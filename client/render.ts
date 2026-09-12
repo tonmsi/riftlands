@@ -1,5 +1,5 @@
 import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../shared/config';
-import type { Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Vec2 } from '../shared/types';
+import type { Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec2 } from '../shared/types';
 import { World } from '../shared/world';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
@@ -8,6 +8,7 @@ const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
 };
 const PALADIN_FRAME_SIZE = 256;
 const PALADIN_DRAW_SIZE = 48;
+const MAX_LOGICAL_VIEWPORT = { width: 2200, height: 1400 };
 
 export interface RenderFrame {
   time: number;
@@ -103,7 +104,12 @@ export class Renderer {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);
-    this.zoom = this.width < 680 ? 0.8 : 0.95;
+    const baseZoom = this.width < 680 ? 0.8 : 0.95;
+    // A browser zoom-out enlarges the CSS viewport without enlarging the actual
+    // screen. Keep the logical world viewport bounded so it cannot generate a
+    // huge amount of procedural terrain in one frame.
+    const viewportScale = Math.max(1, this.width / MAX_LOGICAL_VIEWPORT.width, this.height / MAX_LOGICAL_VIEWPORT.height);
+    this.zoom = baseZoom * viewportScale;
   }
 
   render(frame: RenderFrame): void {
@@ -166,6 +172,7 @@ export class Renderer {
     for (const bush of bushes) this.drawBushTop(bush.x, bush.y, frame.time);
     for (const event of events) this.drawFloatingEvent(event, frame.time);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.drawTeamIndicators(frame);
     const vignette = ctx.createRadialGradient(this.width / 2, this.height / 2, this.width * 0.2, this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.68);
     vignette.addColorStop(0, 'rgba(19,29,24,0)');
     vignette.addColorStop(1, 'rgba(19,29,24,0.18)');
@@ -215,6 +222,41 @@ export class Renderer {
 
   private visible(point: Vec2): boolean {
     return point.x >= this.bounds.left && point.x <= this.bounds.right && point.y >= this.bounds.top && point.y <= this.bounds.bottom;
+  }
+
+  private drawTeamIndicators(frame: RenderFrame): void {
+    if (!frame.playing || !frame.self?.teamId) return;
+    const ctx = this.ctx;
+    const centerX = this.width / 2, centerY = this.height / 2;
+    const edge = 22;
+    for (const teammate of frame.actors) {
+      if (teammate.id === frame.self.id || teammate.teamId !== frame.self.teamId || this.visible(teammate)) continue;
+      const dx = (teammate.x - this.camera.x) * this.zoom;
+      const dy = (teammate.y - this.camera.y) * this.zoom;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) continue;
+      const scale = Math.min((this.width / 2 - edge) / Math.abs(dx || 1), (this.height / 2 - edge) / Math.abs(dy || 1));
+      const x = centerX + dx * Math.min(1, scale);
+      const y = centerY + dy * Math.min(1, scale);
+      const angle = Math.atan2(dy, dx);
+      const color = CLASSES[teammate.classId].color;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.fillStyle = `${color}e8`;
+      ctx.strokeStyle = '#16251b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(10, 0); ctx.lineTo(-6, -7); ctx.lineTo(-3, 0); ctx.lineTo(-6, 7); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.rotate(-angle);
+      ctx.font = '600 10px Inter, system-ui, sans-serif';
+      ctx.textAlign = x < centerX ? 'left' : 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#edf3d8';
+      ctx.shadowColor = '#132319'; ctx.shadowBlur = 4;
+      ctx.fillText(teammate.name, x < centerX ? 14 : -14, 0);
+      ctx.restore();
+    }
   }
 
   private drawTerrain(time: number): Vec2[] {

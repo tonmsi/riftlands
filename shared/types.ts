@@ -16,7 +16,7 @@ export interface GameEvent extends Vec2 { id: string; kind: 'cast' | 'hit' | 'he
 export interface SocialPlayer { id: string; name: string; classId: ClassId; level: number; teamId: string | null; friend: boolean; }
 export interface SocialState { friends: { id: string; name: string; online: boolean }[]; requests: { id: string; name: string }[]; teamInvites: { id: string; name: string; teamId: string }[]; team: { id: string; leaderId: string; members: { id: string; name: string; online: boolean }[] } | null; nearby: SocialPlayer[]; }
 export interface PublicAccount { id: string; name: string; kills: number; deaths: number; xp: number; }
-export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: Actor; actors: Actor[]; projectiles: Projectile[]; pickups: Pickup[]; traps: Trap[]; events: GameEvent[]; online: number; activeChunks: number; }
+export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: Actor; actors: Actor[]; projectiles: Projectile[]; pickups: Pickup[]; traps?: Trap[]; events: GameEvent[]; online: number; activeChunks: number; }
 
 export type ClientMessage =
   | {

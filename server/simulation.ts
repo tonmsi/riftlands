@@ -650,7 +650,11 @@ export class WorldSimulation {
     const self = this.players.get(id), connection = this.connections.get(id);
     if (!self || !connection) return undefined;
     const visible = (actor: Actor) => actor.id === id || (!!self.teamId && actor.teamId === self.teamId) || (!actor.hidden || actor.revealedUntil > this.now || distance(self, actor) < 120);
-    const actors = [...this.players.values(), ...this.npcs.values()].filter(actor => distance(self, actor) < INTEREST_RADIUS && visible(actor)).map(copyActor);
+    // I compagni restano sincronizzati anche quando sono molto lontani: il client
+    // può così mostrarli sul bordo dello schermo invece di perderne la posizione.
+    const actors = [...this.players.values(), ...this.npcs.values()].filter(actor =>
+      (actor.id === id || (!!self.teamId && actor.teamId === self.teamId) || distance(self, actor) < INTEREST_RADIUS) && visible(actor)
+    ).map(copyActor);
     const visibleIds = new Set(actors.map(actor => actor.id));
     return {
       type: 'snapshot', tick: this.tick, time: this.now, ack: connection.ack, self: copyActor(self), actors,
