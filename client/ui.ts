@@ -1,6 +1,8 @@
 import { CLASSES, levelFromXp } from '../shared/config';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, PublicAccount, Snapshot, SocialState } from '../shared/types';
 
+const PALADIN_SPRITE_URL = new URL('../assets/paladino256.png', import.meta.url).href;
+
 type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
 
 export interface UIActions {
@@ -34,6 +36,12 @@ const ABILITY_ICONS: Record<string, string> = {
 
 function icon(paths: string, extra = ''): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${paths}</svg>`;
+}
+
+function portrait(classId: ClassId): string {
+  return classId === 'paladin'
+    ? `<span class="paladin-portrait-sprite" style="background-image:url('${PALADIN_SPRITE_URL}')" aria-hidden="true"></span>`
+    : icon(CLASS_ICONS[classId]);
 }
 
 function textElement(tag: string, className: string, text: string): HTMLElement {
@@ -273,7 +281,7 @@ export class GameUI {
     const definition = CLASSES[player.classId];
     if (this.activeClass !== player.classId) {
       this.activeClass = player.classId;
-      this.ref('portrait').innerHTML = icon(CLASS_ICONS[player.classId]);
+      this.ref('portrait').innerHTML = portrait(player.classId);
       this.ref('portrait').style.color = definition.color;
       this.ref('resource-fill').style.background = definition.resource === 'rage' ? '#df9877' : '#aaa0e8';
       this.write('resource-name', definition.resource === 'rage' ? 'RG' : 'MP');

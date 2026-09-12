@@ -203,7 +203,7 @@ function frame(now: number): void {
   const self = predicted ? localMovement.sample(predicted, inputAccumulator / (1000 / TICK_RATE), delta) : latest?.self ?? null;
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const projectiles = remoteFrame?.projectiles ?? [];
-renderer.render({
+  renderer.render({
     time,
     self,
     actors,
@@ -214,6 +214,10 @@ renderer.render({
     selectedId,
     previewClass: ui.selectedClass,
     playing,
+    moveDirection: playing && !isTyping() ? {
+      x: Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft')),
+      y: Number(keys.has('KeyS') || keys.has('ArrowDown')) - Number(keys.has('KeyW') || keys.has('ArrowUp')),
+    } : null,
   });
   if (self && playing && now - lastMinimap > 250) {
     drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? []); lastMinimap = now;

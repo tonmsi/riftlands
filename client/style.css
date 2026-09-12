@@ -931,6 +931,16 @@ kbd {
   height:29px
 }
 
+.paladin-portrait-sprite {
+  display:block;
+  width:44px;
+  height:44px;
+  background-size:400% 400%;
+  background-position:0 0;
+  background-repeat:no-repeat;
+  image-rendering:pixelated
+}
+
 .player-vitals {
   flex:1;
   min-width:0

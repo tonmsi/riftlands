@@ -2,6 +2,10 @@ import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../sh
 import type { Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Vec2 } from '../shared/types';
 import { World } from '../shared/world';
 
+const PALADIN_SPRITE_URL = new URL('../assets/paladino256SVG.svg', import.meta.url).href;
+const PALADIN_FRAME_SIZE = 256;
+const PALADIN_DRAW_SIZE = 48;
+
 export interface RenderFrame {
   time: number;
   self: Actor | null;
@@ -13,6 +17,8 @@ export interface RenderFrame {
   selectedId: string | null;
   previewClass: ClassId;
   playing: boolean;
+  /** Direction requested by the local player; null means standing still. */
+  moveDirection?: Vec2 | null;
 }
 const TAU = Math.PI * 2;
 const PICKUP_COLORS: Record<Pickup['kind'], string> = {
@@ -56,11 +62,14 @@ export class Renderer {
   private wasPlaying = false;
   private hasCamera = false;
   private bounds = { left: 0, top: 0, right: 0, bottom: 0 };
+  private readonly paladinSprite = new Image();
+  private readonly paladinMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D non disponibile in questo browser.');
     this.ctx = ctx;
+    this.paladinSprite.src = PALADIN_SPRITE_URL;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
     this.resize();
@@ -143,7 +152,8 @@ export class Renderer {
       if (!this.visible(actor)) continue;
       const self = actor.id === frame.self?.id || (!frame.playing && actor.id === 'preview');
       const allied = !!frame.self?.teamId && actor.teamId === frame.self.teamId;
-      this.drawActor(actor, frame.time, self, allied, actor.id === frame.selectedId, events);
+      this.drawActor(actor, frame.time, self, allied, actor.id === frame.selectedId, events,
+        self ? frame.moveDirection : undefined);
     }
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     for (const bush of bushes) this.drawBushTop(bush.x, bush.y, frame.time);
@@ -367,7 +377,8 @@ export class Renderer {
     ctx.stroke(); ctx.restore();
   }
 
-  private drawActor(actor: Actor, time: number, self: boolean, allied: boolean, selected: boolean, events: GameEvent[]): void {
+  private drawActor(actor: Actor, time: number, self: boolean, allied: boolean, selected: boolean,
+    events: GameEvent[], moveDirection?: Vec2 | null): void {
     const { ctx } = this;
     const dead = actor.hp <= 0;
     const color = dead ? '#91968a' : CLASSES[actor.classId].color;
@@ -386,8 +397,8 @@ export class Renderer {
       ctx.stroke();
     }
     if (dead) ctx.globalAlpha = 0.45;
-    ctx.fillStyle = 'rgba(22,32,23,0.28)';
-    ctx.beginPath(); ctx.ellipse(1, 7, r + 4, r * 0.56, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(36, 48, 37, 0.28)';
+    ctx.beginPath(); ctx.ellipse(1, 13, r + 5, r * 0.56, 0, 0, TAU); ctx.fill();
     if (self || allied || selected) {
       ctx.strokeStyle = self ? '#f1e7c2' : allied ? '#abd6c0' : '#f0b7a0';
       ctx.lineWidth = selected ? 2 : 1.5;
@@ -421,7 +432,7 @@ export class Renderer {
       ctx.beginPath(); ctx.moveTo(-r - 5, -5); ctx.lineTo(-r - 15, -5); ctx.moveTo(-r - 5, 5); ctx.lineTo(-r - 12, 5); ctx.stroke(); ctx.restore();
     }
     if (actor.kind === 'npc') this.drawNpc(actor, time, color);
-    else this.drawPlayer(actor, color, dead);
+    else this.drawPlayer(actor, color, dead, time, moveDirection);
     if (!dead && events.some(event => event.kind === 'hit' && event.targetId === actor.id && time - event.at < 130)) {
       circle(ctx, 0, 0, r + 2); ctx.fillStyle = 'rgba(255,241,221,0.48)'; ctx.fill();
     }
@@ -453,9 +464,34 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawPlayer(actor: Actor, color: string, dead: boolean): void {
+  private drawPlayer(actor: Actor, color: string, dead: boolean, time: number, moveDirection?: Vec2 | null): void {
     const { ctx } = this;
     const r = actor.radius;
+    if (actor.classId === 'paladin' && !dead && this.paladinSprite.complete && this.paladinSprite.naturalWidth > 0) {
+      const previous = this.paladinMotion.get(actor.id);
+      const dx = previous ? actor.x - previous.x : 0;
+      const dy = previous ? actor.y - previous.y : 0;
+      const distanceMoved = Math.hypot(dx, dy);
+      const controlledDirection = moveDirection !== undefined;
+      const moving = controlledDirection ? Math.hypot(moveDirection?.x ?? 0, moveDirection?.y ?? 0) > 0 : distanceMoved > 0.02;
+      let row = previous?.row ?? 0;
+      if (moving) {
+        const directionX = controlledDirection ? moveDirection!.x : dx;
+        const directionY = controlledDirection ? moveDirection!.y : dy;
+        // Diagonals use the horizontal spritesheet row; only pure vertical
+        // movement uses the up/down rows.
+        row = directionX !== 0 ? (directionX < 0 ? 2 : 3) : directionY < 0 ? 1 : 0;
+      }
+      const startedAt = moving && (!previous || !previous.moving || previous.row !== row || Math.hypot(actor.x - previous.x, actor.y - previous.y) > 20)
+        ? time : previous?.startedAt ?? time;
+      this.paladinMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
+      const frame = moving ? Math.floor((time - startedAt) / 130) % 4 : 0;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(this.paladinSprite, frame * PALADIN_FRAME_SIZE, row * PALADIN_FRAME_SIZE,
+        PALADIN_FRAME_SIZE, PALADIN_FRAME_SIZE, -PALADIN_DRAW_SIZE / 2, -PALADIN_DRAW_SIZE / 2,
+        PALADIN_DRAW_SIZE, PALADIN_DRAW_SIZE);
+      return;
+    }
     ctx.fillStyle = dead ? '#697066' : '#333e35';
     circle(ctx, 0, 0, r); ctx.fill();
     ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
