@@ -2,7 +2,10 @@ import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../sh
 import type { Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Vec2 } from '../shared/types';
 import { World } from '../shared/world';
 
-const PALADIN_SPRITE_URL = new URL('../assets/paladino256SVG.svg', import.meta.url).href;
+const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
+  paladin: new URL('../assets/paladino256SVG.svg', import.meta.url).href,
+  mage: new URL('../assets/mage256SVG.svg', import.meta.url).href,
+};
 const PALADIN_FRAME_SIZE = 256;
 const PALADIN_DRAW_SIZE = 48;
 
@@ -62,14 +65,18 @@ export class Renderer {
   private wasPlaying = false;
   private hasCamera = false;
   private bounds = { left: 0, top: 0, right: 0, bottom: 0 };
-  private readonly paladinSprite = new Image();
-  private readonly paladinMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
+  private readonly classSprites = new Map<ClassId, HTMLImageElement>();
+  private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D non disponibile in questo browser.');
     this.ctx = ctx;
-    this.paladinSprite.src = PALADIN_SPRITE_URL;
+    for (const [classId, url] of Object.entries(CLASS_SPRITE_URLS) as [ClassId, string][]) {
+      const sprite = new Image();
+      sprite.src = url;
+      this.classSprites.set(classId, sprite);
+    }
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
     this.resize();
@@ -467,8 +474,9 @@ export class Renderer {
   private drawPlayer(actor: Actor, color: string, dead: boolean, time: number, moveDirection?: Vec2 | null): void {
     const { ctx } = this;
     const r = actor.radius;
-    if (actor.classId === 'paladin' && !dead && this.paladinSprite.complete && this.paladinSprite.naturalWidth > 0) {
-      const previous = this.paladinMotion.get(actor.id);
+    const sprite = this.classSprites.get(actor.classId);
+    if (sprite && !dead && sprite.complete && sprite.naturalWidth > 0) {
+      const previous = this.classMotion.get(actor.id);
       const dx = previous ? actor.x - previous.x : 0;
       const dy = previous ? actor.y - previous.y : 0;
       const distanceMoved = Math.hypot(dx, dy);
@@ -484,10 +492,10 @@ export class Renderer {
       }
       const startedAt = moving && (!previous || !previous.moving || previous.row !== row || Math.hypot(actor.x - previous.x, actor.y - previous.y) > 20)
         ? time : previous?.startedAt ?? time;
-      this.paladinMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
+      this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
       const frame = moving ? Math.floor((time - startedAt) / 130) % 4 : 0;
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(this.paladinSprite, frame * PALADIN_FRAME_SIZE, row * PALADIN_FRAME_SIZE,
+      ctx.drawImage(sprite, frame * PALADIN_FRAME_SIZE, row * PALADIN_FRAME_SIZE,
         PALADIN_FRAME_SIZE, PALADIN_FRAME_SIZE, -PALADIN_DRAW_SIZE / 2, -PALADIN_DRAW_SIZE / 2,
         PALADIN_DRAW_SIZE, PALADIN_DRAW_SIZE);
       return;

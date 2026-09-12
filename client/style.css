@@ -931,14 +931,16 @@ kbd {
   height:29px
 }
 
-.paladin-portrait-sprite {
+.player-profile-image {
   display:block;
   width:44px;
   height:44px;
-  background-size:400% 400%;
-  background-position:0 0;
-  background-repeat:no-repeat;
+  object-fit:contain;
   image-rendering:pixelated
+}
+
+.player-portrait [hidden] {
+  display:none
 }
 
 .player-vitals {

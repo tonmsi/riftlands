@@ -1,7 +1,11 @@
 import { CLASSES, levelFromXp } from '../shared/config';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, PublicAccount, Snapshot, SocialState } from '../shared/types';
 
-const PALADIN_SPRITE_URL = new URL('../assets/paladino256.png', import.meta.url).href;
+const PROFILE_URLS: Partial<Record<ClassId, string>> = {
+  paladin: '/assets/paladinoProfile.png',
+  mage: '/assets/mageProfile.png',
+  warrior: '/assets/warriorProfile.png',
+};
 
 type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
 
@@ -39,9 +43,11 @@ function icon(paths: string, extra = ''): string {
 }
 
 function portrait(classId: ClassId): string {
-  return classId === 'paladin'
-    ? `<span class="paladin-portrait-sprite" style="background-image:url('${PALADIN_SPRITE_URL}')" aria-hidden="true"></span>`
-    : icon(CLASS_ICONS[classId]);
+  const profileUrl = PROFILE_URLS[classId];
+  if (profileUrl) {
+    return `<img class="player-profile-image" src="${profileUrl}" alt="" onerror="this.hidden=true;this.nextElementSibling?.removeAttribute('hidden')">${icon(CLASS_ICONS[classId], 'hidden')}`;
+  }
+  return icon(CLASS_ICONS[classId]);
 }
 
 function textElement(tag: string, className: string, text: string): HTMLElement {
