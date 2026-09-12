@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, levelFromXp } from '../shared/config';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
-import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Vec2 } from '../shared/types';
+import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2 } from '../shared/types';
 import { World, chunkCoords, chunkKey, isSolid } from '../shared/world';
 import type { Account, AccountStore } from './store';
 
@@ -56,6 +56,20 @@ export class WorldSimulation {
   readonly activeChunks = new Map<string, ActiveChunk>();
   readonly npcMeta = new Map<string, NpcMeta>();
   readonly events: GameEvent[] = [];
+  readonly traps = new Map<string, Trap>();
+  private readonly queuedBursts: {
+    ownerId: string;
+    remainingShots: number;
+    intervalMs: number;
+    nextShotAt: number;
+    currentAngle: number;
+    angleStep: number;
+    speed: number;
+    damage: number;
+    radius: number;
+    range: number;
+    color: string;
+  }[] = [];
   private readonly invites = new Map<string, Invite[]>();
   private readonly npcSleep = new Map<string, { body: Actor; nextAttack: number; until: number }>();
   private readonly pickupReady = new Map<string, number>();
@@ -191,6 +205,8 @@ export class WorldSimulation {
     resolveActorCollisions([...this.players.values(), ...this.npcs.values()].filter(actor => actor.hp > 0), this.world);
     this.rebuildCells();
     this.stepProjectiles(dt);
+    this.stepBursts();
+    this.stepTraps();
     this.stepPickups();
     while (this.events.length && this.events[0].at + 1800 < this.now) this.events.shift();
     if (this.tick % 150 === 0) {
@@ -251,6 +267,85 @@ export class WorldSimulation {
     if (current) current.until = Math.max(current.until, this.now + duration);
     else actor.effects.push({ kind, until: this.now + duration });
   }
+  private stepBursts(): void {
+    for (let i = this.queuedBursts.length - 1; i >= 0; i--) {
+      const burst = this.queuedBursts[i];
+      if (this.now >= burst.nextShotAt) {
+        const owner = this.players.get(burst.ownerId) ?? this.npcs.get(burst.ownerId);
+        if (owner && owner.hp > 0 && this.projectiles.size < 1000) {
+          burst.currentAngle += burst.angleStep;
+          const projectile: Projectile = {
+            id: randomUUID(),
+            ownerId: owner.id,
+            x: owner.x,
+            y: owner.y,
+            vx: Math.cos(burst.currentAngle) * burst.speed,
+            vy: Math.sin(burst.currentAngle) * burst.speed,
+            radius: burst.radius,
+            damage: burst.damage,
+            expiresAt: this.now + (burst.range / burst.speed) * 1000,
+            color: burst.color,
+          };
+          this.projectiles.set(projectile.id, projectile);
+          this.projectileTeams.set(projectile.id, owner.teamId);
+          this.emit({
+            kind: 'cast',
+            actorId: owner.id,
+            x: owner.x,
+            y: owner.y,
+            aim: burst.currentAngle,
+            abilityKind: 'projectile',
+            radius: burst.radius,
+            duration: 250,
+            color: burst.color,
+          });
+        }
+        burst.remainingShots--;
+        burst.nextShotAt = this.now + burst.intervalMs;
+        if (burst.remainingShots <= 0) {
+          this.queuedBursts.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  private stepTraps(): void {
+    for (const [id, trap] of this.traps) {
+      if (this.now >= trap.expiresAt) {
+        this.traps.delete(id);
+        continue;
+      }
+      const owner = this.players.get(trap.ownerId) ?? this.npcs.get(trap.ownerId);
+      let triggered = false;
+
+      for (const target of this.near(trap, trap.radius)) {
+        if (target.id === trap.ownerId || target.hp <= 0 || target.spawnProtectedUntil > this.now) continue;
+        if (owner && this.allied(owner, target)) continue;
+        if (trap.teamId && target.teamId === trap.teamId) continue;
+
+        triggered = true;
+        this.damage(target, owner, trap.damage);
+        this.effect(target, 'root', trap.duration);
+        this.emit({
+          kind: 'hit',
+          x: trap.x,
+          y: trap.y,
+          actorId: trap.ownerId,
+          targetId: target.id,
+          amount: Math.round(trap.damage),
+          radius: trap.radius,
+          duration: 650,
+          color: '#71c463',
+          text: 'BLOCCATO!',
+        });
+        break;
+      }
+
+      if (triggered) {
+        this.traps.delete(id);
+      }
+    }
+  }
 
   /** May be used directly by deterministic combat tests; input validation precedes this in transport. */
   cast(actor: Actor, slot: AbilitySlot): boolean {
@@ -269,6 +364,70 @@ export class WorldSimulation {
       const projectile: Projectile = { id: randomUUID(), ownerId: actor.id, x: actor.x, y: actor.y, vx: Math.cos(actor.aim) * speed, vy: Math.sin(actor.aim) * speed, radius: ability.radius, damage: ability.damage * this.damageMultiplier(actor), expiresAt: this.now + ability.range / speed * 1000, color: ability.color, slow: actor.classId === 'mage' && slot === 'q' ? 2000 : undefined };
       this.projectiles.set(projectile.id, projectile);
       this.projectileTeams.set(projectile.id, actor.teamId);
+      return true;
+    }
+    // Gestione della trappola dell'Hunter
+    if (ability.kind === 'trap') {
+      const dist = Math.min(ability.range || 60, 60);
+      const placeX = actor.x + Math.cos(actor.aim) * dist;
+      const placeY = actor.y + Math.sin(actor.aim) * dist;
+      const trapId = randomUUID();
+      const trap: Trap = {
+        id: trapId,
+        ownerId: actor.id,
+        teamId: actor.teamId,
+        x: placeX,
+        y: placeY,
+        radius: ability.radius || 52,
+        damage: ability.damage * this.damageMultiplier(actor),
+        duration: 2500, // 2.5 secondi di blocco
+        expiresAt: this.now + (ability.duration ?? 30) * 1000,
+        color: ability.color,
+      };
+      this.traps.set(trapId, trap);
+      this.emit({ kind: 'cast', x: placeX, y: placeY, radius: trap.radius, color: trap.color, duration: 450, actorId: actor.id, abilityKind: 'trap', text: ability.name });
+      return true;
+    }
+
+    // Gestione della Ultimate R a 360° in sequenza
+    if (actor.classId === 'hunter' && slot === 'r') {
+      const speed = ability.speed ?? 500;
+      const totalShots = 6;
+      const angleStep = (Math.PI * 2) / totalShots;
+      const startAngle = actor.aim;
+      const damage = ability.damage * this.damageMultiplier(actor);
+      const range = ability.range || 520;
+
+      // Primo dardo sparato subito
+      const firstShot: Projectile = {
+        id: randomUUID(),
+        ownerId: actor.id,
+        x: actor.x,
+        y: actor.y,
+        vx: Math.cos(startAngle) * speed,
+        vy: Math.sin(startAngle) * speed,
+        radius: ability.radius,
+        damage,
+        expiresAt: this.now + (range / speed) * 1000,
+        color: ability.color,
+      };
+      this.projectiles.set(firstShot.id, firstShot);
+      this.projectileTeams.set(firstShot.id, actor.teamId);
+
+      // Gli altri 5 colpi sparati in sequenza con 70 ms di scarto
+      this.queuedBursts.push({
+        ownerId: actor.id,
+        remainingShots: totalShots - 1,
+        intervalMs: 70,
+        nextShotAt: this.now + 70,
+        currentAngle: startAngle,
+        angleStep,
+        speed,
+        damage,
+        radius: ability.radius,
+        range,
+        color: ability.color,
+      });
       return true;
     }
     if (ability.kind === 'dash') {
@@ -497,6 +656,7 @@ export class WorldSimulation {
       type: 'snapshot', tick: this.tick, time: this.now, ack: connection.ack, self: copyActor(self), actors,
       projectiles: [...this.projectiles.values()].filter(projectile => distance(self, projectile) < INTEREST_RADIUS).map(projectile => ({ ...projectile })),
       pickups: [...this.pickups.values()].filter(pickup => distance(self, pickup) < INTEREST_RADIUS).map(pickup => ({ ...pickup })),
+      traps: [...this.traps.values()].filter(trap => distance(self, trap) < INTEREST_RADIUS).map(trap => ({ ...trap })),
       events: this.events.filter(event => distance(self, event) < INTEREST_RADIUS && (!event.actorId || visibleIds.has(event.actorId)) && (!event.targetId || visibleIds.has(event.targetId))).map(event => ({ ...event })),
       online: this.online, activeChunks: this.activeChunks.size,
     };

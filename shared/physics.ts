@@ -36,6 +36,7 @@ export function movementSpeed(actor: Actor, time: number): number {
   for (const effect of actor.effects) if (effect.until > time) {
     if (effect.kind === 'haste') speed *= 1.35;
     if (effect.kind === 'slow') speed *= 0.55;
+    if (effect.kind === 'root') return 0; // Bersaglio immobilizzato
   }
   return speed;
 }

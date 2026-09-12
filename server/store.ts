@@ -35,7 +35,7 @@ function validBody(body: unknown): boolean {
   if (![actor.x, actor.y, actor.radius, actor.hp, actor.maxHp, actor.resource, actor.maxResource, actor.aim, actor.speed, actor.level, actor.xp, actor.kills, actor.deaths, actor.revealedUntil, actor.deadUntil, actor.spawnProtectedUntil].every(Number.isFinite)) return false;
   if (actor.maxHp <= 0 || actor.hp < 0 || actor.hp > actor.maxHp || actor.resource < 0 || actor.resource > actor.maxResource || actor.radius <= 0 || !Array.isArray(actor.effects) || actor.effects.length > 10 || !actor.cooldowns || typeof actor.cooldowns !== 'object') return false;
   if (!['basic', 'q', 'e', 'r'].every(slot => Number.isFinite(actor.cooldowns[slot as keyof Actor['cooldowns']]))) return false;
-  return actor.effects.every(effect => effect && ['haste', 'power', 'weakness', 'slow', 'shield'].includes(effect.kind) && Number.isFinite(effect.until));
+  return actor.effects.every(effect => effect && ['haste', 'power', 'weakness', 'slow', 'shield','root'].includes(effect.kind) && Number.isFinite(effect.until));
 }
 
 function base64UrlEncode(str: string): string {

@@ -203,7 +203,18 @@ function frame(now: number): void {
   const self = predicted ? localMovement.sample(predicted, inputAccumulator / (1000 / TICK_RATE), delta) : latest?.self ?? null;
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const projectiles = remoteFrame?.projectiles ?? [];
-  renderer.render({ time, self, actors, projectiles, pickups: latest?.pickups ?? [], events: [...effects.values()], selectedId, previewClass: ui.selectedClass, playing });
+renderer.render({
+    time,
+    self,
+    actors,
+    projectiles,
+    pickups: latest?.pickups ?? [],
+    traps: latest?.traps ?? [],
+    events: [...effects.values()],
+    selectedId,
+    previewClass: ui.selectedClass,
+    playing,
+  });
   if (self && playing && now - lastMinimap > 250) {
     drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? []); lastMinimap = now;
   }

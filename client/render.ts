@@ -8,12 +8,12 @@ export interface RenderFrame {
   actors: Actor[];
   projectiles: Projectile[];
   pickups: Pickup[];
+  traps: Trap[];
   events: GameEvent[];
   selectedId: string | null;
   previewClass: ClassId;
   playing: boolean;
 }
-
 const TAU = Math.PI * 2;
 const PICKUP_COLORS: Record<Pickup['kind'], string> = {
   heal: '#b6e5aa', haste: '#a5dbe2', power: '#e5cc81', weakness: '#bb99cb',
@@ -129,6 +129,9 @@ export class Renderer {
       ...this.world.getChunk(0, 0).pickups, ...this.world.getChunk(-1, 0).pickups,
     ];
     for (const pickup of pickups) if (this.visible(pickup)) this.drawPickup(pickup, frame.time);
+    if (frame.traps) {
+      for (const trap of frame.traps) if (this.visible(trap)) this.drawTrap(trap, frame.time);
+    }
     const actors = frame.playing ? [...frame.actors] : this.previewActors(frame.previewClass, frame.time);
     if (frame.self && frame.playing) {
       const index = actors.findIndex(actor => actor.id === frame.self!.id);
@@ -151,6 +154,46 @@ export class Renderer {
     vignette.addColorStop(1, 'rgba(19,29,24,0.18)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, this.width, this.height);
+  }
+
+  private drawTrap(trap: Trap, time: number): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.translate(trap.x, trap.y);
+    
+    // Area di innesco visibile delicata
+    ctx.strokeStyle = `${trap.color}44`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 6]);
+    circle(ctx, 0, 0, trap.radius);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Denti / ganasce della trappola meccanica
+    ctx.fillStyle = '#2f382a';
+    circle(ctx, 0, 0, 16);
+    ctx.fill();
+    ctx.strokeStyle = trap.color;
+    ctx.lineWidth = 2;
+    circle(ctx, 0, 0, 16);
+    ctx.stroke();
+
+    // Denti metallici
+    ctx.fillStyle = '#b7cfad';
+    for (let i = 0; i < 8; i++) {
+      const angle = (i * Math.PI) / 4;
+      const tx = Math.cos(angle) * 14;
+      const ty = Math.sin(angle) * 14;
+      polygon(ctx, [tx, ty, tx * 0.5 - ty * 0.2, ty * 0.5 + tx * 0.2, tx * 0.5 + ty * 0.2, ty * 0.5 - tx * 0.2]);
+      ctx.fill();
+    }
+
+    // Piatto di pressione centrale
+    circle(ctx, 0, 0, 5 + Math.sin(time * 0.005) * 1);
+    ctx.fillStyle = '#9bd48c';
+    ctx.fill();
+
+    ctx.restore();
   }
 
   private visible(point: Vec2): boolean {
@@ -331,6 +374,17 @@ export class Renderer {
     const r = actor.radius || PLAYER_RADIUS;
     ctx.save(); ctx.translate(actor.x, actor.y);
     if (actor.hidden) ctx.globalAlpha = self || allied ? 0.58 : 0.32;
+    if (actor.effects.some(effect => effect.kind === 'root' && effect.until > time)) {
+      ctx.strokeStyle = '#6ebd57';
+      ctx.lineWidth = 3;
+      circle(ctx, 0, 0, r + 5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-r, r); ctx.lineTo(-r - 4, r + 8);
+      ctx.moveTo(r, r); ctx.lineTo(r + 4, r + 8);
+      ctx.moveTo(0, r + 3); ctx.lineTo(0, r + 11);
+      ctx.stroke();
+    }
     if (dead) ctx.globalAlpha = 0.45;
     ctx.fillStyle = 'rgba(22,32,23,0.28)';
     ctx.beginPath(); ctx.ellipse(1, 7, r + 4, r * 0.56, 0, 0, TAU); ctx.fill();
@@ -422,7 +476,7 @@ export class Renderer {
       ctx.save(); ctx.rotate(actor.aim);
       polygon(ctx, [8, 8, 27, 6, 32, 9, 27, 12, 8, 10]); ctx.fillStyle = '#e9ded0'; ctx.fill();
       ctx.strokeStyle = '#ac8760'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(12, 4); ctx.lineTo(12, 14); ctx.stroke(); ctx.restore();
-    } else {
+    } else if (actor.classId === 'paladin'){
       polygon(ctx, [-8, -8, 8, -8, 8, 2, 4, 8, 0, 11, -4, 8, -8, 2]); ctx.fill();
       ctx.strokeStyle = '#74643d'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(0, 6); ctx.moveTo(-4, -1); ctx.lineTo(4, -1); ctx.stroke();
@@ -430,6 +484,42 @@ export class Renderer {
       ctx.beginPath(); ctx.moveTo(8, 10); ctx.lineTo(24, 10); ctx.stroke();
       ctx.fillStyle = '#eaddb3'; ctx.fillRect(20, 4, 8, 12); ctx.restore();
     }
+    else if (actor.classId === 'hunter') {
+      // Tunica verde foresta e cappuccio da cacciatore
+      polygon(ctx, [-7, -7, 0, -11, 7, -7, 7, 7, -7, 7]);
+      ctx.fill();
+      ctx.strokeStyle = '#394d33';
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      
+      // Arco impugnato e freccia puntata nella direzione di mira
+      ctx.save();
+      ctx.rotate(actor.aim);
+      ctx.strokeStyle = '#855d37';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(12, 0, 15, -Math.PI * 0.38, Math.PI * 0.38);
+      ctx.stroke();
+
+      // Corda tesa
+      ctx.strokeStyle = '#e2ebd8';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(12 + Math.cos(-Math.PI * 0.38) * 15, Math.sin(-Math.PI * 0.38) * 15);
+      ctx.lineTo(6, 0);
+      ctx.lineTo(12 + Math.cos(Math.PI * 0.38) * 15, Math.sin(Math.PI * 0.38) * 15);
+      ctx.stroke();
+
+      // Freccia pronta
+      ctx.strokeStyle = '#effae8';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(23, 0); ctx.stroke();
+      polygon(ctx, [23, -2.5, 27, 0, 23, 2.5]);
+      ctx.fillStyle = '#aff598';
+      ctx.fill();
+      ctx.restore();
+    }
+    
   }
 
   private drawNpc(actor: Actor, time: number, color: string): void {

@@ -67,7 +67,7 @@ export class World {
       const ty = Math.floor(coordinateHash(cx, cy * 41 + i, this.seed + 97) * CHUNK_TILES);
       const tile = tiles[ty * CHUNK_TILES + tx];
       const x = (cx * CHUNK_TILES + tx + 0.5) * TILE_SIZE, y = (cy * CHUNK_TILES + ty + 0.5) * TILE_SIZE;
-      if (isSolid(tile) || tile === 'path' || Math.hypot(x, y) < 290) continue;
+      if (isSolid(tile) || tile === 'path' || Math.hypot(x, y) < 890) continue;
       if (chunk.npcs.some(n => Math.hypot(n.x - x, n.y - y) < 120) || chunk.pickups.some(p => Math.hypot(p.x - x, p.y - y) < 100)) continue;
       if (chunk.npcs.length < 3) {
         const index = chunk.npcs.length;

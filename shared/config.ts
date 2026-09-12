@@ -30,7 +30,18 @@ export const CLASSES: Record<ClassId, ClassDef> = {
  q: { name: 'Giudizio', description: 'Un proiettile di luce che ferisce i nemici.', cost: 20, cooldown: 3.5, range: 410, damage: 30, kind: 'projectile', speed: 380, radius: 11, color: '#ffe5a1' },
  e: { name: 'Luce vitale', description: 'Ripristina 38 salute a te e agli alleati del team entro il cerchio.', cost: 30, cooldown: 8, range: 135, damage: 38, kind: 'heal', radius: 135, color: '#a6e5b2' },
  r: { name: 'Egida', description: 'Scudo per te e il team vicino: -60% danni per 5 secondi.', cost: 35, cooldown: 14, range: 150, damage: 0, kind: 'shield', radius: 150, duration: 5, color: '#ffecb0' }
- } }
+ } },
+hunter: { 
+    id: 'hunter', name: 'Cacciatore', subtitle: 'Letale e silenzioso', 
+    description: 'Padroneggia l’arco e le trappole naturali. Controlla il territorio e scatena raffiche a 360°.', 
+    color: '#7bc876', resource: 'mana', maxHp: 130, maxResource: 100, speed: 210, armor: 0.08,
+    abilities: {
+      basic: { name: 'Freccia rapida', description: 'Dardo veloce a lunga gittata.', cost: 0, cooldown: 0.45, range: 600, damage: 19, kind: 'projectile', speed: 560, radius: 5, color: '#b9f0b4' },
+      q: { name: 'Trappola silvana', description: 'Piazza a terra una grande trappola che scatta al passaggio nemico, infliggendo danni e bloccandolo sul posto per 2.5s.', cost: 25, cooldown: 6, range: 80, damage: 28, kind: 'trap', radius: 52, duration: 30, color: '#559c47' },
+      e: { name: 'Scatto silvano', description: 'Balzo rapido nella direzione di puntamento.', cost: 0, cooldown: 6.5, range: 220, damage: 0, kind: 'dash', radius: 25, color: '#c3ffd0' },
+      r: { name: 'Tempesta di frecce', description: 'Scaglia in rapida sequenza 6 frecce attorno a te a 360 gradi.', cost: 45, cooldown: 11, range: 520, damage: 25, kind: 'area', speed: 500, radius: 7, color: '#8de8a3' }
+    } 
+  }
 };
 export const PICKUP_NAMES = { heal: 'Fonte vitale', haste: 'Passo celere', power: 'Potere antico', weakness: 'Maledizione' };
 export function xpForLevel(level: number): number { return level * 100; }
