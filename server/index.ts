@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
 import { WebSocket, WebSocketServer } from 'ws';
 import { CLASSES, DT, PROTOCOL_VERSION, SNAPSHOT_RATE, TICK_RATE, WORLD_SEED } from '../shared/config';
 import type { ClassId, ClientMessage, ServerMessage } from '../shared/types';
-import { AccountStore, publicAccount } from './store';
+import { Account, AccountStore, publicAccount } from './store';
 import { WorldSimulation } from './simulation';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -62,7 +62,7 @@ const registrations = new Map<string, { count: number; until: number }>();
 server.on('upgrade', (request, socket, head) => {
   if ((request.url ?? '').split('?')[0] !== '/ws') {
     if (production) socket.destroy();
-    return; // Vite handles its own HMR upgrades in development.
+    return;
   }
   if (!healthy || closing || wss.clients.size >= 150) { socket.end('HTTP/1.1 503 Service Unavailable\r\n\r\n'); return; }
   const origin = request.headers.origin;
@@ -113,17 +113,39 @@ wss.on('connection', (ws, request) => {
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !('type' in parsed) || typeof parsed.type !== 'string') throw new Error();
       message = parsed as ClientMessage;
     } catch { fatal(session, 'Messaggio non valido.'); return; }
+
     if (message.type === 'hello') {
       if (session.id) { fatal(session, 'Accesso già completato.'); return; }
-      if (message.protocol !== PROTOCOL_VERSION || typeof message.name !== 'string' || message.name.length > 80 || typeof message.classId !== 'string' || !Object.hasOwn(CLASSES, message.classId) || (message.token !== undefined && typeof message.token !== 'string')) { fatal(session, 'Client non compatibile o dati di accesso non validi.'); return; }
+      if (message.protocol !== PROTOCOL_VERSION || typeof message.classId !== 'string' || !Object.hasOwn(CLASSES, message.classId)) {
+        fatal(session, 'Client non compatibile o dati non validi.');
+        return;
+      }
+
+      let authResult: { account: Account; token: string };
       try {
-        if (!message.token) {
-          let entry = registrations.get(ip);
-          if (!entry || entry.until < Date.now()) { entry = { count: 0, until: Date.now() + 600_000 }; registrations.set(ip, entry); }
-          if (entry.count >= 20) throw new Error('Troppe nuove identità. Riprova più tardi.');
-          entry.count++;
+        if (message.token) {
+          if (typeof message.token !== 'string') throw new Error('Formato token di sessione non valido.');
+          authResult = store.authenticateJwt(message.token);
+        } else {
+          const mode = message.mode ?? 'login';
+          const name = typeof message.name === 'string' ? message.name : '';
+          const password = typeof message.password === 'string' ? message.password : '';
+          if (!name || !password) throw new Error('Inserisci sia il nome sia la password.');
+
+          if (mode === 'register') {
+            let entry = registrations.get(ip);
+            if (!entry || entry.until < Date.now()) { entry = { count: 0, until: Date.now() + 600_000 }; registrations.set(ip, entry); }
+            if (entry.count >= 20) throw new Error('Troppi nuovi personaggi creati di recente. Riprova tra poco.');
+            entry.count++;
+            authResult = store.register(name, password);
+          } else if (mode === 'login') {
+            authResult = store.login(name, password);
+          } else {
+            throw new Error('Modalità di accesso non supportata.');
+          }
         }
-        const { account, token } = store.authenticate(message.token, message.name);
+
+        const { account, token } = authResult;
         const previous = byAccount.get(account.id);
         const player = simulation.addPlayer(account, message.classId as ClassId);
         session.id = account.id;
@@ -137,9 +159,12 @@ wss.on('connection', (ws, request) => {
         const snapshot = simulation.snapshotFor(account.id);
         if (snapshot) send(session, snapshot);
         socialBroadcast();
-      } catch (error) { fatal(session, error instanceof Error ? error.message : 'Accesso non riuscito.'); }
+      } catch (error) {
+        fatal(session, error instanceof Error ? error.message : 'Accesso non riuscito.');
+      }
       return;
     }
+
     if (!session.id || byAccount.get(session.id) !== session) { fatal(session, 'Esegui prima l’accesso.'); return; }
     if (message.type === 'input') {
       if (!message.input || typeof message.input !== 'object' || !simulation.enqueueInput(session.id, message.input)) {

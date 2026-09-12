@@ -27,7 +27,14 @@ let profileCache = '';
 const releaseControls = (): void => { keys.clear(); primaryHeld = false; pendingCast = undefined; };
 
 const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
-  join: (name, classId) => connection.join(name, classId),
+  joinCredentials: (mode, name, password, classId) => connection.joinWithCredentials(mode, name, password, classId),
+  joinSaved: classId => connection.joinWithToken(classId),
+  logout: () => {
+    connection.logout();
+    clearProfile();
+    ui.setSavedAccount(null);
+    ui.toast('Disconnessione completata.');
+  },
   leave: () => {
     connection.leave(); playing = false; latest = null; predicted = null; selectedId = null;
     keys.clear(); primaryHeld = false; pendingCast = undefined; snapshotBuffer.clear(); renderedActors = []; effects.clear();
@@ -35,21 +42,9 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   },
   social: (action, targetId) => { connection.send({ type: 'social', action, targetId }); },
   select: id => { selectedId = id; ui.setSelected(latest?.actors.find(actor => actor.id === id) ?? null); },
-  cast: slot => { if (playing && connection.connected) pendingCast = slot; },
-  copyAccount: () => {
-    const token = connection.getAccountToken();
-    if (!token) { ui.toast('Entra nel mondo per creare il tuo codice account.'); return; }
-    navigator.clipboard?.writeText(token).then(() => ui.toast('Codice copiato. Conservalo per recuperare il tuo profilo.', 'success')).catch(() => ui.toast('Il browser non consente la copia. Usa localhost o HTTPS.', 'error'));
-    if (!navigator.clipboard) ui.toast('La copia del codice richiede localhost o HTTPS.', 'error');
-  },
-  useAccount: token => {
-    try {
-      connection.useAccountToken(token); clearProfile();
-      ui.toast('Codice salvato. Entra nel mondo per caricare il profilo.', 'success');
-    } catch (error) { ui.toast(error instanceof Error ? error.message : 'Codice non valido.', 'error'); }
-  },
-  newAccount: () => { connection.resetIdentity(); clearProfile(); ui.toast('Nuovo profilo pronto. Scegli un nome ed entra nel mondo.'); }
+  cast: slot => { if (playing && connection.connected) pendingCast = slot; }
 });
+
 const renderer = new Renderer(ui.canvas);
 const connection = new GameConnection({
   reset: () => { releaseControls(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); },
@@ -58,16 +53,28 @@ const connection = new GameConnection({
     if (status === 'offline' || status === 'reconnecting') releaseControls();
     if (status === 'offline') { playing = false; ui.setPlaying(false); if (detail) ui.toast(detail, 'error'); }
   },
+  authExpired: () => {
+    clearProfile();
+    ui.setSavedAccount(null);
+    ui.toast('La sessione precedente è scaduta. Accedi con le tue credenziali.', 'error');
+  },
   message: message => {
     if (message.type === 'welcome') {
       renderer.setSeed(message.seed);
-      saveProfile(message.account); ui.setSocial(message.social); ui.setPlaying(true);
-      playing = true; pointer = null; effects.clear(); latest = null;
+      saveProfile(message.account);
+      ui.setSavedAccount(message.account);
+      ui.setSocial(message.social);
+      ui.setPlaying(true);
+      playing = true;
+      pointer = null;
+      effects.clear();
+      latest = null;
     } else if (message.type === 'snapshot') {
       const old = predicted;
       latest = message;
       const result = reconcile(message.self, message.ack, pending, renderer.world, message.time);
-      pending = result.pending; predicted = result.actor;
+      pending = result.pending;
+      predicted = result.actor;
       localMovement.correct(old, predicted);
       snapshotBuffer.push(message, performance.now());
       for (const event of message.events) effects.set(event.id, event);
@@ -90,25 +97,31 @@ const connection = new GameConnection({
 function saveProfile(profile: PublicAccount): void {
   const serialized = JSON.stringify(profile);
   if (serialized === profileCache) return;
-  profileCache = serialized; ui.setAccount(profile);
-  try { localStorage.setItem('riftlands.profile', serialized); } catch { /* Optional profile preview. */ }
+  profileCache = serialized;
+  try { localStorage.setItem('riftlands.profile', serialized); } catch { /* Ignore */ }
 }
+
 function clearProfile(): void {
-  profileCache = ''; ui.setAccount(null);
-  try { localStorage.removeItem('riftlands.profile'); } catch { /* Optional profile preview. */ }
+  profileCache = '';
+  try { localStorage.removeItem('riftlands.profile'); } catch { /* Ignore */ }
 }
+
 try {
   const stored = localStorage.getItem('riftlands.profile');
-  if (stored && connection.getAccountToken()) {
+  if (stored && connection.hasToken()) {
     const profile = JSON.parse(stored) as PublicAccount;
-    if (typeof profile.id === 'string' && typeof profile.name === 'string' && [profile.xp, profile.kills, profile.deaths].every(Number.isFinite)) saveProfile(profile);
+    if (typeof profile.id === 'string' && typeof profile.name === 'string' && [profile.xp, profile.kills, profile.deaths].every(Number.isFinite)) {
+      saveProfile(profile);
+      ui.setSavedAccount(profile);
+    }
   }
-} catch { /* Ignore damaged cosmetic profile cache; actual identity is checked by server. */ }
+} catch { /* Ignore */ }
 
 const isTyping = (): boolean => {
   const active = document.activeElement;
   return active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || (active instanceof HTMLElement && active.isContentEditable);
 };
+
 window.addEventListener('keydown', event => {
   if (!playing || !connection.connected || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
   const code = event.code;
@@ -116,6 +129,7 @@ window.addEventListener('keydown', event => {
   keys.add(code);
   if (!event.repeat && ['KeyQ', 'KeyE', 'KeyR'].includes(code)) pendingCast = code.slice(3).toLowerCase() as AbilitySlot;
 });
+
 window.addEventListener('keyup', event => keys.delete(event.code));
 window.addEventListener('blur', releaseControls);
 document.addEventListener('visibilitychange', () => { if (document.hidden) releaseControls(); });
@@ -130,14 +144,13 @@ ui.canvas.addEventListener('pointerdown', event => {
   if (target) { selectedId = target.id; ui.setSelected(target); }
   else if (selectedId) { selectedId = null; ui.setSelected(null); }
 });
+
 window.addEventListener('pointerup', () => { primaryHeld = false; });
 window.addEventListener('pointercancel', releaseControls);
 ui.canvas.addEventListener('contextmenu', event => event.preventDefault());
 
-// One sequence-numbered fixed-duration command per input tick. No position or delta-time is trusted.
 function inputTick(): void {
   if (!playing || !connection.connected || !predicted || document.hidden) return;
-  // Even a skipped send must settle the previous endpoint, so alpha cannot replay an old step.
   localMovement.advance(predicted, predicted);
   if (pending.length > 120) { releaseControls(); return; }
   const right = keys.has('KeyD') || keys.has('ArrowRight'), left = keys.has('KeyA') || keys.has('ArrowLeft');
@@ -159,6 +172,7 @@ function inputTick(): void {
     pendingCast = undefined;
   } else seq--;
 }
+
 let inputTime = performance.now(), inputAccumulator = 0;
 function advanceInputs(now: number): void {
   const elapsed = Math.min(100, now - inputTime); inputTime = now;
@@ -168,7 +182,6 @@ function advanceInputs(now: number): void {
 }
 setInterval(() => advanceInputs(performance.now()), 8);
 
-// Direction pad for touch devices; spells remain accessible through the same HUD buttons.
 const touchControls = document.createElement('div'); touchControls.className = 'touch-controls';
 for (const [label, code, className] of [['↑', 'KeyW', 'up'], ['←', 'KeyA', 'left'], ['↓', 'KeyS', 'down'], ['→', 'KeyD', 'right']]) {
   const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.className = className;
@@ -182,7 +195,6 @@ document.querySelector('.rift-app')?.append(touchControls);
 let lastFrame = performance.now();
 function frame(now: number): void {
   const delta = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
-  // Consume overdue fixed ticks before rendering, then draw the remaining fractional step.
   advanceInputs(performance.now());
   const time = connection.serverTime();
   const remoteFrame = snapshotBuffer.sample(performance.now());
@@ -199,5 +211,4 @@ function frame(now: number): void {
 }
 requestAnimationFrame(frame);
 
-// A normal close removes the connection immediately; the server still owns combat logout grace.
 window.addEventListener('pagehide', () => connection.leave());

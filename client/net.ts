@@ -2,8 +2,18 @@ import { PROTOCOL_VERSION } from '../shared/config';
 import type { ClassId, ClientMessage, ServerMessage } from '../shared/types';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline';
-export interface NetworkCallbacks { message: (message: ServerMessage) => void; status: (status: ConnectionStatus, detail?: string) => void; reset: () => void; }
-const TOKEN_KEY = 'riftlands.account';
+export interface NetworkCallbacks {
+  message: (message: ServerMessage) => void;
+  status: (status: ConnectionStatus, detail?: string) => void;
+  reset: () => void;
+  authExpired?: () => void;
+}
+
+const JWT_KEY = 'riftlands.jwt';
+
+type JoinRequest =
+  | { type: 'token'; classId: ClassId }
+  | { type: 'credentials'; mode: 'login' | 'register'; name: string; password: string; classId: ClassId };
 
 export class GameConnection {
   private socket: WebSocket | null = null;
@@ -15,76 +25,137 @@ export class GameConnection {
   private intentional = true;
   private welcomed = false;
   private generation = 0;
-  private joined: { name: string; classId: ClassId } | null = null;
+  private joinRequest: JoinRequest | null = null;
   private clockOffset = Date.now() - performance.now();
   private lastReceived = 0;
   private token: string | undefined;
   ping = 0;
+
   constructor(private callbacks: NetworkCallbacks) {
-    try { this.token = localStorage.getItem(TOKEN_KEY) || undefined; } catch { /* Session still works with in-memory credentials. */ }
-  }
-  get connected(): boolean { return this.welcomed && this.socket?.readyState === WebSocket.OPEN; }
-  serverTime(): number { return performance.now() + this.clockOffset; }
-  getAccountToken(): string | undefined { return this.token; }
-
-  useAccountToken(token: string): void {
-    const normalized = token.trim().toLowerCase();
-    if (!/^[a-f0-9]{64}$/.test(normalized)) throw new Error('Il codice account deve contenere 64 caratteri esadecimali.');
-    this.leave();
-    this.token = normalized;
-    try { localStorage.setItem(TOKEN_KEY, normalized); } catch { /* Keep imported credentials for this session. */ }
+    try {
+      this.token = localStorage.getItem(JWT_KEY) || undefined;
+    } catch { /* Storage non disponibile */ }
   }
 
-  resetIdentity(): void {
+  get connected(): boolean {
+    return this.welcomed && this.socket?.readyState === WebSocket.OPEN;
+  }
+
+  serverTime(): number {
+    return performance.now() + this.clockOffset;
+  }
+
+  hasToken(): boolean {
+    return Boolean(this.token);
+  }
+
+  getToken(): string | undefined {
+    return this.token;
+  }
+
+  logout(): void {
     this.leave();
     this.token = undefined;
-    try { localStorage.removeItem(TOKEN_KEY); } catch { /* In-memory identity is still reset. */ }
+    try {
+      localStorage.removeItem(JWT_KEY);
+    } catch { /* Storage non disponibile */ }
   }
 
-  join(name: string, classId: ClassId): void {
+  joinWithCredentials(mode: 'login' | 'register', name: string, password: string, classId: ClassId): void {
     this.leave();
-    this.joined = { name, classId }; this.intentional = false; this.attempts = 0;
+    this.joinRequest = { type: 'credentials', mode, name, password, classId };
+    this.intentional = false;
+    this.attempts = 0;
+    this.connect();
+  }
+
+  joinWithToken(classId: ClassId): void {
+    if (!this.token) throw new Error('Nessuna sessione attiva disponibile.');
+    this.leave();
+    this.joinRequest = { type: 'token', classId };
+    this.intentional = false;
+    this.attempts = 0;
     this.connect();
   }
 
   private connect(): void {
-    if (this.intentional || !this.joined) return;
+    if (this.intentional || !this.joinRequest) return;
     const generation = ++this.generation;
     this.welcomed = false;
     this.callbacks.reset();
     this.callbacks.status(this.attempts ? 'reconnecting' : 'connecting');
+
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     let socket: WebSocket;
-    try { socket = new WebSocket(`${protocol}//${location.host}/ws`); }
-    catch { this.retry(generation, 'Impossibile aprire la connessione.'); return; }
+    try {
+      socket = new WebSocket(`${protocol}//${location.host}/ws`);
+    } catch {
+      this.retry(generation, 'Impossibile aprire la connessione.');
+      return;
+    }
+
     this.socket = socket;
     this.lastReceived = performance.now();
-    // Covers both a stalled WebSocket opening handshake and an unanswered hello.
+
     this.deadlineTimer = setTimeout(() => this.retry(generation, 'Accesso al mondo scaduto.'), 10_000);
     this.watchdogTimer = setInterval(() => {
       if (generation !== this.generation || !this.welcomed) return;
       if (performance.now() - this.lastReceived > 10_000) this.retry(generation, 'Il server non risponde.');
     }, 1000);
+
     socket.onopen = () => {
-      if (generation !== this.generation || !this.joined) return;
-      if (!this.send({ type: 'hello', token: this.token, ...this.joined, protocol: PROTOCOL_VERSION })) this.retry(generation, 'Accesso al mondo non inviato.');
+      if (generation !== this.generation || !this.joinRequest) return;
+      let helloMessage: ClientMessage;
+
+      if (this.joinRequest.type === 'token') {
+        helloMessage = {
+          type: 'hello',
+          protocol: PROTOCOL_VERSION,
+          classId: this.joinRequest.classId,
+          token: this.token
+        };
+      } else {
+        helloMessage = {
+          type: 'hello',
+          protocol: PROTOCOL_VERSION,
+          classId: this.joinRequest.classId,
+          mode: this.joinRequest.mode,
+          name: this.joinRequest.name,
+          password: this.joinRequest.password
+        };
+      }
+
+      if (!this.send(helloMessage)) this.retry(generation, 'Accesso al mondo non inviato.');
     };
+
     socket.onmessage = event => {
       if (generation !== this.generation) return;
       let message: ServerMessage;
-      try { message = JSON.parse(String(event.data)); } catch { return; }
+      try {
+        message = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
       if (!message || typeof message !== 'object' || typeof message.type !== 'string') return;
       this.lastReceived = performance.now();
+
       if (message.type === 'welcome') {
         if (this.deadlineTimer) clearTimeout(this.deadlineTimer);
         this.deadlineTimer = null;
         this.token = message.token;
-        try { localStorage.setItem(TOKEN_KEY, message.token); } catch { /* Private/limited storage. */ }
+        try {
+          localStorage.setItem(JWT_KEY, message.token);
+        } catch { /* Storage privato o limitato */ }
+
         this.clockOffset = message.time - performance.now();
-        this.attempts = 0; this.welcomed = true;
-        if (!this.pingTimer) this.pingTimer = setInterval(() => {
-          if (generation === this.generation) this.send({ type: 'ping', at: performance.now() });
-        }, 1500);
+        this.attempts = 0;
+        this.welcomed = true;
+
+        if (!this.pingTimer) {
+          this.pingTimer = setInterval(() => {
+            if (generation === this.generation) this.send({ type: 'ping', at: performance.now() });
+          }, 1500);
+        }
         this.callbacks.status('online');
       } else if (message.type === 'pong') {
         const rtt = Math.max(0, performance.now() - message.at);
@@ -92,15 +163,21 @@ export class GameConnection {
         const offset = message.time + rtt / 2 - performance.now();
         this.clockOffset = this.clockOffset * 0.8 + offset * 0.2;
       } else if (message.type === 'error' && message.fatal) {
+        if (this.joinRequest?.type === 'token') {
+          // Token non più valido sul server
+          this.logout();
+          this.callbacks.authExpired?.();
+        }
         this.stop(generation, message.message);
       }
+
       this.callbacks.message(message);
     };
-    socket.onerror = () => { /* close or the independent watchdog drives one retry path. */ };
+
+    socket.onerror = () => { /* gestito da onclose e watchdog */ };
+
     socket.onclose = event => {
-      if (generation !== this.generation) return;
-      if (this.intentional) return;
-      // Explicit policy failures/session takeover must never fight another active tab.
+      if (generation !== this.generation || this.intentional) return;
       if (event.code === 4001 || event.code === 4003 || event.code === 4009 || event.code === 1008) {
         this.stop(generation, event.reason || 'Sessione chiusa. Rientra dal menu.');
         return;
@@ -109,19 +186,20 @@ export class GameConnection {
     };
   }
 
-  /** Retire first: late close/message events from this socket can never change its successor. */
   private retireSocket(): void {
     this.generation++;
     this.welcomed = false;
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.deadlineTimer) clearTimeout(this.deadlineTimer);
     if (this.watchdogTimer) clearInterval(this.watchdogTimer);
-    this.pingTimer = null; this.deadlineTimer = null; this.watchdogTimer = null;
+    this.pingTimer = null;
+    this.deadlineTimer = null;
+    this.watchdogTimer = null;
+
     const socket = this.socket;
     this.socket = null;
-    // Browser close handshakes can stall on a dead network; never await their completion.
     if (socket && socket.readyState < WebSocket.CLOSING) {
-      try { socket.close(1000, 'Connessione conclusa'); } catch { /* Already failed or closing. */ }
+      try { socket.close(1000, 'Connessione conclusa'); } catch { /* ignore */ }
     }
   }
 
@@ -152,8 +230,12 @@ export class GameConnection {
   send(message: ClientMessage): boolean {
     if (this.socket?.readyState !== WebSocket.OPEN || this.socket.bufferedAmount > 64_000) return false;
     if (message.type === 'input' && !this.welcomed) return false;
-    try { this.socket.send(JSON.stringify(message)); return true; }
-    catch { return false; }
+    try {
+      this.socket.send(JSON.stringify(message));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   leave(): void {

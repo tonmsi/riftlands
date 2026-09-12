@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Actor, PublicAccount } from '../shared/types';
@@ -6,8 +6,10 @@ import { CLASSES } from '../shared/config';
 
 export interface Account {
   id: string;
-  tokenHash: string;
   name: string;
+  nameLower: string;
+  salt: string;
+  passwordHash: string;
   kills: number;
   deaths: number;
   xp: number;
@@ -23,10 +25,8 @@ export function publicAccount(account: Account): PublicAccount {
 }
 
 export function cleanName(name: string): string {
-  return name.replace(/[\p{C}<>]/gu, '').trim().slice(0, 20) || 'Viandante';
+  return name.replace(/[\p{C}<>]/gu, '').trim().slice(0, 20);
 }
-
-const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 
 function validBody(body: unknown): boolean {
   if (!body || typeof body !== 'object') return false;
@@ -38,53 +38,179 @@ function validBody(body: unknown): boolean {
   return actor.effects.every(effect => effect && ['haste', 'power', 'weakness', 'slow', 'shield'].includes(effect.kind) && Number.isFinite(effect.until));
 }
 
-/** Opaque bearer credentials are hashed at rest. Never log token values. */
+function base64UrlEncode(str: string): string {
+  return Buffer.from(str).toString('base64url');
+}
+
+function base64UrlDecode(str: string): string {
+  return Buffer.from(str, 'base64url').toString('utf8');
+}
+
+function getJwtSecret(baseDir: string): string {
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 16) {
+    return process.env.JWT_SECRET;
+  }
+  const secretPath = resolve(baseDir, 'jwt.secret');
+  if (existsSync(secretPath)) {
+    const existing = readFileSync(secretPath, 'utf8').trim();
+    if (existing.length >= 32) return existing;
+  }
+  mkdirSync(baseDir, { recursive: true });
+  const generated = randomBytes(32).toString('hex');
+  writeFileSync(secretPath, generated, { mode: 0o600 });
+  return generated;
+}
+
 export class AccountStore {
   readonly accounts = new Map<string, Account>();
-  private tokens = new Map<string, string>();
+  private readonly accountsByName = new Map<string, string>(); // nameLower -> account.id
   private dirty = false;
   readonly path: string;
+  private readonly jwtSecret: string;
 
   constructor(path = resolve('data/accounts.json')) {
     this.path = path;
+    this.jwtSecret = getJwtSecret(dirname(path));
+
     if (!existsSync(path)) return;
     try {
       const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
-      if (!parsed || typeof parsed !== 'object' || !('version' in parsed) || parsed.version !== 1 || !('accounts' in parsed) || !Array.isArray(parsed.accounts)) throw new Error('Formato account non supportato');
+      if (!parsed || typeof parsed !== 'object' || !('version' in parsed) || parsed.version !== 2 || !('accounts' in parsed) || !Array.isArray(parsed.accounts)) {
+        // Se è versione 1 o formato precedente, consideriamo gli account azzerati come da specifica
+        if (parsed && typeof parsed === 'object' && 'version' in parsed && parsed.version === 1) {
+          this.dirty = true;
+          this.flush();
+          return;
+        }
+        throw new Error('Formato account non supportato.');
+      }
+
       for (const entry of parsed.accounts) {
-        if (!entry || typeof entry.id !== 'string' || typeof entry.tokenHash !== 'string' || !/^[a-f0-9]{64}$/.test(entry.tokenHash) || typeof entry.name !== 'string' || !Array.isArray(entry.friends) || !Array.isArray(entry.requests) || ![entry.xp, entry.kills, entry.deaths, entry.lastSeen].every(Number.isFinite)) throw new Error('Account danneggiato');
-        if (entry.friends.length > 100 || entry.requests.length > 50 || ![...entry.friends, ...entry.requests].every(id => typeof id === 'string') || (entry.body !== undefined && (!validBody(entry.body) || entry.body.id !== entry.id))) throw new Error('Stato account danneggiato');
-        if (this.accounts.has(entry.id) || this.tokens.has(entry.tokenHash)) throw new Error('Identità account duplicata');
-        this.accounts.set(entry.id, entry as Account);
-        this.tokens.set(entry.tokenHash, entry.id);
+        if (!entry || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.nameLower !== 'string' || typeof entry.salt !== 'string' || typeof entry.passwordHash !== 'string' || !Array.isArray(entry.friends) || !Array.isArray(entry.requests) || ![entry.xp, entry.kills, entry.deaths, entry.lastSeen].every(Number.isFinite)) {
+          throw new Error('Account danneggiato.');
+        }
+        if (entry.friends.length > 100 || entry.requests.length > 50 || ![...entry.friends, ...entry.requests].every(id => typeof id === 'string') || (entry.body !== undefined && (!validBody(entry.body) || entry.body.id !== entry.id))) {
+          throw new Error('Stato account non valido.');
+        }
+        if (this.accounts.has(entry.id) || this.accountsByName.has(entry.nameLower)) {
+          throw new Error('Nome o ID account duplicato.');
+        }
+
+        const account = entry as Account;
+        this.accounts.set(account.id, account);
+        this.accountsByName.set(account.nameLower, account.id);
       }
     } catch (error) {
-      // Fail closed; an operator must restore a backup. Never overwrite corrupt data.
-      throw new Error(`Impossibile caricare ${path}. Ripristina un backup prima di riavviare. ${String(error)}`);
+      throw new Error(`Impossibile caricare ${path}. Ripristina o azzera il file prima di riavviare. ${String(error)}`);
     }
   }
 
-  authenticate(token: string | undefined, name: string): { account: Account; token: string } {
-    if (token !== undefined) {
-      if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Codice account non valido. Usa il codice salvato o crea una nuova identità.');
-      const tokenHash = hash(token);
-      const id = this.tokens.get(tokenHash);
-      const account = id ? this.accounts.get(id) : undefined;
-      if (!account || !timingSafeEqual(Buffer.from(account.tokenHash, 'hex'), Buffer.from(tokenHash, 'hex'))) throw new Error('Codice account sconosciuto. Usa il codice salvato o crea una nuova identità.');
-      account.name = cleanName(name);
-      account.lastSeen = Date.now();
-      this.touch();
-      return { account, token };
+  private hashPassword(password: string, salt: string): string {
+    return scryptSync(password, salt, 64).toString('hex');
+  }
+
+  signJwt(account: Account): string {
+    const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+    const now = Math.floor(Date.now() / 1000);
+    const payload = base64UrlEncode(JSON.stringify({
+      sub: account.id,
+      name: account.name,
+      iat: now,
+      exp: now + 30 * 24 * 3600 // 30 giorni
+    }));
+    const signature = createHmac('sha256', this.jwtSecret)
+      .update(`${header}.${payload}`)
+      .digest('base64url');
+    return `${header}.${payload}.${signature}`;
+  }
+
+  verifyJwt(token: string): { sub: string; name: string } | null {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [header, payload, signature] = parts;
+    const expected = createHmac('sha256', this.jwtSecret)
+      .update(`${header}.${payload}`)
+      .digest('base64url');
+    
+    if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+      return null;
     }
-    if (this.accounts.size >= 100_000) throw new Error('Limite account raggiunto.');
-    const nextToken = randomBytes(32).toString('hex');
-    const account: Account = { id: randomUUID(), tokenHash: hash(nextToken), name: cleanName(name), kills: 0, deaths: 0, xp: 0, friends: [], requests: [], lastSeen: Date.now() };
+
+    try {
+      const data = JSON.parse(base64UrlDecode(payload));
+      if (!data || typeof data !== 'object' || typeof data.sub !== 'string' || typeof data.exp !== 'number') return null;
+      if (data.exp < Math.floor(Date.now() / 1000)) return null;
+      return { sub: data.sub, name: data.name ?? '' };
+    } catch {
+      return null;
+    }
+  }
+
+  register(name: string, password: string): { account: Account; token: string } {
+    const cleaned = cleanName(name);
+    if (cleaned.length < 2) throw new Error('Il nome del personaggio deve avere almeno 2 caratteri.');
+    if (cleaned.length > 20) throw new Error('Il nome del personaggio può contenere al massimo 20 caratteri.');
+    if (typeof password !== 'string' || password.length < 4) throw new Error('La password deve contenere almeno 4 caratteri.');
+    if (password.length > 100) throw new Error('La password è troppo lunga (max 100 caratteri).');
+    if (this.accounts.size >= 100_000) throw new Error('Limite account server raggiunto.');
+
+    const nameLower = cleaned.toLowerCase();
+    if (this.accountsByName.has(nameLower)) {
+      throw new Error('Questo nome è già stato scelto da un altro giocatore.');
+    }
+
+    const salt = randomBytes(16).toString('hex');
+    const passwordHash = this.hashPassword(password, salt);
+    const account: Account = {
+      id: randomUUID(),
+      name: cleaned,
+      nameLower,
+      salt,
+      passwordHash,
+      kills: 0,
+      deaths: 0,
+      xp: 0,
+      friends: [],
+      requests: [],
+      lastSeen: Date.now()
+    };
+
     this.accounts.set(account.id, account);
-    this.tokens.set(account.tokenHash, account.id);
+    this.accountsByName.set(nameLower, account.id);
     this.touch();
-    // Persist before acknowledging account creation, so a crash cannot lose identity.
     this.flush();
-    return { account, token: nextToken };
+
+    const token = this.signJwt(account);
+    return { account, token };
+  }
+
+  login(name: string, password: string): { account: Account; token: string } {
+    const cleaned = cleanName(name);
+    const nameLower = cleaned.toLowerCase();
+    const id = this.accountsByName.get(nameLower);
+    if (!id) throw new Error('Nome personaggio o password non validi.');
+    const account = this.accounts.get(id);
+    if (!account) throw new Error('Nome personaggio o password non validi.');
+
+    const computed = this.hashPassword(password, account.salt);
+    const match = computed.length === account.passwordHash.length &&
+      timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(account.passwordHash, 'hex'));
+    if (!match) throw new Error('Nome personaggio o password non validi.');
+
+    account.lastSeen = Date.now();
+    this.touch();
+    const token = this.signJwt(account);
+    return { account, token };
+  }
+
+  authenticateJwt(token: string): { account: Account; token: string } {
+    const payload = this.verifyJwt(token);
+    if (!payload) throw new Error('Sessione scaduta o non valida. Accedi di nuovo.');
+    const account = this.accounts.get(payload.sub);
+    if (!account) throw new Error('Account non trovato. Crea un nuovo personaggio.');
+    account.lastSeen = Date.now();
+    this.touch();
+    return { account, token };
   }
 
   touch(): void { this.dirty = true; }
@@ -93,7 +219,7 @@ export class AccountStore {
     if (!this.dirty) return;
     mkdirSync(dirname(this.path), { recursive: true });
     const next = `${this.path}.tmp`;
-    writeFileSync(next, JSON.stringify({ version: 1, accounts: [...this.accounts.values()] }), { mode: 0o600 });
+    writeFileSync(next, JSON.stringify({ version: 2, accounts: [...this.accounts.values()] }), { mode: 0o600 });
     renameSync(next, this.path);
     this.dirty = false;
   }

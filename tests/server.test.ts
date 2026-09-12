@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CLASSES, DT } from '../shared/config';
@@ -8,7 +8,20 @@ import type { Actor, ClassId } from '../shared/types';
 import { AccountStore, type Account } from '../server/store';
 import { sweptWorldHit, WorldSimulation } from '../server/simulation';
 
-const account = (id: string): Account => ({ id, tokenHash: 'a'.repeat(64), name: id, xp: 0, kills: 0, deaths: 0, friends: [], requests: [], lastSeen: 0 });
+const account = (id: string): Account => ({
+  id,
+  name: id,
+  nameLower: id.toLowerCase(),
+  salt: 'a'.repeat(32),
+  passwordHash: 'b'.repeat(128),
+  xp: 0,
+  kills: 0,
+  deaths: 0,
+  friends: [],
+  requests: [],
+  lastSeen: 0
+});
+
 function arena(aClass: ClassId = 'mage', bClass: ClassId = 'warrior') {
   const simulation = new WorldSimulation(734291, 1_000_000);
   simulation.world.getTile = () => 'grass';
@@ -20,7 +33,11 @@ function arena(aClass: ClassId = 'mage', bClass: ClassId = 'warrior') {
   simulation.step();
   return { simulation, a, b, aAccount, bAccount };
 }
-function advance(simulation: WorldSimulation, seconds: number) { for (let i = 0; i < Math.ceil(seconds / DT); i++) simulation.step(); }
+
+function advance(simulation: WorldSimulation, seconds: number) {
+  for (let i = 0; i < Math.ceil(seconds / DT); i++) simulation.step();
+}
+
 function team(simulation: WorldSimulation, a: Actor, b: Actor) {
   simulation.socialAction(a.id, 'team-invite', b.id);
   simulation.socialAction(b.id, 'team-accept', a.id);
@@ -283,23 +300,46 @@ test('generated pickups regenerate only after their authoritative cooldown', () 
   assert.equal(simulation.pickups.has('source'), true);
 });
 
-test('accounts store only token hashes, reload identity and fail closed on corrupt files', () => {
+test('accounts register, login with password and JWT, and fail closed on corrupt files', () => {
   const directory = mkdtempSync(join(tmpdir(), 'riftlands-store-'));
   const path = join(directory, 'accounts.json');
   try {
     const store = new AccountStore(path);
-    const first = store.authenticate(undefined, 'Alice');
-    assert.equal(first.token.length, 64);
-    assert.equal(readFileSync(path, 'utf8').includes(first.token), false);
-    const restored = new AccountStore(path).authenticate(first.token, 'Alice');
+
+    // Registrazione utente
+    const first = store.register('Alice', 'passwordSegreta123');
+    assert.equal(first.account.name, 'Alice');
+    assert.equal(first.account.nameLower, 'alice');
+    assert.equal(first.token.split('.').length, 3, 'Il token è un JWT valido con 3 parti');
+
+    // Verifica che la password in chiaro e il JWT non siano salvati nel JSON
+    const content = readFileSync(path, 'utf8');
+    assert.equal(content.includes('passwordSegreta123'), false);
+    assert.equal(content.includes(first.token), false);
+
+    // Ricaricamento da file e verifica JWT
+    const restored = new AccountStore(path).authenticateJwt(first.token);
     assert.equal(restored.account.id, first.account.id);
-    assert.throws(() => store.authenticate('0'.repeat(64), 'Intruder'));
+    assert.equal(restored.account.name, 'Alice');
+
+    // Login con credenziali corrette (case-insensitive)
+    const loginOk = store.login('alice', 'passwordSegreta123');
+    assert.equal(loginOk.account.id, first.account.id);
+
+    // Rifiuto password errata
+    assert.throws(() => store.login('Alice', 'password-sbagliata'));
+
+    // Rifiuto JWT errato o manomesso
+    assert.throws(() => store.authenticateJwt('header.payload.signatureFalsa'));
+
+    // Rifiuto nome duplicato case-insensitive
+    assert.throws(() => store.register('alice', 'altraPassword456'));
+
+    // Fail closed su file JSON danneggiato
     writeFileSync(path, '{broken');
-    assert.throws(() => new AccountStore(path), /Ripristina un backup/);
+    assert.throws(() => new AccountStore(path), /Ripristina/);
     assert.equal(readFileSync(path, 'utf8'), '{broken');
   } finally {
-    // The directory was created by mkdtemp above; explicit files avoid recursive deletion.
-    rmSync(path, { force: true });
-    rmdirSync(directory);
+    rmSync(directory, { recursive: true, force: true });
   }
 });

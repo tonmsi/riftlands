@@ -2,16 +2,16 @@ import { CLASSES, levelFromXp } from '../shared/config';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, PublicAccount, Snapshot, SocialState } from '../shared/types';
 
 type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
+
 export interface UIActions {
-  join: (name: string, classId: ClassId) => void;
+  joinCredentials: (mode: 'login' | 'register', name: string, password: string, classId: ClassId) => void;
+  joinSaved: (classId: ClassId) => void;
+  logout: () => void;
   leave: () => void;
   social: (action: SocialAction, targetId?: string) => void;
   select: (id: string | null) => void;
   cast: (slot: AbilitySlot) => void;
   previewClass?: (classId: ClassId) => void;
-  copyAccount?: () => void;
-  useAccount?: (token: string) => void;
-  newAccount?: () => void;
 }
 
 const SLOTS: AbilitySlot[] = ['basic', 'q', 'e', 'r'];
@@ -29,15 +29,18 @@ const ABILITY_ICONS: Record<string, string> = {
   shield: CLASS_ICONS.paladin,
   dash: '<path d="m11 3 9 9-9 9M3 6l6 6-6 6M6 12h14"/>',
 };
+
 function icon(paths: string, extra = ''): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${paths}</svg>`;
 }
-function textElement(tag: string, className: string, text: string): HTMLElement {
-  const element = document.createElement(tag); element.className = className; element.textContent = text; return element;
-}
-function readName(): string { try { return localStorage.getItem('riftlands.name') || ''; } catch { return ''; } }
 
-/** DOM presentation only. Networking, prediction, and world rendering live outside the UI. */
+function textElement(tag: string, className: string, text: string): HTMLElement {
+  const element = document.createElement(tag);
+  element.className = className;
+  element.textContent = text;
+  return element;
+}
+
 export class GameUI {
   public readonly canvas: HTMLCanvasElement;
   public readonly minimap: HTMLCanvasElement;
@@ -49,8 +52,11 @@ export class GameUI {
   private status = 'idle';
   private isPlaying = false;
   private socialCache = '';
+  private authMode: 'login' | 'register' = 'login';
+  private savedAccount: PublicAccount | null = null;
   private readonly refs = new Map<string, HTMLElement>();
   private readonly nameInput: HTMLInputElement;
+  private readonly passwordInput: HTMLInputElement;
 
   constructor(private root: HTMLElement, private actions: UIActions) {
     root.className = 'rift-app';
@@ -62,26 +68,62 @@ export class GameUI {
         <div class="preview-tag"><i></i><span>MONDO PROCEDURALE</span><span class="infinity-symbol">∞</span></div>
       </div>
       <div class="lobby">
-        <header class="site-header"><a class="brand" href="/" aria-label="Riftlands, ingresso"><span class="brand-symbol">${icon('<path d="m12 1 10 11-10 11L2 12Z"/><path d="m12 5 6 7-6 7-6-7ZM12 1v22"/>')}</span>RIFTLANDS<span class="brand-divider"></span><span class="brand-caption">A SHARED FRONTIER</span></a><div class="header-right"><span class="connection-pill" data-ref="lobby-connection"><i></i><span>Pronto a esplorare</span></span><span class="alpha-badge">ALPHA 0.1</span></div></header>
+        <header class="site-header"><a class="brand" href="/" aria-label="Riftlands, ingresso"><span class="brand-symbol">${icon('<path d="m12 1 10 11-10 11L2 12Z"/><path d="m12 5 6 7-6 7-6-7ZM12 1v22"/>')}</span>RIFTLANDS<span class="brand-divider"></span><span class="brand-caption">A SHARED FRONTIER</span></a><div class="header-right"><span class="connection-pill" data-ref="lobby-connection"><i></i><span>Pronto a esplorare</span></span><span class="alpha-badge">ALPHA 0.2</span></div></header>
         <main class="lobby-main"><section class="entry-panel" aria-label="Crea il tuo viaggiatore">
           <div class="intro"><div class="eyebrow"><span class="eyebrow-line"></span>UN MONDO INFINITO. LA TUA STORIA.</div><h1>Oltre il confine<span>.</span></h1><p>Trova la tua strada. Stringi alleanze.<br>Lascia il segno in un mondo senza fine.</p></div>
+          
           <form data-ref="entry-form" class="entry-form">
-            <div class="account-card"><div class="account-icon">${icon('<circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/>')}</div><label class="name-label"><span>IL TUO VIAGGIATORE</span><input data-ref="name" type="text" maxlength="20" placeholder="Come ti chiami?" autocomplete="nickname" aria-label="Nome del personaggio" required pattern=".*\\S.*"></label><div class="account-saved"><span class="save-dot"></span><span data-ref="account-label">Profilo locale</span><small data-ref="account-id">Salvato su questo browser</small><button type="button" data-ref="account-toggle" class="account-tools-toggle" aria-expanded="false">Codice account <span>⌄</span></button></div></div>
-            <div class="account-tools-body" data-ref="account-tools" hidden><div class="account-tools-heading"><span>PORTA IL TUO VIAGGIATORE CON TE</span><button type="button" data-ref="account-close" aria-label="Chiudi codice account">×</button></div><p>Il codice segreto permette di ritrovare il profilo su un altro browser. Conservalo per te.</p><div class="account-code-row"><input type="password" data-ref="account-code" placeholder="Incolla il codice account…" autocomplete="off" spellcheck="false" aria-label="Codice segreto account" maxlength="64"><button type="button" data-ref="account-use">Usa codice</button></div><div class="account-tools-actions"><button type="button" data-ref="account-copy">Copia il mio codice</button><button type="button" data-ref="account-new">Nuovo profilo</button></div></div>
+            <!-- SCHERMATA SESSIONE ATTIVA -->
+            <div class="saved-account-card" data-ref="saved-card" hidden>
+              <div class="account-icon">${icon('<circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/>')}</div>
+              <div class="saved-info">
+                <span class="saved-label">SESSIONE ATTIVA</span>
+                <strong data-ref="saved-name">Viaggiatore</strong>
+                <small data-ref="saved-stats">Livello 1</small>
+              </div>
+              <button type="button" class="change-account-btn" data-ref="change-account-btn">Cambia</button>
+            </div>
+
+            <!-- SCHERMATA LOGIN / REGISTRAZIONE -->
+            <div class="auth-box" data-ref="auth-box">
+              <div class="auth-tabs" role="tablist">
+                <button type="button" class="auth-tab active" data-ref="tab-login" role="tab" aria-selected="true">Accedi</button>
+                <button type="button" class="auth-tab" data-ref="tab-register" role="tab" aria-selected="false">Crea Personaggio</button>
+              </div>
+
+              <div class="account-card auth-inputs">
+                <div class="account-icon">${icon('<circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/>')}</div>
+                <div class="inputs-column">
+                  <label class="name-label">
+                    <span data-ref="name-heading">NOME PERSONAGGIO</span>
+                    <input data-ref="name" type="text" maxlength="20" placeholder="Nome univoco…" autocomplete="username" required>
+                  </label>
+                  <label class="password-label">
+                    <span>PASSWORD</span>
+                    <input data-ref="password" type="password" maxlength="100" placeholder="Almeno 4 caratteri…" autocomplete="current-password" required>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <div class="section-label"><span>01 <b>SCEGLI LA TUA CLASSE</b></span><span>Tre modi di lasciare il segno</span></div>
             <div class="class-choices" role="group" aria-label="Classe del personaggio">${(Object.keys(CLASSES) as ClassId[]).map(id => `<button type="button" class="class-card ${id === 'mage' ? 'selected' : ''}" data-class="${id}" aria-pressed="${id === 'mage'}" style="--class-color:${CLASSES[id].color}"><span class="class-symbol">${icon(CLASS_ICONS[id])}</span><span class="class-name">${CLASSES[id].name}</span><span class="class-role">${id === 'mage' ? 'DISTANZA · CONTROLLO' : id === 'warrior' ? 'MISCHIA · ASSALTO' : 'DIFESA · SUPPORTO'}</span><span class="selection-dot"></span></button>`).join('')}</div>
             <div class="class-detail" data-ref="class-detail"></div>
-            <button type="submit" class="join-button" data-ref="join"><span>Entra nel mondo</span><span class="join-arrow">↗</span></button>
-            <div class="entry-note"><span class="save-dot"></span>Nessuna attesa. La tua avventura comincia qui.</div>
+            
+            <button type="submit" class="join-button" data-ref="join">
+              <span data-ref="join-text">Entra nel mondo</span><span class="join-arrow">↗</span>
+            </button>
+            <div class="entry-note"><span class="save-dot"></span>I tuoi progressi sono protetti dal tuo account personale.</div>
           </form>
+
           <div class="lobby-controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Muoviti</span><span><kbd>␣</kbd> Attacca</span><span><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd> Abilità</span><span class="mouse-hint">↖ Mouse per mirare</span></div>
         </section></main>
-        <footer class="lobby-footer"><div><span class="feature-icon">∞</span><span><b>Nessun confine</b><small>Biomi e incontri generati lungo il cammino</small></span></div><div><span class="feature-icon">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}</span><span><b>La forza di un’alleanza</b><small>Incontra giocatori, aggiungi amici, crea un team</small></span></div><div><span class="feature-icon">${icon('<path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/>')}</span><span><b>Ogni scelta conta</b><small>Combatti, esplora e padroneggia la tua classe</small></span></div><span class="footer-version">PROTOTIPO GIOCABILE<br>NESSUN ASSET · SOLO POSSIBILITÀ</span></footer>
+        <footer class="lobby-footer"><div><span class="feature-icon">∞</span><span><b>Nessun confine</b><small>Biomi e incontri generati lungo il cammino</small></span></div><div><span class="feature-icon">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}</span><span><b>La forza di un’alleanza</b><small>Incontra giocatori, aggiungi amici, crea un team</small></span></div><div><span class="feature-icon">${icon('<path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/>')}</span><span><b>Ogni scelta conta</b><small>Combatti, esplora e padroneggia la tua classe</small></span></div><span class="footer-version">PROTOTIPO GIOCABILE<br>AUTENTICAZIONE SICURA</span></footer>
       </div>
       <div class="game-hud" hidden>
         <section class="player-panel glass"><div class="player-portrait" data-ref="portrait"></div><div class="player-vitals"><div class="player-name-row"><strong data-ref="player-name"></strong><span data-ref="player-level">LV 1</span></div><div class="vital-row"><span>HP</span><div class="meter hp-meter"><i data-ref="hp-fill"></i><span data-ref="hp-label"></span></div></div><div class="vital-row"><span data-ref="resource-name">MP</span><div class="meter resource-meter"><i data-ref="resource-fill"></i><span data-ref="resource-label"></span></div></div><div class="xp-meter"><i data-ref="xp-fill"></i></div></div></section>
         <div class="world-location glass"><span class="location-dot"></span><div><strong data-ref="biome">Terre di Soglia</strong><span data-ref="coords">0 · 0</span></div><span class="location-decoration">✦</span></div>
-        <div class="game-top-right"><div class="server-status glass"><span class="save-dot"></span><b data-ref="online">1</b> online<span class="status-separator"></span><span data-ref="ping">— ms</span></div><div class="menu-buttons"><button class="glass hud-menu-button" data-ref="social-toggle" aria-expanded="false">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}<span>Compagni</span><i class="notification-dot" data-ref="social-dot" hidden></i></button><button class="glass hud-menu-button" data-ref="leave" title="Salva il profilo e torna alla selezione classe">${icon('<path d="M10 3H3v18h7M8 12h14M17 7l5 5-5 5"/>')}<span>Esci</span></button></div></div>
+        <div class="game-top-right"><div class="server-status glass"><span class="save-dot"></span><b data-ref="online">1</b> online<span class="status-separator"></span><span data-ref="ping">— ms</span></div><div class="menu-buttons"><button class="glass hud-menu-button" data-ref="social-toggle" aria-expanded="false">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}<span>Compagni</span><i class="notification-dot" data-ref="social-dot" hidden></i></button><button class="glass hud-menu-button" data-ref="leave" title="Torna al menu">${icon('<path d="M10 3H3v18h7M8 12h14M17 7l5 5-5 5"/>')}<span>Esci</span></button></div></div>
         <div class="effect-list" data-ref="effects"></div>
         <section class="target-panel glass" data-ref="target" hidden><div class="target-heading"><span data-ref="target-type">GIOCATORE</span><button data-ref="target-close" aria-label="Deseleziona bersaglio">×</button></div><strong data-ref="target-name"></strong><small data-ref="target-detail"></small><div class="meter hp-meter target-health"><i data-ref="target-fill"></i></div><div class="target-actions" data-ref="target-actions"><button data-ref="target-friend">+ Amico</button><button data-ref="target-team">+ Team</button></div></section>
         <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><div><span class="eyebrow">NON VIAGGIARE DA SOLO</span><h2>I tuoi compagni</h2></div><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
@@ -92,56 +134,56 @@ export class GameUI {
         <div class="death-overlay" data-ref="death" hidden><span class="eyebrow">IL VIAGGIO NON FINISCE QUI</span><h2>La Soglia ti richiama.</h2><p>Ritorno al punto di partenza tra <b data-ref="death-count">5</b> secondi</p></div>
       </div>
       <div class="toast-stack" data-ref="toasts" aria-live="polite" aria-atomic="false"></div>`;
+
     root.querySelectorAll<HTMLElement>('[data-ref]').forEach(element => this.refs.set(element.dataset.ref!, element));
     this.canvas = root.querySelector<HTMLCanvasElement>('.world-canvas')!;
     this.minimap = root.querySelector<HTMLCanvasElement>('.minimap')!;
     this.nameInput = this.ref('name') as HTMLInputElement;
-    this.nameInput.value = readName();
+    this.passwordInput = this.ref('password') as HTMLInputElement;
+
+    this.ref('tab-login').addEventListener('click', () => this.setAuthMode('login'));
+    this.ref('tab-register').addEventListener('click', () => this.setAuthMode('register'));
+    this.ref('change-account-btn').addEventListener('click', () => {
+      this.actions.logout();
+      this.setSavedAccount(null);
+    });
+
     this.ref('entry-form').addEventListener('submit', event => {
       event.preventDefault();
+      if (this.status === 'connecting') return;
+
+      if (this.savedAccount) {
+        this.actions.joinSaved(this.currentClass);
+        return;
+      }
+
       const name = this.nameInput.value.trim();
-      if (!name || this.status === 'connecting') return;
-      try { localStorage.setItem('riftlands.name', name); } catch { /* browser storage may be unavailable */ }
-      this.actions.join(name, this.currentClass);
+      const password = this.passwordInput.value;
+      if (!name || !password) {
+        this.toast('Compila nome e password per procedere.', 'error');
+        return;
+      }
+      this.actions.joinCredentials(this.authMode, name, password, this.currentClass);
     });
+
     root.querySelectorAll<HTMLButtonElement>('[data-class]').forEach(button => button.addEventListener('click', () => {
       this.currentClass = button.dataset.class as ClassId;
       this.renderClass();
       this.actions.previewClass?.(this.currentClass);
     }));
+
     this.ref('leave').addEventListener('click', () => this.actions.leave());
-    const closeAccount = () => { this.ref('account-tools').hidden = true; this.ref('account-toggle').setAttribute('aria-expanded', 'false'); };
-    this.ref('account-toggle').addEventListener('click', () => {
-      const open = this.ref('account-tools').hidden;
-      this.ref('account-tools').hidden = !open;
-      this.ref('account-toggle').setAttribute('aria-expanded', String(open));
-    });
-    this.ref('account-close').addEventListener('click', closeAccount);
-    this.ref('account-copy').addEventListener('click', () => this.actions.copyAccount?.());
-    const useCode = () => {
-      const input = this.ref('account-code') as HTMLInputElement;
-      const code = input.value.trim().toLowerCase();
-      if (!/^[a-f0-9]{64}$/.test(code)) { this.toast('Il codice account deve contenere 64 caratteri esadecimali.', 'error'); return; }
-      this.actions.useAccount?.(code); input.value = ''; closeAccount();
-    };
-    this.ref('account-use').addEventListener('click', useCode);
-    this.ref('account-code').addEventListener('keydown', event => {
-      if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); useCode(); }
-    });
-    this.ref('account-new').addEventListener('click', () => {
-      if (window.confirm('Creare un nuovo profilo? Conserva prima il codice attuale per non perdere l’accesso al precedente.')) {
-        this.actions.newAccount?.(); closeAccount();
-      }
-    });
     this.ref('social-toggle').addEventListener('click', () => this.toggleSocial());
     this.ref('social-close').addEventListener('click', () => this.toggleSocial(false));
     this.ref('target-close').addEventListener('click', () => this.actions.select(null));
     this.ref('target-friend').addEventListener('click', () => { if (this.selected) this.actions.social('friend-request', this.selected.id); });
     this.ref('target-team').addEventListener('click', () => { if (this.selected) this.actions.social('team-invite', this.selected.id); });
+
     this.ref('ability-bar').addEventListener('click', event => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-slot]');
       if (button && !button.disabled) this.actions.cast(button.dataset.slot as AbilitySlot);
     });
+
     this.renderClass();
   }
 
@@ -150,12 +192,45 @@ export class GameUI {
   private write(name: string, value: string): void { const node = this.ref(name); if (node.textContent !== value) node.textContent = value; }
   private fill(name: string, fraction: number): void { this.ref(name).style.width = `${Math.max(0, Math.min(1, fraction)) * 100}%`; }
 
+  setAuthMode(mode: 'login' | 'register'): void {
+    this.authMode = mode;
+    const isLogin = mode === 'login';
+    this.ref('tab-login').classList.toggle('active', isLogin);
+    this.ref('tab-login').setAttribute('aria-selected', String(isLogin));
+    this.ref('tab-register').classList.toggle('active', !isLogin);
+    this.ref('tab-register').setAttribute('aria-selected', String(!isLogin));
+    this.ref('name-heading').textContent = isLogin ? 'NOME PERSONAGGIO' : 'SCEGLI IL TUO NOME';
+    this.write('join-text', isLogin ? 'Accedi ed entra' : 'Crea personaggio ed entra');
+    this.passwordInput.autocomplete = isLogin ? 'current-password' : 'new-password';
+  }
+
+  setSavedAccount(account: PublicAccount | null): void {
+    this.savedAccount = account;
+    const hasSaved = Boolean(account);
+    this.ref('saved-card').hidden = !hasSaved;
+    this.ref('auth-box').hidden = hasSaved;
+
+    if (hasSaved && account) {
+      this.write('saved-name', account.name);
+      this.write('saved-stats', `Livello ${levelFromXp(account.xp)} · ${account.kills} uccisioni`);
+      this.write('join-text', `Continua come ${account.name}`);
+      this.nameInput.removeAttribute('required');
+      this.passwordInput.removeAttribute('required');
+    } else {
+      this.write('join-text', this.authMode === 'login' ? 'Accedi ed entra' : 'Crea personaggio ed entra');
+      this.nameInput.setAttribute('required', 'true');
+      this.passwordInput.setAttribute('required', 'true');
+      this.passwordInput.value = '';
+    }
+  }
+
   private renderClass(): void {
     const chosen = CLASSES[this.currentClass];
     this.root.style.setProperty('--selected-class', chosen.color);
     this.root.querySelectorAll<HTMLButtonElement>('[data-class]').forEach(button => {
       const active = button.dataset.class === this.currentClass;
-      button.classList.toggle('selected', active); button.setAttribute('aria-pressed', String(active));
+      button.classList.toggle('selected', active);
+      button.setAttribute('aria-pressed', String(active));
     });
     this.ref('class-detail').innerHTML = `<div class="class-detail-heading"><h3>${chosen.subtitle}</h3><div class="class-stats"><span><i class="stat-health"></i>${chosen.maxHp} PV</span><span><i class="stat-resource" style="background:${chosen.color}"></i>${chosen.maxResource} ${chosen.resource === 'rage' ? 'RAGE' : 'MANA'}</span></div></div><p>${chosen.description}</p><div class="lobby-abilities">${SLOTS.map(slot => `<div class="lobby-ability" title="${chosen.abilities[slot].description}"><kbd>${KEYS[slot]}</kbd><span>${chosen.abilities[slot].name}</span></div>`).join('')}</div>`;
   }
@@ -168,25 +243,11 @@ export class GameUI {
     pill.querySelector('span')!.textContent = detail || labels[status];
     const button = this.ref('join') as HTMLButtonElement;
     button.disabled = status === 'connecting';
-    button.querySelector('span')!.textContent = status === 'connecting' ? 'La Soglia si sta aprendo…' : 'Entra nel mondo';
     const banner = this.ref('connection-banner');
     banner.hidden = !this.isPlaying || (status !== 'offline' && status !== 'reconnecting');
     banner.textContent = status === 'reconnecting'
       ? `Riconnessione al mondo…${detail ? ` ${detail}` : ''}`
       : detail || 'Connessione interrotta. Torna al menu per riprovare.';
-  }
-
-  setAccount(account: PublicAccount | null): void {
-    if (!account) {
-      this.write('account-label', 'Profilo locale');
-      this.write('account-id', 'Salvato su questo browser');
-      this.ref('account-id').removeAttribute('title');
-      return;
-    }
-    if (!this.nameInput.value) this.nameInput.value = account.name;
-    this.write('account-label', `Livello ${levelFromXp(account.xp)}`);
-    this.write('account-id', `ID ${account.id.slice(0, 8)}`);
-    this.ref('account-id').title = 'Identità salvata automaticamente in questo browser';
   }
 
   setPlaying(playing: boolean): void {
@@ -196,7 +257,12 @@ export class GameUI {
     (this.root.querySelector('.game-hud') as HTMLElement).hidden = !playing;
     this.ref('connection-banner').hidden = true;
     if (playing) this.canvas.focus({ preventScroll: true });
-    else { this.toggleSocial(false); this.setSelected(null); this.latest = null; this.activeClass = null; }
+    else {
+      this.toggleSocial(false);
+      this.setSelected(null);
+      this.latest = null;
+      this.activeClass = null;
+    }
   }
 
   setSnapshot(snapshot: Snapshot, ping: number): void {
@@ -229,6 +295,7 @@ export class GameUI {
     const remaining = Math.max(0, player.deadUntil - snapshot.time);
     this.ref('death').hidden = remaining <= 0;
     this.write('death-count', String(Math.ceil(remaining / 1000)));
+
     this.root.querySelectorAll<HTMLButtonElement>('[data-slot]').forEach(button => {
       const slot = button.dataset.slot as AbilitySlot;
       const ability = definition.abilities[slot];
@@ -240,6 +307,7 @@ export class GameUI {
       (button.querySelector('.cooldown-shade') as HTMLElement).style.height = `${Math.min(100, cooldown / (ability.cooldown * 1000) * 100)}%`;
       button.querySelector('.cooldown-count')!.textContent = cooldown > 0 ? (cooldown < 1000 ? (cooldown / 1000).toFixed(1) : String(Math.ceil(cooldown / 1000))) : '';
     });
+
     const effectNames = { haste: 'Passo celere', power: 'Potere antico', weakness: 'Maledizione', slow: 'Rallentato', shield: 'Scudo attivo' };
     const effects = player.effects.filter(effect => effect.until > snapshot.time).map(effect => `${effectNames[effect.kind]} · ${Math.ceil((effect.until - snapshot.time) / 1000)}s`);
     if (player.hidden) effects.unshift('Nascosto nel cespuglio');
@@ -276,7 +344,6 @@ export class GameUI {
     this.write('target-team', sameTeam ? '✓ Nel team' : '+ Team');
   }
 
-  /** Optional renderer hook for localized biome names. */
   setLocation(name: string): void { this.write('biome', name); }
 
   private toggleSocial(open?: boolean): void {
@@ -288,11 +355,14 @@ export class GameUI {
   }
 
   private socialButton(label: string, action: SocialAction, id?: string): HTMLButtonElement {
-    const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
     button.dataset.socialAction = action;
     if (id) button.dataset.targetId = id;
     if (label === '×') button.setAttribute('aria-label', action === 'team-decline' ? 'Rifiuta invito al team' : 'Rifiuta richiesta di amicizia');
-    button.addEventListener('click', () => this.actions.social(action, id)); return button;
+    button.addEventListener('click', () => this.actions.social(action, id));
+    return button;
   }
 
   private renderSocial(): void {
@@ -300,17 +370,26 @@ export class GameUI {
     const cache = JSON.stringify(state);
     if (cache === this.socialCache) return;
     this.socialCache = cache;
-    const container = this.ref('social-content'); container.replaceChildren();
-    if (!state) { container.append(textElement('p', 'social-empty', 'I tuoi compagni appariranno qui quando entri nel mondo.')); return; }
+    const container = this.ref('social-content');
+    container.replaceChildren();
+    if (!state) {
+      container.append(textElement('p', 'social-empty', 'I tuoi compagni appariranno qui quando entri nel mondo.'));
+      return;
+    }
     const section = (title: string, count: number): HTMLElement => {
       const block = textElement('section', 'social-section', '');
-      block.append(textElement('h3', '', `${title} (${count})`)); container.append(block); return block;
+      block.append(textElement('h3', '', `${title} (${count})`));
+      container.append(block);
+      return block;
     };
     const row = (name: string, detail: string, buttons: HTMLElement[]): HTMLElement => {
-      const item = textElement('div', 'social-row', ''); const labels = textElement('div', 'social-person', '');
+      const item = textElement('div', 'social-row', '');
+      const labels = textElement('div', 'social-person', '');
       labels.append(textElement('strong', '', name), textElement('small', '', detail));
-      const controls = textElement('div', 'social-row-actions', ''); controls.append(...buttons);
-      item.append(labels, controls); return item;
+      const controls = textElement('div', 'social-row-actions', '');
+      controls.append(...buttons);
+      item.append(labels, controls);
+      return item;
     };
     if (state.requests.length || state.teamInvites.length) {
       const requests = section('Inviti in arrivo', state.requests.length + state.teamInvites.length);
@@ -321,12 +400,14 @@ export class GameUI {
     if (state.team) {
       state.team.members.forEach(member => team.append(row(member.name, `${member.online ? 'Online' : 'Offline'}${member.id === state.team!.leaderId ? ' · Caposquadra' : ''}`, [])));
       team.append(this.socialButton('Lascia il team', 'team-leave'));
-    } else team.append(textElement('p', 'social-empty', 'Invita un giocatore per partire insieme. I membri del team non possono ferirsi.'));
+    } else {
+      team.append(textElement('p', 'social-empty', 'Invita un giocatore per partire insieme. I membri del team non possono ferirsi.'));
+    }
     const friends = section('Amici', state.friends.length);
     if (!state.friends.length) friends.append(textElement('p', 'social-empty', 'Ogni alleanza comincia con un incontro. Seleziona un giocatore e aggiungilo agli amici.'));
     state.friends.forEach(friend => friends.append(row(friend.name, friend.online ? '● Online' : '○ Offline', [...(friend.online ? [this.socialButton('+ Team', 'team-invite', friend.id)] : []), this.socialButton('Rimuovi', 'friend-remove', friend.id)])));
     const nearby = section('Nelle vicinanze', state.nearby.length);
-    if (!state.nearby.length) nearby.append(textElement('p', 'social-empty', 'Nessun altro viaggiatore nei dintorni. Esplora, oppure invita qualcuno con il link del gioco.'));
+    if (!state.nearby.length) nearby.append(textElement('p', 'social-empty', 'Nessun altro viaggiatore nei dintorni.'));
     state.nearby.forEach(player => {
       const controls: HTMLElement[] = [];
       if (!player.friend) controls.push(this.socialButton('+ Amico', 'friend-request', player.id));
@@ -339,8 +420,12 @@ export class GameUI {
 
   toast(message: string, tone: 'info' | 'error' | 'success' = 'info'): void {
     const toast = textElement('div', `toast toast-${tone}`, message);
-    const stack = this.ref('toasts'); stack.append(toast);
+    const stack = this.ref('toasts');
+    stack.append(toast);
     while (stack.childElementCount > 4) stack.firstElementChild?.remove();
-    window.setTimeout(() => { toast.classList.add('toast-leaving'); window.setTimeout(() => toast.remove(), 250); }, tone === 'error' ? 6500 : 4200);
+    window.setTimeout(() => {
+      toast.classList.add('toast-leaving');
+      window.setTimeout(() => toast.remove(), 250);
+    }, tone === 'error' ? 6500 : 4200);
   }
 }

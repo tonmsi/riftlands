@@ -2899,3 +2899,138 @@ kbd {
     transition:none!important
   }
 }
+
+/* --- AUTENTICAZIONE MODERNA & SESSIONE ATTIVA --- */
+
+.auth-box {
+  margin-bottom: 24px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(24, 36, 35, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.auth-tab:hover {
+  background: rgba(35, 49, 43, 0.65);
+  color: var(--text);
+}
+
+.auth-tab.active {
+  background: rgba(35, 55, 45, 0.85);
+  border-color: var(--mint);
+  color: var(--mint);
+  font-weight: 600;
+}
+
+.auth-inputs {
+  min-height: 105px;
+  margin-bottom: 0;
+}
+
+.inputs-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.password-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid rgba(177, 201, 186, 0.1);
+  padding-top: 8px;
+}
+
+.password-label>span {
+  font-size: 8px;
+  letter-spacing: 1.8px;
+  color: #9caea1;
+}
+
+.password-label input {
+  display: block;
+  width: 100%;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  color: #ebeee5;
+  font-size: 14px;
+  line-height: 1.4;
+  outline-offset: 2px;
+}
+
+.password-label input::placeholder {
+  color: #788b81;
+  font-size: 13px;
+}
+
+.saved-account-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid rgba(187, 223, 197, 0.25);
+  border-radius: 6px;
+  padding: 14px 16px;
+  background: linear-gradient(110deg, rgba(56, 85, 68, 0.25), rgba(30, 48, 40, 0.15));
+  margin-bottom: 24px;
+}
+
+.saved-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.saved-label {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: var(--mint);
+  margin-bottom: 4px;
+}
+
+.saved-info strong {
+  display: block;
+  font-size: 16px;
+  color: #f0f4ea;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-info small {
+  display: block;
+  font-size: 9px;
+  color: #90a597;
+  margin-top: 3px;
+}
+
+.change-account-btn {
+  padding: 7px 12px;
+  background: rgba(24, 36, 35, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 10px;
+  color: #b1c4b7;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.change-account-btn:hover {
+  background: rgba(45, 62, 53, 0.8);
+  border-color: #93ab98;
+  color: #e4ece5;
+}

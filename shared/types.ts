@@ -16,5 +16,37 @@ export interface SocialPlayer { id: string; name: string; classId: ClassId; leve
 export interface SocialState { friends: { id: string; name: string; online: boolean }[]; requests: { id: string; name: string }[]; teamInvites: { id: string; name: string; teamId: string }[]; team: { id: string; leaderId: string; members: { id: string; name: string; online: boolean }[] } | null; nearby: SocialPlayer[]; }
 export interface PublicAccount { id: string; name: string; kills: number; deaths: number; xp: number; }
 export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: Actor; actors: Actor[]; projectiles: Projectile[]; pickups: Pickup[]; events: GameEvent[]; online: number; activeChunks: number; }
-export type ClientMessage = { type: 'hello'; token?: string; name: string; classId: ClassId; protocol: number } | { type: 'input'; input: InputCommand } | { type: 'ping'; at: number } | { type: 'social'; action: 'friend-request' | 'friend-accept' | 'friend-decline' | 'friend-remove' | 'team-invite' | 'team-accept' | 'team-decline' | 'team-leave'; targetId?: string };
-export type ServerMessage = { type: 'welcome'; token: string; account: PublicAccount; playerId: string; seed: number; tickRate: number; time: number; social: SocialState } | Snapshot | { type: 'social'; state: SocialState } | { type: 'pong'; at: number; time: number } | { type: 'notice'; message: string; tone: 'info' | 'error' | 'success' } | { type: 'error'; message: string; fatal?: boolean };
+
+export type ClientMessage =
+  | {
+      type: 'hello';
+      protocol: number;
+      classId: ClassId;
+      token?: string;
+      name?: string;
+      password?: string;
+      mode?: 'login' | 'register';
+    }
+  | { type: 'input'; input: InputCommand }
+  | { type: 'ping'; at: number }
+  | {
+      type: 'social';
+      action:
+        | 'friend-request'
+        | 'friend-accept'
+        | 'friend-decline'
+        | 'friend-remove'
+        | 'team-invite'
+        | 'team-accept'
+        | 'team-decline'
+        | 'team-leave';
+      targetId?: string;
+    };
+
+export type ServerMessage =
+  | { type: 'welcome'; token: string; account: PublicAccount; playerId: string; seed: number; tickRate: number; time: number; social: SocialState }
+  | Snapshot
+  | { type: 'social'; state: SocialState }
+  | { type: 'pong'; at: number; time: number }
+  | { type: 'notice'; message: string; tone: 'info' | 'error' | 'success' }
+  | { type: 'error'; message: string; fatal?: boolean };
