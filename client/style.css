@@ -2929,8 +2929,58 @@ kbd {
   text-align:center;
   pointer-events:none;
 }
+
+.status-row {
+  display:flex;
+  align-items:stretch;
+  gap:6px
+}
+
+.gold-counter {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-width:58px;
+  padding:8px 11px;
+  color:#f0ce78;
+  background:linear-gradient(145deg,rgba(72,57,28,.78),rgba(27,38,30,.82));
+  border-color:rgba(229,190,94,.28)
+}
+
+.gold-counter svg {
+  width:17px;
+  height:17px;
+  stroke:#f1cb68;
+  filter:drop-shadow(0 0 4px rgba(232,184,67,.28))
+}
+
+.gold-counter b {
+  font-size:12px;
+  font-weight:650;
+  color:#f7dda0;
+  font-variant-numeric:tabular-nums
+}
 .is-playing .arena-status { display:block; }
 .is-playing .arena-status[hidden] { display:none; }
+.saved-gold {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 9px;
+  border:1px solid rgba(229,190,94,.2);
+  border-radius:5px;
+  color:#f0ce78;
+  background:rgba(62,49,25,.35)
+}
+
+.saved-gold svg { width:16px; height:16px; stroke:#f1cb68 }
+.saved-gold strong { color:#f7dda0; font-size:12px; font-variant-numeric:tabular-nums }
+@media(max-width:650px) {
+  .gold-counter { min-width:48px; padding:7px 8px; gap:5px }
+  .gold-counter svg { width:14px; height:14px }
+  .saved-account-card { flex-wrap:wrap }
+  .saved-gold { margin-left:auto }
+}
 .arena-status[data-phase=countdown] { border-color:#ffe3a0; color:#ffe3a0; }
 @media(max-width:650px) {
   .arena-status { top:auto; bottom:115px; max-width:none; width:calc(100% - 32px); font-size:11px; }

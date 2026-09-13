@@ -1,6 +1,7 @@
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, WORLD_SEED } from './config';
 import { ARENA_GATE, arenaTileIsWall } from './arena';
 import { OUTPOST, outpostHutAt } from './outpost';
+import { RUINS, ruinsTile, inRuins, onRuinsRoad } from './ruins';
 import type { Biome, Pickup, TileKind, RoomMode } from './types';
 
 export interface NpcSpawn { id: string; x: number; y: number; npcKind: 'slime' | 'sentinel' | 'wisp'; level: number; }
@@ -51,14 +52,18 @@ export class World {
     }
     // Walkable approach to the physical arena entrance. PvP rules stay unchanged.
     const x = (tx + 0.5) * TILE_SIZE, y = (ty + 0.5) * TILE_SIZE;
+    const ruinTile = ruinsTile(tx, ty);
+    if (ruinTile) return ruinTile;
     if (outpostHutAt(x, y)) return 'rock';
     if (Math.hypot(x, y) < OUTPOST.clearingRadius) return Math.abs(x) < 65 || Math.abs(y - 72) < 38 || Math.hypot(x, y) < 85 ? 'path' : 'grass';
     if (Math.hypot(x - ARENA_GATE.x, y - ARENA_GATE.y) < ARENA_GATE.radius + 55 || (Math.abs(x) < 75 && y < -120 && y > ARENA_GATE.y)) return 'path';
+    const curatedRuinsApproach = y < -250 && y > RUINS.y + 250 && Math.abs(x) < 520;
+    if (onRuinsRoad({ x, y })) return 'path';
     const distance = Math.hypot(tx + 0.5, ty + 0.5);
     if (distance < 4.7) return distance < 2.7 ? 'path' : 'grass';
     // An uninterrupted road network guarantees routes through terrain in every direction.
     const mod = (n: number): number => ((n % 48) + 48) % 48;
-    if (mod(tx) === 0 || mod(tx) === 47 || mod(ty) === 0 || mod(ty) === 47) return 'path';
+    if ((!curatedRuinsApproach && (mod(tx) === 0 || mod(tx) === 47)) || mod(ty) === 0 || mod(ty) === 47) return 'path';
     const elevation = noise(tx * 0.085, ty * 0.085, this.seed);
     const detail = coordinateHash(tx, ty, this.seed + 31);
     const moisture = noise(tx * 0.12, ty * 0.12, this.seed + 491);
@@ -81,7 +86,7 @@ export class World {
       const ty = Math.floor(coordinateHash(cx, cy * 41 + i, this.seed + 97) * CHUNK_TILES);
       const tile = tiles[ty * CHUNK_TILES + tx];
       const x = (cx * CHUNK_TILES + tx + 0.5) * TILE_SIZE, y = (cy * CHUNK_TILES + ty + 0.5) * TILE_SIZE;
-      if (isSolid(tile) || tile === 'path' || Math.hypot(x, y) < 890) continue;
+      if (isSolid(tile) || tile === 'path' || Math.hypot(x, y) < 890 || inRuins({ x, y }, 220)) continue;
       if (chunk.npcs.some(n => Math.hypot(n.x - x, n.y - y) < 120) || chunk.pickups.some(p => Math.hypot(p.x - x, p.y - y) < 100)) continue;
       if (chunk.npcs.length < 3) {
         const index = chunk.npcs.length;

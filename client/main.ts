@@ -7,6 +7,7 @@ import { LocalMovementView, LocalPresentationDelay } from './motion';
 import { SnapshotBuffer } from './snapshots';
 import { Renderer, drawMinimap } from './render';
 import { GameUI } from './ui';
+import { inRuins } from '../shared/ruins';
 
 let playing = false;
 let latest: Snapshot | null = null;
@@ -94,14 +95,14 @@ const connection = new GameConnection({
       }
       ui.setSnapshot(message, connection.ping);
       const { id, name, xp, kills, deaths } = message.self;
-      if (renderer.world.mode === 'world') saveProfile({ id, name, xp, kills, deaths });
+      if (renderer.world.mode === 'world') saveProfile({ id, name, xp, kills, deaths, gold: message.gold ?? 0 });
       if (selectedId) {
         const selected = message.actors.find(actor => actor.id === selectedId) ?? null;
         if (!selected) selectedId = null;
         ui.setSelected(selected);
       }
       const biome = renderer.world.getBiome(message.self.x, message.self.y);
-      ui.setLocation(renderer.world.mode === 'world' ? message.sanctuary !== 'outside' ? 'Avamposto del Crocevia' : ({ meadow: 'Praterie di Soglia', forest: 'Selva dei Sussurri', marsh: 'Acquitrini Velati' })[biome] : renderer.world.mode === 'arena' ? 'Arena del Crocevia' : 'Battleground di prova');
+      ui.setLocation(renderer.world.mode === 'world' ? message.sanctuary !== 'outside' ? 'Avamposto del Crocevia' : inRuins(message.self, 150) ? 'Rovine della Soglia' : ({ meadow: 'Praterie di Soglia', forest: 'Selva dei Sussurri', marsh: 'Acquitrini Velati' })[biome] : renderer.world.mode === 'arena' ? 'Arena del Crocevia' : 'Battleground di prova');
     } else if (message.type === 'social') ui.setSocial(message.state);
     else if (message.type === 'notice') ui.toast(message.message, message.tone);
     else if (message.type === 'error') ui.toast(message.message, 'error');
@@ -220,6 +221,8 @@ function frame(now: number): void {
   const projectiles = remoteFrame?.projectiles ?? [];
   renderer.render({
     arenaGate: latest?.arenaGate,
+    goldDrops: latest?.goldDrops,
+    bossWindup: latest?.bossWindup,
     time,
     self,
     actors,

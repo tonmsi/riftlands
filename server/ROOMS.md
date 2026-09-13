@@ -1,6 +1,6 @@
 # Istanze PvP: fondazione
 
-Il runtime usa un `RoomManager` unico. `global` mantiene il mondo procedurale con un piccolo avamposto iniziale e PvP libero all'esterno. Il corpo rimane per 20 secondi dopo ogni uscita ed è vulnerabile secondo le regole della zona. Non sono state aggiunte valute o ricompense.
+Il runtime usa un `RoomManager` unico. `global` mantiene il mondo procedurale con un piccolo avamposto iniziale e PvP libero all'esterno. Il corpo rimane per 20 secondi dopo ogni uscita ed è vulnerabile secondo le regole della zona. I gold del mini-boss sono descritti in [RUINS.md](RUINS.md); le istanze PvP non assegnano ricompense.
 
 ## Avamposto e confine PvP
 
@@ -45,7 +45,7 @@ Arena: singolo round, nessun respawn; chiusura quando rimane meno di una coppia 
 
 Prima dell'ingresso viene salvato lo stato globale. Ogni partita usa copie degli account: XP, kill, morti, posizione e salute della partita non sovrascrivono il personaggio persistente. Uscita e riavvio recuperano lo stato globale precedente; la progressione economica futura dovrà avere un percorso esplicito di assegnazione ricompense.
 
-Il protocollo è versione 3 (terreno dell'avamposto e nuovo ingresso arena): dopo `welcome` e a ogni trasferimento il server invia `room` prima dello snapshot. `roomId` ed `epoch` accompagnano ogni input; comandi di un contesto precedente sono ignorati. Il client azzera predizione, buffer remoti, selezione, effetti e camera al cambio stanza. Pubblicare client e server insieme.
+Il protocollo è versione 4 (rovine, mini-boss e loot privato): dopo `welcome` e a ogni trasferimento il server invia `room` prima dello snapshot. `roomId` ed `epoch` accompagnano ogni input; comandi di un contesto precedente sono ignorati. Il client azzera predizione, buffer remoti, selezione, effetti e camera al cambio stanza. Pubblicare client e server insieme.
 
 Tutte le istanze condividono processo e clock; non c'è distribuzione tra VPS né isolamento dei crash per stanza. Il JSON mantiene un solo autore delle scritture.
 
@@ -57,4 +57,4 @@ Tutte le istanze condividono processo e clock; non c'è distribuzione tra VPS n�
 
 `node --import tsx --test tests/integration/arena-browser.test.ts` dopo la build verifica due browser reali: ingresso, cancellazione, duello e abbandono. Su Windows usa Chrome; `PLAYWRIGHT_CHANNEL` consente di scegliere un altro canale installato. Le schermate sono in `test-results/arena-entrance.png` e `test-results/arena-duel.png`. Il server usa esclusivamente account temporanei ed è chiuso a fine prova.
 
-Passo successivo: accessi 2v2 per gruppi e BG, con consenso/gestione del roster, obiettivi e punteggi. Non sono ancora attivi. Gold e gemme rimangono una fase separata.
+Passo successivo: accessi 2v2 per gruppi e BG, con consenso/gestione del roster, obiettivi e punteggi. Non sono ancora attivi. Spesa dei gold e gemme rimangono una fase separata.

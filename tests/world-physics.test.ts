@@ -5,6 +5,7 @@ import { World, chunkCoords, isSolid } from '../shared/world';
 import { collidesWorld, hasLineOfSight, movementSpeed, moveWithCollisions, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
 import { interpolateActors, reconcile } from '../client/prediction';
 import type { Actor, TileKind } from '../shared/types';
+import { RUINS, ruinsRoadCenter } from '../shared/ruins';
 
 class TestWorld extends World {
   constructor(private tiles: Record<string, TileKind> = {}) { super(); }
@@ -34,7 +35,12 @@ test('generated NPCs and pickups are valid and spawn clearing and roads stay tra
     assert.equal(chunk.tiles.length, 256);
     for (const spawn of [...chunk.npcs, ...chunk.pickups]) assert.equal(collidesWorld(spawn.x, spawn.y, 15, world), false);
   }
-  for (let t = -500; t < 500; t++) { assert.equal(isSolid(world.getTile(0, t)), false); assert.equal(isSolid(world.getTile(t, 0)), false); }
+  for (let t = -500; t < 500; t++) {
+    const y = (t + 0.5) * TILE_SIZE;
+    const verticalTile = y < -250 && y > RUINS.y + 250 ? Math.floor(ruinsRoadCenter(y) / TILE_SIZE) : 0;
+    assert.equal(isSolid(world.getTile(verticalTile, t)), false);
+    assert.equal(isSolid(world.getTile(t, 0)), false);
+  }
   assert.equal(collidesWorld(0, 0, 15, world), false);
 });
 test('movement normalizes diagonals, slides along walls, and cannot tunnel during a dash', () => {

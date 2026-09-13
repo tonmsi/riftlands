@@ -76,6 +76,8 @@ export class GameUI {
   private readonly passwordInput: HTMLInputElement;
   private readonly arenaStatus = document.createElement('div');
   private lastSanctuary: Snapshot['sanctuary'];
+  private readonly goldWallet: HTMLElement;
+  private previousGold?: number;
 
   constructor(private root: HTMLElement, private actions: UIActions) {
     root.className = 'rift-app';
@@ -100,6 +102,7 @@ export class GameUI {
                 <strong data-ref="saved-name">Viaggiatore</strong>
                 <small data-ref="saved-stats">Livello 1</small>
               </div>
+              <div class="saved-gold" title="Gold raccolti">${icon('<circle cx="12" cy="12" r="8"/><path d="M14.8 8.7a4.5 4.5 0 1 0 0 6.6M9 10h5M9 14h5"/>')}<strong data-ref="lobby-gold">0</strong></div>
               <button type="button" class="change-account-btn" data-ref="change-account-btn">Cambia</button>
             </div>
 
@@ -142,7 +145,7 @@ export class GameUI {
       <div class="game-hud" hidden>
         <section class="player-panel glass"><div class="player-portrait" data-ref="portrait"></div><div class="player-vitals"><div class="player-name-row"><strong data-ref="player-name"></strong><span data-ref="player-level">LV 1</span></div><div class="vital-row"><span>HP</span><div class="meter hp-meter"><i data-ref="hp-fill"></i><span data-ref="hp-label"></span></div></div><div class="vital-row"><span data-ref="resource-name">MP</span><div class="meter resource-meter"><i data-ref="resource-fill"></i><span data-ref="resource-label"></span></div></div><div class="xp-meter"><i data-ref="xp-fill"></i></div></div></section>
         <div class="world-location glass"><span class="location-dot"></span><div><strong data-ref="biome">Terre di Soglia</strong><span data-ref="coords">0 · 0</span></div><span class="location-decoration">✦</span></div>
-        <div class="game-top-right"><div class="server-status glass"><span class="save-dot"></span><b data-ref="online">1</b> online<span class="status-separator"></span><span data-ref="ping">— ms</span></div><div class="menu-buttons"><button class="glass hud-menu-button" data-ref="social-toggle" aria-expanded="false">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}<span>Compagni</span><i class="notification-dot" data-ref="social-dot" hidden></i></button><button class="glass hud-menu-button" data-ref="leave" title="Torna al menu">${icon('<path d="M10 3H3v18h7M8 12h14M17 7l5 5-5 5"/>')}<span>Esci</span></button></div></div>
+        <div class="game-top-right"><div class="status-row"><div class="gold-counter glass" title="Gold raccolti">${icon('<circle cx="12" cy="12" r="8"/><path d="M14.8 8.7a4.5 4.5 0 1 0 0 6.6M9 10h5M9 14h5"/>')}<b data-ref="hud-gold">0</b></div><div class="server-status glass"><span class="save-dot"></span><b data-ref="online">1</b> online<span class="status-separator"></span><span data-ref="ping">— ms</span></div></div><div class="menu-buttons"><button class="glass hud-menu-button" data-ref="social-toggle" aria-expanded="false">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}<span>Compagni</span><i class="notification-dot" data-ref="social-dot" hidden></i></button><button class="glass hud-menu-button" data-ref="leave" title="Torna al menu">${icon('<path d="M10 3H3v18h7M8 12h14M17 7l5 5-5 5"/>')}<span>Esci</span></button></div></div>
         <div class="effect-list" data-ref="effects"></div>
         <section class="target-panel glass" data-ref="target" hidden><div class="target-heading"><span data-ref="target-type">GIOCATORE</span><button data-ref="target-close" aria-label="Deseleziona bersaglio">×</button></div><strong data-ref="target-name"></strong><small data-ref="target-detail"></small><div class="meter hp-meter target-health"><i data-ref="target-fill"></i></div><div class="target-actions" data-ref="target-actions"><button data-ref="target-friend">+ Amico</button><button data-ref="target-team">+ Team</button></div></section>
         <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><div><span class="eyebrow">NON VIAGGIARE DA SOLO</span><h2>I tuoi compagni</h2></div><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
@@ -158,6 +161,7 @@ export class GameUI {
     this.arenaStatus.className = 'arena-status';
     this.arenaStatus.setAttribute('role', 'status');
     root.append(this.arenaStatus);
+    this.goldWallet = this.ref('hud-gold');
     this.canvas = root.querySelector<HTMLCanvasElement>('.world-canvas')!;
     this.minimap = root.querySelector<HTMLCanvasElement>('.minimap')!;
     this.nameInput = this.ref('name') as HTMLInputElement;
@@ -235,6 +239,7 @@ export class GameUI {
     if (hasSaved && account) {
       this.write('saved-name', account.name);
       this.write('saved-stats', `Livello ${levelFromXp(account.xp)} · ${account.kills} uccisioni`);
+      this.write('lobby-gold', String(account.gold ?? 0));
       this.write('join-text', `Continua come ${account.name}`);
       this.nameInput.removeAttribute('required');
       this.passwordInput.removeAttribute('required');
@@ -285,6 +290,7 @@ export class GameUI {
       this.latest = null;
       this.activeClass = null;
       this.lastSanctuary = undefined;
+      this.previousGold = undefined;
     }
   }
 
@@ -317,6 +323,11 @@ export class GameUI {
     }
     this.lastSanctuary = snapshot.sanctuary;
     this.write('online', String(snapshot.online));
+    const gold = snapshot.gold ?? 0;
+    this.goldWallet.textContent = String(gold);
+    this.write('lobby-gold', String(gold));
+    if (this.previousGold !== undefined && gold > this.previousGold) this.toast(`+${gold - this.previousGold} gold raccolti`, 'success');
+    this.previousGold = gold;
     const gate = snapshot.arenaGate;
     const worldTip = this.root.querySelector<HTMLElement>('.world-tip');
     if (worldTip) worldTip.hidden = !!snapshot.matchEndsAt || !player.hidden;
@@ -379,6 +390,7 @@ export class GameUI {
     this.write('target-type', actor.kind === 'npc' ? 'CREATURA DEL MONDO' : 'VIAGGIATORE');
     this.write('target-name', actor.name);
     this.write('target-detail', `${CLASSES[actor.classId].name} · Livello ${actor.level} · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV`);
+    if (actor.npcKind === 'warden') this.write('target-detail', actor.hp <= 0 ? `Cadavere · Ritorna tra ${Math.max(0, Math.ceil((actor.deadUntil - (this.latest?.time ?? 0)) / 1000))}s` : `Mini-boss · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV`);
     this.fill('target-fill', actor.hp / actor.maxHp);
     this.ref('target-actions').hidden = actor.kind !== 'player';
     const isFriend = this.socialState?.friends.some(friend => friend.id === actor!.id);

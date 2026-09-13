@@ -3,8 +3,10 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname, resolve } from 'node:path';
 import type { Actor, PublicAccount } from '../shared/types';
 import { CLASSES } from '../shared/config';
+import { validRuinsState, type RuinsState } from '../shared/ruins';
 
 export interface Account {
+  gold?: number;
   id: string;
   name: string;
   nameLower: string;
@@ -21,7 +23,7 @@ export interface Account {
 
 export function publicAccount(account: Account): PublicAccount {
   const { id, name, kills, deaths, xp } = account;
-  return { id, name, kills, deaths, xp };
+  return { id, name, kills, deaths, xp, gold: account.gold ?? 0 };
 }
 
 export function cleanName(name: string): string {
@@ -63,6 +65,7 @@ function getJwtSecret(baseDir: string): string {
 }
 
 export class AccountStore {
+  ruins?: RuinsState;
   readonly accounts = new Map<string, Account>();
   private readonly accountsByName = new Map<string, string>(); // nameLower -> account.id
   private dirty = false;
@@ -86,6 +89,10 @@ export class AccountStore {
         throw new Error('Formato account non supportato.');
       }
 
+      if ('ruins' in parsed && parsed.ruins !== undefined) {
+        if (!validRuinsState(parsed.ruins)) throw new Error('Stato rovine non valido.');
+        this.ruins = parsed.ruins;
+      }
       for (const entry of parsed.accounts) {
         if (!entry || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.nameLower !== 'string' || typeof entry.salt !== 'string' || typeof entry.passwordHash !== 'string' || !Array.isArray(entry.friends) || !Array.isArray(entry.requests) || ![entry.xp, entry.kills, entry.deaths, entry.lastSeen].every(Number.isFinite)) {
           throw new Error('Account danneggiato.');
@@ -98,6 +105,8 @@ export class AccountStore {
         }
 
         const account = entry as Account;
+        if (account.gold !== undefined && (!Number.isSafeInteger(account.gold) || account.gold < 0)) throw new Error('Saldo gold non valido.');
+        account.gold ??= 0;
         this.accounts.set(account.id, account);
         this.accountsByName.set(account.nameLower, account.id);
       }
@@ -220,7 +229,7 @@ export class AccountStore {
     if (!this.dirty) return;
     mkdirSync(dirname(this.path), { recursive: true });
     const next = `${this.path}.tmp`;
-    writeFileSync(next, JSON.stringify({ version: 2, accounts: [...this.accounts.values()] }), { mode: 0o600 });
+    writeFileSync(next, JSON.stringify({ version: 2, accounts: [...this.accounts.values()], ruins: this.ruins }), { mode: 0o600 });
     renameSync(next, this.path);
     this.dirty = false;
   }
