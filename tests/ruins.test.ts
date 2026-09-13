@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { AccountStore, type Account } from '../server/store';
 import { WorldSimulation } from '../server/simulation';
 import { RUINS, inRuins, ruinsRoadCenter } from '../shared/ruins';
-import { RUINS_WARDEN } from '../shared/bosses';
+import { insideBossEntry, RUINS_WARDEN } from '../shared/bosses';
 import { World, chunkCoords } from '../shared/world';
 import { collidesWorld, hasLineOfSight, moveWithCollisions } from '../shared/physics';
 
@@ -190,6 +190,109 @@ test('first entrant seals the arena: owner stays inside and every other player s
   Object.assign(b, { aim: -Math.PI / 2 });
   assert.equal(sim.cast(b, 'basic'), true); advance(sim, 1);
   assert.equal(boss.hp, hp, 'only the encounter owner can damage the boss');
+});
+
+test('nearby team enters together, drives aggro and receives an equal private reward split', () => {
+  const sim = new WorldSimulation(734291, 1_000_000);
+  const aa = account('leader'), bb = account('teammate'), cc = account('intruder'), dd = account('late-member');
+  const a = sim.addPlayer(aa, 'warrior'), b = sim.addPlayer(bb, 'mage'), c = sim.addPlayer(cc, 'hunter'), d = sim.addPlayer(dd, 'paladin');
+  sim.socialAction(a.id, 'team-invite', b.id);
+  sim.socialAction(b.id, 'team-accept', a.id);
+  sim.socialAction(a.id, 'team-invite', d.id);
+  sim.socialAction(d.id, 'team-accept', a.id);
+  Object.assign(a, { x: RUINS.x, y: RUINS.y + 70, aim: -Math.PI / 2, spawnProtectedUntil: 0 });
+  Object.assign(b, { x: RUINS.x + 40, y: RUINS.y + 330, spawnProtectedUntil: 0 });
+  Object.assign(c, { x: RUINS.x + 300, y: RUINS.y, spawnProtectedUntil: 0 });
+  Object.assign(d, { ...RUINS_WARDEN.arena.exit, spawnProtectedUntil: 0 });
+  sim.step(0.1);
+  const encounter = sim.bosses.get(RUINS_WARDEN.id)!, boss = encounter.boss;
+  assert.equal(encounter.ownerId, undefined);
+  for (const member of [a, b, d]) {
+    const preparation = sim.snapshotFor(member.id)!.bossPreparations;
+    assert.equal(preparation?.length, 1);
+    assert.equal(preparation![0].endsAt, sim.now + RUINS_WARDEN.arena.preparationMs);
+  }
+  assert.equal(sim.snapshotFor(c.id)!.bossPreparations?.length, 0);
+  Object.assign(b, { x: RUINS.x + 40, y: RUINS.y + 190 });
+  sim.step(0.1);
+  assert.equal(sim.snapshotFor(b.id)!.bossPreparations![0].entrants, 2);
+  Object.assign(b, { x: RUINS.x + 40, y: RUINS.y + 300 });
+  advance(sim, 4.8);
+  assert.equal(encounter.ownerId, undefined, 'the entrances remain open for the full preparation window');
+  assert.equal(sim.snapshotFor(b.id)!.bossPreparations![0].entrants, 2, 'crossing the inner threshold reserves the place despite a small outward push');
+  sim.step(0.1);
+  assert.deepEqual([...encounter.participantIds].sort(), [a.id, b.id].sort());
+  assert.equal(insideBossEntry(RUINS_WARDEN, a), true);
+  assert.equal(insideBossEntry(RUINS_WARDEN, b), true, 'both entrants are moved to safe separated staging points');
+  assert.equal(encounter.hasParticipant(d.id), false, 'a teammate left outside at zero is excluded');
+  Object.assign(d, { x: RUINS.x, y: RUINS.y + 230 });
+  sim.step(0.1);
+  assert.deepEqual({ x: d.x, y: d.y }, RUINS_WARDEN.arena.exit, 'an excluded teammate cannot enter after the lock');
+  assert.equal(encounter.hasParticipant(c.id), false);
+  assert.ok(Math.hypot(c.x - RUINS.x, c.y - RUINS.y) > RUINS_WARDEN.arena.entryRadius,
+    'the intentional lateral-access quirk remains available to outsiders');
+  Object.assign(a, { x: RUINS.x + 80, y: RUINS.y - 20, hp: a.maxHp });
+  Object.assign(c, { x: RUINS.x + 300, y: RUINS.y - 20, aim: Math.PI });
+  Object.assign(boss, { x: RUINS.x - 180, y: RUINS.y + 180 });
+  const hpBeforeIntrusion = a.hp;
+  assert.equal(sim.cast(c, 'basic'), true);
+  advance(sim, 0.5);
+  assert.ok(a.hp < hpBeforeIntrusion, 'an outsider in the lateral band can still shoot a participant in PvP');
+  assert.equal(encounter.hasParticipant(c.id), false);
+
+  encounter.recordDamage(a.id, 10);
+  encounter.recordDamage(b.id, 30);
+  sim.step(0.1);
+  assert.equal(encounter.targetId, b.id, 'the highest damage threat becomes the target');
+
+  Object.assign(a, { x: boss.x, y: boss.y + 60, aim: -Math.PI / 2 });
+  boss.hp = 1;
+  assert.equal(sim.cast(a, 'basic'), true);
+  assert.equal(boss.hp, 0);
+  assert.equal(encounter.state.drops.length, 2);
+  assert.deepEqual(encounter.state.drops.map(drop => drop.amount), [25, 25]);
+  assert.equal(sim.snapshotFor(a.id)!.goldDrops!.length, 1);
+  assert.equal(sim.snapshotFor(b.id)!.goldDrops!.length, 1);
+  assert.equal(sim.snapshotFor(c.id)!.goldDrops!.length, 0);
+  assert.equal(sim.snapshotFor(d.id)!.goldDrops!.length, 0);
+});
+
+test('a dead team participant respawns outside once and is not killed again during the surviving fight', () => {
+  const sim = new WorldSimulation(734291, 1_000_000);
+  const a = sim.addPlayer(account('survivor'), 'warrior'), b = sim.addPlayer(account('fallen'), 'mage');
+  sim.socialAction(a.id, 'team-invite', b.id);
+  sim.socialAction(b.id, 'team-accept', a.id);
+  Object.assign(a, { x: RUINS.x, y: RUINS.y + 70, hp: 10_000, maxHp: 10_000, spawnProtectedUntil: 0 });
+  Object.assign(b, { x: RUINS.x + 40, y: RUINS.y + 100, spawnProtectedUntil: 0 });
+  sim.step(0.1);
+  advance(sim, 5);
+  const encounter = sim.bosses.get(RUINS_WARDEN.id)!;
+  assert.deepEqual([...encounter.participantIds].sort(), [a.id, b.id].sort());
+  const deaths = b.deaths;
+  Object.assign(b, { x: RUINS.x + RUINS_WARDEN.arena.radius + 10, y: RUINS.y });
+  sim.step(0.1);
+  assert.equal(b.hp, 0);
+  assert.equal(b.deaths, deaths + 1);
+  assert.equal(encounter.isActiveParticipant(b.id), false);
+  assert.equal(encounter.ownerId, a.id);
+  advance(sim, 5.2);
+  assert.ok(b.hp > 0, 'the normal world respawn still happens');
+  assert.equal(b.deaths, deaths + 1);
+  advance(sim, 2);
+  assert.equal(b.deaths, deaths + 1, 'the respawned excluded member must not enter a death loop');
+  assert.equal(encounter.ownerId, a.id);
+});
+
+test('crossing the boss arena boundary counts as a death and fails the solo encounter', () => {
+  const { sim, a, boss, encounter } = fixture();
+  const deaths = a.deaths;
+  Object.assign(a, { x: RUINS.x + RUINS_WARDEN.arena.radius + 10, y: RUINS.y });
+  sim.step(0.1);
+  assert.equal(a.hp, 0);
+  assert.equal(a.deaths, deaths + 1);
+  assert.equal(encounter.ownerId, undefined);
+  assert.equal(boss.hp, RUINS_WARDEN.hp);
+  assert.equal(sim.world.isBossLocked(RUINS_WARDEN.id), false);
 });
 
 test('victory opens the room; owner death fails and resets the encounter', () => {

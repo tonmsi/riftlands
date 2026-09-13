@@ -329,10 +329,15 @@ export class GameUI {
     if (this.previousGold !== undefined && gold > this.previousGold) this.toast(`+${gold - this.previousGold} gold raccolti`, 'success');
     this.previousGold = gold;
     const gate = snapshot.arenaGate;
+    const bossPreparation = snapshot.bossPreparations?.[0];
     const worldTip = this.root.querySelector<HTMLElement>('.world-tip');
     if (worldTip) worldTip.hidden = !!snapshot.matchEndsAt || !player.hidden;
     let arenaText = Math.hypot(player.x - ARENA_GATE.x, player.y - ARENA_GATE.y) < ARENA_GATE.radius + 55 ? 'Arena 1v1 · Entra nel cerchio per partecipare' : '';
-    if (snapshot.matchEndsAt) {
+    if (bossPreparation) {
+      const seconds = Math.max(0, (bossPreparation.endsAt - snapshot.time) / 1000).toFixed(1);
+      const ready = `${bossPreparation.entrants} ${bossPreparation.entrants === 1 ? 'membro pronto' : 'membri pronti'}`;
+      arenaText = `Battaglia con ${bossPreparation.name} · ${seconds} s · ${ready} · Entra nelle rovine entro lo zero`;
+    } else if (snapshot.matchEndsAt) {
       const seconds = Math.max(0, Math.ceil((snapshot.matchEndsAt - snapshot.time) / 1000));
       arenaText = `Duello 1v1 · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} · Elimina l’avversario`;
     } else if (gate) {
@@ -344,7 +349,7 @@ export class GameUI {
     }
     if (this.arenaStatus.textContent !== arenaText) this.arenaStatus.textContent = arenaText;
     this.arenaStatus.hidden = !arenaText;
-    this.arenaStatus.dataset.phase = gate?.phase ?? (snapshot.matchEndsAt ? 'match' : 'idle');
+    this.arenaStatus.dataset.phase = bossPreparation ? 'boss-countdown' : gate?.phase ?? (snapshot.matchEndsAt ? 'match' : 'idle');
     this.write('ping', Number.isFinite(ping) ? `${Math.round(ping)} ms` : '— ms');
     this.ref('ping').classList.toggle('high-ping', ping > 180);
     const remaining = Math.max(0, player.deadUntil - snapshot.time);

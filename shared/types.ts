@@ -1,4 +1,4 @@
-import type { BossDrop, BossLockState, BossWindup } from './bosses';
+import type { BossDrop, BossLockState, BossPreparationState, BossWindup } from './bosses';
 export type ClassId = 'mage' | 'warrior' | 'paladin' | 'hunter';
 export type AbilitySlot = 'basic' | 'q' | 'e' | 'r';
 export type Vec2 = { x: number; y: number };
@@ -22,7 +22,7 @@ export interface SocialPlayer { id: string; name: string; classId: ClassId; leve
 export interface SocialState { friends: { id: string; name: string; online: boolean }[]; requests: { id: string; name: string }[]; teamInvites: { id: string; name: string; teamId: string }[]; team: { id: string; leaderId: string; members: { id: string; name: string; online: boolean }[] } | null; nearby: SocialPlayer[]; }
 export interface PublicAccount { id: string; name: string; kills: number; deaths: number; xp: number; }
 export interface PublicAccount { gold?: number; }
-export interface Snapshot { gold?: number; goldDrops?: BossDrop[]; bossWindups?: BossWindup[]; bossLocks?: BossLockState[]; }
+export interface Snapshot { gold?: number; goldDrops?: BossDrop[]; bossWindups?: BossWindup[]; bossLocks?: BossLockState[]; bossPreparations?: BossPreparationState[]; }
 export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: Actor; actors: Actor[]; projectiles: Projectile[]; pickups: Pickup[]; traps?: Trap[]; events: GameEvent[]; online: number; activeChunks: number; arenaGate?: ArenaGateState; matchEndsAt?: number; sanctuary?: 'safe' | 'combat' | 'outside'; }
 
 export type ClientMessage =

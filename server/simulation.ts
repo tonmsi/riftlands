@@ -206,6 +206,7 @@ export class WorldSimulation {
     for (const [id, actor] of this.players) {
       const connection = this.connections.get(id)!;
       if (!connection.connected && this.now >= connection.removeAt) {
+        for (const encounter of this.bosses.values()) if (encounter.isActiveParticipant(id) && actor.hp > 0) this.damage(actor, encounter.boss, Number.MAX_SAFE_INTEGER);
         this.persistPlayer(id);
         this.players.delete(id);
         this.connections.delete(id);
@@ -533,6 +534,7 @@ export class WorldSimulation {
     const shield = target.effects.some(effect => effect.kind === 'shield' && effect.until > this.now) ? 0.4 : 1;
     const applied = Math.max(1, Math.round(amount * (1 - armor) * shield));
     target.hp = Math.max(0, target.hp - applied);
+    if (encounter && attacker?.kind === 'player') encounter.recordDamage(attacker.id, applied);
     if (this.mode === 'world' && target.kind === 'player' && attacker?.kind === 'player') {
       target.pvpUntil = attacker.pvpUntil = this.now + OUTPOST.combatMs;
     }
@@ -547,6 +549,7 @@ export class WorldSimulation {
     }
     this.emit({ kind: 'hit', x: target.x, y: target.y, actorId: attacker?.id, targetId: target.id, amount: applied, radius: 26, duration: 500, color: '#ffb8a2' });
     if (target.hp > 0) return true;
+    if (target.kind === 'player') for (const boss of this.bosses.values()) boss.eliminate(target.id);
     target.deaths++;
     target.deadUntil = this.now + (target.kind === 'npc' ? 35_000 : 5000);
     target.effects = [];
@@ -725,6 +728,7 @@ export class WorldSimulation {
       goldDrops: [...this.bosses.values()].flatMap(encounter => encounter.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > this.now && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop }))),
       bossWindups: [...this.bosses.values()].flatMap(encounter => encounter.windup && distance(self, encounter.windup) < INTEREST_RADIUS ? [{ ...encounter.windup }] : []),
       bossLocks: [...this.bosses.values()].map(encounter => encounter.lockState()),
+      bossPreparations: [...this.bosses.values()].flatMap(encounter => encounter.preparationFor(self) ?? []),
       projectiles: [...this.projectiles.values()].filter(projectile => distance(self, projectile) < INTEREST_RADIUS).map(projectile => ({ ...projectile })),
       pickups: [...this.pickups.values()].filter(pickup => distance(self, pickup) < INTEREST_RADIUS).map(pickup => ({ ...pickup })),
       traps: [...this.traps.values()].filter(trap => distance(self, trap) < INTEREST_RADIUS).map(trap => ({ ...trap })),

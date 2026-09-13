@@ -2981,7 +2981,7 @@ kbd {
   .saved-account-card { flex-wrap:wrap }
   .saved-gold { margin-left:auto }
 }
-.arena-status[data-phase=countdown] { border-color:#ffe3a0; color:#ffe3a0; }
+.arena-status[data-phase=countdown],.arena-status[data-phase=boss-countdown] { border-color:#ffe3a0; color:#ffe3a0; }
 @media(max-width:650px) {
   .arena-status { top:auto; bottom:115px; max-width:none; width:calc(100% - 32px); font-size:11px; }
 }

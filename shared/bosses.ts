@@ -23,7 +23,7 @@ export interface BossDefinition {
   speed: number;
   level: number;
   aggroRadius: number;
-  arena: { radius: number; entryRadius: number; exit: Vec2; sealedTiles: readonly Vec2[] };
+  arena: { radius: number; entryRadius: number; preparationMs: number; exit: Vec2; sealedTiles: readonly Vec2[] };
   attacks: readonly BossAttackDefinition[];
   enrageAt: number;
   enrageSpeed: number;
@@ -45,12 +45,13 @@ export interface BossWindup extends Vec2 {
   innerRadius?: number;
 }
 export interface BossLockState { bossId: string; locked: boolean; ownerId?: string; }
+export interface BossPreparationState { bossId: string; name: string; endsAt: number; entrants: number; }
 
 const ruinsSeal = [-87, -74].flatMap(ty => [-2, -1, 0, 1].map(tx => ({ x: tx, y: ty })));
 export const RUINS_WARDEN: BossDefinition = {
   id: 'boss:ruins:warden', name: 'Custode delle Rovine', skin: 'stone-warden', classId: 'warrior',
   position: { x: RUINS.x, y: RUINS.y }, radius: 28, hp: 460, speed: 100, level: 5,
-  aggroRadius: RUINS.radius, arena: { radius: RUINS.radius, entryRadius: 260, exit: { x: RUINS.x, y: RUINS.y + 390 }, sealedTiles: ruinsSeal },
+  aggroRadius: RUINS.radius, arena: { radius: 420, entryRadius: 260, preparationMs: 5000, exit: { x: RUINS.x, y: RUINS.y + 440 }, sealedTiles: ruinsSeal },
   attacks: [
     { kind: 'melee', damage: 18, range: 82, radius: 82, windupMs: 0, cooldownMs: 1450 },
     { kind: 'slam', damage: 31, range: 285, radius: 145, windupMs: 850, cooldownMs: 1450 },
@@ -103,4 +104,3 @@ export function normalizeLegacyBossState(value: unknown): BossState | undefined 
   if (!validBossState(value, RUINS_WARDEN, true)) return undefined;
   return { ...value, drops: value.drops.map(drop => ({ ...drop, bossId: RUINS_WARDEN.id })) };
 }
-
