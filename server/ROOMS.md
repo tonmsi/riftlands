@@ -45,7 +45,7 @@ Arena: singolo round, nessun respawn; chiusura quando rimane meno di una coppia 
 
 Prima dell'ingresso viene salvato lo stato globale. Ogni partita usa copie degli account: XP, kill, morti, posizione e salute della partita non sovrascrivono il personaggio persistente. Uscita e riavvio recuperano lo stato globale precedente; la progressione economica futura dovrà avere un percorso esplicito di assegnazione ricompense.
 
-Il protocollo è versione 4 (rovine, mini-boss e loot privato): dopo `welcome` e a ogni trasferimento il server invia `room` prima dello snapshot. `roomId` ed `epoch` accompagnano ogni input; comandi di un contesto precedente sono ignorati. Il client azzera predizione, buffer remoti, selezione, effetti e camera al cambio stanza. Pubblicare client e server insieme.
+Il protocollo è versione 5 (boss configurabili e arene PvE esclusive): dopo `welcome` e a ogni trasferimento il server invia `room` prima dello snapshot. `roomId` ed `epoch` accompagnano ogni input; comandi di un contesto precedente sono ignorati. Il client azzera predizione, buffer remoti, selezione, effetti e camera al cambio stanza. Pubblicare client e server insieme.
 
 Tutte le istanze condividono processo e clock; non c'è distribuzione tra VPS né isolamento dei crash per stanza. Il JSON mantiene un solo autore delle scritture.
 

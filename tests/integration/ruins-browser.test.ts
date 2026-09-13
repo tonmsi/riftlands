@@ -11,6 +11,9 @@ import { AccountStore, publicAccount } from '../../server/store';
 import { WorldSimulation } from '../../server/simulation';
 import type { ServerMessage, Snapshot } from '../../shared/types';
 import { RUINS } from '../../shared/ruins';
+import { RUINS_WARDEN } from '../../shared/bosses';
+import { World } from '../../shared/world';
+import { findBossPath } from '../../server/boss-encounter';
 
 test('two browsers fight the boss: private gold, visible corpse, physical collection and persistent wallet', { timeout: 60_000 }, async () => {
   const directory = mkdtempSync(join(tmpdir(), 'riftlands-ruins-browser-'));
@@ -49,7 +52,13 @@ test('two browsers fight the boss: private gold, visible corpse, physical collec
       clients.push({ page, state });
     }
     const [owner, observer] = clients;
-    await expect.poll(() => owner.state.snapshot?.actors.some(a => a.id === RUINS.bossId)).toBe(true);
+    await expect.poll(() => owner.state.snapshot?.actors.some(a => a.id === RUINS_WARDEN.id)).toBe(true);
+    await expect.poll(() => owner.state.snapshot?.bossLocks?.find(lock => lock.bossId === RUINS_WARDEN.id)?.ownerId).toBe(owner.state.snapshot!.self.id);
+    await observer.page.keyboard.down('KeyA'); await observer.page.keyboard.down('KeyW');
+    await observer.page.waitForTimeout(1800);
+    await observer.page.keyboard.up('KeyA'); await observer.page.keyboard.up('KeyW');
+    assert.ok(Math.hypot(observer.state.snapshot!.self.x - RUINS.x, observer.state.snapshot!.self.y - RUINS.y) > RUINS.radius,
+      'the second browser must remain outside the sealed room');
     mkdirSync(resolve('test-results'), { recursive: true });
     await owner.page.screenshot({ path: resolve('test-results/ruins-boss.png') });
     const canvas = (await owner.page.locator('.world-canvas').boundingBox())!;
@@ -63,16 +72,17 @@ test('two browsers fight the boss: private gold, visible corpse, physical collec
       for (const key of wanted) if (!movement.has(key)) { await owner.page.keyboard.down(key); movement.add(key); }
     };
     const deadline = Date.now() + 25_000;
-    while ((owner.state.snapshot?.actors.find(a => a.id === RUINS.bossId)?.hp ?? RUINS.hp) > 0 && Date.now() < deadline) {
-      const snapshot = owner.state.snapshot!, self = snapshot.self, boss = snapshot.actors.find(a => a.id === RUINS.bossId);
+    while ((owner.state.snapshot?.actors.find(a => a.id === RUINS_WARDEN.id)?.hp ?? RUINS_WARDEN.hp) > 0 && Date.now() < deadline) {
+      const snapshot = owner.state.snapshot!, self = snapshot.self, boss = snapshot.actors.find(a => a.id === RUINS_WARDEN.id);
       assert.ok(self.hp > 0, 'the ranged test player should survive by moving');
       if (!boss) { await owner.page.waitForTimeout(75); continue; }
       await owner.page.mouse.move(canvas.x + canvas.width / 2 + boss.x - self.x, canvas.y + canvas.height / 2 + boss.y - self.y);
       const bx = boss.x - self.x, by = boss.y - self.y, distance = Math.hypot(bx, by) || 1;
       let dx = -by / distance, dy = bx / distance;
-      if (snapshot.bossWindup?.kind === 'charge') {
-        const lineX = (snapshot.bossWindup.targetX ?? boss.x) - snapshot.bossWindup.x;
-        const lineY = (snapshot.bossWindup.targetY ?? boss.y) - snapshot.bossWindup.y;
+      const windup = snapshot.bossWindups?.[0];
+      if (windup?.kind === 'charge') {
+        const lineX = (windup.targetX ?? boss.x) - windup.x;
+        const lineY = (windup.targetY ?? boss.y) - windup.y;
         dx = -lineY; dy = lineX;
         if (Math.abs(self.x + Math.sign(dx) * 100) > 270 || Math.abs(self.y - RUINS.y + Math.sign(dy) * 100) > 270) { dx = -dx; dy = -dy; }
       } else if (distance < 150) { dx = -bx; dy = -by; }
@@ -84,24 +94,28 @@ test('two browsers fight the boss: private gold, visible corpse, physical collec
     }
     await move(0, 0);
     await owner.page.keyboard.up('Space');
-    assert.equal(owner.state.snapshot?.actors.find(a => a.id === RUINS.bossId)?.hp, 0, 'the moving ranged player should defeat the boss');
+    assert.equal(owner.state.snapshot?.actors.find(a => a.id === RUINS_WARDEN.id)?.hp, 0, 'the moving ranged player should defeat the boss');
     await expect.poll(() => owner.state.snapshot?.goldDrops?.length).toBe(1);
     assert.equal(observer.state.snapshot!.goldDrops!.length, 0);
     assert.equal(owner.state.snapshot!.gold, 0);
     await owner.page.screenshot({ path: resolve('test-results/ruins-loot-owner.png') });
     const lootDeadline = Date.now() + 6_000;
     const held = new Set<string>();
-    while ((owner.state.snapshot?.gold ?? 0) < RUINS.gold && Date.now() < lootDeadline) {
-      const snapshot = owner.state.snapshot!, drop = snapshot.goldDrops![0], self = snapshot.self;
+    const drop = owner.state.snapshot!.goldDrops![0];
+    const route = [...findBossPath(RUINS_WARDEN, owner.state.snapshot!.self, drop, new World()), drop];
+    while ((owner.state.snapshot?.gold ?? 0) < RUINS_WARDEN.reward.gold && Date.now() < lootDeadline) {
+      const snapshot = owner.state.snapshot!, self = snapshot.self;
+      while (route.length > 1 && Math.hypot(route[0].x - self.x, route[0].y - self.y) < 24) route.shift();
+      const waypoint = route[0];
       const wanted = new Set<string>();
-      if (drop.x > self.x + 8) wanted.add('KeyD'); if (drop.x < self.x - 8) wanted.add('KeyA');
-      if (drop.y > self.y + 8) wanted.add('KeyS'); if (drop.y < self.y - 8) wanted.add('KeyW');
+      if (waypoint.x > self.x + 8) wanted.add('KeyD'); if (waypoint.x < self.x - 8) wanted.add('KeyA');
+      if (waypoint.y > self.y + 8) wanted.add('KeyS'); if (waypoint.y < self.y - 8) wanted.add('KeyW');
       for (const key of held) if (!wanted.has(key)) { await owner.page.keyboard.up(key); held.delete(key); }
       for (const key of wanted) if (!held.has(key)) { await owner.page.keyboard.down(key); held.add(key); }
       await owner.page.waitForTimeout(50);
     }
     for (const key of held) await owner.page.keyboard.up(key);
-    assert.equal(owner.state.snapshot?.gold, RUINS.gold);
+    assert.equal(owner.state.snapshot?.gold, RUINS_WARDEN.reward.gold);
     await expect(owner.page.locator('[data-ref=hud-gold]')).toHaveText('50');
     await owner.page.locator('[data-ref=leave]').click();
     await expect(owner.page.locator('[data-ref=lobby-gold]')).toHaveText('50');

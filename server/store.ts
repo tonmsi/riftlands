@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname, resolve } from 'node:path';
 import type { Actor, PublicAccount } from '../shared/types';
 import { CLASSES } from '../shared/config';
-import { validRuinsState, type RuinsState } from '../shared/ruins';
+import { normalizeLegacyBossState, validBossStates, RUINS_WARDEN, type BossState } from '../shared/bosses';
 
 export interface Account {
   gold?: number;
@@ -65,7 +65,7 @@ function getJwtSecret(baseDir: string): string {
 }
 
 export class AccountStore {
-  ruins?: RuinsState;
+  bossStates: Record<string, BossState> = {};
   readonly accounts = new Map<string, Account>();
   private readonly accountsByName = new Map<string, string>(); // nameLower -> account.id
   private dirty = false;
@@ -89,9 +89,14 @@ export class AccountStore {
         throw new Error('Formato account non supportato.');
       }
 
-      if ('ruins' in parsed && parsed.ruins !== undefined) {
-        if (!validRuinsState(parsed.ruins)) throw new Error('Stato rovine non valido.');
-        this.ruins = parsed.ruins;
+      if ('bosses' in parsed && parsed.bosses !== undefined) {
+        if (!validBossStates(parsed.bosses)) throw new Error('Stato boss non valido.');
+        this.bossStates = parsed.bosses;
+      } else if ('ruins' in parsed && parsed.ruins !== undefined) {
+        const legacy = normalizeLegacyBossState(parsed.ruins);
+        if (!legacy) throw new Error('Stato rovine non valido.');
+        this.bossStates[RUINS_WARDEN.id] = legacy;
+        this.dirty = true;
       }
       for (const entry of parsed.accounts) {
         if (!entry || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.nameLower !== 'string' || typeof entry.salt !== 'string' || typeof entry.passwordHash !== 'string' || !Array.isArray(entry.friends) || !Array.isArray(entry.requests) || ![entry.xp, entry.kills, entry.deaths, entry.lastSeen].every(Number.isFinite)) {
@@ -229,7 +234,7 @@ export class AccountStore {
     if (!this.dirty) return;
     mkdirSync(dirname(this.path), { recursive: true });
     const next = `${this.path}.tmp`;
-    writeFileSync(next, JSON.stringify({ version: 2, accounts: [...this.accounts.values()], ruins: this.ruins }), { mode: 0o600 });
+    writeFileSync(next, JSON.stringify({ version: 2, accounts: [...this.accounts.values()], bosses: this.bossStates }), { mode: 0o600 });
     renameSync(next, this.path);
     this.dirty = false;
   }

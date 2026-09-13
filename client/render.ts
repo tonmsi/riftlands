@@ -4,7 +4,8 @@ import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
 import { OUTPOST, OUTPOST_HUTS, outpostHutAt } from '../shared/outpost';
 import type { ArenaGateState } from '../shared/types';
-import { RUINS, ruinsRoadCenter, type GoldDrop, type BossWindup } from '../shared/ruins';
+import { RUINS, ruinsRoadCenter } from '../shared/ruins';
+import type { BossDrop, BossWindup } from '../shared/bosses';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -16,8 +17,8 @@ const PALADIN_DRAW_SIZE = 48;
 const MAX_LOGICAL_VIEWPORT = { width: 2200, height: 1400 };
 
 export interface RenderFrame {
-  goldDrops?: GoldDrop[];
-  bossWindup?: BossWindup;
+  goldDrops?: BossDrop[];
+  bossWindups?: BossWindup[];
   arenaGate?: ArenaGateState;
   time: number;
   self: Actor | null;
@@ -161,8 +162,7 @@ export class Renderer {
       this.drawArenaGate(frame.time, frame.arenaGate);
       this.drawRuins();
     }
-    if (frame.bossWindup) {
-      const w = frame.bossWindup;
+    for (const w of frame.bossWindups ?? []) {
       const progress = Math.max(0, Math.min(1, (frame.time - w.startedAt) / Math.max(1, w.resolvesAt - w.startedAt)));
       ctx.save(); ctx.fillStyle = 'rgba(216,72,45,0.2)'; ctx.strokeStyle = '#ffb184'; ctx.lineWidth = 3;
       if (w.kind === 'charge' && w.targetX !== undefined && w.targetY !== undefined) {
@@ -462,29 +462,13 @@ export class Renderer {
     const { ctx } = this;
     ctx.save();
     // Weathered stones guide the eye along the trail without floating sign text.
-    for (const y of [-720, -1450, -2220, -3000, RUINS.y + 300]) {
+    for (const y of [-720, -1450, -2220, -3000]) {
       const x = ruinsRoadCenter(y) + (Math.round(Math.abs(y) / 100) % 2 ? 92 : -92);
       if (!this.visible({ x, y })) continue;
       ctx.fillStyle = 'rgba(25,34,27,.24)'; ctx.beginPath(); ctx.ellipse(x + 5, y + 9, 18, 7, -.2, 0, TAU); ctx.fill();
       ctx.fillStyle = '#777864'; ctx.strokeStyle = '#464e42'; ctx.lineWidth = 2;
       polygon(ctx, [x - 10, y + 8, x - 8, y - 26, x + 2, y - 37, x + 11, y - 21, x + 9, y + 8]); ctx.fill(); ctx.stroke();
       ctx.strokeStyle = '#d0b97999'; ctx.lineWidth = 1.5; polygon(ctx, [x, y - 26, x + 5, y - 17, x, y - 8, x - 5, y - 17]); ctx.stroke();
-    }
-    if (this.visible(RUINS)) {
-      ctx.strokeStyle = '#b9a87555'; ctx.lineWidth = 2;
-      circle(ctx, RUINS.x, RUINS.y, 92); ctx.stroke();
-      for (let i = 0; i < 8; i++) {
-        const angle = i * TAU / 8;
-        ctx.save(); ctx.translate(RUINS.x + Math.cos(angle) * 92, RUINS.y + Math.sin(angle) * 92); ctx.rotate(angle);
-        polygon(ctx, [-5, 0, 0, -10, 5, 0, 0, 10]); ctx.stroke(); ctx.restore();
-      }
-      // Broken threshold arch at the southern entrance.
-      const gateY = RUINS.y + 290;
-      ctx.fillStyle = '#777764'; ctx.strokeStyle = '#444c40';
-      ctx.fillRect(RUINS.x - 88, gateY - 56, 24, 68); ctx.strokeRect(RUINS.x - 88, gateY - 56, 24, 68);
-      ctx.fillRect(RUINS.x + 64, gateY - 56, 24, 68); ctx.strokeRect(RUINS.x + 64, gateY - 56, 24, 68);
-      polygon(ctx, [RUINS.x - 68, gateY - 58, RUINS.x - 43, gateY - 78, RUINS.x + 7, gateY - 82, RUINS.x + 38, gateY - 68, RUINS.x + 64, gateY - 57]); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#252f2890'; polygon(ctx, [RUINS.x - 49, gateY - 55, RUINS.x - 31, gateY - 68, RUINS.x + 9, gateY - 70, RUINS.x + 42, gateY - 54]); ctx.fill();
     }
     ctx.restore();
   }
@@ -608,7 +592,7 @@ export class Renderer {
       polygon(ctx, [r + 15, -3, r + 20, 0, r + 15, 3]);
       ctx.fillStyle = '#f2eacb'; ctx.fill(); ctx.restore();
     }
-    if (actor.kind === 'player' || selected || actor.hp < actor.maxHp || actor.npcKind === 'warden') {
+    if (actor.kind === 'player' || selected || actor.hp < actor.maxHp || actor.npcKind === 'boss') {
       const barWidth = actor.kind === 'player' ? 42 : 32;
       const barY = -r - 11;
       ctx.fillStyle = 'rgba(24,32,24,0.75)'; ctx.fillRect(-barWidth / 2 - 1, barY - 1, barWidth + 2, 5);
@@ -619,9 +603,9 @@ export class Renderer {
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(34,43,29,0.65)';
         const label = `${actor.name.slice(0, 20)}${self ? ' · tu' : ''}`;
         ctx.strokeText(label, 0, barY - 7); ctx.fillStyle = self ? '#faf2d8' : allied ? '#ceebd6' : '#e7e6d7'; ctx.fillText(label, 0, barY - 7);
-      } else if (selected || actor.npcKind === 'warden') {
+      } else if (selected || actor.npcKind === 'boss') {
         ctx.textAlign = 'center'; ctx.font = '500 9px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#f0e8cf'; ctx.fillText(actor.npcKind === 'warden' && dead ? `Cadavere · ${Math.max(0, Math.ceil((actor.deadUntil - time) / 1000))}s` : `${actor.name} · ${actor.level}`, 0, barY - 6);
+        ctx.fillStyle = '#f0e8cf'; ctx.fillText(actor.npcKind === 'boss' && dead ? `Cadavere · ${Math.max(0, Math.ceil((actor.deadUntil - time) / 1000))}s` : `${actor.name} · ${actor.level}`, 0, barY - 6);
       }
     }
     if (actor.hidden && self) {
@@ -730,7 +714,7 @@ export class Renderer {
     const { ctx } = this;
     const r = actor.radius;
     ctx.strokeStyle = '#3c483b'; ctx.lineWidth = 1.8;
-    if (actor.npcKind === 'warden') {
+    if (actor.npcKind === 'boss') {
       if (actor.hp <= 0) {
         ctx.fillStyle = '#9c9479';
         for (const [x, y] of [[-22, 0], [-2, 7], [20, -2]]) { polygon(ctx, [x - 10, y - 8, x + 9, y - 7, x + 12, y + 9, x - 7, y + 12]); ctx.fill(); ctx.stroke(); }

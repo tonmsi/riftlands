@@ -1,5 +1,5 @@
 import type { ClassDef, ClassId } from './types';
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
 export const SNAPSHOT_RATE = 10;

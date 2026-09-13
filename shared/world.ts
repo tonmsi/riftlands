@@ -2,6 +2,7 @@ import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, WORLD_SEED } from './config';
 import { ARENA_GATE, arenaTileIsWall } from './arena';
 import { OUTPOST, outpostHutAt } from './outpost';
 import { RUINS, ruinsTile, inRuins, onRuinsRoad } from './ruins';
+import { isSealedBossTile } from './bosses';
 import type { Biome, Pickup, TileKind, RoomMode } from './types';
 
 export interface NpcSpawn { id: string; x: number; y: number; npcKind: 'slime' | 'sentinel' | 'wisp'; level: number; }
@@ -27,8 +28,12 @@ function noise(x: number, y: number, seed: number): number {
 /** Pure terrain plus a bounded LRU cache; neither client nor server retains infinity. */
 export class World {
   private cache = new Map<string, Chunk>();
+  private readonly lockedBosses = new Set<string>();
   constructor(public readonly seed = WORLD_SEED, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world') {}
   get cacheSize(): number { return this.cache.size; }
+  setBossLocked(id: string, locked: boolean): void { if (locked) this.lockedBosses.add(id); else this.lockedBosses.delete(id); }
+  setBossLocks(ids: Iterable<string>): void { this.lockedBosses.clear(); for (const id of ids) this.lockedBosses.add(id); }
+  isBossLocked(id: string): boolean { return this.lockedBosses.has(id); }
 
   getBiome(x: number, y: number): Biome {
     if (this.mode !== 'world') return 'meadow';
@@ -37,6 +42,7 @@ export class World {
   }
 
   getTile(tx: number, ty: number): TileKind {
+    if (this.mode === 'world' && isSealedBossTile(tx, ty, this.lockedBosses)) return 'rock';
     const cx = Math.floor(tx / CHUNK_TILES), cy = Math.floor(ty / CHUNK_TILES);
     const cached = this.cache.get(chunkKey(cx, cy));
     if (cached) return cached.tiles[(ty - cy * CHUNK_TILES) * CHUNK_TILES + tx - cx * CHUNK_TILES];

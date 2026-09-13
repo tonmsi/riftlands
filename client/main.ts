@@ -84,6 +84,7 @@ const connection = new GameConnection({
     } else if (message.type === 'snapshot') {
       const old = predicted;
       latest = message;
+      renderer.world.setBossLocks((message.bossLocks ?? []).filter(lock => lock.locked).map(lock => lock.bossId));
       const result = reconcile(message.self, message.ack, pending, renderer.world, message.time);
       pending = result.pending;
       predicted = result.actor;
@@ -222,7 +223,7 @@ function frame(now: number): void {
   renderer.render({
     arenaGate: latest?.arenaGate,
     goldDrops: latest?.goldDrops,
-    bossWindup: latest?.bossWindup,
+    bossWindups: latest?.bossWindups,
     time,
     self,
     actors,

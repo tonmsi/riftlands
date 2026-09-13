@@ -390,7 +390,7 @@ export class GameUI {
     this.write('target-type', actor.kind === 'npc' ? 'CREATURA DEL MONDO' : 'VIAGGIATORE');
     this.write('target-name', actor.name);
     this.write('target-detail', `${CLASSES[actor.classId].name} · Livello ${actor.level} · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV`);
-    if (actor.npcKind === 'warden') this.write('target-detail', actor.hp <= 0 ? `Cadavere · Ritorna tra ${Math.max(0, Math.ceil((actor.deadUntil - (this.latest?.time ?? 0)) / 1000))}s` : `Mini-boss · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV`);
+    if (actor.npcKind === 'boss') this.write('target-detail', actor.hp <= 0 ? `Cadavere · Ritorna tra ${Math.max(0, Math.ceil((actor.deadUntil - (this.latest?.time ?? 0)) / 1000))}s` : `Boss · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV`);
     this.fill('target-fill', actor.hp / actor.maxHp);
     this.ref('target-actions').hidden = actor.kind !== 'player';
     const isFriend = this.socialState?.friends.some(friend => friend.id === actor!.id);

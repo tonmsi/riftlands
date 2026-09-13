@@ -5,7 +5,8 @@ import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputComman
 import { World, chunkCoords, chunkKey, isSolid } from '../shared/world';
 import { OUTPOST, inOutpost } from '../shared/outpost';
 import { insideArenaGate } from '../shared/arena';
-import { RuinsEncounter } from './ruins';
+import { BOSS_DEFINITIONS } from '../shared/bosses';
+import { BossEncounter } from './boss-encounter';
 import type { Account, AccountStore } from './store';
 
 const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
@@ -47,7 +48,7 @@ export function sweptWorldHit(start: Vec2, end: Vec2, radius: number, world: Wor
 
 /** Single authoritative simulation. Time fields are milliseconds; step delta is seconds. */
 export class WorldSimulation {
-  readonly ruins?: RuinsEncounter;
+  readonly bosses = new Map<string, BossEncounter>();
   readonly world: World;
   readonly seed: number;
   readonly players = new Map<string, Actor>();
@@ -92,8 +93,12 @@ export class WorldSimulation {
     this.store = store;
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
     if (mode === 'world') {
-      this.ruins = new RuinsEncounter(now, store);
-      this.npcs.set(this.ruins.boss.id, this.ruins.boss);
+      for (const definition of BOSS_DEFINITIONS) {
+        const encounter = new BossEncounter(definition, now, store?.bossStates[definition.id], store);
+        this.bosses.set(definition.id, encounter);
+        this.npcs.set(encounter.boss.id, encounter.boss);
+        if (store) store.bossStates[definition.id] = encounter.state;
+      }
     }
   }
 
@@ -238,7 +243,8 @@ export class WorldSimulation {
     }
     this.pendingCasts.clear();
     this.stepNpcs(dt);
-    this.ruins?.step(this.now, dt, [...this.players.values()], this.world, (target, amount) => this.damage(target, this.ruins!.boss, amount));
+    for (const encounter of this.bosses.values()) encounter.step(this.now, dt, [...this.players.values()],
+      id => !!this.connections.get(id)?.connected, this.world, (target, amount) => this.damage(target, encounter.boss, amount));
     resolveActorCollisions([...this.players.values(), ...this.npcs.values()].filter(actor => actor.hp > 0), this.world);
     if (this.mode === 'world') for (const actor of this.players.values()) if (!inOutpost(actor)) actor.spawnProtectedUntil = 0;
     this.rebuildCells();
@@ -246,7 +252,7 @@ export class WorldSimulation {
     this.stepBursts();
     this.stepTraps();
     this.stepPickups();
-    if (this.ruins) for (const player of this.players.values()) this.ruins.collect(player, this.accounts.get(player.id)!, !!this.connections.get(player.id)?.connected, this.now);
+    for (const encounter of this.bosses.values()) for (const player of this.players.values()) encounter.collect(player, this.accounts.get(player.id)!, !!this.connections.get(player.id)?.connected, this.now);
     while (this.events.length && this.events[0].at + 1800 < this.now) this.events.shift();
     if (this.tick % 150 === 0) {
       this.checkpoint();
@@ -520,6 +526,8 @@ export class WorldSimulation {
 
   private damage(target: Actor, attacker: Actor | undefined, amount: number): boolean {
     if (target.hp <= 0 || target.spawnProtectedUntil > this.now || (attacker && this.allied(attacker, target))) return false;
+    const encounter = target.bossKey ? this.bosses.get(target.bossKey) : undefined;
+    if (encounter && !encounter.canDamage(attacker)) return false;
     if (target.kind === 'player' && attacker?.kind !== 'npc' && (this.isSafeProtected(target) || (attacker && this.isSafeProtected(attacker)))) return false;
     const armor = target.kind === 'npc' ? (target.npcKind === 'sentinel' ? 0.15 : 0) : CLASSES[target.classId].armor;
     const shield = target.effects.some(effect => effect.kind === 'shield' && effect.until > this.now) ? 0.4 : 1;
@@ -550,7 +558,7 @@ export class WorldSimulation {
       this.persistPlayer(attacker.id);
     }
     if (target.kind === 'player') this.persistPlayer(target.id);
-    if (target.npcKind === 'warden') this.ruins?.killed(attacker?.kind === 'player' ? attacker.id : undefined, this.now);
+    encounter?.killed(attacker?.kind === 'player' ? attacker.id : undefined, this.now, this.world);
     return true;
   }
 
@@ -649,7 +657,7 @@ export class WorldSimulation {
 
   private stepNpcs(dt: number): void {
     for (const npc of this.npcs.values()) {
-      if (npc.npcKind === 'warden') continue;
+      if (npc.npcKind === 'boss') continue;
       const meta = this.npcMeta.get(npc.id)!;
       if (npc.hp <= 0) {
         if (this.now >= npc.deadUntil) { Object.assign(npc, meta.home); npc.hp = npc.maxHp; npc.deadUntil = 0; npc.effects = []; meta.nextAttack = this.now + 1200; }
@@ -714,8 +722,9 @@ export class WorldSimulation {
     return {
       type: 'snapshot', tick: this.tick, time: this.now, ack: connection.ack, self: copyActor(self), actors,
       gold: this.accounts.get(id)?.gold ?? 0,
-      goldDrops: this.ruins?.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > this.now && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop })) ?? [],
-      bossWindup: this.ruins?.windup && distance(self, this.ruins.windup) < INTEREST_RADIUS ? { ...this.ruins.windup } : undefined,
+      goldDrops: [...this.bosses.values()].flatMap(encounter => encounter.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > this.now && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop }))),
+      bossWindups: [...this.bosses.values()].flatMap(encounter => encounter.windup && distance(self, encounter.windup) < INTEREST_RADIUS ? [{ ...encounter.windup }] : []),
+      bossLocks: [...this.bosses.values()].map(encounter => encounter.lockState()),
       projectiles: [...this.projectiles.values()].filter(projectile => distance(self, projectile) < INTEREST_RADIUS).map(projectile => ({ ...projectile })),
       pickups: [...this.pickups.values()].filter(pickup => distance(self, pickup) < INTEREST_RADIUS).map(pickup => ({ ...pickup })),
       traps: [...this.traps.values()].filter(trap => distance(self, trap) < INTEREST_RADIUS).map(trap => ({ ...trap })),

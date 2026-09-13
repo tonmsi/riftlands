@@ -5,6 +5,8 @@ Le Rovine della Soglia si trovano nel mondo globale a `(0, -3840)`: seguire il s
 ## Incontro e loot
 
 - Il Custode delle Rovine ha 460 HP e insegue anche chi rompe la linea visiva, calcolando un percorso locale attorno a pilastri e mura. Alterna colpo ravvicinato, schianto circolare, carica lineare e nova ad anello; le tre mosse pesanti sono telegrafate e richiedono posizionamenti diversi. Sotto il 45% di vita si muove e attacca più rapidamente. Se tutti abbandonano la zona, torna al centro e recupera la vita.
+- Il primo giocatore vivo e connesso che supera la soglia interna diventa proprietario esclusivo dell'incontro. Le aperture nord e sud vengono riempite da terreno solido sincronizzato con il client: il proprietario non può uscire e gli altri non possono entrare, attraversare con uno scatto, colpire il boss o sparare attraverso l'accesso.
+- Alla vittoria le aperture tornano transitabili. Se il proprietario muore, oppure scompare dopo i 20 secondi di tolleranza della disconnessione, l'incontro fallisce: la stanza si apre e il boss torna immediatamente al massimo della vita. Una riconnessione entro la tolleranza riprende lo stesso combattimento e lo stesso corpo.
 - Le rovine **non sono una safe zone**: il PvP globale resta attivo.
 - Il giocatore che infligge il colpo finale riceve la proprietà esclusiva di un drop da **50 gold**. Non c'è condivisione automatica con il team: anche chi contribuisce senza infliggere il colpo finale non riceve gold.
 - I gold non sono accreditati alla morte del boss: il proprietario deve passarci sopra, vivo e connesso. Sono raccoglibili da 500 ms dopo la morte, con distanza massima pari al raggio del personaggio più 18 unità. Se è già sovrapposto, la raccolta avviene automaticamente dopo questo intervallo.
@@ -15,13 +17,13 @@ Le Rovine della Soglia si trovano nel mondo globale a `(0, -3840)`: seguire il s
 
 ## Organizzazione e salvataggio
 
-`shared/ruins.ts` contiene configurazione, terreno e schema dello stato. `server/ruins.ts` gestisce incontro, respawn e raccolta autorevole. La simulazione lo crea esclusivamente nel mondo globale, separato dagli NPC dei chunk e dalle istanze PvP.
+`shared/bosses.ts` contiene `BossDefinition`, catalogo, attacchi, fasi, ricompense, respawn e geometria delle chiusure. `server/boss-encounter.ts` è il runtime condiviso per proprietà, pathfinding, combattimento, fallimento, loot e persistenza. `shared/ruins.ts` contiene soltanto geografia e terreno specifici delle rovine. Per aggiungere un boss ordinario si aggiunge una definizione al catalogo; codice dedicato serve solo per una meccanica non rappresentabile dagli attacchi disponibili.
 
-L'archivio JSON versione 2 accetta i nuovi campi opzionali `gold` degli account e `ruins` dello stato globale. Gli account precedenti partono da zero gold; valori malformati sono rifiutati. Alla raccolta, incremento del portafoglio e rimozione del drop vengono salvati nella stessa sostituzione atomica del file: non sono due scritture separate.
+L'archivio JSON versione 2 usa i campi opzionali `gold` degli account e la mappa `bosses` indicizzata per ID. Il precedente campo singolo `ruins` viene migrato automaticamente alla prima lettura senza perdere cadavere, timer o drop. Gli account precedenti partono da zero gold; valori malformati sono rifiutati. Alla raccolta, incremento del portafoglio e rimozione del drop vengono salvati nella stessa sostituzione atomica del file: non sono due scritture separate.
 
 Cadavere, scadenza del respawn e proprietà/scadenza dei drop sopravvivono al riavvio. I timer sono assoluti: il tempo trascorso a server spento conta. La vita del boss ancora vivo e il suo combattimento non vengono salvati: al riavvio riparte integro. Rimane un archivio con un solo processo scrittore, non una soluzione per più server concorrenti.
 
-Il protocollo è **4**: aggiornare client e server insieme. Prima del deploy fare un backup del file account; un rollback a server precedenti non conserva necessariamente questi nuovi campi.
+Il protocollo è **5**: snapshot con più telegraph e stati di chiusura sincronizzano ogni arena boss. Aggiornare client e server insieme. Prima del deploy fare un backup del file account; un rollback a server precedenti non conserva necessariamente la mappa `bosses`.
 
 ## Verifica
 
