@@ -3,8 +3,9 @@ import type { Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec
 import { World } from '../shared/world';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
-  paladin: new URL('../assets/paladino256SVG.svg', import.meta.url).href,
-  mage: new URL('../assets/mage256SVG.svg', import.meta.url).href,
+  paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
+  mage: new URL('../assets/mage256.svg', import.meta.url).href,
+  warrior: new URL('../assets/warrior256.svg', import.meta.url).href
 };
 const PALADIN_FRAME_SIZE = 256;
 const PALADIN_DRAW_SIZE = 48;

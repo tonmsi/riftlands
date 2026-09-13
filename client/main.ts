@@ -3,7 +3,7 @@ import { TICK_RATE } from '../shared/config';
 import type { AbilitySlot, Actor, GameEvent, InputCommand, PublicAccount, Snapshot, Vec2 } from '../shared/types';
 import { GameConnection } from './net';
 import { predictMovement, reconcile } from './prediction';
-import { LocalMovementView } from './motion';
+import { LocalMovementView, LocalPresentationDelay } from './motion';
 import { SnapshotBuffer } from './snapshots';
 import { Renderer, drawMinimap } from './render';
 import { GameUI } from './ui';
@@ -22,6 +22,9 @@ const snapshotBuffer = new SnapshotBuffer();
 let renderedActors: Actor[] = [];
 const effects = new Map<string, GameEvent>();
 const localMovement = new LocalMovementView();
+const LOCAL_PRESENTATION_DELAY_MS = 30;
+// Presentation-only delay. Inputs still go to the server as soon as they are generated.
+const localPresentation = new LocalPresentationDelay(LOCAL_PRESENTATION_DELAY_MS);
 let lastMinimap = 0;
 let profileCache = '';
 const releaseControls = (): void => { keys.clear(); primaryHeld = false; pendingCast = undefined; };
@@ -36,7 +39,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
     ui.toast('Disconnessione completata.');
   },
   leave: () => {
-    connection.leave(); playing = false; latest = null; predicted = null; selectedId = null;
+    connection.leave(); playing = false; latest = null; predicted = null; selectedId = null; localPresentation.reset();
     keys.clear(); primaryHeld = false; pendingCast = undefined; snapshotBuffer.clear(); renderedActors = []; effects.clear();
     ui.setPlaying(false); ui.setSelected(null);
   },
@@ -47,7 +50,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
 
 const renderer = new Renderer(ui.canvas);
 const connection = new GameConnection({
-  reset: () => { releaseControls(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); },
+  reset: () => { releaseControls(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localPresentation.reset(); },
   status: (status, detail) => {
     ui.setConnection(status, detail);
     if (status === 'offline' || status === 'reconnecting') releaseControls();
@@ -77,7 +80,10 @@ const connection = new GameConnection({
       predicted = result.actor;
       localMovement.correct(old, predicted);
       snapshotBuffer.push(message, performance.now());
-      for (const event of message.events) effects.set(event.id, event);
+      for (const event of message.events) {
+        const localEvent = event.actorId === message.self.id || event.targetId === message.self.id;
+        effects.set(event.id, localEvent ? { ...event, at: event.at + LOCAL_PRESENTATION_DELAY_MS } : event);
+      }
       ui.setSnapshot(message, connection.ping);
       const { id, name, xp, kills, deaths } = message.self;
       saveProfile({ id, name, xp, kills, deaths });
@@ -200,7 +206,8 @@ function frame(now: number): void {
   const remoteFrame = snapshotBuffer.sample(performance.now());
   const actors = remoteFrame?.actors ?? [];
   renderedActors = actors;
-  const self = predicted ? localMovement.sample(predicted, inputAccumulator / (1000 / TICK_RATE), delta) : latest?.self ?? null;
+  const immediateSelf = predicted ? localMovement.sample(predicted, inputAccumulator / (1000 / TICK_RATE), delta) : latest?.self ?? null;
+  const self = immediateSelf ? localPresentation.sample(immediateSelf, performance.now()) : null;
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const projectiles = remoteFrame?.projectiles ?? [];
   renderer.render({
