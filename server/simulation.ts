@@ -727,7 +727,7 @@ export class WorldSimulation {
       gold: this.accounts.get(id)?.gold ?? 0,
       goldDrops: [...this.bosses.values()].flatMap(encounter => encounter.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > this.now && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop }))),
       bossWindups: [...this.bosses.values()].flatMap(encounter => encounter.windup && distance(self, encounter.windup) < INTEREST_RADIUS ? [{ ...encounter.windup }] : []),
-      bossLocks: [...this.bosses.values()].map(encounter => encounter.lockState()),
+      bossLocks: [...this.bosses.values()].map(encounter => encounter.lockState(self)),
       bossPreparations: [...this.bosses.values()].flatMap(encounter => encounter.preparationFor(self) ?? []),
       projectiles: [...this.projectiles.values()].filter(projectile => distance(self, projectile) < INTEREST_RADIUS).map(projectile => ({ ...projectile })),
       pickups: [...this.pickups.values()].filter(pickup => distance(self, pickup) < INTEREST_RADIUS).map(pickup => ({ ...pickup })),

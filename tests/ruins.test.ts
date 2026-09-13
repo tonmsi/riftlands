@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { AccountStore, type Account } from '../server/store';
 import { WorldSimulation } from '../server/simulation';
 import { RUINS, inRuins, ruinsRoadCenter } from '../shared/ruins';
-import { insideBossEntry, RUINS_WARDEN } from '../shared/bosses';
+import { insideBossEntry, RUINS_WARDEN, touchesBossEscapeGate } from '../shared/bosses';
 import { World, chunkCoords } from '../shared/world';
 import { collidesWorld, hasLineOfSight, moveWithCollisions } from '../shared/physics';
 
@@ -177,7 +177,9 @@ test('boss rotates through slam, charge and nova telegraphs', () => {
 test('first entrant seals the arena: owner stays inside and every other player stays outside', () => {
   const { sim, a, b, boss, encounter } = fixture();
   assert.equal(encounter.ownerId, a.id);
-  assert.deepEqual(sim.snapshotFor(a.id)!.bossLocks, [{ bossId: RUINS_WARDEN.id, locked: true, ownerId: a.id }]);
+  assert.deepEqual(sim.snapshotFor(a.id)!.bossLocks,
+    [{ bossId: RUINS_WARDEN.id, locked: true, ownerId: a.id, relation: 'participant' }]);
+  assert.equal(sim.snapshotFor(b.id)!.bossLocks![0].relation, 'outsider');
   for (const tile of RUINS_WARDEN.arena.sealedTiles) assert.equal(sim.world.getTile(tile.x, tile.y), 'rock');
 
   Object.assign(a, moveWithCollisions(a, 0, 1, 900, sim.world));
@@ -225,6 +227,7 @@ test('nearby team enters together, drives aggro and receives an equal private re
   assert.equal(insideBossEntry(RUINS_WARDEN, a), true);
   assert.equal(insideBossEntry(RUINS_WARDEN, b), true, 'both entrants are moved to safe separated staging points');
   assert.equal(encounter.hasParticipant(d.id), false, 'a teammate left outside at zero is excluded');
+  assert.equal(sim.snapshotFor(d.id)!.bossLocks![0].relation, 'outsider');
   Object.assign(d, { x: RUINS.x, y: RUINS.y + 230 });
   sim.step(0.1);
   assert.deepEqual({ x: d.x, y: d.y }, RUINS_WARDEN.arena.exit, 'an excluded teammate cannot enter after the lock');
@@ -257,7 +260,7 @@ test('nearby team enters together, drives aggro and receives an equal private re
   assert.equal(sim.snapshotFor(d.id)!.goldDrops!.length, 0);
 });
 
-test('a dead team participant respawns outside once and is not killed again during the surviving fight', () => {
+test('an eliminated team participant only dies again when crossing one of the four escape flames', () => {
   const sim = new WorldSimulation(734291, 1_000_000);
   const a = sim.addPlayer(account('survivor'), 'warrior'), b = sim.addPlayer(account('fallen'), 'mage');
   sim.socialAction(a.id, 'team-invite', b.id);
@@ -281,6 +284,32 @@ test('a dead team participant respawns outside once and is not killed again duri
   advance(sim, 2);
   assert.equal(b.deaths, deaths + 1, 'the respawned excluded member must not enter a death loop');
   assert.equal(encounter.ownerId, a.id);
+  assert.equal(sim.snapshotFor(b.id)!.bossLocks![0].relation, 'eliminated');
+
+  const gate = RUINS_WARDEN.arena.escapeGates[3];
+  assert.equal(touchesBossEscapeGate(RUINS_WARDEN, gate, b.radius), true);
+  Object.assign(b, gate);
+  sim.step(0.1);
+  assert.equal(b.hp, 0, 'an eliminated member that tries to re-enter through a flame dies again');
+  assert.equal(b.deaths, deaths + 2);
+  assert.equal(encounter.ownerId, a.id, 'the surviving teammate keeps the encounter active');
+});
+
+test('the four escape flames match the real arena boundary and are harmless to outsiders', () => {
+  const { sim, a, b, encounter } = fixture();
+  a.hp = a.maxHp = 10_000;
+  assert.equal(RUINS_WARDEN.arena.escapeGates.length, 4);
+  for (const gate of RUINS_WARDEN.arena.escapeGates) {
+    assert.ok(Math.abs(Math.hypot(gate.x - RUINS.x, gate.y - RUINS.y) - RUINS_WARDEN.arena.radius) < 0.001);
+    assert.equal(touchesBossEscapeGate(RUINS_WARDEN, gate, b.radius), true);
+  }
+  const deaths = b.deaths;
+  Object.assign(b, RUINS_WARDEN.arena.escapeGates[0]);
+  sim.step(0.1);
+  assert.ok(b.hp > 0);
+  assert.equal(b.deaths, deaths);
+  assert.equal(encounter.hasParticipant(b.id), false);
+  assert.equal(sim.snapshotFor(b.id)!.bossLocks![0].relation, 'outsider');
 });
 
 test('crossing the boss arena boundary counts as a death and fails the solo encounter', () => {

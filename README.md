@@ -92,6 +92,12 @@ tests/             Test della logica e test browser con due client
 
 Le grafie Canvas sono placeholder: per aggiungere sprite, tilemap, animazioni o audio si interviene sul livello di presentazione, mantenendo hitbox e regole nella simulazione. Per aggiungere classi si estendono i tipi e le definizioni condivise; per nuovi effetti/comportamenti si aggiungono sistemi alla simulazione. La versione del protocollo impedisce accessi di client incompatibili.
 
+### Promemoria architetturale: secondo dungeon
+
+Il runtime dei boss è già condiviso e configurabile tramite `BossDefinition`: combattimento, team, aggro, lock, eliminazione, respawn e ricompense non devono essere duplicati. La geografia e la presentazione delle Rovine sono invece ancora specifiche (`shared/ruins.ts` e `drawRuins` nel renderer).
+
+**Prima di implementare il secondo dungeon**, introdurre una `DungeonDefinition` condivisa che descriva almeno posizione, limiti, layout/ostacoli, ingressi, punti di spawn e uscita, barriere e tema grafico. Migrare le Rovine come prima definizione e fare consumare il catalogo generico da mondo, server e renderer. I nuovi dungeon dovranno quindi richiedere soprattutto dati e asset; scrivere codice dedicato soltanto per meccaniche realmente particolari del boss o dell'area. Non anticipare questo refactoring finché esiste un solo dungeon, ma non aggiungerne un secondo con un'altra implementazione hardcoded.
+
 ## Rete e limiti attuali
 
 Il server simula a **30 Hz** e invia snapshot a **10 Hz**, filtrati per interesse spaziale. Accetta comandi sequenziali di durata fissa, non posizioni, danni o delta temporali scelti dal client. Il client predice solo il movimento, torna alla posizione confermata e rigioca i comandi non ancora riconosciuti. Il rendering locale interpola tra gli ultimi due tick, alla frequenza del display: aggiunge al massimo un tick grafico (33 ms), senza cambiare hitbox o velocità della simulazione. Le piccole correzioni vengono assorbite gradualmente; morte, respawn e grandi spostamenti azzerano la storia grafica.

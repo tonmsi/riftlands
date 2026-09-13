@@ -5,7 +5,8 @@ import { ARENA_GATE } from '../shared/arena';
 import { OUTPOST, OUTPOST_HUTS, outpostHutAt } from '../shared/outpost';
 import type { ArenaGateState } from '../shared/types';
 import { RUINS, ruinsRoadCenter } from '../shared/ruins';
-import type { BossDrop, BossWindup } from '../shared/bosses';
+import { BOSS_BY_ID } from '../shared/bosses';
+import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -19,6 +20,7 @@ const MAX_LOGICAL_VIEWPORT = { width: 2200, height: 1400 };
 export interface RenderFrame {
   goldDrops?: BossDrop[];
   bossWindups?: BossWindup[];
+  bossLocks?: BossLockState[];
   arenaGate?: ArenaGateState;
   time: number;
   self: Actor | null;
@@ -210,6 +212,7 @@ export class Renderer {
         self ? frame.moveDirection : undefined);
     }
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
+    if (this.world.mode === 'world') this.drawBossEscapeGates(frame.time, frame.bossLocks);
     for (const bush of bushes) this.drawBushTop(bush.x, bush.y, frame.time);
     for (const event of events) this.drawFloatingEvent(event, frame.time);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -456,6 +459,47 @@ export class Renderer {
     ctx.font = '12px system-ui'; ctx.fillText('Entra nel cerchio', x, y + radius + 24);
     ctx.font = '700 28px system-ui'; ctx.fillText('⚔', x, y + 9);
     ctx.restore();
+  }
+
+  private drawBossEscapeGates(time: number, locks: BossLockState[] = []): void {
+    const { ctx } = this;
+    for (const lock of locks) {
+      if (!lock.locked) continue;
+      const definition = BOSS_BY_ID.get(lock.bossId);
+      if (!definition) continue;
+      const dangerous = lock.relation === 'participant' || lock.relation === 'eliminated';
+      const base = dangerous ? '#6d28d9' : '#237a3b';
+      const middle = dangerous ? '#b45cff' : '#55d96f';
+      const core = dangerous ? '#f1d7ff' : '#dcffe2';
+      for (const gate of definition.arena.escapeGates) {
+        if (!this.visible(gate)) continue;
+        const radial = Math.atan2(gate.y - definition.position.y, gate.x - definition.position.x);
+        const flames = Math.max(3, Math.round(gate.length / 15));
+        ctx.save();
+        ctx.translate(gate.x, gate.y);
+        ctx.rotate(radial + Math.PI / 2);
+        ctx.globalCompositeOperation = 'screen';
+        ctx.shadowColor = middle;
+        ctx.shadowBlur = dangerous ? 15 : 9;
+        ctx.strokeStyle = base;
+        ctx.lineWidth = dangerous ? 7 : 4;
+        ctx.beginPath(); ctx.moveTo(-gate.length / 2, 0); ctx.lineTo(gate.length / 2, 0); ctx.stroke();
+        for (let index = 0; index < flames; index++) {
+          const x = -gate.length / 2 + gate.length * (index + 0.5) / flames;
+          const wave = Math.sin(time * 0.008 + index * 1.73 + gate.x * 0.01 + gate.y * 0.013);
+          const height = (dangerous ? 27 : 15) + wave * (dangerous ? 5 : 3);
+          const width = gate.length / flames * (dangerous ? 0.72 : 0.58);
+          ctx.fillStyle = middle;
+          polygon(ctx, [x - width / 2, 3, x - width * 0.42, height * 0.46, x, height,
+            x + width * 0.38, height * 0.43, x + width / 2, 3]);
+          ctx.fill();
+          ctx.fillStyle = core;
+          polygon(ctx, [x - width * 0.18, 2, x, height * 0.68, x + width * 0.17, 2]);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
   }
 
   private drawRuins(): void {

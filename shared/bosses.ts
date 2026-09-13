@@ -12,6 +12,7 @@ export interface BossAttackDefinition {
   innerRadius?: number;
   travel?: number;
 }
+export interface BossEscapeGate extends Vec2 { length: number; thickness: number; }
 export interface BossDefinition {
   id: string;
   name: string;
@@ -23,7 +24,7 @@ export interface BossDefinition {
   speed: number;
   level: number;
   aggroRadius: number;
-  arena: { radius: number; entryRadius: number; preparationMs: number; exit: Vec2; sealedTiles: readonly Vec2[] };
+  arena: { radius: number; entryRadius: number; preparationMs: number; exit: Vec2; sealedTiles: readonly Vec2[]; escapeGates: readonly BossEscapeGate[] };
   attacks: readonly BossAttackDefinition[];
   enrageAt: number;
   enrageSpeed: number;
@@ -44,14 +45,20 @@ export interface BossWindup extends Vec2 {
   targetY?: number;
   innerRadius?: number;
 }
-export interface BossLockState { bossId: string; locked: boolean; ownerId?: string; }
+export interface BossLockState { bossId: string; locked: boolean; ownerId?: string; relation?: 'participant' | 'eliminated' | 'outsider'; }
 export interface BossPreparationState { bossId: string; name: string; endsAt: number; entrants: number; }
 
 const ruinsSeal = [-87, -74].flatMap(ty => [-2, -1, 0, 1].map(tx => ({ x: tx, y: ty })));
+const ruinsArenaRadius = 420;
+const ruinsEscapeGates: BossEscapeGate[] = [[-360, -264], [360, -264], [-360, 264], [360, 264]].map(([x, y]) => {
+  const scale = ruinsArenaRadius / Math.hypot(x, y);
+  return { x: RUINS.x + x * scale, y: RUINS.y + y * scale, length: 70, thickness: 10 };
+});
 export const RUINS_WARDEN: BossDefinition = {
   id: 'boss:ruins:warden', name: 'Custode delle Rovine', skin: 'stone-warden', classId: 'warrior',
   position: { x: RUINS.x, y: RUINS.y }, radius: 28, hp: 460, speed: 100, level: 5,
-  aggroRadius: RUINS.radius, arena: { radius: 420, entryRadius: 260, preparationMs: 5000, exit: { x: RUINS.x, y: RUINS.y + 440 }, sealedTiles: ruinsSeal },
+  aggroRadius: RUINS.radius, arena: { radius: ruinsArenaRadius, entryRadius: 260, preparationMs: 5000,
+    exit: { x: RUINS.x, y: RUINS.y + 440 }, sealedTiles: ruinsSeal, escapeGates: ruinsEscapeGates },
   attacks: [
     { kind: 'melee', damage: 18, range: 82, radius: 82, windupMs: 0, cooldownMs: 1450 },
     { kind: 'slam', damage: 31, range: 285, radius: 145, windupMs: 850, cooldownMs: 1450 },
@@ -73,6 +80,18 @@ export function insideBossArena(definition: BossDefinition, position: Vec2, marg
 
 export function insideBossEntry(definition: BossDefinition, position: Vec2): boolean {
   return Math.hypot(position.x - definition.position.x, position.y - definition.position.y) < definition.arena.entryRadius;
+}
+
+/** Oriented contact test for the four physical gaps cut by the arena boundary. */
+export function touchesBossEscapeGate(definition: BossDefinition, position: Vec2, radius = 0): boolean {
+  return definition.arena.escapeGates.some(gate => {
+    const radial = Math.atan2(gate.y - definition.position.y, gate.x - definition.position.x);
+    const tangentX = -Math.sin(radial), tangentY = Math.cos(radial);
+    const dx = position.x - gate.x, dy = position.y - gate.y;
+    const along = dx * tangentX + dy * tangentY;
+    const normal = -dx * tangentY + dy * tangentX;
+    return Math.abs(along) <= gate.length / 2 + radius && Math.abs(normal) <= gate.thickness / 2 + radius;
+  });
 }
 
 export function validBossState(value: unknown, definition: BossDefinition, legacy = false): value is BossState {

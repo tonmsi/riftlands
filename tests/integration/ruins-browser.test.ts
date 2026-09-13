@@ -20,7 +20,11 @@ test('two browsers fight the boss: private gold, visible corpse, physical collec
   const store = new AccountStore(join(directory, 'accounts.json'));
   const users = ['LootOwner', 'Spectator'].map(name => store.register(name, 'test-password'));
   const sim = new WorldSimulation(734291, Date.now(), store);
-  users.forEach((user, i) => Object.assign(sim.addPlayer(user.account, i ? 'warrior' : 'hunter'), { x: i ? 400 : 0, y: RUINS.y + (i ? 300 : 240), spawnProtectedUntil: 0 }));
+  const spectatorGate = RUINS_WARDEN.arena.escapeGates[3];
+  const spectatorAngle = Math.atan2(spectatorGate.y - RUINS.y, spectatorGate.x - RUINS.x);
+  const spectatorSpawn = { x: spectatorGate.x + Math.cos(spectatorAngle) * 20, y: spectatorGate.y + Math.sin(spectatorAngle) * 20 };
+  users.forEach((user, i) => Object.assign(sim.addPlayer(user.account, i ? 'warrior' : 'hunter'),
+    { ...(i ? spectatorSpawn : { x: 0, y: RUINS.y + 240 }), spawnProtectedUntil: 0 }));
   sim.checkpoint(); store.flush();
   const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
   const port = (probe.address() as { port: number }).port;
@@ -54,13 +58,13 @@ test('two browsers fight the boss: private gold, visible corpse, physical collec
     const [owner, observer] = clients;
     await expect.poll(() => owner.state.snapshot?.actors.some(a => a.id === RUINS_WARDEN.id)).toBe(true);
     await expect.poll(() => owner.state.snapshot?.bossLocks?.find(lock => lock.bossId === RUINS_WARDEN.id)?.ownerId).toBe(owner.state.snapshot!.self.id);
-    await observer.page.keyboard.down('KeyA'); await observer.page.keyboard.down('KeyW');
-    await observer.page.waitForTimeout(1800);
-    await observer.page.keyboard.up('KeyA'); await observer.page.keyboard.up('KeyW');
+    assert.equal(owner.state.snapshot?.bossLocks?.find(lock => lock.bossId === RUINS_WARDEN.id)?.relation, 'participant');
+    assert.equal(observer.state.snapshot?.bossLocks?.find(lock => lock.bossId === RUINS_WARDEN.id)?.relation, 'outsider');
     assert.ok(Math.hypot(observer.state.snapshot!.self.x - RUINS.x, observer.state.snapshot!.self.y - RUINS.y) > RUINS.radius,
       'the second browser must remain outside the sealed room');
     mkdirSync(resolve('test-results'), { recursive: true });
     await owner.page.screenshot({ path: resolve('test-results/ruins-boss.png') });
+    await observer.page.screenshot({ path: resolve('test-results/ruins-boss-outsider.png') });
     const canvas = (await owner.page.locator('.world-canvas').boundingBox())!;
     await owner.page.keyboard.down('Space');
     const movement = new Set<string>();

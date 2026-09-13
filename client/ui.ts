@@ -3,9 +3,9 @@ import { ARENA_GATE } from '../shared/arena';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, PublicAccount, Snapshot, SocialState } from '../shared/types';
 
 const PROFILE_URLS: Partial<Record<ClassId, string>> = {
-  paladin: '../assets/paladinoProfile.png',
-  mage: '../assets/mageProfile.png',
-  warrior: '../assets/warriorProfile.png',
+  paladin: new URL('../assets/paladinoProfile.png', import.meta.url).href,
+  mage: new URL('../assets/mageProfile.png', import.meta.url).href,
+  warrior: new URL('../assets/warriorProfile.png', import.meta.url).href,
 };
 
 type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];

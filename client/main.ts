@@ -224,6 +224,7 @@ function frame(now: number): void {
     arenaGate: latest?.arenaGate,
     goldDrops: latest?.goldDrops,
     bossWindups: latest?.bossWindups,
+    bossLocks: latest?.bossLocks,
     time,
     self,
     actors,

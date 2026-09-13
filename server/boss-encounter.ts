@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Actor, Vec2 } from '../shared/types';
 import type { BossAttackDefinition, BossDefinition, BossLockState, BossPreparationState, BossState, BossWindup } from '../shared/bosses';
-import { insideBossArena, insideBossEntry } from '../shared/bosses';
+import { insideBossArena, insideBossEntry, touchesBossEscapeGate } from '../shared/bosses';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, segmentCircleHit } from '../shared/physics';
 import type { World } from '../shared/world';
 import type { Account, AccountStore } from './store';
@@ -37,7 +37,16 @@ export class BossEncounter {
     };
   }
 
-  lockState(): BossLockState { return { bossId: this.definition.id, locked: !!this.ownerId, ...(this.ownerId ? { ownerId: this.ownerId } : {}) }; }
+  lockState(viewer?: Actor): BossLockState {
+    const locked = !!this.ownerId;
+    return {
+      bossId: this.definition.id,
+      locked,
+      ...(this.ownerId ? { ownerId: this.ownerId } : {}),
+      ...(locked && viewer ? { relation: this.isActiveParticipant(viewer.id) ? 'participant' as const
+        : this.isEliminated(viewer.id) ? 'eliminated' as const : 'outsider' as const } : {}),
+    };
+  }
   preparationFor(player: Actor): BossPreparationState | undefined {
     if (!this.preparation || player.teamId !== this.preparation.teamId) return undefined;
     return { bossId: this.definition.id, name: this.definition.name, endsAt: this.preparation.endsAt, entrants: this.preparationEntrants };
@@ -45,6 +54,7 @@ export class BossEncounter {
   canDamage(attacker: Actor | undefined): boolean { return !!attacker && attacker.kind === 'player' && this.isActiveParticipant(attacker.id); }
   hasParticipant(id: string): boolean { return this.participantIds.has(id); }
   isActiveParticipant(id: string): boolean { return this.participantIds.has(id) && !this.eliminatedIds.has(id); }
+  isEliminated(id: string): boolean { return this.eliminatedIds.has(id); }
   eliminate(id: string): void { if (this.participantIds.has(id)) this.eliminatedIds.add(id); }
   recordDamage(id: string, amount: number): void {
     if (this.isActiveParticipant(id) && Number.isFinite(amount) && amount > 0) this.threat.set(id, (this.threat.get(id) ?? 0) + amount);
@@ -122,8 +132,10 @@ export class BossEncounter {
         this.beginEncounter(leader, [leader], now, world, false);
       }
     }
-    for (const player of players) if (!this.participantIds.has(player.id) && insideBossEntry(this.definition, player)) this.eject(player);
     for (const player of players) if (this.participantIds.has(player.id) && player.hp <= 0) this.eliminate(player.id);
+    for (const player of players) if (this.isEliminated(player.id) && player.hp > 0
+      && touchesBossEscapeGate(this.definition, player, player.radius)) damage(player, Number.MAX_SAFE_INTEGER);
+    for (const player of players) if (!this.isActiveParticipant(player.id) && player.hp > 0 && insideBossEntry(this.definition, player)) this.eject(player);
     for (const player of players) if (this.isActiveParticipant(player.id) && player.hp > 0 && !insideBossArena(this.definition, player)) damage(player, Number.MAX_SAFE_INTEGER);
     const active = players.filter(player => this.isActiveParticipant(player.id) && player.hp > 0);
     if (!active.length) { this.fail(world); return; }
