@@ -2,6 +2,7 @@ import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../sh
 import type { Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec2, RoomMode } from '../shared/types';
 import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
+import { OUTPOST, OUTPOST_HUTS, outpostHutAt } from '../shared/outpost';
 import type { ArenaGateState } from '../shared/types';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
@@ -288,6 +289,10 @@ export class Renderer {
         }
         const tile = this.world.getTile(tx, ty);
         const x = tx * TILE_SIZE, y = ty * TILE_SIZE;
+        if (this.world.mode === 'world' && outpostHutAt(x, y)) {
+          ctx.fillStyle = '#8b8263'; ctx.fillRect(x, y, TILE_SIZE + 0.5, TILE_SIZE + 0.5);
+          continue;
+        }
         const variation = noise(tx, ty);
         const biome = this.world.getBiome(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
         ctx.fillStyle = tile === 'grass'
@@ -425,18 +430,31 @@ export class Renderer {
   }
 
   private drawCrossroads(): void {
-    if (!this.visible({ x: 0, y: 0 })) return;
     const { ctx } = this;
     ctx.save();
-    ctx.strokeStyle = 'rgba(231,222,170,0.2)'; ctx.lineWidth = 2;
-    circle(ctx, 0, 0, 92); ctx.stroke();
-    ctx.setLineDash([3, 12]); circle(ctx, 0, 0, 81); ctx.stroke(); ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(53,61,41,0.19)'; ctx.lineWidth = 1;
-    polygon(ctx, [0, -38, 25, 0, 0, 38, -25, 0]); ctx.stroke();
-    circle(ctx, 0, 0, 15); ctx.stroke();
-    ctx.font = '500 9px Inter, system-ui, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(246,237,192,0.4)';
-    ctx.fillText('I L   C R O C E V I A', 0, 118);
+    ctx.fillStyle = 'rgba(140,196,170,0.055)'; circle(ctx, 0, 0, OUTPOST.radius); ctx.fill();
+    ctx.strokeStyle = '#b6d9b0'; ctx.lineWidth = 3; circle(ctx, 0, 0, OUTPOST.radius); ctx.stroke();
+    ctx.strokeStyle = '#d8bf86'; ctx.lineWidth = 1; ctx.setLineDash([6, 10]); circle(ctx, 0, 0, OUTPOST.radius + 7); ctx.stroke(); ctx.setLineDash([]);
+    for (const hut of OUTPOST_HUTS) {
+      const { x, y, width: w, height: h } = hut;
+      ctx.fillStyle = 'rgba(18,30,24,0.35)'; ctx.fillRect(x + 7, y + 8, w, h);
+      ctx.fillStyle = '#655444'; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#b6a47d'; polygon(ctx, [x, y + h, x + w / 2, y, x + w, y + h]); ctx.fill();
+      ctx.fillStyle = '#8d795a'; polygon(ctx, [x + w / 2, y, x + w, y, x + w, y + h]); ctx.fill();
+      ctx.strokeStyle = '#d0bc91'; ctx.lineWidth = 2; ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
+      ctx.fillStyle = '#343d31'; ctx.fillRect(x + w / 2 - 12, y + h - 26, 24, 26);
+    }
+    // Spawn marker and banners are visual; the tents use shared tile collisions.
+    ctx.fillStyle = '#8d8b70'; circle(ctx, 0, 40, 22); ctx.fill();
+    ctx.strokeStyle = '#d9cb9b'; ctx.lineWidth = 2; polygon(ctx, [0, 23, 12, 40, 0, 57, -12, 40]); ctx.stroke();
+    for (const x of [-70, 70]) {
+      ctx.strokeStyle = '#564b38'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x, 80); ctx.lineTo(x, 135); ctx.stroke();
+      ctx.fillStyle = '#557f78'; polygon(ctx, [x + 2, 80, x + 29, 80, x + 23, 109, x + 2, 105]); ctx.fill();
+    }
+    ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#f2e6bf';
+    ctx.fillText('AVAMPOSTO DEL CROCEVIA', 0, 160);
+    ctx.font = '10px system-ui'; ctx.fillStyle = '#d1e7c3'; ctx.fillText('ZONA SICURA', 0, 181);
+    ctx.fillStyle = '#f1c29e'; ctx.fillText('↓ PVP LIBERO', 0, OUTPOST.radius + 28);
     ctx.restore();
   }
 
@@ -793,6 +811,8 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
     ctx.fillRect((pickup.x - left) * scale - 1, (pickup.y - top) * scale - 1, 2, 2);
   }
   if (world.mode === 'world') {
+    ctx.fillStyle = '#b6d9b018'; ctx.strokeStyle = '#b6d9b0'; ctx.lineWidth = 1;
+    circle(ctx, -left * scale, -top * scale, OUTPOST.radius * scale); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = '#a5d9e8'; ctx.lineWidth = 2;
     circle(ctx, (ARENA_GATE.x - left) * scale, (ARENA_GATE.y - top) * scale, ARENA_GATE.radius * scale); ctx.stroke();
   }

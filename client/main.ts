@@ -101,7 +101,7 @@ const connection = new GameConnection({
         ui.setSelected(selected);
       }
       const biome = renderer.world.getBiome(message.self.x, message.self.y);
-      ui.setLocation(renderer.world.mode === 'world' ? ({ meadow: 'Praterie di Soglia', forest: 'Selva dei Sussurri', marsh: 'Acquitrini Velati' })[biome] : renderer.world.mode === 'arena' ? 'Arena del Crocevia' : 'Battleground di prova');
+      ui.setLocation(renderer.world.mode === 'world' ? message.sanctuary !== 'outside' ? 'Avamposto del Crocevia' : ({ meadow: 'Praterie di Soglia', forest: 'Selva dei Sussurri', marsh: 'Acquitrini Velati' })[biome] : renderer.world.mode === 'arena' ? 'Arena del Crocevia' : 'Battleground di prova');
     } else if (message.type === 'social') ui.setSocial(message.state);
     else if (message.type === 'notice') ui.toast(message.message, message.tone);
     else if (message.type === 'error') ui.toast(message.message, 'error');

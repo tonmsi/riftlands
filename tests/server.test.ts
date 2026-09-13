@@ -23,7 +23,8 @@ const account = (id: string): Account => ({
 });
 
 function arena(aClass: ClassId = 'mage', bClass: ClassId = 'warrior') {
-  const simulation = new WorldSimulation(734291, 1_000_000);
+  // Isolated PvP fixture: combat is enabled even at origin, unlike the global outpost.
+  const simulation = new WorldSimulation(734291, 1_000_000, undefined, 'battleground');
   simulation.world.getTile = () => 'grass';
   simulation.world.getChunk = (cx, cy) => ({ cx, cy, key: `${cx},${cy}`, tiles: [], npcs: [], pickups: [] });
   const aAccount = account('alice'), bAccount = account('bob');

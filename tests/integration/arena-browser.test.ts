@@ -62,14 +62,14 @@ test('two browsers: gate cancellation, 1v1 transfer, obstacles and opponent aban
     const [a, b] = clients;
     await expect.poll(() => b.state.snapshot?.self.y).toBe(ARENA_GATE.y);
     await a.page.keyboard.down('KeyD');
-    await expect.poll(() => a.state.snapshot?.self.x, { intervals: [20], timeout: 5000 }).toBeGreaterThan(-60);
+    await expect.poll(() => a.state.snapshot?.self.x, { intervals: [20], timeout: 5000 }).toBeGreaterThan(-ARENA_GATE.radius + 25);
     await a.page.keyboard.up('KeyD');
     await expect.poll(() => a.state.snapshot?.arenaGate?.phase, { timeout: 15_000 }).toBe('waiting');
     mkdirSync(resolve('test-results'), { recursive: true });
     await a.page.screenshot({ path: resolve('test-results/arena-entrance.png') });
 
     await b.page.keyboard.down('KeyA');
-    await expect.poll(() => b.state.snapshot?.self.x, { intervals: [20], timeout: 5000 }).toBeLessThan(85);
+    await expect.poll(() => b.state.snapshot?.self.x, { intervals: [20], timeout: 5000 }).toBeLessThan(ARENA_GATE.radius - 5);
     await b.page.keyboard.up('KeyA');
     await expect.poll(() => a.state.snapshot?.arenaGate?.phase, { intervals: [20] }).toBe('countdown');
     await b.page.keyboard.down('KeyD');
@@ -79,7 +79,7 @@ test('two browsers: gate cancellation, 1v1 transfer, obstacles and opponent aban
     assert.equal(a.state.room?.mode, 'world');
 
     await b.page.keyboard.down('KeyA');
-    await expect.poll(() => b.state.snapshot?.self.x, { intervals: [20] }).toBeLessThan(70);
+    await expect.poll(() => b.state.snapshot?.self.x, { intervals: [20] }).toBeLessThan(ARENA_GATE.radius - 10);
     await b.page.keyboard.up('KeyA');
     await expect.poll(() => a.state.room?.mode).toBe('arena');
     await expect.poll(() => b.state.room?.mode).toBe('arena');
@@ -94,6 +94,17 @@ test('two browsers: gate cancellation, 1v1 transfer, obstacles and opponent aban
     await expect.poll(() => a.state.room?.mode).toBe('world');
     await expect(a.page.locator('.arena-status')).toContainText('esci dal cerchio');
     await expect(a.page.locator('.toast-stack')).toContainText('Vittoria');
+    await a.page.keyboard.down('KeyS');
+    await expect.poll(() => a.state.snapshot?.self.y, { intervals: [20] }).toBeGreaterThan(65);
+    await a.page.keyboard.up('KeyS');
+    await expect(a.page.locator('.arena-status')).toBeHidden();
+    await expect(a.page.locator('[data-ref=coords]')).toContainText('ZONA SICURA');
+    await a.page.screenshot({ path: resolve('test-results/outpost.png') });
+    await a.page.keyboard.down('KeyS');
+    await expect.poll(() => a.state.snapshot?.sanctuary, { intervals: [20] }).toBe('outside');
+    await a.page.keyboard.up('KeyS');
+    await expect(a.page.locator('[data-ref=coords]')).toContainText('PVP ATTIVO');
+    assert.equal(a.state.snapshot!.self.spawnProtectedUntil, 0);
     assert.deepEqual(errors, []);
   } finally {
     await browser?.close();

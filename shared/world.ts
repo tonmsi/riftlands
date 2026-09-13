@@ -1,5 +1,6 @@
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, WORLD_SEED } from './config';
 import { ARENA_GATE, arenaTileIsWall } from './arena';
+import { OUTPOST, outpostHutAt } from './outpost';
 import type { Biome, Pickup, TileKind, RoomMode } from './types';
 
 export interface NpcSpawn { id: string; x: number; y: number; npcKind: 'slime' | 'sentinel' | 'wisp'; level: number; }
@@ -50,6 +51,8 @@ export class World {
     }
     // Walkable approach to the physical arena entrance. PvP rules stay unchanged.
     const x = (tx + 0.5) * TILE_SIZE, y = (ty + 0.5) * TILE_SIZE;
+    if (outpostHutAt(x, y)) return 'rock';
+    if (Math.hypot(x, y) < OUTPOST.clearingRadius) return Math.abs(x) < 65 || Math.abs(y - 72) < 38 || Math.hypot(x, y) < 85 ? 'path' : 'grass';
     if (Math.hypot(x - ARENA_GATE.x, y - ARENA_GATE.y) < ARENA_GATE.radius + 55 || (Math.abs(x) < 75 && y < -120 && y > ARENA_GATE.y)) return 'path';
     const distance = Math.hypot(tx + 0.5, ty + 0.5);
     if (distance < 4.7) return distance < 2.7 ? 'path' : 'grass';

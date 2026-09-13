@@ -3,6 +3,8 @@ import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, lev
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2, RoomMode } from '../shared/types';
 import { World, chunkCoords, chunkKey, isSolid } from '../shared/world';
+import { OUTPOST, inOutpost } from '../shared/outpost';
+import { insideArenaGate } from '../shared/arena';
 import type { Account, AccountStore } from './store';
 
 const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
@@ -129,10 +131,12 @@ export class WorldSimulation {
       kills: account.kills, deaths: account.deaths, teamId: this.teamFor(account.id)?.id ?? null,
       hidden: false, revealedUntil: 0, deadUntil: validSaved ? saved.deadUntil : 0,
       spawnProtectedUntil: validSaved ? saved.spawnProtectedUntil : this.now + 5000,
+      pvpUntil: validSaved ? saved.pvpUntil ?? 0 : 0,
       effects: validSaved ? saved.effects.filter(effect => effect.until > this.now).map(effect => ({ ...effect })) : [],
       cooldowns: validSaved ? { ...saved.cooldowns } : EMPTY_COOLDOWNS(),
     };
     if (collidesWorld(player.x, player.y, player.radius, this.world)) Object.assign(player, spawn);
+    if (this.mode === 'world' && !inOutpost(player)) player.spawnProtectedUntil = 0;
     if (player.hp <= 0 && player.deadUntil <= 0) player.deadUntil = this.now + 5000;
     this.players.set(player.id, player);
     this.connections.set(player.id, { account, connected: true, removeAt: 0, inputs: [], ack: 0, highestSeq: 0, combatAt: this.now });
@@ -153,6 +157,10 @@ export class WorldSimulation {
   canTransfer(id: string): boolean {
     const actor = this.players.get(id), connection = this.connections.get(id);
     return !!actor && actor.hp > 0 && !!connection?.connected && this.now - connection.combatAt >= 10_000;
+  }
+
+  isSafeProtected(actor: Actor): boolean {
+    return this.mode === 'world' && actor.kind === 'player' && inOutpost(actor) && (actor.pvpUntil ?? 0) <= this.now;
   }
 
   /** Transfer is distinct from logout: no old body or owned attack may remain. */
@@ -214,6 +222,7 @@ export class WorldSimulation {
         if (magnitude > 0) Object.assign(actor, moveWithCollisions(actor, input.dx / Math.max(1, magnitude), input.dy / Math.max(1, magnitude), movementSpeed(actor, this.now) * terrainSpeed(actor, this.world) * dt, this.world));
       }
       actor.hidden = this.world.getTile(Math.floor(actor.x / TILE_SIZE), Math.floor(actor.y / TILE_SIZE)) === 'bush';
+      if (this.mode === 'world' && !inOutpost(actor)) actor.spawnProtectedUntil = 0;
     }
     this.rebuildCells();
     // Casts use the input consumed this tick, captured independently of queue length.
@@ -224,6 +233,7 @@ export class WorldSimulation {
     this.pendingCasts.clear();
     this.stepNpcs(dt);
     resolveActorCollisions([...this.players.values(), ...this.npcs.values()].filter(actor => actor.hp > 0), this.world);
+    if (this.mode === 'world') for (const actor of this.players.values()) if (!inOutpost(actor)) actor.spawnProtectedUntil = 0;
     this.rebuildCells();
     this.stepProjectiles(dt);
     this.stepBursts();
@@ -248,10 +258,10 @@ export class WorldSimulation {
     let hash = 0;
     for (const char of id) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
     const angle = (hash % 6283) / 1000;
-    for (let i = 0; i < 200; i++) {
-      const r = 70 + Math.floor(i / 12) * 35;
+    for (let i = 0; i < 1200; i++) {
+      const r = 40 + (Math.floor(i / 12) % 9) * 18;
       const point = { x: Math.cos(angle + i * 2.4) * r, y: Math.sin(angle + i * 2.4) * r };
-      if (!collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, this.world) && ![...this.players.values()].some(actor => actor.hp > 0 && distance(actor, point) < 40)) return point;
+      if (!insideArenaGate(point) && !collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, this.world) && ![...this.players.values()].some(actor => actor.hp > 0 && distance(actor, point) < 40)) return point;
     }
     return { x: TILE_SIZE / 2, y: TILE_SIZE / 2 };
   }
@@ -350,8 +360,8 @@ export class WorldSimulation {
         if (owner && this.allied(owner, target)) continue;
         if (trap.teamId && target.teamId === trap.teamId) continue;
 
+        if (!this.damage(target, owner, trap.damage)) continue;
         triggered = true;
-        this.damage(target, owner, trap.damage);
         this.effect(target, 'root', trap.duration);
         this.emit({
           kind: 'hit',
@@ -377,6 +387,7 @@ export class WorldSimulation {
   /** May be used directly by deterministic combat tests; input validation precedes this in transport. */
   cast(actor: Actor, slot: AbilitySlot): boolean {
     const ability = CLASSES[actor.classId].abilities[slot];
+    if (this.isSafeProtected(actor) && ability.kind !== 'heal' && ability.kind !== 'shield') return false;
     if (actor.hp <= 0 || actor.cooldowns[slot] > this.now || actor.resource < ability.cost) return false;
     if (ability.kind === 'projectile' && this.projectiles.size >= 1000) return false;
     actor.resource -= ability.cost;
@@ -480,6 +491,7 @@ export class WorldSimulation {
       if (!hasLineOfSight(actor, target, this.world)) continue;
       if (ability.kind === 'heal' || ability.kind === 'shield') {
         if (!ally) continue;
+        if (this.isSafeProtected(actor) && (target.pvpUntil ?? 0) > this.now) continue;
         if (ability.kind === 'heal') this.heal(target, ability.damage, actor.id);
         else this.effect(target, 'shield', (ability.duration ?? 4) * 1000);
         continue;
@@ -498,12 +510,16 @@ export class WorldSimulation {
     return (actor.effects.some(effect => effect.kind === 'power' && effect.until > this.now) ? 1.3 : 1) * (actor.effects.some(effect => effect.kind === 'weakness' && effect.until > this.now) ? 0.7 : 1);
   }
 
-  private damage(target: Actor, attacker: Actor | undefined, amount: number): void {
-    if (target.hp <= 0 || target.spawnProtectedUntil > this.now || (attacker && this.allied(attacker, target))) return;
+  private damage(target: Actor, attacker: Actor | undefined, amount: number): boolean {
+    if (target.hp <= 0 || target.spawnProtectedUntil > this.now || (attacker && this.allied(attacker, target))) return false;
+    if (target.kind === 'player' && attacker?.kind !== 'npc' && (this.isSafeProtected(target) || (attacker && this.isSafeProtected(attacker)))) return false;
     const armor = target.kind === 'npc' ? (target.npcKind === 'sentinel' ? 0.15 : 0) : CLASSES[target.classId].armor;
     const shield = target.effects.some(effect => effect.kind === 'shield' && effect.until > this.now) ? 0.4 : 1;
     const applied = Math.max(1, Math.round(amount * (1 - armor) * shield));
     target.hp = Math.max(0, target.hp - applied);
+    if (this.mode === 'world' && target.kind === 'player' && attacker?.kind === 'player') {
+      target.pvpUntil = attacker.pvpUntil = this.now + OUTPOST.combatMs;
+    }
     target.revealedUntil = this.now + 2500;
     const connection = this.connections.get(target.id);
     if (connection) connection.combatAt = this.now;
@@ -514,7 +530,7 @@ export class WorldSimulation {
       if (CLASSES[attacker.classId].resource === 'rage') attacker.resource = Math.min(attacker.maxResource, attacker.resource + 12);
     }
     this.emit({ kind: 'hit', x: target.x, y: target.y, actorId: attacker?.id, targetId: target.id, amount: applied, radius: 26, duration: 500, color: '#ffb8a2' });
-    if (target.hp > 0) return;
+    if (target.hp > 0) return true;
     target.deaths++;
     target.deadUntil = this.now + (target.kind === 'npc' ? 35_000 : 5000);
     target.effects = [];
@@ -526,6 +542,7 @@ export class WorldSimulation {
       this.persistPlayer(attacker.id);
     }
     if (target.kind === 'player') this.persistPlayer(target.id);
+    return true;
   }
 
   private heal(actor: Actor, amount: number, sourceId = actor.id): void {
@@ -541,6 +558,7 @@ export class WorldSimulation {
     actor.resource = CLASSES[actor.classId].resource === 'mana' ? actor.maxResource : 0;
     actor.deadUntil = 0;
     actor.spawnProtectedUntil = this.now + 5000;
+    actor.pvpUntil = 0;
     actor.effects = [];
     actor.hidden = false;
     this.emit({ kind: 'respawn', x: actor.x, y: actor.y, actorId: actor.id, radius: 70, duration: 700, color: '#bcebdc' });
@@ -562,8 +580,8 @@ export class WorldSimulation {
         if (t !== null && t < hitAt) { hitAt = t; hit = actor; }
       }
       if (hit) {
-        this.damage(hit, owner, projectile.damage);
-        if (projectile.slow && hit.hp > 0) this.effect(hit, 'slow', projectile.slow);
+        const applied = this.damage(hit, owner, projectile.damage);
+        if (applied && projectile.slow && hit.hp > 0) this.effect(hit, 'slow', projectile.slow);
       }
       if (hit || wallAt <= 1 || this.now >= projectile.expiresAt) {
         this.projectiles.delete(id);

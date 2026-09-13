@@ -1,4 +1,5 @@
 import { CLASSES, levelFromXp } from '../shared/config';
+import { ARENA_GATE } from '../shared/arena';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, PublicAccount, Snapshot, SocialState } from '../shared/types';
 
 const PROFILE_URLS: Partial<Record<ClassId, string>> = {
@@ -74,6 +75,7 @@ export class GameUI {
   private readonly nameInput: HTMLInputElement;
   private readonly passwordInput: HTMLInputElement;
   private readonly arenaStatus = document.createElement('div');
+  private lastSanctuary: Snapshot['sanctuary'];
 
   constructor(private root: HTMLElement, private actions: UIActions) {
     root.className = 'rift-app';
@@ -282,6 +284,7 @@ export class GameUI {
       this.setSelected(null);
       this.latest = null;
       this.activeClass = null;
+      this.lastSanctuary = undefined;
     }
   }
 
@@ -308,12 +311,16 @@ export class GameUI {
     this.fill('resource-fill', player.resource / player.maxResource);
     this.write('resource-label', `${Math.floor(player.resource)} / ${player.maxResource}`);
     this.fill('xp-fill', (player.xp % 100) / 100);
-    this.write('coords', `${Math.round(player.x)} · ${Math.round(player.y)}`);
+    this.write('coords', snapshot.sanctuary === 'safe' ? 'ZONA SICURA · NO PVP' : snapshot.sanctuary === 'combat' ? `VULNERABILE · ${Math.max(0, Math.ceil(((player.pvpUntil ?? 0) - snapshot.time) / 1000))}s` : snapshot.sanctuary === 'outside' ? 'PVP ATTIVO' : 'ISTANZA PVP');
+    if (snapshot.sanctuary && this.lastSanctuary && snapshot.sanctuary !== this.lastSanctuary) {
+      this.toast(snapshot.sanctuary === 'safe' ? 'Zona sicura: PvP disattivato.' : snapshot.sanctuary === 'combat' ? 'Sei ancora in combattimento: resti vulnerabile.' : 'Fuori dall’avamposto: PvP attivo.', 'info');
+    }
+    this.lastSanctuary = snapshot.sanctuary;
     this.write('online', String(snapshot.online));
     const gate = snapshot.arenaGate;
     const worldTip = this.root.querySelector<HTMLElement>('.world-tip');
-    if (worldTip) worldTip.hidden = !!snapshot.matchEndsAt;
-    let arenaText = 'Arena 1v1 · cerchio azzurro a nord del Crocevia ↑';
+    if (worldTip) worldTip.hidden = !!snapshot.matchEndsAt || !player.hidden;
+    let arenaText = Math.hypot(player.x - ARENA_GATE.x, player.y - ARENA_GATE.y) < ARENA_GATE.radius + 55 ? 'Arena 1v1 · Entra nel cerchio per partecipare' : '';
     if (snapshot.matchEndsAt) {
       const seconds = Math.max(0, Math.ceil((snapshot.matchEndsAt - snapshot.time) / 1000));
       arenaText = `Duello 1v1 · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} · Elimina l’avversario`;
@@ -325,6 +332,7 @@ export class GameUI {
         : `Arena 1v1 · ${gate.players}/2 pronti · In attesa di un avversario`;
     }
     if (this.arenaStatus.textContent !== arenaText) this.arenaStatus.textContent = arenaText;
+    this.arenaStatus.hidden = !arenaText;
     this.arenaStatus.dataset.phase = gate?.phase ?? (snapshot.matchEndsAt ? 'match' : 'idle');
     this.write('ping', Number.isFinite(ping) ? `${Math.round(ping)} ms` : '— ms');
     this.ref('ping').classList.toggle('high-ping', ping > 180);
@@ -336,7 +344,8 @@ export class GameUI {
       const slot = button.dataset.slot as AbilitySlot;
       const ability = definition.abilities[slot];
       const cooldown = Math.max(0, player.cooldowns[slot] - snapshot.time);
-      const unavailable = cooldown > 0 || player.resource < ability.cost || remaining > 0;
+      const safeBlocked = snapshot.sanctuary === 'safe' && ability.kind !== 'heal' && ability.kind !== 'shield';
+      const unavailable = cooldown > 0 || player.resource < ability.cost || remaining > 0 || safeBlocked;
       button.disabled = unavailable;
       button.classList.toggle('on-cooldown', cooldown > 0);
       button.classList.toggle('low-resource', player.resource < ability.cost);

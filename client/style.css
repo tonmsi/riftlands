@@ -2930,6 +2930,7 @@ kbd {
   pointer-events:none;
 }
 .is-playing .arena-status { display:block; }
+.is-playing .arena-status[hidden] { display:none; }
 .arena-status[data-phase=countdown] { border-color:#ffe3a0; color:#ffe3a0; }
 @media(max-width:650px) {
   .arena-status { top:auto; bottom:115px; max-width:none; width:calc(100% - 32px); font-size:11px; }

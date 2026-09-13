@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DT, WORLD_SEED } from '../shared/config';
 import { ARENA_GATE, ARENA_DURATION_SECONDS, insideArenaGate } from '../shared/arena';
+import { inOutpost } from '../shared/outpost';
 import type { ClassId, InputCommand, RoomMode, RoomState, SocialState, ArenaGateState } from '../shared/types';
 import type { Account, AccountStore } from './store';
 import { WorldSimulation, type SocialAction } from './simulation';
@@ -207,6 +208,7 @@ export class RoomManager {
     const snapshot = this.simulationFor(id).snapshotFor(id);
     if (snapshot) {
       snapshot.arenaGate = this.gateStateFor(id);
+      if (this.membership(id).roomId === 'world') snapshot.sanctuary = !inOutpost(snapshot.self) ? 'outside' : this.global.isSafeProtected(snapshot.self) ? 'safe' : 'combat';
       snapshot.matchEndsAt = this.rooms.get(this.membership(id).roomId)?.endsAt;
     }
     return snapshot;

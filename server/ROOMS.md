@@ -1,14 +1,22 @@
 # Istanze PvP: fondazione
 
-Il runtime usa un `RoomManager` unico. `global` mantiene il mondo procedurale e le regole precedenti, incluso PvP libero e corpo vulnerabile per 20 secondi dopo ogni uscita. Non sono state aggiunte safe zone, valute o ricompense.
+Il runtime usa un `RoomManager` unico. `global` mantiene il mondo procedurale con un piccolo avamposto iniziale e PvP libero all'esterno. Il corpo rimane per 20 secondi dopo ogni uscita ed è vulnerabile secondo le regole della zona. Non sono state aggiunte valute o ricompense.
+
+## Avamposto e confine PvP
+
+L'avamposto è centrato su `(0, 0)`, con raggio protetto di **220 unità** (circa 1–2 secondi di cammino dallo spawn al confine). Il bordo è disegnato nel mondo e sulla minimappa. Il centro del personaggio determina se è dentro: immediatamente oltre il raggio, PvP attivo e nessuna immunità residua dello spawn. Una piccola radura transitabile oltre il bordo consente di iniziare lo scontro senza cercare una strada; non estende la protezione.
+
+All'interno, i personaggi non impegnati in PvP non possono lanciare attacchi offensivi né ricevere danni/effetti PvP, anche da fuori. Dopo un colpo PvP riuscito entrambi restano marcati per 8 secondi dall'ultimo colpo: rientrare mantiene la vulnerabilità fino alla scadenza. Il timer è persistito e non si azzera disconnettendosi. Non si possono curare o proteggere alleati in combattimento dall'interno della protezione. Il respawn azzera il timer e avviene nell'avamposto, fuori dal cerchio arena e dalle tende. Le istanze arena/BG non applicano la safe zone.
+
+L'HUD mostra lo stato della zona e un avviso al cambio di confine. Le istruzioni dell'arena compaiono solo vicino al cerchio; i suggerimenti dei cespugli compaiono quando ci si nasconde. Le tende sono elementi decorativi con collisioni condivise tra client e server, non negozi.
 
 ## Creazione e chiusura
 
-L'arena 1v1 è accessibile dal cerchio azzurro a nord del Crocevia, centro `(0, -360)`, raggio 90. L'accesso è fisico: due giocatori idonei nel cerchio vengono abbinati dal server. Parte una preparazione di un secondo con movimento libero; uscire, morire, entrare in combattimento o disconnettersi annulla l'abbinamento. Un eventuale sostituto deve attendere un nuovo secondo completo. Se ci sono più giocatori, il server abbina prima chi è in attesa da più tempo. Ogni partecipante entra individualmente, anche se appartiene a un gruppo.
+L'arena 1v1 è accessibile dal cerchio azzurro nell'avamposto, centro `(0, -115)`, raggio 60. L'accesso è fisico: due giocatori idonei nel cerchio vengono abbinati dal server. Parte una preparazione di un secondo con movimento libero; uscire, morire, entrare in combattimento o disconnettersi annulla l'abbinamento. Un eventuale sostituto deve attendere un nuovo secondo completo. Se ci sono più giocatori, il server abbina prima chi è in attesa da più tempo. Ogni partecipante entra individualmente, anche se appartiene a un gruppo.
 
 Il campo 1v1 misura 864 × 672 unità, con quattro pilastri simmetrici che bloccano movimento e proiettili. Non ci sono NPC o pickup. Un singolo round dura al massimo tre minuti; eliminazione o abbandono dell'avversario conclude il duello, scadenza del tempo dà pareggio. Il risultato è mostrato come messaggio, senza ricompense persistenti.
 
-Al ritorno bisogna uscire dal cerchio e rientrare per iscriversi nuovamente. Anche un nuovo accesso con posizione salvata nel cerchio richiede questa conferma fisica. Non esiste una safe zone: resta il requisito di vita e 10 secondi fuori combattimento previsto dai trasferimenti (anche dopo l'accesso iniziale).
+Al ritorno bisogna uscire dal cerchio e rientrare per iscriversi nuovamente. Anche un nuovo accesso con posizione salvata nel cerchio richiede questa conferma fisica. Resta il requisito di vita e 10 secondi fuori combattimento previsto dai trasferimenti (anche dopo l'accesso iniziale).
 
 La creazione resta un'API **interna al server**, utilizzata dall'ingresso fisico e disponibile per i futuri accessi 2v2/BG. Non è un messaggio che un client può inviare per trasferire arbitrariamente altri giocatori.
 
@@ -37,7 +45,7 @@ Arena: singolo round, nessun respawn; chiusura quando rimane meno di una coppia 
 
 Prima dell'ingresso viene salvato lo stato globale. Ogni partita usa copie degli account: XP, kill, morti, posizione e salute della partita non sovrascrivono il personaggio persistente. Uscita e riavvio recuperano lo stato globale precedente; la progressione economica futura dovrà avere un percorso esplicito di assegnazione ricompense.
 
-Il protocollo è versione 2: dopo `welcome` e a ogni trasferimento il server invia `room` prima dello snapshot. `roomId` ed `epoch` accompagnano ogni input; comandi di un contesto precedente sono ignorati. Il client azzera predizione, buffer remoti, selezione, effetti e camera al cambio stanza. Pubblicare client e server insieme.
+Il protocollo è versione 3 (terreno dell'avamposto e nuovo ingresso arena): dopo `welcome` e a ogni trasferimento il server invia `room` prima dello snapshot. `roomId` ed `epoch` accompagnano ogni input; comandi di un contesto precedente sono ignorati. Il client azzera predizione, buffer remoti, selezione, effetti e camera al cambio stanza. Pubblicare client e server insieme.
 
 Tutte le istanze condividono processo e clock; non c'è distribuzione tra VPS né isolamento dei crash per stanza. Il JSON mantiene un solo autore delle scritture.
 

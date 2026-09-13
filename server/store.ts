@@ -31,6 +31,7 @@ export function cleanName(name: string): string {
 function validBody(body: unknown): boolean {
   if (!body || typeof body !== 'object') return false;
   const actor = body as Actor;
+  if (actor.pvpUntil !== undefined && (!Number.isFinite(actor.pvpUntil) || actor.pvpUntil < 0)) return false;
   if (actor.kind !== 'player' || typeof actor.id !== 'string' || typeof actor.name !== 'string' || !Object.hasOwn(CLASSES, actor.classId ?? '')) return false;
   if (![actor.x, actor.y, actor.radius, actor.hp, actor.maxHp, actor.resource, actor.maxResource, actor.aim, actor.speed, actor.level, actor.xp, actor.kills, actor.deaths, actor.revealedUntil, actor.deadUntil, actor.spawnProtectedUntil].every(Number.isFinite)) return false;
   if (actor.maxHp <= 0 || actor.hp < 0 || actor.hp > actor.maxHp || actor.resource < 0 || actor.resource > actor.maxResource || actor.radius <= 0 || !Array.isArray(actor.effects) || actor.effects.length > 10 || !actor.cooldowns || typeof actor.cooldowns !== 'object') return false;
