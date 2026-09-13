@@ -1,6 +1,9 @@
 export type ClassId = 'mage' | 'warrior' | 'paladin' | 'hunter';
 export type AbilitySlot = 'basic' | 'q' | 'e' | 'r';
 export type Vec2 = { x: number; y: number };
+export type RoomMode = 'world' | 'arena' | 'battleground';
+export interface RoomState { id: string; epoch: number; mode: RoomMode; seed: number; }
+export interface ArenaGateState { phase: 'waiting' | 'countdown' | 'combat' | 'reenter' | 'full'; players: number; startsAt?: number; }
 export type TileKind = 'grass' | 'path' | 'water' | 'rock' | 'bush' | 'mud';
 export type Biome = 'meadow' | 'forest' | 'marsh';
 export type PickupKind = 'heal' | 'haste' | 'power' | 'weakness';
@@ -16,7 +19,7 @@ export interface GameEvent extends Vec2 { id: string; kind: 'cast' | 'hit' | 'he
 export interface SocialPlayer { id: string; name: string; classId: ClassId; level: number; teamId: string | null; friend: boolean; }
 export interface SocialState { friends: { id: string; name: string; online: boolean }[]; requests: { id: string; name: string }[]; teamInvites: { id: string; name: string; teamId: string }[]; team: { id: string; leaderId: string; members: { id: string; name: string; online: boolean }[] } | null; nearby: SocialPlayer[]; }
 export interface PublicAccount { id: string; name: string; kills: number; deaths: number; xp: number; }
-export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: Actor; actors: Actor[]; projectiles: Projectile[]; pickups: Pickup[]; traps?: Trap[]; events: GameEvent[]; online: number; activeChunks: number; }
+export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: Actor; actors: Actor[]; projectiles: Projectile[]; pickups: Pickup[]; traps?: Trap[]; events: GameEvent[]; online: number; activeChunks: number; arenaGate?: ArenaGateState; matchEndsAt?: number; }
 
 export type ClientMessage =
   | {
@@ -28,7 +31,8 @@ export type ClientMessage =
       password?: string;
       mode?: 'login' | 'register';
     }
-  | { type: 'input'; input: InputCommand }
+  | { type: 'input'; input: InputCommand; roomId: string; epoch: number }
+  | { type: 'leave' }
   | { type: 'ping'; at: number }
   | {
       type: 'social';
@@ -46,8 +50,9 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: 'welcome'; token: string; account: PublicAccount; playerId: string; seed: number; tickRate: number; time: number; social: SocialState }
+  | { type: 'room'; room: RoomState }
   | Snapshot
   | { type: 'social'; state: SocialState }
   | { type: 'pong'; at: number; time: number }
   | { type: 'notice'; message: string; tone: 'info' | 'error' | 'success' }
-  | { type: 'error'; message: string; fatal?: boolean };
+  | { type: 'error'; message: string; fatal?: boolean; authExpired?: boolean };

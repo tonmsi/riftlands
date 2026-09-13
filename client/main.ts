@@ -72,6 +72,14 @@ const connection = new GameConnection({
       pointer = null;
       effects.clear();
       latest = null;
+    } else if (message.type === 'room') {
+      renderer.setSeed(message.room.seed, message.room.mode);
+      latest = null;
+      selectedId = null;
+      pointer = null;
+      effects.clear();
+      lastMinimap = 0;
+      ui.setSelected(null);
     } else if (message.type === 'snapshot') {
       const old = predicted;
       latest = message;
@@ -86,14 +94,14 @@ const connection = new GameConnection({
       }
       ui.setSnapshot(message, connection.ping);
       const { id, name, xp, kills, deaths } = message.self;
-      saveProfile({ id, name, xp, kills, deaths });
+      if (renderer.world.mode === 'world') saveProfile({ id, name, xp, kills, deaths });
       if (selectedId) {
         const selected = message.actors.find(actor => actor.id === selectedId) ?? null;
         if (!selected) selectedId = null;
         ui.setSelected(selected);
       }
       const biome = renderer.world.getBiome(message.self.x, message.self.y);
-      ui.setLocation(({ meadow: 'Praterie di Soglia', forest: 'Selva dei Sussurri', marsh: 'Acquitrini Velati' })[biome]);
+      ui.setLocation(renderer.world.mode === 'world' ? ({ meadow: 'Praterie di Soglia', forest: 'Selva dei Sussurri', marsh: 'Acquitrini Velati' })[biome] : renderer.world.mode === 'arena' ? 'Arena del Crocevia' : 'Battleground di prova');
     } else if (message.type === 'social') ui.setSocial(message.state);
     else if (message.type === 'notice') ui.toast(message.message, message.tone);
     else if (message.type === 'error') ui.toast(message.message, 'error');
@@ -211,6 +219,7 @@ function frame(now: number): void {
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const projectiles = remoteFrame?.projectiles ?? [];
   renderer.render({
+    arenaGate: latest?.arenaGate,
     time,
     self,
     actors,

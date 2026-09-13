@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, levelFromXp } from '../shared/config';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
-import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2 } from '../shared/types';
+import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2, RoomMode } from '../shared/types';
 import { World, chunkCoords, chunkKey, isSolid } from '../shared/world';
 import type { Account, AccountStore } from './store';
 
@@ -53,6 +53,7 @@ export class WorldSimulation {
   readonly accounts = new Map<string, Account>();
   readonly connections = new Map<string, Connection>();
   readonly teams = new Map<string, Team>();
+  readonly awayPlayers = new Set<string>();
   readonly activeChunks = new Map<string, ActiveChunk>();
   readonly npcMeta = new Map<string, NpcMeta>();
   readonly events: GameEvent[] = [];
@@ -80,9 +81,9 @@ export class WorldSimulation {
   tick = 0;
   now: number;
 
-  constructor(seed = WORLD_SEED, now = Date.now(), store?: AccountStore) {
+  constructor(seed = WORLD_SEED, now = Date.now(), store?: AccountStore, readonly mode: RoomMode = 'world') {
     this.seed = seed;
-    this.world = new World(seed);
+    this.world = new World(seed, 160, mode);
     this.now = now;
     this.store = store;
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
@@ -112,7 +113,7 @@ export class WorldSimulation {
       connection.highestSeq = 0;
       return current;
     }
-    if (this.players.size >= 128) throw new Error('Il mondo ha raggiunto il limite di 128 giocatori.');
+    if (this.players.size + this.awayPlayers.size - Number(this.awayPlayers.has(account.id)) >= 128) throw new Error('Il mondo ha raggiunto il limite di 128 giocatori.');
     const spec = CLASSES[classId];
     const saved = account.body;
     const spawn = this.safeSpawn(account.id);
@@ -149,6 +150,26 @@ export class WorldSimulation {
     this.persistPlayer(id);
   }
 
+  canTransfer(id: string): boolean {
+    const actor = this.players.get(id), connection = this.connections.get(id);
+    return !!actor && actor.hp > 0 && !!connection?.connected && this.now - connection.combatAt >= 10_000;
+  }
+
+  /** Transfer is distinct from logout: no old body or owned attack may remain. */
+  detachPlayer(id: string): void {
+    this.persistPlayer(id);
+    this.players.delete(id);
+    this.connections.delete(id);
+    this.pendingCasts.delete(id);
+    for (const [key, projectile] of this.projectiles) if (projectile.ownerId === id) {
+      this.projectiles.delete(key);
+      this.projectileTeams.delete(key);
+    }
+    for (const [key, trap] of this.traps) if (trap.ownerId === id) this.traps.delete(key);
+    for (let i = this.queuedBursts.length - 1; i >= 0; i--) if (this.queuedBursts[i].ownerId === id) this.queuedBursts.splice(i, 1);
+    this.rebuildCells();
+  }
+
   enqueueInput(id: string, input: InputCommand): boolean {
     const connection = this.connections.get(id);
     if (!connection?.connected || !Number.isSafeInteger(input.seq) || input.seq <= connection.highestSeq || input.seq > connection.highestSeq + 120 || ![input.dx, input.dy, input.aim].every(Number.isFinite) || Math.abs(input.dx) > 1 || Math.abs(input.dy) > 1 || Math.abs(input.aim) > 1e6 || (input.cast !== undefined && !['basic', 'q', 'e', 'r'].includes(input.cast))) return false;
@@ -180,7 +201,7 @@ export class WorldSimulation {
       const input = connection.inputs.shift();
       if (input) connection.ack = input.seq;
       if (actor.hp <= 0) {
-        if (this.now >= actor.deadUntil) this.respawn(actor);
+        if (this.mode !== 'arena' && this.now >= actor.deadUntil) this.respawn(actor);
         continue;
       }
       if (CLASSES[actor.classId].resource === 'mana') actor.resource = Math.min(actor.maxResource, actor.resource + 7 * dt);
@@ -218,6 +239,12 @@ export class WorldSimulation {
   private readonly pendingCasts = new Map<string, InputCommand>();
 
   private safeSpawn(id: string): Vec2 {
+    if (this.mode !== 'world') {
+      const teamId = this.players.get(id)?.teamId;
+      const side = teamId?.endsWith(':1') ? 1 : -1;
+      const members = [...this.players.values()].filter(player => player.teamId === teamId);
+      return { x: side * (this.mode === 'arena' ? 300 : 700), y: Math.max(0, members.findIndex(player => player.id === id)) * 70 - 140 };
+    }
     let hash = 0;
     for (const char of id) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
     const angle = (hash % 6283) / 1000;
@@ -758,6 +785,6 @@ export class WorldSimulation {
       const active = invitations.filter(invite => invite.expiresAt > this.now && this.teams.has(invite.teamId));
       if (active.length) this.invites.set(id, active); else this.invites.delete(id);
     }
-    for (const [id, team] of this.teams) if (![...team.members].some(member => this.players.has(member))) this.teams.delete(id);
+    for (const [id, team] of this.teams) if (![...team.members].some(member => this.players.has(member) || this.awayPlayers.has(member))) this.teams.delete(id);
   }
 }

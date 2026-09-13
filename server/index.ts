@@ -7,14 +7,15 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { CLASSES, DT, PROTOCOL_VERSION, SNAPSHOT_RATE, TICK_RATE, WORLD_SEED } from '../shared/config';
 import type { ClassId, ClientMessage, ServerMessage } from '../shared/types';
 import { Account, AccountStore, publicAccount } from './store';
-import { WorldSimulation } from './simulation';
+import { RoomManager } from './rooms';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT deve essere tra 1 e 65535.');
 const store = new AccountStore(process.env.DATA_FILE ? resolve(process.env.DATA_FILE) : resolve(ROOT, 'data/accounts.json'));
-const simulation = new WorldSimulation(WORLD_SEED, Date.now(), store);
+const rooms = new RoomManager(store, WORLD_SEED);
+const simulation = rooms.global;
 let healthy = true;
 let closing = false;
 let tickCostMs = 0;
@@ -26,7 +27,7 @@ const server = createServer((request, response) => {
   response.setHeader('X-Content-Type-Options', 'nosniff');
   if (path === '/health') {
     response.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    response.end(JSON.stringify({ ok: healthy, online: simulation.online, tick: simulation.tick, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE, activeChunks: simulation.activeChunks.size, npcs: simulation.npcs.size, tickCostMs: Math.round(tickCostMs * 100) / 100 }));
+    response.end(JSON.stringify({ ok: healthy, online: byAccount.size, worldOnline: simulation.online, matchRooms: rooms.rooms.size, tick: simulation.tick, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE, activeChunks: simulation.activeChunks.size + [...rooms.rooms.values()].reduce((sum, room) => sum + room.simulation.activeChunks.size, 0), npcs: simulation.npcs.size, tickCostMs: Math.round(tickCostMs * 100) / 100 }));
     return;
   }
   if (!production) {
@@ -53,7 +54,7 @@ if (!production) {
 } else if (!existsSync(resolve(dist, 'index.html'))) throw new Error('Build frontend assente. Esegui npm run build prima di npm start.');
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
-type Session = { ws: WebSocket; id?: string; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
+type Session = { ws: WebSocket; id?: string; roomEpoch?: number; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
 const sessions = new Map<WebSocket, Session>();
 const byAccount = new Map<string, Session>();
 const ipConnections = new Map<string, number>();
@@ -83,13 +84,25 @@ function send(session: Session, message: ServerMessage): void {
   session.ws.send(JSON.stringify(message));
 }
 
-function fatal(session: Session, message: string): void {
-  send(session, { type: 'error', message, fatal: true });
+function fatal(session: Session, message: string, authExpired = false): void {
+  send(session, { type: 'error', message, fatal: true, authExpired });
   session.ws.close(1008, message.slice(0, 70));
 }
 
 function socialBroadcast(): void {
-  for (const session of sessions.values()) if (session.id && byAccount.get(session.id) === session) send(session, { type: 'social', state: simulation.socialFor(session.id) });
+  for (const session of sessions.values()) if (session.id && byAccount.get(session.id) === session) send(session, { type: 'social', state: rooms.socialFor(session.id) });
+}
+
+function sendSnapshot(session: Session): void {
+  const state = rooms.stateFor(session.id!);
+  if (session.roomEpoch !== state.epoch) {
+    send(session, { type: 'room', room: state });
+    session.roomEpoch = state.epoch;
+  }
+  const notice = rooms.takeNotice(session.id!);
+  if (notice) send(session, { type: 'notice', message: notice, tone: 'info' });
+  const snapshot = rooms.snapshotFor(session.id!);
+  if (snapshot) send(session, snapshot);
 }
 
 wss.on('connection', (ws, request) => {
@@ -122,6 +135,7 @@ wss.on('connection', (ws, request) => {
       }
 
       let authResult: { account: Account; token: string };
+      let authenticated = false;
       try {
         if (message.token) {
           if (typeof message.token !== 'string') throw new Error('Formato token di sessione non valido.');
@@ -145,9 +159,10 @@ wss.on('connection', (ws, request) => {
           }
         }
 
+        authenticated = true;
         const { account, token } = authResult;
         const previous = byAccount.get(account.id);
-        const player = simulation.addPlayer(account, message.classId as ClassId);
+        const player = rooms.connect(account, message.classId as ClassId);
         session.id = account.id;
         byAccount.set(account.id, session);
         clearTimeout(session.helloDeadline);
@@ -155,19 +170,25 @@ wss.on('connection', (ws, request) => {
           send(previous, { type: 'error', message: 'Account aperto in un’altra scheda. Questa sessione è stata chiusa.', fatal: true });
           previous.ws.close(4001, 'Sessione sostituita');
         }
-        send(session, { type: 'welcome', token, account: publicAccount(account), playerId: player.id, seed: simulation.seed, tickRate: TICK_RATE, time: simulation.now, social: simulation.socialFor(account.id) });
-        const snapshot = simulation.snapshotFor(account.id);
-        if (snapshot) send(session, snapshot);
+        send(session, { type: 'welcome', token, account: publicAccount(account), playerId: player.id, seed: rooms.simulationFor(account.id).seed, tickRate: TICK_RATE, time: simulation.now, social: rooms.socialFor(account.id) });
+        sendSnapshot(session);
         socialBroadcast();
       } catch (error) {
-        fatal(session, error instanceof Error ? error.message : 'Accesso non riuscito.');
+        fatal(session, error instanceof Error ? error.message : 'Accesso non riuscito.', !!message.token && !authenticated);
       }
       return;
     }
 
     if (!session.id || byAccount.get(session.id) !== session) { fatal(session, 'Esegui prima l’accesso.'); return; }
+    if (message.type === 'leave') {
+      rooms.disconnect(session.id, true);
+      byAccount.delete(session.id);
+      ws.close(1000, 'Uscita volontaria');
+      socialBroadcast();
+      return;
+    }
     if (message.type === 'input') {
-      if (!message.input || typeof message.input !== 'object' || !simulation.enqueueInput(session.id, message.input)) {
+      if (typeof message.roomId !== 'string' || !Number.isSafeInteger(message.epoch) || !message.input || typeof message.input !== 'object' || !rooms.enqueueInput(session.id, message.input, message.roomId, message.epoch)) {
         if (++session.badPackets > 8) fatal(session, 'Comandi di movimento non validi.');
       }
     } else if (message.type === 'ping') {
@@ -178,7 +199,7 @@ wss.on('connection', (ws, request) => {
       session.socialTokens--;
       if (!['friend-request', 'friend-accept', 'friend-decline', 'friend-remove', 'team-invite', 'team-accept', 'team-decline', 'team-leave'].includes(message.action) || (message.targetId !== undefined && (typeof message.targetId !== 'string' || message.targetId.length > 80))) { fatal(session, 'Azione sociale non valida.'); return; }
       try {
-        const notice = simulation.socialAction(session.id, message.action, message.targetId);
+        const notice = rooms.socialAction(session.id, message.action, message.targetId);
         store.flush();
         send(session, { type: 'notice', message: notice, tone: 'success' });
         socialBroadcast();
@@ -192,7 +213,7 @@ wss.on('connection', (ws, request) => {
     if (count > 0) ipConnections.set(ip, count); else ipConnections.delete(ip);
     if (session.id && byAccount.get(session.id) === session) {
       byAccount.delete(session.id);
-      simulation.disconnectPlayer(session.id);
+      rooms.disconnect(session.id);
       socialBroadcast();
     }
   });
@@ -208,11 +229,10 @@ const stepTimer = setInterval(() => {
   const started = performance.now();
   try {
     while (accumulator >= 1000 / TICK_RATE && steps++ < 5) {
-      simulation.step(DT);
+      rooms.step(DT);
       accumulator -= 1000 / TICK_RATE;
       if (simulation.tick % (TICK_RATE / SNAPSHOT_RATE) === 0) for (const session of byAccount.values()) {
-        const snapshot = simulation.snapshotFor(session.id!);
-        if (snapshot) send(session, snapshot);
+        sendSnapshot(session);
       }
     }
     if (steps >= 5) accumulator = Math.min(accumulator, 1000 / TICK_RATE);
@@ -222,7 +242,7 @@ const stepTimer = setInterval(() => {
 
 const socialTimer = setInterval(socialBroadcast, 2000);
 const persistTimer = setInterval(() => {
-  try { simulation.checkpoint(); store.flush(); } catch (error) { console.error('Persistenza non disponibile:', error); healthy = false; void shutdown(1); }
+  try { rooms.checkpoint(); store.flush(); } catch (error) { console.error('Persistenza non disponibile:', error); healthy = false; void shutdown(1); }
   for (const [ip, entry] of registrations) if (entry.until < Date.now()) registrations.delete(ip);
 }, 5000);
 const heartbeatTimer = setInterval(() => {
@@ -239,7 +259,7 @@ async function shutdown(exitCode = 0): Promise<void> {
   healthy = false;
   for (const timer of [stepTimer, socialTimer, persistTimer, heartbeatTimer]) clearInterval(timer);
   for (const session of sessions.values()) { clearTimeout(session.helloDeadline); session.ws.close(1001, 'Server in riavvio'); }
-  try { simulation.checkpoint(); store.flush(); } catch (error) { console.error('Salvataggio finale fallito:', error); exitCode = 1; }
+  try { rooms.checkpoint(); store.flush(); } catch (error) { console.error('Salvataggio finale fallito:', error); exitCode = 1; }
   await vite?.close();
   wss.close();
   server.close(() => process.exit(exitCode));

@@ -2912,6 +2912,29 @@ kbd {
   }
 }
 
+.arena-status {
+  display:none;
+  position:fixed;
+  left:50%;
+  top:88px;
+  transform:translateX(-50%);
+  z-index:7;
+  max-width:min(480px,70vw);
+  padding:10px 16px;
+  border:1px solid #a5d9e855;
+  border-radius:8px;
+  background:#14262eed;
+  color:#dceef2;
+  font:12px/1.5 system-ui,sans-serif;
+  text-align:center;
+  pointer-events:none;
+}
+.is-playing .arena-status { display:block; }
+.arena-status[data-phase=countdown] { border-color:#ffe3a0; color:#ffe3a0; }
+@media(max-width:650px) {
+  .arena-status { top:auto; bottom:115px; max-width:none; width:calc(100% - 32px); font-size:11px; }
+}
+
 /* --- AUTENTICAZIONE MODERNA & SESSIONE ATTIVA --- */
 
 .auth-box {

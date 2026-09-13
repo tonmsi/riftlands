@@ -1,5 +1,6 @@
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, WORLD_SEED } from './config';
-import type { Biome, Pickup, TileKind } from './types';
+import { ARENA_GATE, arenaTileIsWall } from './arena';
+import type { Biome, Pickup, TileKind, RoomMode } from './types';
 
 export interface NpcSpawn { id: string; x: number; y: number; npcKind: 'slime' | 'sentinel' | 'wisp'; level: number; }
 export interface Chunk { key: string; cx: number; cy: number; tiles: TileKind[]; npcs: NpcSpawn[]; pickups: Pickup[]; }
@@ -24,10 +25,11 @@ function noise(x: number, y: number, seed: number): number {
 /** Pure terrain plus a bounded LRU cache; neither client nor server retains infinity. */
 export class World {
   private cache = new Map<string, Chunk>();
-  constructor(public readonly seed = WORLD_SEED, private readonly cacheLimit = 160) {}
+  constructor(public readonly seed = WORLD_SEED, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world') {}
   get cacheSize(): number { return this.cache.size; }
 
   getBiome(x: number, y: number): Biome {
+    if (this.mode !== 'world') return 'meadow';
     const moisture = noise(x / 1250, y / 1250, this.seed + 411);
     return moisture > 0.63 ? 'marsh' : moisture > 0.39 ? 'forest' : 'meadow';
   }
@@ -40,6 +42,15 @@ export class World {
   }
 
   private generateTile(tx: number, ty: number): TileKind {
+    // Bounded test maps shared by prediction, renderer and authority.
+    if (this.mode !== 'world') {
+      if (this.mode === 'arena') return arenaTileIsWall(tx, ty) ? 'rock' : 'grass';
+      const half = 24;
+      return tx < -half || tx >= half || ty < -half || ty >= half ? 'rock' : 'grass';
+    }
+    // Walkable approach to the physical arena entrance. PvP rules stay unchanged.
+    const x = (tx + 0.5) * TILE_SIZE, y = (ty + 0.5) * TILE_SIZE;
+    if (Math.hypot(x - ARENA_GATE.x, y - ARENA_GATE.y) < ARENA_GATE.radius + 55 || (Math.abs(x) < 75 && y < -120 && y > ARENA_GATE.y)) return 'path';
     const distance = Math.hypot(tx + 0.5, ty + 0.5);
     if (distance < 4.7) return distance < 2.7 ? 'path' : 'grass';
     // An uninterrupted road network guarantees routes through terrain in every direction.
@@ -62,7 +73,7 @@ export class World {
     for (let y = 0; y < CHUNK_TILES; y++) for (let x = 0; x < CHUNK_TILES; x++) tiles.push(this.generateTile(cx * CHUNK_TILES + x, cy * CHUNK_TILES + y));
     const chunk: Chunk = { key, cx, cy, tiles, npcs: [], pickups: [] };
     // Try a bounded number of positions and place on walkable tile centres.
-    for (let i = 0; i < 24 && (chunk.npcs.length < 3 || chunk.pickups.length < 2); i++) {
+    for (let i = 0; this.mode === 'world' && i < 24 && (chunk.npcs.length < 3 || chunk.pickups.length < 2); i++) {
       const tx = Math.floor(coordinateHash(cx * 41 + i, cy, this.seed + 88) * CHUNK_TILES);
       const ty = Math.floor(coordinateHash(cx, cy * 41 + i, this.seed + 97) * CHUNK_TILES);
       const tile = tiles[ty * CHUNK_TILES + tx];
@@ -77,8 +88,8 @@ export class World {
         chunk.pickups.push({ id: `pickup:${key}:${index}`, x, y, radius: 12, kind: (['heal', 'haste', 'power', 'weakness'] as const)[Math.floor(coordinateHash(cx + i, cy, this.seed + 345) * 4)] });
       }
     }
-    if (cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
-    if (cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
+    if (this.mode === 'world' && cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
+    if (this.mode === 'world' && cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
     this.cache.set(key, chunk);
     while (this.cache.size > Math.max(1, this.cacheLimit)) this.cache.delete(this.cache.keys().next().value!);
     return chunk;

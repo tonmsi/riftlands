@@ -1,5 +1,5 @@
 import { PROTOCOL_VERSION } from '../shared/config';
-import type { ClassId, ClientMessage, ServerMessage } from '../shared/types';
+import type { ClassId, ClientMessage, ServerMessage, RoomState, InputCommand } from '../shared/types';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline';
 export interface NetworkCallbacks {
@@ -24,6 +24,7 @@ export class GameConnection {
   private attempts = 0;
   private intentional = true;
   private welcomed = false;
+  private room: RoomState | null = null;
   private generation = 0;
   private joinRequest: JoinRequest | null = null;
   private clockOffset = Date.now() - performance.now();
@@ -157,13 +158,16 @@ export class GameConnection {
           }, 1500);
         }
         this.callbacks.status('online');
+      } else if (message.type === 'room') {
+        this.room = message.room;
+        this.callbacks.reset();
       } else if (message.type === 'pong') {
         const rtt = Math.max(0, performance.now() - message.at);
         this.ping = Math.round(this.ping ? this.ping * 0.6 + rtt * 0.4 : rtt);
         const offset = message.time + rtt / 2 - performance.now();
         this.clockOffset = this.clockOffset * 0.8 + offset * 0.2;
       } else if (message.type === 'error' && message.fatal) {
-        if (this.joinRequest?.type === 'token') {
+        if (message.authExpired && this.joinRequest?.type === 'token') {
           // Token non più valido sul server
           this.logout();
           this.callbacks.authExpired?.();
@@ -227,9 +231,12 @@ export class GameConnection {
     this.callbacks.status('offline', detail);
   }
 
-  send(message: ClientMessage): boolean {
+  send(message: ClientMessage | { type: 'input'; input: InputCommand }): boolean {
     if (this.socket?.readyState !== WebSocket.OPEN || this.socket.bufferedAmount > 64_000) return false;
-    if (message.type === 'input' && !this.welcomed) return false;
+    if (message.type === 'input') {
+      if (!this.welcomed || !this.room) return false;
+      message = { ...message, roomId: this.room.id, epoch: this.room.epoch };
+    }
     try {
       this.socket.send(JSON.stringify(message));
       return true;
@@ -239,6 +246,8 @@ export class GameConnection {
   }
 
   leave(): void {
+    if (this.welcomed) this.send({ type: 'leave' });
+    this.room = null;
     this.intentional = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;

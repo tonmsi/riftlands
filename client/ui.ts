@@ -2,9 +2,9 @@ import { CLASSES, levelFromXp } from '../shared/config';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, PublicAccount, Snapshot, SocialState } from '../shared/types';
 
 const PROFILE_URLS: Partial<Record<ClassId, string>> = {
-  paladin: '/assets/paladinoProfile.png',
-  mage: '/assets/mageProfile.png',
-  warrior: '/assets/warriorProfile.png',
+  paladin: '../assets/paladinoProfile.png',
+  mage: '../assets/mageProfile.png',
+  warrior: '../assets/warriorProfile.png',
 };
 
 type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
@@ -73,6 +73,7 @@ export class GameUI {
   private readonly refs = new Map<string, HTMLElement>();
   private readonly nameInput: HTMLInputElement;
   private readonly passwordInput: HTMLInputElement;
+  private readonly arenaStatus = document.createElement('div');
 
   constructor(private root: HTMLElement, private actions: UIActions) {
     root.className = 'rift-app';
@@ -152,6 +153,9 @@ export class GameUI {
       <div class="toast-stack" data-ref="toasts" aria-live="polite" aria-atomic="false"></div>`;
 
     root.querySelectorAll<HTMLElement>('[data-ref]').forEach(element => this.refs.set(element.dataset.ref!, element));
+    this.arenaStatus.className = 'arena-status';
+    this.arenaStatus.setAttribute('role', 'status');
+    root.append(this.arenaStatus);
     this.canvas = root.querySelector<HTMLCanvasElement>('.world-canvas')!;
     this.minimap = root.querySelector<HTMLCanvasElement>('.minimap')!;
     this.nameInput = this.ref('name') as HTMLInputElement;
@@ -306,6 +310,22 @@ export class GameUI {
     this.fill('xp-fill', (player.xp % 100) / 100);
     this.write('coords', `${Math.round(player.x)} · ${Math.round(player.y)}`);
     this.write('online', String(snapshot.online));
+    const gate = snapshot.arenaGate;
+    const worldTip = this.root.querySelector<HTMLElement>('.world-tip');
+    if (worldTip) worldTip.hidden = !!snapshot.matchEndsAt;
+    let arenaText = 'Arena 1v1 · cerchio azzurro a nord del Crocevia ↑';
+    if (snapshot.matchEndsAt) {
+      const seconds = Math.max(0, Math.ceil((snapshot.matchEndsAt - snapshot.time) / 1000));
+      arenaText = `Duello 1v1 · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} · Elimina l’avversario`;
+    } else if (gate) {
+      arenaText = gate.phase === 'countdown' ? `Preparazione arena · ${Math.max(0, (gate.startsAt! - snapshot.time) / 1000).toFixed(1)} s · Esci dal cerchio per annullare`
+        : gate.phase === 'combat' ? 'Arena 1v1 · Occorre essere vivi e fuori combattimento da 10 secondi'
+        : gate.phase === 'reenter' ? 'Per un nuovo duello, esci dal cerchio e rientra'
+        : gate.phase === 'full' ? 'Arene occupate · Attendi nel cerchio'
+        : `Arena 1v1 · ${gate.players}/2 pronti · In attesa di un avversario`;
+    }
+    if (this.arenaStatus.textContent !== arenaText) this.arenaStatus.textContent = arenaText;
+    this.arenaStatus.dataset.phase = gate?.phase ?? (snapshot.matchEndsAt ? 'match' : 'idle');
     this.write('ping', Number.isFinite(ping) ? `${Math.round(ping)} ms` : '— ms');
     this.ref('ping').classList.toggle('high-ping', ping > 180);
     const remaining = Math.max(0, player.deadUntil - snapshot.time);

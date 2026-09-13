@@ -1,6 +1,8 @@
 import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../shared/config';
-import type { Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec2 } from '../shared/types';
+import type { Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec2, RoomMode } from '../shared/types';
 import { World } from '../shared/world';
+import { ARENA_GATE } from '../shared/arena';
+import type { ArenaGateState } from '../shared/types';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -12,6 +14,7 @@ const PALADIN_DRAW_SIZE = 48;
 const MAX_LOGICAL_VIEWPORT = { width: 2200, height: 1400 };
 
 export interface RenderFrame {
+  arenaGate?: ArenaGateState;
   time: number;
   self: Actor | null;
   actors: Actor[];
@@ -84,8 +87,11 @@ export class Renderer {
     this.resize();
   }
 
-  setSeed(seed: number): void {
-    this.world = new World(seed);
+  setSeed(seed: number, mode: RoomMode = 'world'): void {
+    this.world = new World(seed, 160, mode);
+    this.hasCamera = false;
+    this.classMotion.clear();
+    this.resize();
   }
 
   screenToWorld(clientX: number, clientY: number): Vec2 {
@@ -111,6 +117,7 @@ export class Renderer {
     // huge amount of procedural terrain in one frame.
     const viewportScale = Math.max(1, this.width / MAX_LOGICAL_VIEWPORT.width, this.height / MAX_LOGICAL_VIEWPORT.height);
     this.zoom = baseZoom * viewportScale;
+    if (this.world.mode === 'arena') this.zoom = Math.max(0.3, Math.min((this.width - 40) / 960, (this.height - 230) / 768));
   }
 
   render(frame: RenderFrame): void {
@@ -118,7 +125,7 @@ export class Renderer {
     const now = performance.now();
     const delta = this.lastTime ? Math.max(0, Math.min(80, now - this.lastTime)) : 16;
     this.lastTime = now;
-    const target = frame.self && frame.playing ? frame.self : {
+    const target = this.world.mode === 'arena' && frame.playing ? { x: 0, y: 0 } : frame.self && frame.playing ? frame.self : {
       x: 25 + Math.sin(frame.time * 0.000025) * 18,
       y: 12 + Math.cos(frame.time * 0.000019) * 12,
     };
@@ -145,7 +152,10 @@ export class Renderer {
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.camera.x, -this.camera.y);
     const bushes = this.drawTerrain(frame.time);
-    this.drawCrossroads();
+    if (this.world.mode === 'world') {
+      this.drawCrossroads();
+      this.drawArenaGate(frame.time, frame.arenaGate);
+    }
     const events = frame.events.filter(event => frame.time >= event.at && frame.time - event.at < event.duration);
     for (const event of events) this.drawGroundEvent(event, frame.time);
     const pickups = frame.playing ? frame.pickups : [
@@ -271,6 +281,11 @@ export class Renderer {
     }
     for (let ty = Math.floor(this.bounds.top / TILE_SIZE); ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty++) {
       for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
+        if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) {
+          ctx.fillStyle = '#202b29';
+          ctx.fillRect(tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE + 0.4, TILE_SIZE + 0.4);
+          continue;
+        }
         const tile = this.world.getTile(tx, ty);
         const x = tx * TILE_SIZE, y = ty * TILE_SIZE;
         const variation = noise(tx, ty);
@@ -382,6 +397,30 @@ export class Renderer {
       const px = x + 8 + i * 10, py = y + 19 + (i % 2) * 11;
       ctx.beginPath(); ctx.moveTo(px - 3 + sway, py - 3); ctx.lineTo(px, py); ctx.lineTo(px + 4 + sway, py - 4); ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  private drawArenaGate(time: number, state?: ArenaGateState): void {
+    if (!this.visible(ARENA_GATE)) return;
+    const { ctx } = this;
+    const { x, y, radius } = ARENA_GATE;
+    ctx.save();
+    ctx.fillStyle = 'rgba(28,42,56,0.62)';
+    circle(ctx, x, y, radius); ctx.fill();
+    ctx.strokeStyle = state?.phase === 'countdown' ? '#ffe3a0' : '#a5d9e8';
+    ctx.lineWidth = 3;
+    circle(ctx, x, y, radius); ctx.stroke();
+    ctx.setLineDash([5, 9]); ctx.lineWidth = 1;
+    circle(ctx, x, y, radius - 10); ctx.stroke(); ctx.setLineDash([]);
+    if (state?.startsAt) {
+      const progress = Math.max(0, Math.min(1, 1 - (state.startsAt - time) / ARENA_GATE.countdownMs));
+      ctx.strokeStyle = '#ffe3a0'; ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.arc(x, y, radius + 7, -Math.PI / 2, -Math.PI / 2 + progress * TAU); ctx.stroke();
+    }
+    ctx.textAlign = 'center'; ctx.fillStyle = '#e5f2f4';
+    ctx.font = '700 15px system-ui'; ctx.fillText('ARENA 1 VS 1', x, y - radius - 22);
+    ctx.font = '12px system-ui'; ctx.fillText('Entra nel cerchio', x, y + radius + 24);
+    ctx.font = '700 28px system-ui'; ctx.fillText('⚔', x, y + 9);
     ctx.restore();
   }
 
@@ -752,6 +791,10 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   for (const pickup of pickups) {
     ctx.fillStyle = PICKUP_COLORS[pickup.kind];
     ctx.fillRect((pickup.x - left) * scale - 1, (pickup.y - top) * scale - 1, 2, 2);
+  }
+  if (world.mode === 'world') {
+    ctx.strokeStyle = '#a5d9e8'; ctx.lineWidth = 2;
+    circle(ctx, (ARENA_GATE.x - left) * scale, (ARENA_GATE.y - top) * scale, ARENA_GATE.radius * scale); ctx.stroke();
   }
   for (const actor of actors) {
     if (actor.id === self?.id || actor.hp <= 0) continue;
