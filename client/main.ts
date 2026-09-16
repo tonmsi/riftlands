@@ -28,18 +28,33 @@ const LOCAL_PRESENTATION_DELAY_MS = 30;
 const localPresentation = new LocalPresentationDelay(LOCAL_PRESENTATION_DELAY_MS);
 let lastMinimap = 0;
 let profileCache = '';
+let joinGeneration = 0;
 const releaseControls = (): void => { keys.clear(); primaryHeld = false; pendingCast = undefined; };
 
 const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
-  joinCredentials: (mode, name, password, classId) => connection.joinWithCredentials(mode, name, password, classId),
-  joinSaved: classId => connection.joinWithToken(classId),
+  joinCredentials: (mode, name, password, classId) => {
+    const generation = ++joinGeneration;
+    ui.setConnection('connecting', 'Preparazione grafica…');
+    void renderer.spritesReady.then(() => {
+      if (generation === joinGeneration) connection.joinWithCredentials(mode, name, password, classId);
+    });
+  },
+  joinSaved: classId => {
+    const generation = ++joinGeneration;
+    ui.setConnection('connecting', 'Preparazione grafica…');
+    void renderer.spritesReady.then(() => {
+      if (generation === joinGeneration) connection.joinWithToken(classId);
+    });
+  },
   logout: () => {
+    joinGeneration++;
     connection.logout();
     clearProfile();
     ui.setSavedAccount(null);
     ui.toast('Disconnessione completata.');
   },
   leave: () => {
+    joinGeneration++;
     connection.leave(); playing = false; latest = null; predicted = null; selectedId = null; localPresentation.reset();
     keys.clear(); primaryHeld = false; pendingCast = undefined; snapshotBuffer.clear(); renderedActors = []; effects.clear();
     ui.setPlaying(false); ui.setSelected(null);

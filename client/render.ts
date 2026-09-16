@@ -9,21 +9,73 @@ import { BOSS_BY_ID } from '../shared/bosses';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
-  paladin: new URL('../assets/paladino256.png', import.meta.url).href,
-  mage: new URL('../assets/mage256.png', import.meta.url).href,
-  warrior: new URL('../assets/warrior256.png', import.meta.url).href
+  paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
+  mage: new URL('../assets/mage256.svg', import.meta.url).href,
+  warrior: new URL('../assets/warrior256.svg', import.meta.url).href
 };
 const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = {
   wisp: new URL('../assets/wisp.svg', import.meta.url).href,
   slime: new URL('../assets/slime.svg', import.meta.url).href,
-  boss: new URL('../assets/boss_warden.png', import.meta.url).href
+  boss: new URL('../assets/boss_warden.svg', import.meta.url).href
 };
-const FRAME_SIZE = 512;
+const FRAME_SIZE = 256;
 const DRAW_SIZE_SIZE = 48;
 const NPC_FRAME_SIZE = 256;
 const NPC_DRAW_SIZE = 48;
 const BOSS_DRAW_SIZE = 84;
+const SPRITE_COLUMNS = 4;
+const SPRITE_ROWS = 4;
+const MAX_RENDER_DPR = 2;
 const MAX_LOGICAL_VIEWPORT = { width: 2200, height: 1400 };
+
+interface RasterSpriteSheet {
+  frames: HTMLCanvasElement[];
+}
+
+async function loadImage(url: string): Promise<HTMLImageElement> {
+  const image = new Image();
+  image.decoding = 'async';
+  const loaded = new Promise<void>((resolve, reject) => {
+    image.addEventListener('load', () => resolve(), { once: true });
+    image.addEventListener('error', () => reject(new Error(`Impossibile caricare la sprite ${url}`)), { once: true });
+  });
+  image.src = url;
+  await loaded;
+  try { await image.decode(); } catch { /* onload already verified that the image is usable */ }
+  return image;
+}
+
+/** Rasterizes vector artwork once; the animation loop only ever sees small bitmap frames. */
+async function rasterizeSpriteSheet(url: string, frameSize: number, drawSize: number): Promise<RasterSpriteSheet> {
+  const image = await loadImage(url);
+  const atlas = document.createElement('canvas');
+  atlas.width = image.naturalWidth;
+  atlas.height = image.naturalHeight;
+  const atlasContext = atlas.getContext('2d');
+  if (!atlasContext) throw new Error('Canvas 2D non disponibile per la cache delle sprite.');
+  atlasContext.imageSmoothingEnabled = true;
+  atlasContext.imageSmoothingQuality = 'high';
+  atlasContext.drawImage(image, 0, 0);
+
+  // The game canvas caps its DPR at two. Cached frames at the same density keep
+  // smooth vector edges while using much less memory than full raster atlases.
+  const cachedSize = Math.ceil(drawSize * MAX_RENDER_DPR);
+  const frames: HTMLCanvasElement[] = [];
+  for (let row = 0; row < SPRITE_ROWS; row++) {
+    for (let column = 0; column < SPRITE_COLUMNS; column++) {
+      const frame = document.createElement('canvas');
+      frame.width = cachedSize;
+      frame.height = cachedSize;
+      const frameContext = frame.getContext('2d');
+      if (!frameContext) throw new Error('Canvas 2D non disponibile per un frame della sprite.');
+      frameContext.imageSmoothingEnabled = true;
+      frameContext.imageSmoothingQuality = 'high';
+      frameContext.drawImage(atlas, column * frameSize, row * frameSize, frameSize, frameSize, 0, 0, cachedSize, cachedSize);
+      frames.push(frame);
+    }
+  }
+  return { frames };
+}
 
 export interface RenderFrame {
   goldDrops?: BossDrop[];
@@ -85,24 +137,16 @@ export class Renderer {
   private wasPlaying = false;
   private hasCamera = false;
   private bounds = { left: 0, top: 0, right: 0, bottom: 0 };
-  private readonly classSprites = new Map<ClassId, HTMLImageElement>();
-  private readonly npcSprites = new Map<NonNullable<Actor['npcKind']>, HTMLImageElement>();
+  private readonly classSprites = new Map<ClassId, RasterSpriteSheet>();
+  private readonly npcSprites = new Map<NonNullable<Actor['npcKind']>, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
+  readonly spritesReady: Promise<void>;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D non disponibile in questo browser.');
     this.ctx = ctx;
-    for (const [classId, url] of Object.entries(CLASS_SPRITE_URLS) as [ClassId, string][]) {
-      const sprite = new Image();
-      sprite.src = url;
-      this.classSprites.set(classId, sprite);
-    }
-    for (const [npcKind, url] of Object.entries(NPC_SPRITE_URLS) as [NonNullable<Actor['npcKind']>, string][]) {
-      const sprite = new Image();
-      sprite.src = url;
-      this.npcSprites.set(npcKind, sprite);
-    }
+    this.spritesReady = this.prepareSprites();
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
     this.resize();
@@ -125,11 +169,27 @@ export class Renderer {
 
   destroy(): void { this.resizeObserver.disconnect(); }
 
+  private async prepareSprites(): Promise<void> {
+    const jobs: Promise<void>[] = [];
+    for (const [classId, url] of Object.entries(CLASS_SPRITE_URLS) as [ClassId, string][]) {
+      jobs.push(rasterizeSpriteSheet(url, FRAME_SIZE, DRAW_SIZE_SIZE)
+        .then(sprite => { this.classSprites.set(classId, sprite); })
+        .catch(error => { console.warn(error); }));
+    }
+    for (const [npcKind, url] of Object.entries(NPC_SPRITE_URLS) as [NonNullable<Actor['npcKind']>, string][]) {
+      const drawSize = npcKind === 'boss' ? BOSS_DRAW_SIZE : NPC_DRAW_SIZE;
+      jobs.push(rasterizeSpriteSheet(url, NPC_FRAME_SIZE, drawSize)
+        .then(sprite => { this.npcSprites.set(npcKind, sprite); })
+        .catch(error => { console.warn(error); }));
+    }
+    await Promise.all(jobs);
+  }
+
   private resize(): void {
     const rect = this.canvas.getBoundingClientRect();
     this.width = Math.max(1, rect.width);
     this.height = Math.max(1, rect.height);
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = Math.min(window.devicePixelRatio || 1, MAX_RENDER_DPR);
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);
     const baseZoom = this.width < 680 ? 0.8 : 0.95;
@@ -677,7 +737,7 @@ export class Renderer {
     const { ctx } = this;
     const r = actor.radius;
     const sprite = this.classSprites.get(actor.classId);
-    if (sprite && !dead && sprite.complete && sprite.naturalWidth > 0) {
+    if (sprite && !dead) {
       const previous = this.classMotion.get(actor.id);
       const dx = previous ? actor.x - previous.x : 0;
       const dy = previous ? actor.y - previous.y : 0;
@@ -695,11 +755,11 @@ export class Renderer {
       const startedAt = moving && (!previous || !previous.moving || previous.row !== row || Math.hypot(actor.x - previous.x, actor.y - previous.y) > 20)
         ? time : previous?.startedAt ?? time;
       this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
-      const frame = moving ? Math.floor((time - startedAt) / 130) % 4 : 0;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sprite, frame * FRAME_SIZE, row * FRAME_SIZE,
-        FRAME_SIZE, FRAME_SIZE, -DRAW_SIZE_SIZE / 2, -DRAW_SIZE_SIZE / 2,
-        DRAW_SIZE_SIZE, DRAW_SIZE_SIZE);
+      const frame = moving ? Math.floor((time - startedAt) / 130) % SPRITE_COLUMNS : 0;
+      const cachedFrame = sprite.frames[row * SPRITE_COLUMNS + frame];
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(cachedFrame, -DRAW_SIZE_SIZE / 2, -DRAW_SIZE_SIZE / 2, DRAW_SIZE_SIZE, DRAW_SIZE_SIZE);
       return;
     }
     ctx.fillStyle = dead ? '#697066' : '#333e35';
@@ -772,7 +832,7 @@ export class Renderer {
     const { ctx } = this;
     const r = actor.radius;
     const sprite = actor.npcKind ? this.npcSprites.get(actor.npcKind) : undefined;
-    if (sprite && actor.hp > 0 && sprite.complete && sprite.naturalWidth > 0) {
+    if (sprite && actor.hp > 0) {
       const previous = this.classMotion.get(actor.id);
       const dx = previous ? actor.x - previous.x : 0;
       const dy = previous ? actor.y - previous.y : 0;
@@ -782,12 +842,12 @@ export class Renderer {
       const startedAt = moving && (!previous || !previous.moving || previous.row !== row)
         ? time : previous?.startedAt ?? time;
       this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
-      const frame = moving ? Math.floor((time - startedAt) / 130) % 4 : 0;
+      const frame = moving ? Math.floor((time - startedAt) / 130) % SPRITE_COLUMNS : 0;
       const drawSize = actor.npcKind === 'boss' ? BOSS_DRAW_SIZE : NPC_DRAW_SIZE;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sprite, frame * NPC_FRAME_SIZE, row * NPC_FRAME_SIZE,
-        NPC_FRAME_SIZE, NPC_FRAME_SIZE, -drawSize / 2, -drawSize / 2,
-        drawSize, drawSize);
+      const cachedFrame = sprite.frames[row * SPRITE_COLUMNS + frame];
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(cachedFrame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
       return;
     }
     ctx.strokeStyle = '#3c483b'; ctx.lineWidth = 1.8;
