@@ -13,8 +13,16 @@ const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   mage: new URL('../assets/mage256.svg', import.meta.url).href,
   warrior: new URL('../assets/warrior256.svg', import.meta.url).href
 };
+const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = {
+  wisp: new URL('../assets/wisp.svg', import.meta.url).href,
+  slime: new URL('../assets/slime.svg', import.meta.url).href,
+  boss: new URL('../assets/boss_warden.svg', import.meta.url).href
+};
 const PALADIN_FRAME_SIZE = 256;
 const PALADIN_DRAW_SIZE = 48;
+const NPC_FRAME_SIZE = 256;
+const NPC_DRAW_SIZE = 48;
+const BOSS_DRAW_SIZE = 84;
 const MAX_LOGICAL_VIEWPORT = { width: 2200, height: 1400 };
 
 export interface RenderFrame {
@@ -78,6 +86,7 @@ export class Renderer {
   private hasCamera = false;
   private bounds = { left: 0, top: 0, right: 0, bottom: 0 };
   private readonly classSprites = new Map<ClassId, HTMLImageElement>();
+  private readonly npcSprites = new Map<NonNullable<Actor['npcKind']>, HTMLImageElement>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -88,6 +97,11 @@ export class Renderer {
       const sprite = new Image();
       sprite.src = url;
       this.classSprites.set(classId, sprite);
+    }
+    for (const [npcKind, url] of Object.entries(NPC_SPRITE_URLS) as [NonNullable<Actor['npcKind']>, string][]) {
+      const sprite = new Image();
+      sprite.src = url;
+      this.npcSprites.set(npcKind, sprite);
     }
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -757,6 +771,25 @@ export class Renderer {
   private drawNpc(actor: Actor, time: number, color: string): void {
     const { ctx } = this;
     const r = actor.radius;
+    const sprite = actor.npcKind ? this.npcSprites.get(actor.npcKind) : undefined;
+    if (sprite && actor.hp > 0 && sprite.complete && sprite.naturalWidth > 0) {
+      const previous = this.classMotion.get(actor.id);
+      const dx = previous ? actor.x - previous.x : 0;
+      const dy = previous ? actor.y - previous.y : 0;
+      const moving = Math.hypot(dx, dy) > 0.02;
+      let row = previous?.row ?? 0;
+      if (moving) row = dx !== 0 ? (dx < 0 ? 2 : 3) : dy < 0 ? 1 : 0;
+      const startedAt = moving && (!previous || !previous.moving || previous.row !== row)
+        ? time : previous?.startedAt ?? time;
+      this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
+      const frame = moving ? Math.floor((time - startedAt) / 130) % 4 : 0;
+      const drawSize = actor.npcKind === 'boss' ? BOSS_DRAW_SIZE : NPC_DRAW_SIZE;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sprite, frame * NPC_FRAME_SIZE, row * NPC_FRAME_SIZE,
+        NPC_FRAME_SIZE, NPC_FRAME_SIZE, -drawSize / 2, -drawSize / 2,
+        drawSize, drawSize);
+      return;
+    }
     ctx.strokeStyle = '#3c483b'; ctx.lineWidth = 1.8;
     if (actor.npcKind === 'boss') {
       if (actor.hp <= 0) {
