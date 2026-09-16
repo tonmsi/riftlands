@@ -5,7 +5,8 @@ import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputComman
 import { World, chunkCoords, chunkKey, isSolid } from '../shared/world';
 import { OUTPOST, inOutpost } from '../shared/outpost';
 import { insideArenaGate } from '../shared/arena';
-import { BOSS_DEFINITIONS } from '../shared/bosses';
+import { BOSS_BY_ID } from '../shared/bosses';
+import { DUNGEON_DEFINITIONS } from '../shared/dungeons';
 import { BossEncounter } from './boss-encounter';
 import type { Account, AccountStore } from './store';
 
@@ -93,7 +94,9 @@ export class WorldSimulation {
     this.store = store;
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
     if (mode === 'world') {
-      for (const definition of BOSS_DEFINITIONS) {
+      for (const dungeon of DUNGEON_DEFINITIONS) {
+        const definition = BOSS_BY_ID.get(dungeon.bossId);
+        if (!definition || definition.dungeonId !== dungeon.id) throw new Error(`Configurazione dungeon non valida: ${dungeon.id}`);
         const encounter = new BossEncounter(definition, now, store?.bossStates[definition.id], store);
         this.bosses.set(definition.id, encounter);
         this.npcs.set(encounter.boss.id, encounter.boss);

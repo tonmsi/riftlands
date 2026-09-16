@@ -10,17 +10,19 @@ import { chromium, expect, type Browser } from '@playwright/test';
 import { AccountStore, publicAccount } from '../../server/store';
 import { WorldSimulation } from '../../server/simulation';
 import type { ServerMessage, Snapshot } from '../../shared/types';
-import { RUINS } from '../../shared/ruins';
+import { RUINS_DUNGEON, dungeonFlames } from '../../shared/dungeons';
 import { RUINS_WARDEN } from '../../shared/bosses';
 import { World } from '../../shared/world';
 import { findBossPath } from '../../server/boss-encounter';
+
+const RUINS = RUINS_DUNGEON.area;
 
 test('two browsers fight the boss: private gold, visible corpse, physical collection and persistent wallet', { timeout: 60_000 }, async () => {
   const directory = mkdtempSync(join(tmpdir(), 'riftlands-ruins-browser-'));
   const store = new AccountStore(join(directory, 'accounts.json'));
   const users = ['LootOwner', 'Spectator'].map(name => store.register(name, 'test-password'));
   const sim = new WorldSimulation(734291, Date.now(), store);
-  const spectatorGate = RUINS_WARDEN.arena.escapeGates[3];
+  const spectatorGate = dungeonFlames(RUINS_DUNGEON).at(-1)!;
   const spectatorAngle = Math.atan2(spectatorGate.y - RUINS.y, spectatorGate.x - RUINS.x);
   const spectatorSpawn = { x: spectatorGate.x + Math.cos(spectatorAngle) * 20, y: spectatorGate.y + Math.sin(spectatorAngle) * 20 };
   users.forEach((user, i) => Object.assign(sim.addPlayer(user.account, i ? 'warrior' : 'hunter'),

@@ -81,6 +81,7 @@ client/
 shared/
   types.ts         Contratto del protocollo e modelli dati
   config.ts        Classi, abilità, bilanciamento e frequenze
+  dungeons.ts      Catalogo data-driven di geografia, accessi, barriere e temi dei dungeon
   world.ts         Generazione deterministica e cache limitata
   physics.ts       Movimento, collisioni, raggi e proiettili
 server/
@@ -92,11 +93,22 @@ tests/             Test della logica e test browser con due client
 
 Le grafie Canvas sono placeholder: per aggiungere sprite, tilemap, animazioni o audio si interviene sul livello di presentazione, mantenendo hitbox e regole nella simulazione. Per aggiungere classi si estendono i tipi e le definizioni condivise; per nuovi effetti/comportamenti si aggiungono sistemi alla simulazione. La versione del protocollo impedisce accessi di client incompatibili.
 
-### Promemoria architetturale: secondo dungeon
+### Architettura dei dungeon
 
-Il runtime dei boss è già condiviso e configurabile tramite `BossDefinition`: combattimento, team, aggro, lock, eliminazione, respawn e ricompense non devono essere duplicati. La geografia e la presentazione delle Rovine sono invece ancora specifiche (`shared/ruins.ts` e `drawRuins` nel renderer).
+`shared/dungeons.ts` è la fonte unica per geografia, passaggi e regole spaziali dei dungeon. Ogni `DungeonDefinition` descrive identità, area, layout, spawn, percorso di accesso, tema e passaggi nominati. Ogni passaggio ha un solo stato durante il fight: `stone`, `flame` oppure `open`. Il tipo discriminato e il validatore impediscono che lo stesso varco contenga contemporaneamente pietre e fiamme.
 
-**Prima di implementare il secondo dungeon**, introdurre una `DungeonDefinition` condivisa che descriva almeno posizione, limiti, layout/ostacoli, ingressi, punti di spawn e uscita, barriere e tema grafico. Migrare le Rovine come prima definizione e fare consumare il catalogo generico da mondo, server e renderer. I nuovi dungeon dovranno quindi richiedere soprattutto dati e asset; scrivere codice dedicato soltanto per meccaniche realmente particolari del boss o dell'area. Non anticipare questo refactoring finché esiste un solo dungeon, ma non aggiungerne un secondo con un'altra implementazione hardcoded.
+Le mappe sono composte sulla griglia di tile del mondo: `layout.bounds` delimita l'area curata, `layout.obstacles` descrive muri rettangolari e `layout.obstacleTiles` consente correzioni puntuali. Il resto dell'area usa `layout.floor`. Le sei regioni dell'incontro (`trigger`, `admission`, `combat`, `ejectIntruders`, `bossAggro`, `bossLeash`) sono indipendenti e accettano cerchi o poligoni; `ejectTo` stabilisce dove riportare gli intrusi.
+
+Mondo, server e client consumano lo stesso catalogo: soltanto i passaggi `stone` diventano collisioni solide; i passaggi `flame` restano attraversabili e applicano le regole di partecipazione; quelli `open` non cambiano. Il validatore eseguito all'avvio controlla coordinate, regioni, spawn, tile solide, passaggi duplicati, sovrapposizioni pietra/fiamma e aperture di bordo non dichiarate. `BossDefinition` contiene soltanto combattimento e comportamento: non duplica più spawn, barriere o raggi della mappa.
+
+Per aggiungere un dungeon:
+
+1. aggiungere una `DungeonDefinition` e registrarla in `DUNGEON_DEFINITIONS`;
+2. aggiungere la sua `BossDefinition`, collegata con `dungeonId` e `bossId`;
+3. aggiungere gli asset o una resa particolare solo se il fallback procedurale e il tema generico non bastano;
+4. aggiungere test sui dati e sulle eventuali meccaniche davvero specifiche.
+
+Combattimento, team, aggro, lock, eliminazione, respawn, ricompense, terreno, esclusione degli spawn e indicatori non vanno duplicati per dungeon.
 
 ## Rete e limiti attuali
 

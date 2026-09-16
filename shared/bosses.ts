@@ -1,5 +1,5 @@
 import type { ClassId, Vec2 } from './types';
-import { RUINS, inRuins } from './ruins';
+import { DUNGEON_BY_ID, MAZE_DUNGEON, RUINS_DUNGEON, insideDungeonRegion } from './dungeons';
 
 export type BossAttackKind = 'melee' | 'slam' | 'charge' | 'nova';
 export interface BossAttackDefinition {
@@ -12,20 +12,24 @@ export interface BossAttackDefinition {
   innerRadius?: number;
   travel?: number;
 }
-export interface BossEscapeGate extends Vec2 { length: number; thickness: number; }
+export interface BossBehaviorDefinition {
+  targeting: 'threat' | 'nearest' | 'lowest-health';
+  attackSelection: 'sequence' | 'distance';
+  preferredRange: number;
+  pathRefreshMs: number;
+}
 export interface BossDefinition {
   id: string;
+  dungeonId: string;
   name: string;
   skin: string;
   classId: ClassId;
-  position: Vec2;
   radius: number;
   hp: number;
   speed: number;
   level: number;
-  aggroRadius: number;
-  arena: { radius: number; entryRadius: number; preparationMs: number; exit: Vec2; sealedTiles: readonly Vec2[]; escapeGates: readonly BossEscapeGate[] };
   attacks: readonly BossAttackDefinition[];
+  behavior: BossBehaviorDefinition;
   enrageAt: number;
   enrageSpeed: number;
   enrageCooldown: number;
@@ -48,17 +52,10 @@ export interface BossWindup extends Vec2 {
 export interface BossLockState { bossId: string; locked: boolean; ownerId?: string; relation?: 'participant' | 'eliminated' | 'outsider'; }
 export interface BossPreparationState { bossId: string; name: string; endsAt: number; entrants: number; }
 
-const ruinsSeal = [-87, -74].flatMap(ty => [-2, -1, 0, 1].map(tx => ({ x: tx, y: ty })));
-const ruinsArenaRadius = 420;
-const ruinsEscapeGates: BossEscapeGate[] = [[-360, -264], [360, -264], [-360, 264], [360, 264]].map(([x, y]) => {
-  const scale = ruinsArenaRadius / Math.hypot(x, y);
-  return { x: RUINS.x + x * scale, y: RUINS.y + y * scale, length: 70, thickness: 10 };
-});
 export const RUINS_WARDEN: BossDefinition = {
-  id: 'boss:ruins:warden', name: 'Custode delle Rovine', skin: 'stone-warden', classId: 'warrior',
-  position: { x: RUINS.x, y: RUINS.y }, radius: 28, hp: 460, speed: 100, level: 5,
-  aggroRadius: RUINS.radius, arena: { radius: ruinsArenaRadius, entryRadius: 260, preparationMs: 5000,
-    exit: { x: RUINS.x, y: RUINS.y + 440 }, sealedTiles: ruinsSeal, escapeGates: ruinsEscapeGates },
+  id: RUINS_DUNGEON.bossId, dungeonId: RUINS_DUNGEON.id,
+  name: 'Custode delle Rovine', skin: 'stone-warden', classId: 'warrior',
+  radius: 28, hp: 460, speed: 100, level: 5,
   attacks: [
     { kind: 'melee', damage: 18, range: 82, radius: 82, windupMs: 0, cooldownMs: 1450 },
     { kind: 'slam', damage: 31, range: 285, radius: 145, windupMs: 850, cooldownMs: 1450 },
@@ -67,42 +64,44 @@ export const RUINS_WARDEN: BossDefinition = {
     { kind: 'melee', damage: 18, range: 82, radius: 82, windupMs: 0, cooldownMs: 1450 },
     { kind: 'nova', damage: 24, range: 285, radius: 235, innerRadius: 82, windupMs: 1100, cooldownMs: 1450 },
   ],
+  behavior: { targeting: 'threat', attackSelection: 'sequence', preferredRange: 68, pathRefreshMs: 550 },
   enrageAt: 0.45, enrageSpeed: 1.24, enrageCooldown: 0.72,
   reward: { gold: 50, lootMs: 120_000 }, respawnMs: 60_000,
 };
 
-export const BOSS_DEFINITIONS: readonly BossDefinition[] = [RUINS_WARDEN];
+/** No dedicated sprite exists for this boss: clients intentionally use the procedural fallback. */
+export const MAZE_STALKER: BossDefinition = {
+  id: MAZE_DUNGEON.bossId, dungeonId: MAZE_DUNGEON.id,
+  name: 'Predatore del Dedalo', skin: 'maze-stalker', classId: 'warrior',
+  radius: 25, hp: 620, speed: 118, level: 8,
+  attacks: [
+    { kind: 'charge', damage: 34, range: 330, radius: 34, windupMs: 520, cooldownMs: 1050, travel: 300 },
+    { kind: 'melee', damage: 21, range: 76, radius: 76, windupMs: 0, cooldownMs: 900 },
+    { kind: 'slam', damage: 27, range: 190, radius: 105, windupMs: 620, cooldownMs: 1000 },
+    { kind: 'nova', damage: 22, range: 280, radius: 210, innerRadius: 105, windupMs: 850, cooldownMs: 1200 },
+  ],
+  behavior: { targeting: 'nearest', attackSelection: 'distance', preferredRange: 105, pathRefreshMs: 260 },
+  enrageAt: 0.55, enrageSpeed: 1.38, enrageCooldown: 0.62,
+  reward: { gold: 75, lootMs: 120_000 }, respawnMs: 75_000,
+};
+
+export const BOSS_DEFINITIONS: readonly BossDefinition[] = [RUINS_WARDEN, MAZE_STALKER];
 export const BOSS_BY_ID = new Map(BOSS_DEFINITIONS.map(definition => [definition.id, definition]));
-
-export function insideBossArena(definition: BossDefinition, position: Vec2, margin = 0): boolean {
-  return Math.hypot(position.x - definition.position.x, position.y - definition.position.y) < definition.arena.radius + margin;
+for (const definition of BOSS_DEFINITIONS) {
+  const dungeon = DUNGEON_BY_ID.get(definition.dungeonId);
+  if (!dungeon || dungeon.bossId !== definition.id) throw new Error(`Boss ${definition.id}: dungeon ${definition.dungeonId} assente o non associato.`);
 }
 
-export function insideBossEntry(definition: BossDefinition, position: Vec2): boolean {
-  return Math.hypot(position.x - definition.position.x, position.y - definition.position.y) < definition.arena.entryRadius;
-}
-
-/** Oriented contact test for the four physical gaps cut by the arena boundary. */
-export function touchesBossEscapeGate(definition: BossDefinition, position: Vec2, radius = 0): boolean {
-  return definition.arena.escapeGates.some(gate => {
-    const radial = Math.atan2(gate.y - definition.position.y, gate.x - definition.position.x);
-    const tangentX = -Math.sin(radial), tangentY = Math.cos(radial);
-    const dx = position.x - gate.x, dy = position.y - gate.y;
-    const along = dx * tangentX + dy * tangentY;
-    const normal = -dx * tangentY + dy * tangentX;
-    return Math.abs(along) <= gate.length / 2 + radius && Math.abs(normal) <= gate.thickness / 2 + radius;
-  });
-}
-
-export function validBossState(value: unknown, definition: BossDefinition, legacy = false): value is BossState {
+export function validBossState(value: unknown, definition: BossDefinition): value is BossState {
   const state = value as BossState;
+  const dungeon = DUNGEON_BY_ID.get(definition.dungeonId);
   return !!state && Number.isFinite(state.respawnAt) && state.respawnAt >= 0 && !!state.corpse
-    && [state.corpse.x, state.corpse.y].every(Number.isFinite) && insideBossArena(definition, state.corpse, 400)
+    && !!dungeon && [state.corpse.x, state.corpse.y].every(Number.isFinite) && insideDungeonRegion(dungeon.encounter.regions.combat, state.corpse, 400)
     && Array.isArray(state.drops) && state.drops.length <= 10 && new Set(state.drops.map(drop => drop?.id)).size === state.drops.length
-    && state.drops.every(drop => drop && typeof drop.id === 'string' && (legacy || drop.bossId === definition.id)
+    && state.drops.every(drop => drop && typeof drop.id === 'string' && drop.bossId === definition.id
       && typeof drop.ownerId === 'string' && Number.isSafeInteger(drop.amount) && drop.amount > 0 && drop.amount <= definition.reward.gold
       && [drop.x, drop.y, drop.availableAt, drop.expiresAt].every(Number.isFinite) && drop.expiresAt > drop.availableAt
-      && insideBossArena(definition, drop, 400));
+      && insideDungeonRegion(dungeon.encounter.regions.combat, drop, 400));
 }
 
 export function validBossStates(value: unknown): value is Record<string, BossState> {
@@ -112,14 +111,4 @@ export function validBossStates(value: unknown): value is Record<string, BossSta
     const definition = BOSS_BY_ID.get(id);
     return !!definition && validBossState(state, definition);
   });
-}
-
-export function isSealedBossTile(tx: number, ty: number, locked: ReadonlySet<string>): boolean {
-  for (const definition of BOSS_DEFINITIONS) if (locked.has(definition.id) && definition.arena.sealedTiles.some(tile => tile.x === tx && tile.y === ty)) return true;
-  return false;
-}
-
-export function normalizeLegacyBossState(value: unknown): BossState | undefined {
-  if (!validBossState(value, RUINS_WARDEN, true)) return undefined;
-  return { ...value, drops: value.drops.map(drop => ({ ...drop, bossId: RUINS_WARDEN.id })) };
 }

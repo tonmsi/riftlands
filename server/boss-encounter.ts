@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { Actor, Vec2 } from '../shared/types';
 import type { BossAttackDefinition, BossDefinition, BossLockState, BossPreparationState, BossState, BossWindup } from '../shared/bosses';
-import { insideBossArena, insideBossEntry, touchesBossEscapeGate } from '../shared/bosses';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, segmentCircleHit } from '../shared/physics';
 import type { World } from '../shared/world';
+import { DUNGEON_BY_ID, clampToDungeonRegion, insideDungeonRegion, touchesDungeonFlame } from '../shared/dungeons';
+import type { DungeonDefinition } from '../shared/dungeons';
 import type { Account, AccountStore } from './store';
 
 /** Shared runtime for data-defined bosses. Unique mechanics can extend this class later without duplicating its lifecycle. */
 export class BossEncounter {
+  readonly dungeon: DungeonDefinition;
   readonly boss: Actor;
   readonly state: BossState;
   windup?: BossWindup;
@@ -26,11 +28,15 @@ export class BossEncounter {
   private pathRefreshAt = 0;
 
   constructor(readonly definition: BossDefinition, now: number, state: BossState | undefined, private readonly store?: AccountStore) {
-    this.state = state ?? { respawnAt: 0, corpse: { ...definition.position }, drops: [] };
+    const dungeon = DUNGEON_BY_ID.get(definition.dungeonId);
+    if (!dungeon || dungeon.bossId !== definition.id) throw new Error(`Configurazione dungeon assente per ${definition.id}.`);
+    this.dungeon = dungeon;
+    const spawn = dungeon.spawnPoints.boss;
+    this.state = state ?? { respawnAt: 0, corpse: { ...spawn }, drops: [] };
     const dead = this.state.respawnAt > now;
     this.boss = {
       id: definition.id, bossKey: definition.id, bossSkin: definition.skin, name: definition.name, kind: 'npc', npcKind: 'boss', classId: definition.classId,
-      x: dead ? this.state.corpse.x : definition.position.x, y: dead ? this.state.corpse.y : definition.position.y,
+      x: dead ? this.state.corpse.x : spawn.x, y: dead ? this.state.corpse.y : spawn.y,
       radius: definition.radius, hp: dead ? 0 : definition.hp, maxHp: definition.hp, resource: 0, maxResource: 100, aim: Math.PI / 2,
       speed: definition.speed, level: definition.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0,
       deadUntil: dead ? this.state.respawnAt : 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 },
@@ -97,7 +103,7 @@ export class BossEncounter {
     if (boss.hp <= 0) {
       this.unlock(world);
       if (now < this.state.respawnAt) return;
-      Object.assign(boss, { ...this.definition.position, hp: this.definition.hp, deadUntil: 0, effects: [] });
+      Object.assign(boss, { ...this.dungeon.spawnPoints.boss, hp: this.definition.hp, deadUntil: 0, effects: [] });
       this.state.respawnAt = 0; this.nextAttack = now + 1500; this.attackIndex = 0; this.resetPath();
       this.save();
       return;
@@ -106,24 +112,28 @@ export class BossEncounter {
     if (!this.ownerId) {
       if (this.preparation) {
         const initiator = players.find(player => player.id === this.preparation!.initiatorId);
-        if (!initiator || initiator.hp <= 0 || !connected(initiator.id) || initiator.teamId !== this.preparation.teamId || !insideBossArena(this.definition, initiator)) {
+        if (!initiator || initiator.hp <= 0 || !connected(initiator.id) || initiator.teamId !== this.preparation.teamId
+          || !insideDungeonRegion(this.dungeon.encounter.regions.combat, initiator)) {
           this.cancelPreparation(); this.resetFight(); return;
         }
         for (const player of players) {
-          if (player.teamId === this.preparation.teamId && player.hp > 0 && connected(player.id) && insideBossEntry(this.definition, player)) this.preparedIds.add(player.id);
-          if (this.preparedIds.has(player.id) && (player.teamId !== this.preparation.teamId || player.hp <= 0 || !connected(player.id) || !insideBossArena(this.definition, player))) this.preparedIds.delete(player.id);
+          if (player.teamId === this.preparation.teamId && player.hp > 0 && connected(player.id)
+            && insideDungeonRegion(this.dungeon.encounter.regions.admission, player)) this.preparedIds.add(player.id);
+          if (this.preparedIds.has(player.id) && (player.teamId !== this.preparation.teamId || player.hp <= 0 || !connected(player.id)
+            || !insideDungeonRegion(this.dungeon.encounter.regions.combat, player))) this.preparedIds.delete(player.id);
         }
         const entrants = players.filter(player => this.preparedIds.has(player.id) && player.hp > 0 && connected(player.id)
-          && player.teamId === this.preparation!.teamId && insideBossArena(this.definition, player));
+          && player.teamId === this.preparation!.teamId && insideDungeonRegion(this.dungeon.encounter.regions.combat, player));
         this.preparationEntrants = this.preparedIds.size;
         if (now < this.preparation.endsAt) return;
         this.preparation = undefined;
         this.beginEncounter(initiator, entrants, now, world, true);
       } else {
-        const leader = players.find(player => player.hp > 0 && connected(player.id) && insideBossEntry(this.definition, player));
+        const leader = players.find(player => player.hp > 0 && connected(player.id)
+          && insideDungeonRegion(this.dungeon.encounter.regions.trigger, player));
         if (!leader) { this.resetFight(); return; }
-        if (leader.teamId && this.definition.arena.preparationMs > 0) {
-          this.preparation = { initiatorId: leader.id, teamId: leader.teamId, endsAt: now + this.definition.arena.preparationMs };
+        if (leader.teamId && this.dungeon.encounter.preparationMs > 0) {
+          this.preparation = { initiatorId: leader.id, teamId: leader.teamId, endsAt: now + this.dungeon.encounter.preparationMs };
           this.preparedIds.add(leader.id);
           this.preparationEntrants = 1;
           this.resetFight();
@@ -133,27 +143,34 @@ export class BossEncounter {
       }
     }
     for (const player of players) if (this.participantIds.has(player.id) && player.hp <= 0) this.eliminate(player.id);
-    for (const player of players) if (this.isEliminated(player.id) && player.hp > 0
-      && touchesBossEscapeGate(this.definition, player, player.radius)) damage(player, Number.MAX_SAFE_INTEGER);
-    for (const player of players) if (!this.isActiveParticipant(player.id) && player.hp > 0 && insideBossEntry(this.definition, player)) this.eject(player);
-    for (const player of players) if (this.isActiveParticipant(player.id) && player.hp > 0 && !insideBossArena(this.definition, player)) damage(player, Number.MAX_SAFE_INTEGER);
+    for (const player of players) if (this.hasParticipant(player.id) && player.hp > 0
+      && touchesDungeonFlame(this.dungeon, player, player.radius)) damage(player, Number.MAX_SAFE_INTEGER);
+    for (const player of players) if (!this.isActiveParticipant(player.id) && player.hp > 0
+      && insideDungeonRegion(this.dungeon.encounter.regions.ejectIntruders, player)) this.eject(player);
+    for (const player of players) if (this.isActiveParticipant(player.id) && player.hp > 0
+      && !insideDungeonRegion(this.dungeon.encounter.regions.combat, player)) damage(player, Number.MAX_SAFE_INTEGER);
     const active = players.filter(player => this.isActiveParticipant(player.id) && player.hp > 0);
     if (!active.length) { this.fail(world); return; }
 
+    const targets = active.filter(player => insideDungeonRegion(this.dungeon.encounter.regions.bossAggro, player));
+    if (!targets.length) {
+      this.targetId = undefined;
+      this.windup = undefined;
+      this.nextAttack = Math.max(this.nextAttack, now + 250);
+      this.resetPath();
+      return;
+    }
+
     boss.effects = boss.effects.filter(effect => effect.until > now);
     if (this.windup) { this.resolveWindup(now, active, world, damage); return; }
-    const target = this.chooseTarget(active);
+    const target = this.chooseTarget(targets);
     const distance = Math.hypot(target.x - boss.x, target.y - boss.y);
     const seesTarget = hasLineOfSight(boss, target, world);
-    if (distance > 68) this.chase(target, seesTarget, now, dt, world);
+    if (distance > this.definition.behavior.preferredRange) this.chase(target, seesTarget, now, dt, world);
     boss.aim = Math.atan2(target.y - boss.y, target.x - boss.x);
     if (now < this.nextAttack || !seesTarget) return;
-    let attack = this.definition.attacks[this.attackIndex % this.definition.attacks.length];
-    if (distance > attack.range) {
-      const charge = this.definition.attacks.find(candidate => candidate.kind === 'charge' && distance <= candidate.range);
-      if (!charge) return;
-      attack = charge;
-    }
+    const attack = this.chooseAttack(distance);
+    if (!attack) return;
     this.beginAttack(attack, target, now, distance, damage);
     this.attackIndex++;
   }
@@ -169,7 +186,7 @@ export class BossEncounter {
       damage: attack.damage, startedAt: now, resolvesAt: now + attack.windupMs, innerRadius: attack.innerRadius };
     if (attack.kind === 'charge') {
       const length = Math.min(attack.travel ?? 250, Math.max(115, distance + 35));
-      const endpoint = this.clampToArena({ x: boss.x + Math.cos(boss.aim) * length, y: boss.y + Math.sin(boss.aim) * length });
+      const endpoint = this.clampToLeash({ x: boss.x + Math.cos(boss.aim) * length, y: boss.y + Math.sin(boss.aim) * length });
       windup.targetX = endpoint.x; windup.targetY = endpoint.y;
     }
     this.windup = windup;
@@ -201,7 +218,7 @@ export class BossEncounter {
     else if (now >= this.pathRefreshAt || this.pathTargetId !== target.id || !this.path.length) {
       this.path = findBossPath(this.definition, this.boss, target, world);
       this.pathTargetId = target.id;
-      this.pathRefreshAt = now + 550;
+      this.pathRefreshAt = now + this.definition.behavior.pathRefreshMs;
     }
     while (this.path.length && Math.hypot(this.path[0].x - this.boss.x, this.path[0].y - this.boss.y) < 24) this.path.shift();
     const waypoint = direct ? target : this.path[0] ?? target;
@@ -215,21 +232,34 @@ export class BossEncounter {
     return attack.cooldownMs * (this.boss.hp <= this.boss.maxHp * this.definition.enrageAt ? this.definition.enrageCooldown : 1);
   }
   private chooseTarget(players: Actor[]): Actor {
-    const target = [...players].sort((a, b) => (this.threat.get(b.id) ?? 0) - (this.threat.get(a.id) ?? 0)
-      || Math.hypot(a.x - this.boss.x, a.y - this.boss.y) - Math.hypot(b.x - this.boss.x, b.y - this.boss.y))[0];
+    const distance = (player: Actor) => Math.hypot(player.x - this.boss.x, player.y - this.boss.y);
+    const behavior = this.definition.behavior.targeting;
+    const target = [...players].sort((a, b) => behavior === 'nearest' ? distance(a) - distance(b)
+      : behavior === 'lowest-health' ? a.hp / a.maxHp - b.hp / b.maxHp || distance(a) - distance(b)
+        : (this.threat.get(b.id) ?? 0) - (this.threat.get(a.id) ?? 0) || distance(a) - distance(b))[0];
     this.targetId = target.id;
     return target;
   }
-  private clampToArena(point: Vec2): Vec2 {
-    const dx = point.x - this.definition.position.x, dy = point.y - this.definition.position.y;
-    const distance = Math.hypot(dx, dy), limit = this.definition.arena.radius - this.definition.radius - 14;
-    return distance <= limit ? point : { x: this.definition.position.x + dx / distance * limit, y: this.definition.position.y + dy / distance * limit };
+  private chooseAttack(distance: number): BossAttackDefinition | undefined {
+    if (this.definition.behavior.attackSelection === 'distance') {
+      const candidates = this.definition.attacks.filter(candidate => distance <= candidate.range);
+      return candidates.length ? candidates[this.attackIndex % candidates.length] : undefined;
+    }
+    const attack = this.definition.attacks[this.attackIndex % this.definition.attacks.length];
+    if (distance <= attack.range) return attack;
+    return this.definition.attacks.find(candidate => candidate.kind === 'charge' && distance <= candidate.range);
+  }
+  private clampToLeash(point: Vec2): Vec2 {
+    return clampToDungeonRegion(this.dungeon.encounter.regions.bossLeash, this.boss, point, -this.definition.radius - 14);
   }
   private placeEntrants(players: Actor[], world: World, force: boolean): void {
     players.forEach((player, index) => {
-      if (!force && insideBossEntry(this.definition, player) && !collidesWorld(player.x, player.y, player.radius, world)) return;
+      if (!force && insideDungeonRegion(this.dungeon.encounter.regions.admission, player)
+        && !collidesWorld(player.x, player.y, player.radius, world)) return;
       const column = index - (players.length - 1) / 2;
-      const staging = { x: this.definition.position.x + column * 48, y: this.definition.position.y + 205 };
+      const spawn = this.dungeon.spawnPoints.boss;
+      const staging = this.dungeon.spawnPoints.party[index]
+        ?? { x: spawn.x + column * 48, y: spawn.y + 205 };
       if (!collidesWorld(staging.x, staging.y, player.radius, world)) Object.assign(player, staging);
     });
   }
@@ -244,10 +274,12 @@ export class BossEncounter {
     this.placeEntrants(entrants, world, stageTeam);
   }
   private cancelPreparation(): void { this.preparation = undefined; this.preparationEntrants = 0; this.preparedIds.clear(); }
-  private eject(player: Actor): void { Object.assign(player, this.definition.arena.exit); }
+  private eject(player: Actor): void {
+    Object.assign(player, this.dungeon.encounter.ejectTo);
+  }
   private fail(world: World): void { this.resetFight(); this.unlock(world); }
   private resetFight(): void {
-    Object.assign(this.boss, { ...this.definition.position, hp: this.definition.hp, effects: [] });
+    Object.assign(this.boss, { ...this.dungeon.spawnPoints.boss, hp: this.definition.hp, effects: [] });
     this.windup = undefined; this.nextAttack = 0; this.attackIndex = 0; this.resetPath();
   }
   private unlock(world: World): void {
@@ -258,13 +290,16 @@ export class BossEncounter {
   private save(): void { this.store?.touch(); this.store?.flush(); }
 }
 
-/** Bounded A* shared by every configured boss arena. */
+/** Bounded A* constrained by the map-authored boss leash region. */
 export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2, world: World): Vec2[] {
+  const dungeon = DUNGEON_BY_ID.get(definition.dungeonId);
+  if (!dungeon) return [];
   const toTile = (point: Vec2) => ({ tx: Math.floor(point.x / 48), ty: Math.floor(point.y / 48) });
   const center = (tx: number, ty: number): Vec2 => ({ x: tx * 48 + 24, y: ty * 48 + 24 });
   const valid = (tx: number, ty: number): boolean => {
     const point = center(tx, ty);
-    return insideBossArena(definition, point, -definition.radius - 12) && !collidesWorld(point.x, point.y, definition.radius + 2, world);
+    return insideDungeonRegion(dungeon.encounter.regions.bossLeash, point, -definition.radius - 12)
+      && !collidesWorld(point.x, point.y, definition.radius + 2, world);
   };
   const nearest = (point: Vec2) => {
     const base = toTile(point);
@@ -284,7 +319,7 @@ export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2
     if (current.tx === to.tx && current.ty === to.ty) {
       const result: Vec2[] = []; let cursor = key(to.tx, to.ty);
       while (cursor !== key(from.tx, from.ty)) { const node = coords.get(cursor)!; result.unshift(center(node.tx, node.ty)); cursor = came.get(cursor)!; }
-      return smoothBossPath(definition, start, result, world);
+      return smoothBossPath(definition, dungeon, start, result, world);
     }
     const baseCost = cost.get(key(current.tx, current.ty))!;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
@@ -302,12 +337,13 @@ export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2
 }
 
 /** Removes grid zig-zags only when the boss-sized circle can safely sweep the shortcut. */
-function smoothBossPath(definition: BossDefinition, start: Vec2, path: Vec2[], world: World): Vec2[] {
+function smoothBossPath(definition: BossDefinition, dungeon: DungeonDefinition, start: Vec2, path: Vec2[], world: World): Vec2[] {
   const clear = (from: Vec2, to: Vec2): boolean => {
     const distance = Math.hypot(to.x - from.x, to.y - from.y), steps = Math.max(1, Math.ceil(distance / 12));
     for (let step = 1; step <= steps; step++) {
       const ratio = step / steps, x = from.x + (to.x - from.x) * ratio, y = from.y + (to.y - from.y) * ratio;
-      if (!insideBossArena(definition, { x, y }, -definition.radius - 8) || collidesWorld(x, y, definition.radius + 2, world)) return false;
+      if (!insideDungeonRegion(dungeon.encounter.regions.bossLeash, { x, y }, -definition.radius - 8)
+        || collidesWorld(x, y, definition.radius + 2, world)) return false;
     }
     return true;
   };

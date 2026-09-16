@@ -5,10 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AccountStore, type Account } from '../server/store';
 import { WorldSimulation } from '../server/simulation';
-import { RUINS, inRuins, ruinsRoadCenter } from '../shared/ruins';
-import { insideBossEntry, RUINS_WARDEN, touchesBossEscapeGate } from '../shared/bosses';
+import { RUINS_DUNGEON, dungeonApproachCenter, dungeonFlames, dungeonStoneTiles, insideDungeon,
+  insideDungeonRegion, touchesDungeonFlame } from '../shared/dungeons';
+import { RUINS_WARDEN } from '../shared/bosses';
 import { World, chunkCoords } from '../shared/world';
 import { collidesWorld, hasLineOfSight, moveWithCollisions } from '../shared/physics';
+
+const RUINS = RUINS_DUNGEON.area;
+const insideRuins = (position: { x: number; y: number }, margin = 0) => insideDungeon(RUINS_DUNGEON, position, margin);
+const ruinRoadX = (y: number) => dungeonApproachCenter(RUINS_DUNGEON, { x: RUINS.x, y }).x;
 
 const account = (id: string): Account => ({ id, name: id, nameLower: id, salt: '', passwordHash: '', xp: 0, kills: 0, deaths: 0, friends: [], requests: [], lastSeen: 0 });
 function fixture(store?: AccountStore) {
@@ -135,7 +140,7 @@ test('ruins terrain has a winding walkable road, solid ruins and no procedural s
   const world = new World();
   let oldStraightTiles = 0, samples = 0;
   for (let y = -350; y >= RUINS.y + 350; y -= 48) {
-    assert.equal(collidesWorld(ruinsRoadCenter(y), y, 15, world), false);
+    assert.equal(collidesWorld(ruinRoadX(y), y, 15, world), false);
     oldStraightTiles += Number(world.getTile(0, Math.floor(y / 48)) === 'path'); samples++;
   }
   assert.ok(oldStraightTiles < samples * 0.7, 'the old straight north strip must not remain the primary route');
@@ -144,7 +149,7 @@ test('ruins terrain has a winding walkable road, solid ruins and no procedural s
   const center = chunkCoords(RUINS.x, RUINS.y);
   for (let cx = center.cx - 1; cx <= center.cx + 1; cx++) for (let cy = center.cy - 1; cy <= center.cy + 1; cy++) {
     const chunk = world.getChunk(cx, cy);
-    for (const spawn of [...chunk.npcs, ...chunk.pickups]) assert.equal(inRuins(spawn, 220), false);
+    for (const spawn of [...chunk.npcs, ...chunk.pickups]) assert.equal(insideRuins(spawn, 220), false);
   }
   for (const mode of ['arena', 'battleground'] as const) assert.equal(new WorldSimulation(734291, 0, undefined, mode).bosses.size, 0);
 });
@@ -177,16 +182,16 @@ test('boss rotates through slam, charge and nova telegraphs', () => {
 test('first entrant seals the arena: owner stays inside and every other player stays outside', () => {
   const { sim, a, b, boss, encounter } = fixture();
   assert.equal(encounter.ownerId, a.id);
-  assert.deepEqual(sim.snapshotFor(a.id)!.bossLocks,
+  assert.deepEqual(sim.snapshotFor(a.id)!.bossLocks!.filter(lock => lock.bossId === RUINS_WARDEN.id),
     [{ bossId: RUINS_WARDEN.id, locked: true, ownerId: a.id, relation: 'participant' }]);
-  assert.equal(sim.snapshotFor(b.id)!.bossLocks![0].relation, 'outsider');
-  for (const tile of RUINS_WARDEN.arena.sealedTiles) assert.equal(sim.world.getTile(tile.x, tile.y), 'rock');
+  assert.equal(sim.snapshotFor(b.id)!.bossLocks!.find(lock => lock.bossId === RUINS_WARDEN.id)!.relation, 'outsider');
+  for (const tile of dungeonStoneTiles(RUINS_DUNGEON)) assert.equal(sim.world.getTile(tile.x, tile.y), 'rock');
 
   Object.assign(a, moveWithCollisions(a, 0, 1, 900, sim.world));
-  assert.equal(inRuins(a), true, 'the owner must not cross the sealed southern entrance');
-  Object.assign(b, RUINS_WARDEN.arena.exit);
+  assert.equal(insideRuins(a), true, 'the owner must not cross the sealed southern entrance');
+  Object.assign(b, RUINS_DUNGEON.encounter.ejectTo);
   Object.assign(b, moveWithCollisions(b, 0, -1, 900, sim.world));
-  assert.equal(inRuins(b), false, 'an outsider must not cross into the sealed arena');
+  assert.equal(insideRuins(b), false, 'an outsider must not cross into the sealed arena');
 
   const hp = boss.hp;
   Object.assign(b, { aim: -Math.PI / 2 });
@@ -205,14 +210,14 @@ test('nearby team enters together, drives aggro and receives an equal private re
   Object.assign(a, { x: RUINS.x, y: RUINS.y + 70, aim: -Math.PI / 2, spawnProtectedUntil: 0 });
   Object.assign(b, { x: RUINS.x + 40, y: RUINS.y + 330, spawnProtectedUntil: 0 });
   Object.assign(c, { x: RUINS.x + 300, y: RUINS.y, spawnProtectedUntil: 0 });
-  Object.assign(d, { ...RUINS_WARDEN.arena.exit, spawnProtectedUntil: 0 });
+  Object.assign(d, { ...RUINS_DUNGEON.encounter.ejectTo, spawnProtectedUntil: 0 });
   sim.step(0.1);
   const encounter = sim.bosses.get(RUINS_WARDEN.id)!, boss = encounter.boss;
   assert.equal(encounter.ownerId, undefined);
   for (const member of [a, b, d]) {
     const preparation = sim.snapshotFor(member.id)!.bossPreparations;
     assert.equal(preparation?.length, 1);
-    assert.equal(preparation![0].endsAt, sim.now + RUINS_WARDEN.arena.preparationMs);
+    assert.equal(preparation![0].endsAt, sim.now + RUINS_DUNGEON.encounter.preparationMs);
   }
   assert.equal(sim.snapshotFor(c.id)!.bossPreparations?.length, 0);
   Object.assign(b, { x: RUINS.x + 40, y: RUINS.y + 190 });
@@ -224,15 +229,23 @@ test('nearby team enters together, drives aggro and receives an equal private re
   assert.equal(sim.snapshotFor(b.id)!.bossPreparations![0].entrants, 2, 'crossing the inner threshold reserves the place despite a small outward push');
   sim.step(0.1);
   assert.deepEqual([...encounter.participantIds].sort(), [a.id, b.id].sort());
-  assert.equal(insideBossEntry(RUINS_WARDEN, a), true);
-  assert.equal(insideBossEntry(RUINS_WARDEN, b), true, 'both entrants are moved to safe separated staging points');
+  assert.equal(insideDungeonRegion(RUINS_DUNGEON.encounter.regions.admission, a), true);
+  assert.equal(insideDungeonRegion(RUINS_DUNGEON.encounter.regions.admission, b), true, 'both entrants are moved to safe separated staging points');
   assert.equal(encounter.hasParticipant(d.id), false, 'a teammate left outside at zero is excluded');
-  assert.equal(sim.snapshotFor(d.id)!.bossLocks![0].relation, 'outsider');
-  Object.assign(d, { x: RUINS.x, y: RUINS.y + 230 });
+  assert.equal(sim.snapshotFor(d.id)!.bossLocks!.find(lock => lock.bossId === RUINS_WARDEN.id)!.relation, 'outsider');
+  const flame = dungeonFlames(RUINS_DUNGEON)[0], lateDeaths = d.deaths;
+  Object.assign(d, flame);
   sim.step(0.1);
-  assert.deepEqual({ x: d.x, y: d.y }, RUINS_WARDEN.arena.exit, 'an excluded teammate cannot enter after the lock');
+  assert.ok(d.hp > 0);
+  assert.equal(d.deaths, lateDeaths, 'a teammate excluded from the roster crosses flames safely');
+  const hpBeforeLateMember = boss.hp;
+  Object.assign(d, { x: boss.x + 60, y: boss.y, aim: Math.PI });
+  assert.equal(sim.cast(d, 'basic'), true);
+  assert.equal(boss.hp, hpBeforeLateMember, 'a late teammate cannot damage the boss');
+  sim.step(0.1);
+  assert.deepEqual({ x: d.x, y: d.y }, RUINS_DUNGEON.encounter.ejectTo, 'an excluded teammate cannot enter after the lock');
   assert.equal(encounter.hasParticipant(c.id), false);
-  assert.ok(Math.hypot(c.x - RUINS.x, c.y - RUINS.y) > RUINS_WARDEN.arena.entryRadius,
+  assert.equal(insideDungeonRegion(RUINS_DUNGEON.encounter.regions.ejectIntruders, c), false,
     'the intentional lateral-access quirk remains available to outsiders');
   Object.assign(a, { x: RUINS.x + 80, y: RUINS.y - 20, hp: a.maxHp });
   Object.assign(c, { x: RUINS.x + 300, y: RUINS.y - 20, aim: Math.PI });
@@ -260,7 +273,7 @@ test('nearby team enters together, drives aggro and receives an equal private re
   assert.equal(sim.snapshotFor(d.id)!.goldDrops!.length, 0);
 });
 
-test('an eliminated team participant only dies again when crossing one of the four escape flames', () => {
+test('an active or eliminated participant dies on a configured escape flame', () => {
   const sim = new WorldSimulation(734291, 1_000_000);
   const a = sim.addPlayer(account('survivor'), 'warrior'), b = sim.addPlayer(account('fallen'), 'mage');
   sim.socialAction(a.id, 'team-invite', b.id);
@@ -271,8 +284,9 @@ test('an eliminated team participant only dies again when crossing one of the fo
   advance(sim, 5);
   const encounter = sim.bosses.get(RUINS_WARDEN.id)!;
   assert.deepEqual([...encounter.participantIds].sort(), [a.id, b.id].sort());
+  const gate = dungeonFlames(RUINS_DUNGEON).at(-1)!;
   const deaths = b.deaths;
-  Object.assign(b, { x: RUINS.x + RUINS_WARDEN.arena.radius + 10, y: RUINS.y });
+  Object.assign(b, gate);
   sim.step(0.1);
   assert.equal(b.hp, 0);
   assert.equal(b.deaths, deaths + 1);
@@ -284,10 +298,9 @@ test('an eliminated team participant only dies again when crossing one of the fo
   advance(sim, 2);
   assert.equal(b.deaths, deaths + 1, 'the respawned excluded member must not enter a death loop');
   assert.equal(encounter.ownerId, a.id);
-  assert.equal(sim.snapshotFor(b.id)!.bossLocks![0].relation, 'eliminated');
+  assert.equal(sim.snapshotFor(b.id)!.bossLocks!.find(lock => lock.bossId === RUINS_WARDEN.id)!.relation, 'eliminated');
 
-  const gate = RUINS_WARDEN.arena.escapeGates[3];
-  assert.equal(touchesBossEscapeGate(RUINS_WARDEN, gate, b.radius), true);
+  assert.equal(touchesDungeonFlame(RUINS_DUNGEON, gate, b.radius), true);
   Object.assign(b, gate);
   sim.step(0.1);
   assert.equal(b.hp, 0, 'an eliminated member that tries to re-enter through a flame dies again');
@@ -295,27 +308,32 @@ test('an eliminated team participant only dies again when crossing one of the fo
   assert.equal(encounter.ownerId, a.id, 'the surviving teammate keeps the encounter active');
 });
 
-test('the four escape flames match the real arena boundary and are harmless to outsiders', () => {
+test('escape flames match the real dungeon openings and are harmless to outsiders', () => {
   const { sim, a, b, encounter } = fixture();
   a.hp = a.maxHp = 10_000;
-  assert.equal(RUINS_WARDEN.arena.escapeGates.length, 4);
-  for (const gate of RUINS_WARDEN.arena.escapeGates) {
-    assert.ok(Math.abs(Math.hypot(gate.x - RUINS.x, gate.y - RUINS.y) - RUINS_WARDEN.arena.radius) < 0.001);
-    assert.equal(touchesBossEscapeGate(RUINS_WARDEN, gate, b.radius), true);
+  const flames = dungeonFlames(RUINS_DUNGEON);
+  const stones = dungeonStoneTiles(RUINS_DUNGEON);
+  assert.equal(flames.length, 1);
+  for (const gate of flames) {
+    const tile = { x: Math.floor(gate.x / 48), y: Math.floor(gate.y / 48) };
+    assert.equal(stones.some(stone => stone.x === tile.x && stone.y === tile.y), false);
+    assert.equal(gate.angle, 0);
+    assert.equal(gate.length, 4 * 48);
+    assert.equal(touchesDungeonFlame(RUINS_DUNGEON, gate, b.radius), true);
   }
   const deaths = b.deaths;
-  Object.assign(b, RUINS_WARDEN.arena.escapeGates[0]);
+  Object.assign(b, flames[0]);
   sim.step(0.1);
   assert.ok(b.hp > 0);
   assert.equal(b.deaths, deaths);
   assert.equal(encounter.hasParticipant(b.id), false);
-  assert.equal(sim.snapshotFor(b.id)!.bossLocks![0].relation, 'outsider');
+  assert.equal(sim.snapshotFor(b.id)!.bossLocks!.find(lock => lock.bossId === RUINS_WARDEN.id)!.relation, 'outsider');
 });
 
 test('crossing the boss arena boundary counts as a death and fails the solo encounter', () => {
   const { sim, a, boss, encounter } = fixture();
   const deaths = a.deaths;
-  Object.assign(a, { x: RUINS.x + RUINS_WARDEN.arena.radius + 10, y: RUINS.y });
+  Object.assign(a, { x: RUINS.x + 430, y: RUINS.y });
   sim.step(0.1);
   assert.equal(a.hp, 0);
   assert.equal(a.deaths, deaths + 1);
@@ -327,7 +345,7 @@ test('crossing the boss arena boundary counts as a death and fails the solo enco
 test('victory opens the room; owner death fails and resets the encounter', () => {
   const won = fixture(); won.kill();
   assert.equal(won.encounter.ownerId, undefined);
-  for (const tile of RUINS_WARDEN.arena.sealedTiles) assert.equal(won.sim.world.getTile(tile.x, tile.y), 'path');
+  for (const tile of dungeonStoneTiles(RUINS_DUNGEON)) assert.equal(won.sim.world.getTile(tile.x, tile.y), 'path');
 
   const failed = fixture();
   failed.boss.hp = 100;
@@ -335,7 +353,7 @@ test('victory opens the room; owner death fails and resets the encounter', () =>
   failed.sim.step();
   assert.equal(failed.encounter.ownerId, undefined);
   assert.equal(failed.boss.hp, RUINS_WARDEN.hp);
-  for (const tile of RUINS_WARDEN.arena.sealedTiles) assert.equal(failed.sim.world.getTile(tile.x, tile.y), 'path');
+  for (const tile of dungeonStoneTiles(RUINS_DUNGEON)) assert.equal(failed.sim.world.getTile(tile.x, tile.y), 'path');
 });
 
 test('reconnect within grace keeps the lock; disconnect expiry opens and resets the room', () => {

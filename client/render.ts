@@ -4,8 +4,8 @@ import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
 import { OUTPOST, OUTPOST_HUTS, outpostHutAt } from '../shared/outpost';
 import type { ArenaGateState } from '../shared/types';
-import { RUINS, ruinsRoadCenter } from '../shared/ruins';
-import { BOSS_BY_ID } from '../shared/bosses';
+import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames } from '../shared/dungeons';
+import type { DungeonDefinition } from '../shared/dungeons';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
@@ -15,8 +15,10 @@ const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
 };
 const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = {
   wisp: new URL('../assets/wisp.svg', import.meta.url).href,
-  slime: new URL('../assets/slime.svg', import.meta.url).href,
-  boss: new URL('../assets/boss_warden.svg', import.meta.url).href
+  slime: new URL('../assets/slime.svg', import.meta.url).href
+};
+const BOSS_SPRITE_URLS: Record<string, string> = {
+  'stone-warden': new URL('../assets/boss_warden.svg', import.meta.url).href,
 };
 const FRAME_SIZE = 256;
 const DRAW_SIZE_SIZE = 48;
@@ -138,7 +140,7 @@ export class Renderer {
   private hasCamera = false;
   private bounds = { left: 0, top: 0, right: 0, bottom: 0 };
   private readonly classSprites = new Map<ClassId, RasterSpriteSheet>();
-  private readonly npcSprites = new Map<NonNullable<Actor['npcKind']>, RasterSpriteSheet>();
+  private readonly npcSprites = new Map<string, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
   readonly spritesReady: Promise<void>;
 
@@ -177,9 +179,13 @@ export class Renderer {
         .catch(error => { console.warn(error); }));
     }
     for (const [npcKind, url] of Object.entries(NPC_SPRITE_URLS) as [NonNullable<Actor['npcKind']>, string][]) {
-      const drawSize = npcKind === 'boss' ? BOSS_DRAW_SIZE : NPC_DRAW_SIZE;
-      jobs.push(rasterizeSpriteSheet(url, NPC_FRAME_SIZE, drawSize)
+      jobs.push(rasterizeSpriteSheet(url, NPC_FRAME_SIZE, NPC_DRAW_SIZE)
         .then(sprite => { this.npcSprites.set(npcKind, sprite); })
+        .catch(error => { console.warn(error); }));
+    }
+    for (const [skin, url] of Object.entries(BOSS_SPRITE_URLS)) {
+      jobs.push(rasterizeSpriteSheet(url, NPC_FRAME_SIZE, BOSS_DRAW_SIZE)
+        .then(sprite => { this.npcSprites.set(`boss:${skin}`, sprite); })
         .catch(error => { console.warn(error); }));
     }
     await Promise.all(jobs);
@@ -236,7 +242,7 @@ export class Renderer {
     if (this.world.mode === 'world') {
       this.drawCrossroads();
       this.drawArenaGate(frame.time, frame.arenaGate);
-      this.drawRuins();
+      this.drawDungeons();
     }
     for (const w of frame.bossWindups ?? []) {
       const progress = Math.max(0, Math.min(1, (frame.time - w.startedAt) / Math.max(1, w.resolvesAt - w.startedAt)));
@@ -286,7 +292,7 @@ export class Renderer {
         self ? frame.moveDirection : undefined);
     }
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
-    if (this.world.mode === 'world') this.drawBossEscapeGates(frame.time, frame.bossLocks);
+    if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);
     for (const bush of bushes) this.drawBushTop(bush.x, bush.y, frame.time);
     for (const event of events) this.drawFloatingEvent(event, frame.time);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -395,13 +401,14 @@ export class Renderer {
         }
         const tile = this.world.getTile(tx, ty);
         const x = tx * TILE_SIZE, y = ty * TILE_SIZE;
+        const dungeon = this.world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
         if (this.world.mode === 'world' && outpostHutAt(x, y)) {
           ctx.fillStyle = '#8b8263'; ctx.fillRect(x, y, TILE_SIZE + 0.5, TILE_SIZE + 0.5);
           continue;
         }
         const variation = noise(tx, ty);
         const biome = this.world.getBiome(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
-        ctx.fillStyle = tile === 'grass'
+        ctx.fillStyle = dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor : dungeon && tile === 'rock' ? dungeon.theme.wall : tile === 'grass'
           ? (biome === 'forest' ? '#677654' : biome === 'marsh' ? '#727861' : TERRAIN.grass)
           : TERRAIN[tile];
         ctx.fillRect(x, y, TILE_SIZE + 0.4, TILE_SIZE + 0.4);
@@ -410,7 +417,7 @@ export class Renderer {
         if (tile === 'water') {
           this.drawWater(tx, ty, x, y, time);
         } else if (tile === 'rock') {
-          this.drawRock(x, y, variation);
+          this.drawRock(x, y, variation, dungeon);
         } else if (tile === 'bush') {
           bushes.push({ x, y });
           this.drawBushBase(x, y);
@@ -470,12 +477,12 @@ export class Renderer {
     ctx.stroke();
   }
 
-  private drawRock(x: number, y: number, variation: number): void {
+  private drawRock(x: number, y: number, variation: number, dungeon?: DungeonDefinition): void {
     const { ctx } = this;
-    ctx.fillStyle = '#50594f';
+    ctx.fillStyle = dungeon?.theme.wall ?? '#50594f';
     ctx.fillRect(x + 1, y + 6, TILE_SIZE - 2, TILE_SIZE - 6);
     polygon(ctx, [x + 2, y + 9, x + 12, y + 2, x + 37, y + 3, x + 46, y + 12, x + 45, y + 37, x + 34, y + 43, x + 8, y + 41, x + 2, y + 31]);
-    ctx.fillStyle = variation > 0.5 ? '#8a9080' : '#828b7b';
+    ctx.fillStyle = dungeon?.theme.wallTop ?? (variation > 0.5 ? '#8a9080' : '#828b7b');
     ctx.fill();
     ctx.strokeStyle = 'rgba(32,43,34,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
     polygon(ctx, [x + 12, y + 3, x + 37, y + 4, x + 44, y + 13, x + 29, y + 20, x + 11, y + 14]);
@@ -535,23 +542,22 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawBossEscapeGates(time: number, locks: BossLockState[] = []): void {
+  private drawDungeonFlames(time: number, locks: BossLockState[] = []): void {
     const { ctx } = this;
     for (const lock of locks) {
       if (!lock.locked) continue;
-      const definition = BOSS_BY_ID.get(lock.bossId);
-      if (!definition) continue;
+      const dungeon = DUNGEON_BY_BOSS_ID.get(lock.bossId);
+      if (!dungeon) continue;
       const dangerous = lock.relation === 'participant' || lock.relation === 'eliminated';
       const base = dangerous ? '#6d28d9' : '#237a3b';
       const middle = dangerous ? '#b45cff' : '#55d96f';
       const core = dangerous ? '#f1d7ff' : '#dcffe2';
-      for (const gate of definition.arena.escapeGates) {
+      for (const gate of dungeonFlames(dungeon)) {
         if (!this.visible(gate)) continue;
-        const radial = Math.atan2(gate.y - definition.position.y, gate.x - definition.position.x);
         const flames = Math.max(3, Math.round(gate.length / 15));
         ctx.save();
         ctx.translate(gate.x, gate.y);
-        ctx.rotate(radial + Math.PI / 2);
+        ctx.rotate(gate.angle);
         ctx.globalCompositeOperation = 'screen';
         ctx.shadowColor = middle;
         ctx.shadowBlur = dangerous ? 15 : 9;
@@ -576,17 +582,23 @@ export class Renderer {
     }
   }
 
-  private drawRuins(): void {
+  private drawDungeons(): void {
+    for (const definition of DUNGEON_DEFINITIONS) this.drawDungeon(definition);
+  }
+
+  private drawDungeon(definition: DungeonDefinition): void {
     const { ctx } = this;
     ctx.save();
     // Weathered stones guide the eye along the trail without floating sign text.
-    for (const y of [-720, -1450, -2220, -3000]) {
-      const x = ruinsRoadCenter(y) + (Math.round(Math.abs(y) / 100) % 2 ? 92 : -92);
+    const normal = dungeonApproachNormal(definition);
+    for (const [index, progress] of definition.approach.markers.entries()) {
+      const center = dungeonApproachPoint(definition, progress), side = index % 2 ? 1 : -1;
+      const x = center.x + normal.x * side * 92, y = center.y + normal.y * side * 92;
       if (!this.visible({ x, y })) continue;
       ctx.fillStyle = 'rgba(25,34,27,.24)'; ctx.beginPath(); ctx.ellipse(x + 5, y + 9, 18, 7, -.2, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#777864'; ctx.strokeStyle = '#464e42'; ctx.lineWidth = 2;
+      ctx.fillStyle = definition.theme.markerStone; ctx.strokeStyle = definition.theme.markerEdge; ctx.lineWidth = 2;
       polygon(ctx, [x - 10, y + 8, x - 8, y - 26, x + 2, y - 37, x + 11, y - 21, x + 9, y + 8]); ctx.fill(); ctx.stroke();
-      ctx.strokeStyle = '#d0b97999'; ctx.lineWidth = 1.5; polygon(ctx, [x, y - 26, x + 5, y - 17, x, y - 8, x - 5, y - 17]); ctx.stroke();
+      ctx.strokeStyle = definition.theme.markerRune; ctx.lineWidth = 1.5; polygon(ctx, [x, y - 26, x + 5, y - 17, x, y - 8, x - 5, y - 17]); ctx.stroke();
     }
     ctx.restore();
   }
@@ -831,7 +843,8 @@ export class Renderer {
   private drawNpc(actor: Actor, time: number, color: string): void {
     const { ctx } = this;
     const r = actor.radius;
-    const sprite = actor.npcKind ? this.npcSprites.get(actor.npcKind) : undefined;
+    const spriteKey = actor.npcKind === 'boss' ? `boss:${actor.bossSkin}` : actor.npcKind;
+    const sprite = spriteKey ? this.npcSprites.get(spriteKey) : undefined;
     if (sprite && actor.hp > 0) {
       const previous = this.classMotion.get(actor.id);
       const dx = previous ? actor.x - previous.x : 0;
@@ -855,11 +868,19 @@ export class Renderer {
       if (actor.hp <= 0) {
         ctx.fillStyle = '#9c9479';
         for (const [x, y] of [[-22, 0], [-2, 7], [20, -2]]) { polygon(ctx, [x - 10, y - 8, x + 9, y - 7, x + 12, y + 9, x - 7, y + 12]); ctx.fill(); ctx.stroke(); }
-      } else {
+      } else if (actor.bossSkin === 'stone-warden') {
         ctx.fillStyle = '#a99b76'; polygon(ctx, [-29, -12, -20, -28, 20, -28, 29, -12, 24, 23, -24, 23]); ctx.fill(); ctx.stroke();
         ctx.fillStyle = '#675b48'; ctx.fillRect(-14, -19, 28, 22);
         ctx.fillStyle = '#eac773'; ctx.fillRect(-10, -12, 6, 4); ctx.fillRect(4, -12, 6, 4);
         ctx.strokeStyle = '#e6c279'; polygon(ctx, [0, 6, 7, 14, 0, 23, -7, 14]); ctx.stroke();
+      } else {
+        // Asset-independent fallback used by newly configured bosses.
+        ctx.fillStyle = '#443a49'; polygon(ctx, [-24, -19, -12, -29, 0, -22, 12, -29, 24, -19, 27, 18, 0, 29, -27, 18]); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#d47a56'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(-13, -21); ctx.quadraticCurveTo(-28, -36, -34, -19); ctx.moveTo(13, -21); ctx.quadraticCurveTo(28, -36, 34, -19); ctx.stroke();
+        ctx.fillStyle = '#f0a16e'; ctx.fillRect(-10, -10, 6, 4); ctx.fillRect(4, -10, 6, 4);
+        ctx.save(); ctx.rotate(actor.aim); ctx.strokeStyle = '#b86b50'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(8, 8); ctx.lineTo(34, 8); ctx.stroke(); ctx.restore();
       }
     } else if (actor.npcKind === 'wisp') {
       const bob = Math.sin(time * 0.003 + actor.x) * 2;
@@ -1002,10 +1023,13 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
     ctx.fillRect((pickup.x - left) * scale - 1, (pickup.y - top) * scale - 1, 2, 2);
   }
   if (world.mode === 'world') {
-    const rx = Math.max(10, Math.min(width - 10, (RUINS.x - left) * scale));
-    const ry = Math.max(10, Math.min(height - 10, (RUINS.y - top) * scale));
-    ctx.save(); ctx.translate(rx, ry); ctx.rotate(Math.PI / 4);
-    ctx.fillStyle = '#d8bd79'; ctx.strokeStyle = '#423f32'; ctx.lineWidth = 1.5; ctx.fillRect(-5, -5, 10, 10); ctx.strokeRect(-5, -5, 10, 10); ctx.restore();
+    for (const dungeon of DUNGEON_DEFINITIONS) {
+      const dx = Math.max(10, Math.min(width - 10, (dungeon.area.x - left) * scale));
+      const dy = Math.max(10, Math.min(height - 10, (dungeon.area.y - top) * scale));
+      ctx.save(); ctx.translate(dx, dy); ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = dungeon.theme.minimap; ctx.strokeStyle = '#423f32'; ctx.lineWidth = 1.5;
+      ctx.fillRect(-5, -5, 10, 10); ctx.strokeRect(-5, -5, 10, 10); ctx.restore();
+    }
     ctx.fillStyle = '#b6d9b018'; ctx.strokeStyle = '#b6d9b0'; ctx.lineWidth = 1;
     circle(ctx, -left * scale, -top * scale, OUTPOST.radius * scale); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = '#a5d9e8'; ctx.lineWidth = 2;
