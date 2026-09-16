@@ -9,17 +9,17 @@ import { BOSS_BY_ID } from '../shared/bosses';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
-  paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
-  mage: new URL('../assets/mage256.svg', import.meta.url).href,
-  warrior: new URL('../assets/warrior256.svg', import.meta.url).href
+  paladin: new URL('../assets/paladino256.png', import.meta.url).href,
+  mage: new URL('../assets/mage256.png', import.meta.url).href,
+  warrior: new URL('../assets/warrior256.png', import.meta.url).href
 };
 const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = {
   wisp: new URL('../assets/wisp.svg', import.meta.url).href,
   slime: new URL('../assets/slime.svg', import.meta.url).href,
-  boss: new URL('../assets/boss_warden.svg', import.meta.url).href
+  boss: new URL('../assets/boss_warden.png', import.meta.url).href
 };
-const PALADIN_FRAME_SIZE = 256;
-const PALADIN_DRAW_SIZE = 48;
+const FRAME_SIZE = 512;
+const DRAW_SIZE_SIZE = 48;
 const NPC_FRAME_SIZE = 256;
 const NPC_DRAW_SIZE = 48;
 const BOSS_DRAW_SIZE = 84;
@@ -697,9 +697,9 @@ export class Renderer {
       this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
       const frame = moving ? Math.floor((time - startedAt) / 130) % 4 : 0;
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sprite, frame * PALADIN_FRAME_SIZE, row * PALADIN_FRAME_SIZE,
-        PALADIN_FRAME_SIZE, PALADIN_FRAME_SIZE, -PALADIN_DRAW_SIZE / 2, -PALADIN_DRAW_SIZE / 2,
-        PALADIN_DRAW_SIZE, PALADIN_DRAW_SIZE);
+      ctx.drawImage(sprite, frame * FRAME_SIZE, row * FRAME_SIZE,
+        FRAME_SIZE, FRAME_SIZE, -DRAW_SIZE_SIZE / 2, -DRAW_SIZE_SIZE / 2,
+        DRAW_SIZE_SIZE, DRAW_SIZE_SIZE);
       return;
     }
     ctx.fillStyle = dead ? '#697066' : '#333e35';
