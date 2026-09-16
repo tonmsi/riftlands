@@ -101,6 +101,8 @@ Le mappe sono composte sulla griglia di tile del mondo: `layout.bounds` delimita
 
 Mondo, server e client consumano lo stesso catalogo: soltanto i passaggi `stone` diventano collisioni solide; i passaggi `flame` restano attraversabili e applicano le regole di partecipazione; quelli `open` non cambiano. Il validatore eseguito all'avvio controlla coordinate, regioni, spawn, tile solide, passaggi duplicati, sovrapposizioni pietra/fiamma e aperture di bordo non dichiarate. `BossDefinition` contiene soltanto combattimento e comportamento: non duplica più spawn, barriere o raggi della mappa.
 
+I punti di modifica principali sono volutamente concentrati: la forma della mappa è in `layout`, i varchi sono in `passages`, l'aggro è in `encounter.regions.bossAggro` e il limite fisico del boss è in `bossLeash`. Parametri puramente comportamentali, incluso l'eventuale recupero `behavior.unstuck`, appartengono invece alla relativa voce in `shared/bosses.ts`.
+
 Per aggiungere un dungeon:
 
 1. aggiungere una `DungeonDefinition` e registrarla in `DUNGEON_DEFINITIONS`;

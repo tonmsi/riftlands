@@ -178,7 +178,8 @@ export const MAZE_DUNGEON: DungeonDefinition = {
   },
   passages: [
     { id: 'west', position: { x: 3384, y: 0 }, tiles: [{ x: 70, y: -1 }, { x: 70, y: 0 }], fightState: 'open' },
-    { id: 'inner-sanctum', position: { x: 4104, y: 312 }, tiles: mazeSeal, fightState: 'stone' },
+    { id: 'maze-exit', position: { x: 4104, y: 312 }, tiles: mazeSeal,
+      fightState: 'flame', flame: flameBarrierFromTiles(mazeSeal) },
   ],
   spawnPoints: {
     boss: mazeBoss,
@@ -189,12 +190,12 @@ export const MAZE_DUNGEON: DungeonDefinition = {
     regions: {
       trigger: circle(mazeBoss, 80),
       admission: circle(mazeBoss, 100),
-      combat: circle(mazeBoss, 390),
+      combat: circle(mazeBoss, 520),
       ejectIntruders: circle(mazeBoss, 100),
-      bossAggro: circle(mazeBoss, 390),
-      bossLeash: circle(mazeBoss, 390),
+      bossAggro: circle(mazeBoss, 500),
+      bossLeash: circle(mazeBoss, 500),
     },
-    ejectTo: { x: 4050, y: 360 },
+    ejectTo: { x: 3750, y: 312 },
   },
   spawnExclusionMargin: 180,
   approach: {
@@ -297,7 +298,8 @@ export function dungeonApproachNormal(definition: DungeonDefinition): Vec2 {
 }
 
 export function dungeonApproachPoint(definition: DungeonDefinition, progress: number): Vec2 {
-  const approach = definition.approach, t = Math.max(0, Math.min(1, progress));
+  const approach = definition.approach;
+  const t = Math.max(0, Math.min(1, progress));
   const normal = dungeonApproachNormal(definition);
   const waveOffset = approach.waves.reduce((offset, wave) => offset + Math.sin(t * Math.PI * wave.cycles) * wave.amplitude, 0);
   return {
@@ -379,7 +381,6 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   }
   if (!Number.isFinite(definition.encounter.preparationMs) || definition.encounter.preparationMs < 0) fail('preparationMs non valido.');
   if (!finitePoint(definition.encounter.ejectTo)) fail('destinazione di espulsione non valida.');
-
   const passageIds = new Set<string>(), passageTiles = new Map<string, string>(), stoneTiles = new Set<string>();
   const flames: DungeonFlameBarrier[] = [];
   for (const passage of definition.passages) {

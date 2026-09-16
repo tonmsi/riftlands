@@ -17,6 +17,7 @@ export interface BossBehaviorDefinition {
   attackSelection: 'sequence' | 'distance';
   preferredRange: number;
   pathRefreshMs: number;
+  unstuck?: { afterMs: number; durationMs: number; probeDistance: number };
 }
 export interface BossDefinition {
   id: string;
@@ -64,7 +65,10 @@ export const RUINS_WARDEN: BossDefinition = {
     { kind: 'melee', damage: 18, range: 82, radius: 82, windupMs: 0, cooldownMs: 1450 },
     { kind: 'nova', damage: 24, range: 285, radius: 235, innerRadius: 82, windupMs: 1100, cooldownMs: 1450 },
   ],
-  behavior: { targeting: 'threat', attackSelection: 'sequence', preferredRange: 68, pathRefreshMs: 550 },
+  behavior: {
+    targeting: 'threat', attackSelection: 'sequence', preferredRange: 68, pathRefreshMs: 550,
+    unstuck: { afterMs: 900, durationMs: 550, probeDistance: 54 },
+  },
   enrageAt: 0.45, enrageSpeed: 1.24, enrageCooldown: 0.72,
   reward: { gold: 50, lootMs: 120_000 }, respawnMs: 60_000,
 };
@@ -90,6 +94,11 @@ export const BOSS_BY_ID = new Map(BOSS_DEFINITIONS.map(definition => [definition
 for (const definition of BOSS_DEFINITIONS) {
   const dungeon = DUNGEON_BY_ID.get(definition.dungeonId);
   if (!dungeon || dungeon.bossId !== definition.id) throw new Error(`Boss ${definition.id}: dungeon ${definition.dungeonId} assente o non associato.`);
+  const unstuck = definition.behavior.unstuck;
+  if (unstuck && (![unstuck.afterMs, unstuck.durationMs, unstuck.probeDistance].every(Number.isFinite)
+    || unstuck.afterMs <= 0 || unstuck.durationMs <= 0 || unstuck.probeDistance <= definition.radius)) {
+    throw new Error(`Boss ${definition.id}: configurazione anti-incastro non valida.`);
+  }
 }
 
 export function validBossState(value: unknown, definition: BossDefinition): value is BossState {

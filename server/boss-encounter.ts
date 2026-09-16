@@ -26,6 +26,10 @@ export class BossEncounter {
   private path: Vec2[] = [];
   private pathTargetId?: string;
   private pathRefreshAt = 0;
+  private stalledSince?: number;
+  private unstuckUntil = 0;
+  private unstuckAngle = 0;
+  private lastUnstuckSector = -1;
 
   constructor(readonly definition: BossDefinition, now: number, state: BossState | undefined, private readonly store?: AccountStore) {
     const dungeon = DUNGEON_BY_ID.get(definition.dungeonId);
@@ -158,15 +162,16 @@ export class BossEncounter {
       this.windup = undefined;
       this.nextAttack = Math.max(this.nextAttack, now + 250);
       this.resetPath();
+      this.resetStallTimer();
       return;
     }
 
     boss.effects = boss.effects.filter(effect => effect.until > now);
-    if (this.windup) { this.resolveWindup(now, active, world, damage); return; }
+    if (this.windup) { this.resetStallTimer(); this.resolveWindup(now, active, world, damage); return; }
     const target = this.chooseTarget(targets);
     const distance = Math.hypot(target.x - boss.x, target.y - boss.y);
     const seesTarget = hasLineOfSight(boss, target, world);
-    if (distance > this.definition.behavior.preferredRange) this.chase(target, seesTarget, now, dt, world);
+    if (distance > this.definition.behavior.preferredRange && this.chase(target, seesTarget, now, dt, world)) return;
     boss.aim = Math.atan2(target.y - boss.y, target.x - boss.x);
     if (now < this.nextAttack || !seesTarget) return;
     const attack = this.chooseAttack(distance);
@@ -177,6 +182,7 @@ export class BossEncounter {
 
   private beginAttack(attack: BossAttackDefinition, target: Actor, now: number, distance: number, damage: (target: Actor, amount: number) => void): void {
     const boss = this.boss;
+    this.resetStallTimer();
     if (attack.kind === 'melee') {
       if (distance <= attack.range) damage(target, attack.damage);
       this.nextAttack = now + this.cooldown(attack);
@@ -213,7 +219,10 @@ export class BossEncounter {
     this.resetPath();
   }
 
-  private chase(target: Actor, direct: boolean, now: number, dt: number, world: World): void {
+  /** Returns true while an anti-stuck sidestep owns movement and attacks must remain paused. */
+  private chase(target: Actor, direct: boolean, now: number, dt: number, world: World): boolean {
+    if (this.moveUnstuck(now, dt, world)) return true;
+    if (this.pathTargetId && this.pathTargetId !== target.id) this.stalledSince = undefined;
     if (direct) this.resetPath();
     else if (now >= this.pathRefreshAt || this.pathTargetId !== target.id || !this.path.length) {
       this.path = findBossPath(this.definition, this.boss, target, world);
@@ -225,7 +234,49 @@ export class BossEncounter {
     const angle = Math.atan2(waypoint.y - this.boss.y, waypoint.x - this.boss.x);
     this.boss.aim = angle;
     const speed = this.boss.hp <= this.boss.maxHp * this.definition.enrageAt ? this.definition.enrageSpeed : 1;
+    const before = { x: this.boss.x, y: this.boss.y };
     Object.assign(this.boss, moveWithCollisions(this.boss, Math.cos(angle), Math.sin(angle), movementSpeed(this.boss, now) * speed * dt, world));
+    const moved = Math.hypot(this.boss.x - before.x, this.boss.y - before.y);
+    const unstuck = this.definition.behavior.unstuck;
+    if (!unstuck || moved > Math.max(0.6, movementSpeed(this.boss, now) * dt * 0.2)) {
+      this.stalledSince = undefined;
+      return false;
+    }
+    this.stalledSince ??= now;
+    if (now - this.stalledSince < unstuck.afterMs || !this.beginUnstuck(angle, now, world)) return false;
+    return this.moveUnstuck(now, dt, world);
+  }
+
+  private beginUnstuck(intendedAngle: number, now: number, world: World): boolean {
+    const config = this.definition.behavior.unstuck;
+    if (!config) return false;
+    const intendedSector = ((Math.round(intendedAngle / (Math.PI / 4)) % 8) + 8) % 8;
+    const sectors = [2, -2, 3, -3, 1, -1, 4, 0]
+      .map(offset => (intendedSector + offset + 8) % 8)
+      .filter(sector => sector !== this.lastUnstuckSector);
+    let best: { sector: number; angle: number; distance: number } | undefined;
+    for (const sector of sectors) {
+      const angle = sector * Math.PI / 4;
+      const candidate = moveWithCollisions(this.boss, Math.cos(angle), Math.sin(angle), config.probeDistance, world);
+      if (!insideDungeonRegion(this.dungeon.encounter.regions.bossLeash, candidate, -this.definition.radius - 8)) continue;
+      const distance = Math.hypot(candidate.x - this.boss.x, candidate.y - this.boss.y);
+      if (distance > (best?.distance ?? 1)) best = { sector, angle, distance };
+    }
+    if (!best) return false;
+    this.lastUnstuckSector = best.sector;
+    this.unstuckAngle = best.angle;
+    this.unstuckUntil = now + config.durationMs;
+    this.stalledSince = undefined;
+    this.resetPath();
+    return true;
+  }
+
+  private moveUnstuck(now: number, dt: number, world: World): boolean {
+    if (now >= this.unstuckUntil) return false;
+    this.boss.aim = this.unstuckAngle;
+    const distance = movementSpeed(this.boss, now) * dt;
+    Object.assign(this.boss, moveWithCollisions(this.boss, Math.cos(this.unstuckAngle), Math.sin(this.unstuckAngle), distance, world));
+    return true;
   }
 
   private cooldown(attack: BossAttackDefinition): number {
@@ -265,6 +316,8 @@ export class BossEncounter {
   }
   private beginEncounter(leader: Actor, entrants: Actor[], now: number, world: World, stageTeam: boolean): void {
     this.ownerId = leader.id;
+    this.resetStallTimer();
+    this.lastUnstuckSector = -1;
     this.preparationEntrants = 0;
     this.preparedIds.clear();
     this.eliminatedIds.clear();
@@ -280,13 +333,14 @@ export class BossEncounter {
   private fail(world: World): void { this.resetFight(); this.unlock(world); }
   private resetFight(): void {
     Object.assign(this.boss, { ...this.dungeon.spawnPoints.boss, hp: this.definition.hp, effects: [] });
-    this.windup = undefined; this.nextAttack = 0; this.attackIndex = 0; this.resetPath();
+    this.windup = undefined; this.nextAttack = 0; this.attackIndex = 0; this.resetPath(); this.resetStallTimer(); this.lastUnstuckSector = -1;
   }
   private unlock(world: World): void {
     this.ownerId = undefined; this.targetId = undefined; this.cancelPreparation(); this.participantIds.clear(); this.eliminatedIds.clear(); this.threat.clear();
     world.setBossLocked(this.definition.id, false);
   }
   private resetPath(): void { this.path = []; this.pathTargetId = undefined; this.pathRefreshAt = 0; }
+  private resetStallTimer(): void { this.stalledSince = undefined; this.unstuckUntil = 0; }
   private save(): void { this.store?.touch(); this.store?.flush(); }
 }
 

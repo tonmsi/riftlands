@@ -7,6 +7,7 @@ import type { ArenaGateState } from '../shared/types';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
+import { spriteDirectionRow } from './sprite-direction';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -851,7 +852,7 @@ export class Renderer {
       const dy = previous ? actor.y - previous.y : 0;
       const moving = Math.hypot(dx, dy) > 0.02;
       let row = previous?.row ?? 0;
-      if (moving) row = dx !== 0 ? (dx < 0 ? 2 : 3) : dy < 0 ? 1 : 0;
+      if (moving) row = spriteDirectionRow(dx, dy, row);
       const startedAt = moving && (!previous || !previous.moving || previous.row !== row)
         ? time : previous?.startedAt ?? time;
       this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });

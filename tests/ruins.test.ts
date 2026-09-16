@@ -166,6 +166,25 @@ test('boss navigates around a pillar even without initial line of sight', () => 
   assert.ok(hasLineOfSight(boss, a, sim.world));
 });
 
+test('warden anti-stuck recovery chooses a valid direction different from the previous one', () => {
+  const { sim, encounter, boss } = fixture();
+  type RecoveryProbe = {
+    beginUnstuck(angle: number, now: number, world: World): boolean;
+    lastUnstuckSector: number;
+    unstuckAngle: number;
+    unstuckUntil: number;
+  };
+  const recovery = encounter as unknown as RecoveryProbe;
+  assert.equal(recovery.beginUnstuck(0, sim.now, sim.world), true);
+  const firstSector = recovery.lastUnstuckSector;
+  const firstProbe = moveWithCollisions(boss, Math.cos(recovery.unstuckAngle), Math.sin(recovery.unstuckAngle), 30, sim.world);
+  assert.ok(Math.hypot(firstProbe.x - boss.x, firstProbe.y - boss.y) > 1, 'the recovery direction must be traversable');
+
+  recovery.unstuckUntil = 0;
+  assert.equal(recovery.beginUnstuck(0, sim.now + 1000, sim.world), true);
+  assert.notEqual(recovery.lastUnstuckSector, firstSector, 'consecutive recovery attempts must not repeat the same direction');
+});
+
 test('boss rotates through slam, charge and nova telegraphs', () => {
   const { sim, a, b, boss } = fixture();
   Object.assign(b, { x: 0, y: 0 });

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MAZE_STALKER } from '../shared/bosses';
-import { MAZE_DUNGEON, dungeonFlames, dungeonStoneTiles, insideDungeon } from '../shared/dungeons';
-import { collidesWorld, moveWithCollisions } from '../shared/physics';
+import { MAZE_DUNGEON, dungeonFlames, dungeonStoneTiles, insideDungeon, insideDungeonRegion } from '../shared/dungeons';
+import { collidesWorld, hasLineOfSight, moveWithCollisions } from '../shared/physics';
 import { World, chunkCoords } from '../shared/world';
 import { WorldSimulation } from '../server/simulation';
 import type { Account } from '../server/store';
@@ -19,7 +19,7 @@ function moveTo(actor: Actor, target: Vec2, world: World): void {
   assert.ok(Math.hypot(actor.x - target.x, actor.y - target.y) < 1, `unreachable maze waypoint ${target.x},${target.y}`);
 }
 
-test('ashen maze is a traversable serpentine layout with a lockable inner sanctum', () => {
+test('ashen maze is traversable and its exit remains open under a flame guard', () => {
   const world = new World();
   assert.equal(world.getTile(75, 0), 'rock');
   assert.equal(world.getTile(75, 6), 'path');
@@ -34,10 +34,16 @@ test('ashen maze is a traversable serpentine layout with a lockable inner sanctu
     { x: 3940, y: 312 }, { x: 4160, y: 312 }, { x: 4160, y: 0 },
   ]) moveTo(explorer, waypoint, world);
 
-  for (const tile of dungeonStoneTiles(MAZE_DUNGEON)) assert.equal(world.getTile(tile.x, tile.y), 'path');
-  assert.deepEqual(dungeonFlames(MAZE_DUNGEON), [], 'a fully closed sanctum does not need flame guards');
+  assert.deepEqual(dungeonStoneTiles(MAZE_DUNGEON), []);
+  assert.deepEqual(dungeonFlames(MAZE_DUNGEON), [{ x: 4104, y: 312, length: 144, thickness: 12, angle: Math.PI / 2 }]);
   world.setBossLocked(MAZE_DUNGEON.bossId, true);
-  for (const tile of dungeonStoneTiles(MAZE_DUNGEON)) assert.equal(world.getTile(tile.x, tile.y), 'rock');
+  for (const tile of MAZE_DUNGEON.passages.find(passage => passage.id === 'maze-exit')!.tiles) {
+    assert.equal(world.getTile(tile.x, tile.y), 'path', 'flames must never create rock collision');
+  }
+  assert.equal(insideDungeonRegion(MAZE_DUNGEON.encounter.regions.bossAggro, { x: 3730, y: 0 }), true,
+    'the configured aggro reaches well beyond the old 390-unit radius');
+  assert.equal(hasLineOfSight(MAZE_DUNGEON.spawnPoints.boss, { x: 3730, y: 0 }, world), false,
+    'larger aggro does not bypass maze walls');
 
   const center = chunkCoords(MAZE_DUNGEON.area.x, MAZE_DUNGEON.area.y);
   for (let cx = center.cx - 1; cx <= center.cx + 1; cx++) for (let cy = center.cy - 1; cy <= center.cy + 1; cy++) {
@@ -45,6 +51,21 @@ test('ashen maze is a traversable serpentine layout with a lockable inner sanctu
       assert.equal(insideDungeon(MAZE_DUNGEON, spawn, MAZE_DUNGEON.spawnExclusionMargin), false);
     }
   }
+});
+
+test('maze exit flame kills a participant without becoming a solid wall', () => {
+  const simulation = new WorldSimulation(734291, 1_000_000);
+  const player = simulation.addPlayer(account('maze-flame-runner'), 'warrior');
+  Object.assign(player, { x: MAZE_DUNGEON.spawnPoints.boss.x, y: MAZE_DUNGEON.spawnPoints.boss.y - 60, spawnProtectedUntil: 0 });
+  simulation.step(0.1);
+  const encounter = simulation.bosses.get(MAZE_STALKER.id)!;
+  assert.equal(encounter.ownerId, player.id);
+
+  const flame = dungeonFlames(MAZE_DUNGEON)[0];
+  assert.equal(collidesWorld(flame.x, flame.y, player.radius, simulation.world), false);
+  Object.assign(player, flame);
+  simulation.step(0.1);
+  assert.equal(player.hp, 0);
 });
 
 test('maze boss uses its own nearest-target and distance-aware combat behavior', () => {
