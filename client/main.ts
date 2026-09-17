@@ -1,5 +1,6 @@
 import './style.css';
-import { TICK_RATE } from '../shared/config';
+import './mobile.css';
+import { CLASSES, TICK_RATE } from '../shared/config';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import { GameConnection } from './net';
 import { predictMovement, reconcile } from './prediction';
@@ -9,6 +10,7 @@ import { Renderer, drawMinimap } from './render';
 import { GameUI } from './ui';
 import { dungeonAt } from '../shared/dungeons';
 import { CONTROLS_STORAGE_KEY, defaultControls, GameControls, parseControls } from './controls';
+import { MobileControls } from './mobile-controls';
 
 let playing = false;
 let latest: Snapshot | null = null;
@@ -28,9 +30,11 @@ const localPresentation = new LocalPresentationDelay(LOCAL_PRESENTATION_DELAY_MS
 let lastMinimap = 0;
 let profileCache = '';
 let joinGeneration = 0;
-const releaseControls = (): void => controls.clear();
+let mobileControls: MobileControls | undefined;
+const releaseControls = (): void => { controls.clear(); mobileControls?.reset(); };
 
 const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
+  releaseControls,
   joinCredentials: (mode, name, password, classId) => {
     const generation = ++joinGeneration;
     ui.setConnection('connecting', 'Preparazione grafica…');
@@ -60,7 +64,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   },
   social: (action, targetId) => { connection.send({ type: 'social', action, targetId }); },
   select: id => { selectedId = id; ui.setSelected(latest?.actors.find(actor => actor.id === id) ?? null); },
-  cast: slot => { if (playing && connection.connected) controls.cast(slot); },
+  cast: slot => { if (playing && connection.connected && !ui.inputBlocked) controls.cast(slot); },
   controlsChanged: settings => {
     if (playing) return;
     releaseControls(); controls.settings = settings;
@@ -161,7 +165,7 @@ const isTyping = (): boolean => {
 };
 
 window.addEventListener('keydown', event => {
-  if (!playing || !connection.connected || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (!playing || !connection.connected || ui.inputBlocked || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
   if (controls.press(event.code)) event.preventDefault();
 });
 
@@ -171,7 +175,7 @@ document.addEventListener('focusin', () => { if (isTyping()) releaseControls(); 
 document.addEventListener('visibilitychange', () => { if (document.hidden) releaseControls(); });
 ui.canvas.addEventListener('pointermove', event => { if (playing && event.pointerType === 'mouse') controls.setPointer({ x: event.clientX, y: event.clientY }); });
 ui.canvas.addEventListener('pointerdown', event => {
-  if (!playing || !connection.connected || ![0, 1, 2].includes(event.button)) return;
+  if (!playing || !connection.connected || ui.inputBlocked || ![0, 1, 2].includes(event.button)) return;
   ui.canvas.focus({ preventScroll: true });
   if (event.pointerType === 'mouse') {
     controls.setPointer({ x: event.clientX, y: event.clientY });
@@ -185,7 +189,7 @@ ui.canvas.addEventListener('pointerdown', event => {
 });
 
 window.addEventListener('pointerup', event => { if (event.pointerType === 'mouse') controls.release(`Mouse${event.button}`); });
-window.addEventListener('pointercancel', releaseControls);
+window.addEventListener('pointercancel', event => { if (event.pointerType === 'mouse') releaseControls(); });
 ui.canvas.addEventListener('lostpointercapture', event => { if (event.pointerType === 'mouse') { controls.release('Mouse1'); controls.release('Mouse2'); } });
 ui.canvas.addEventListener('contextmenu', event => event.preventDefault());
 ui.canvas.addEventListener('auxclick', event => event.preventDefault());
@@ -194,7 +198,7 @@ function inputTick(): void {
   if (!playing || !connection.connected || !predicted || document.hidden) return;
   localMovement.advance(predicted, predicted);
   if (pending.length > 120) { releaseControls(); return; }
-  const { dx, dy, aim, cast } = isTyping() || predicted.hp <= 0
+  const { dx, dy, aim, cast } = isTyping() || ui.inputBlocked || predicted.hp <= 0
     ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined })
     : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
   const input: InputCommand = { seq: ++seq, dx, dy, aim, ...(cast ? { cast } : {}) };
@@ -216,15 +220,13 @@ function advanceInputs(now: number): void {
 }
 setInterval(() => advanceInputs(performance.now()), 8);
 
-const touchControls = document.createElement('div'); touchControls.className = 'touch-controls';
-for (const [label, action] of [['↑', 'up'], ['←', 'left'], ['↓', 'down'], ['→', 'right']] as const) {
-  const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.className = action;
-  button.setAttribute('aria-label', `Muoviti ${({ up: 'su', left: 'a sinistra', down: 'giù', right: 'a destra' })[action]}`);
-  button.addEventListener('pointerdown', event => { if (!playing || !connection.connected) return; event.preventDefault(); button.setPointerCapture(event.pointerId); controls.setTouchDirection(action, true); });
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(event, () => controls.setTouchDirection(action, false));
-  touchControls.append(button);
-}
-document.querySelector('.rift-app')?.append(touchControls);
+mobileControls = new MobileControls(document.querySelector<HTMLElement>('.rift-app')!, {
+  ability: slot => CLASSES[predicted?.classId ?? ui.selectedClass].abilities[slot],
+  enabled: () => playing && connection.connected && !ui.inputBlocked && !!predicted && predicted.hp > 0,
+  move: vector => controls.setTouchMovement(vector),
+  aim: angle => controls.setTouchAim(angle),
+  cast: slot => controls.cast(slot),
+});
 
 let lastFrame = performance.now();
 function frame(now: number): void {
@@ -253,12 +255,13 @@ function frame(now: number): void {
     selectedId,
     previewClass: ui.selectedClass,
     playing,
+    aimPreview: mobileControls?.aimPreview,
     moveDirection: playing && !isTyping() && predicted ? (() => {
       const input = controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
       return { x: input.dx, y: input.dy };
     })() : null,
   });
-  if (self && playing && now - lastMinimap > 250) {
+  if (self && playing && ui.minimapVisible && now - lastMinimap > 250) {
     drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? []); lastMinimap = now;
   }
   requestAnimationFrame(frame);

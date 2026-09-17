@@ -64,7 +64,6 @@ export function changeMovement(settings: ControlSettings, movement: ControlSetti
 /** Device-independent input state: touch movement never changes the aim. */
 export class GameControls {
   private pressed = new Set<string>();
-  private touchDirections = new Set<ControlAction>();
   private touchMovement: Vec2 = { x: 0, y: 0 };
   private pointer: Vec2 | null = null;
   private touchAim: number | null = null;
@@ -79,15 +78,11 @@ export class GameControls {
   }
   release(code: string): void { this.pressed.delete(code); }
   setPointer(position: Vec2): void { this.pointer = position; this.touchAim = null; }
-  setTouchDirection(action: ControlAction, held: boolean): void {
-    if (held) this.touchDirections.add(action); else this.touchDirections.delete(action);
-    this.setTouchMovement({ x: Number(this.touchDirections.has('right')) - Number(this.touchDirections.has('left')), y: Number(this.touchDirections.has('down')) - Number(this.touchDirections.has('up')) });
-  }
   setTouchMovement(movement: Vec2): void { this.touchMovement = movement; this.pointer = null; }
   setTouchAim(angle: number): void { if (Number.isFinite(angle)) { this.touchAim = angle; this.pointer = null; } }
   cast(slot: AbilitySlot): void { this.pendingCast = slot; }
   consumeCast(): void { this.pendingCast = undefined; }
-  clear(): void { this.pressed.clear(); this.touchDirections.clear(); this.touchMovement = { x: 0, y: 0 }; this.pointer = null; this.touchAim = null; this.pendingCast = undefined; }
+  clear(): void { this.pressed.clear(); this.touchMovement = { x: 0, y: 0 }; this.pointer = null; this.touchAim = null; this.pendingCast = undefined; }
   sample(position: Vec2, previousAim: number, screenToWorld: (x: number, y: number) => Vec2): { dx: number; dy: number; aim: number; cast?: AbilitySlot } {
     const held = (action: ControlAction): boolean => this.settings.bindings[action].some(code => this.pressed.has(code));
     const target = this.pointer ? screenToWorld(this.pointer.x, this.pointer.y) : null;

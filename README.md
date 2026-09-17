@@ -33,7 +33,11 @@ Dal menu principale, **Opzioni → Controlli** permette di cambiare i comandi di
 
 La modalità **Segui il cursore** muove il personaggio verso il puntatore mentre si tiene premuto il comando configurato (mouse destro per impostazione iniziale). Il rilascio arresta il movimento; il personaggio si ferma vicino al cursore e collide normalmente con gli ostacoli, senza calcolare un percorso. Il clic sinistro resta riservato alla selezione. Passando a questa modalità, il destro viene rimosso dall'attacco base, che resta su Spazio; eventuali altri conflitti tra movimento e attacchi vengono risolti e mostrati nelle opzioni. Le associazioni duplicate attive vengono rifiutate.
 
-`client/controls.ts` separa input fisici e azioni di gioco. Movimento touch e mira touch sono indipendenti dalle associazioni desktop: il futuro joystick userà `setTouchMovement`, mentre lo swipe sull'attacco direzionale userà `setTouchAim`. Le altre abilità continueranno a usare `cast` tramite tocco. Il joystick e lo swipe non sono ancora implementati; il pad touch esistente usa già le azioni indipendenti dai tasti.
+`client/controls.ts` separa input fisici e azioni di gioco. `client/mobile-controls.ts` gestisce il joystick analogico e le dita indipendenti: trascina qualsiasi abilità direzionale per mirare e rilascia per usarla; un tocco usa la direzione corrente. Ogni `AbilityDef` dichiara obbligatoriamente `targeting: 'directional' | 'self'`: proiettili, colpi frontali, scatti e trappole sono direzionali, mentre cure, scudi e aree centrate sul personaggio si attivano con un tocco. Il pulsante e l'anteprima usano la definizione dell'abilità selezionata, indipendentemente dalla sua posizione nella barra. Il joystick non cambia la direzione di mira. La selezione di giocatori e creature avviene ancora toccandoli nel mondo. Gesti annullati, cambio di orientamento, perdita del focus e disconnessione rilasciano gli input.
+
+Su dispositivi touch, l'ingresso richiede subito il fullscreen con `navigationUI: 'hide'` e prova a bloccare l'orientamento landscape. Il gioco resta utilizzabile anche in portrait o se il browser rifiuta il fullscreen; il pulsante **Schermo intero** consente di riprovare. Il primo Indietro durante la partita apre la conferma d'uscita. Uscire ripristina scorrimento, orientamento e presentazione del menu. CSS limita overscroll, pull-to-refresh e gesti sulle superfici di gioco; le gesture riservate al sistema operativo e l'effettiva disponibilità del fullscreen rimangono sotto il controllo del browser/dispositivo. `client/game-display.ts` concentra questa integrazione per il futuro wrapper Android.
+
+HUD touch e desktop condividono dati, abilità e cooldown. `client/mobile.css` organizza le aree touch con margini per notch e barre di sistema, pulsanti di almeno 44 px e layout dedicati a portrait, landscape e tablet. Canvas del mondo e minimappa si ridimensionano alla superficie disponibile e alla densità del display (massimo DPR 2). In arena touch la camera segue il personaggio senza rimpicciolire gli attori per far entrare tutta la mappa. **Mostra/Nascondi mappa** funziona anche su PC e salva la preferenza localmente; sui dispositivi touch la mappa è inizialmente nascosta.
 
 | Comando | Azione |
 | --- | --- |
@@ -45,7 +49,7 @@ La modalità **Segui il cursore** muove il personaggio verso il puntatore mentre
 | Compagni | Giocatori vicini, richieste, amici e team |
 | Esci | Torna al menu e consente di cambiare classe |
 
-Su schermi touch ci sono un pad direzionale e pulsanti per le abilità; tocca il mondo per mirare/selezionare.
+Su schermi touch ci sono joystick e attacchi circolari: trascina le abilità direzionali per mirare, tocca i personaggi per selezionarli. Le sprite dei giocatori su mobile usano settori cardinali con isteresi: una lieve componente laterale non impedisce più di mostrare nord e sud.
 
 | Classe | Risorsa | Attacco base | Q | E | R |
 | --- | --- | --- | --- | --- | --- |

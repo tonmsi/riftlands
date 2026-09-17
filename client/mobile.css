@@ -1,0 +1,107 @@
+/* Shared viewport contract: overlays and both canvases use the same visible area. */
+:root { --safe-top:env(safe-area-inset-top, 0px); --safe-right:env(safe-area-inset-right, 0px); --safe-bottom:env(safe-area-inset-bottom, 0px); --safe-left:env(safe-area-inset-left, 0px) }
+html.game-active, .game-active body { overflow:hidden; overscroll-behavior:none; height:100%; width:100% }
+.game-active body { position:fixed; inset:0 }
+.rift-app.is-playing { position:fixed; inset:0; min-height:0; height:var(--game-height, 100dvh); overscroll-behavior:none }
+.rift-app.is-playing .world-stage, .rift-app.is-playing .game-hud { height:var(--game-height, 100dvh); min-height:0; bottom:auto }
+.is-playing .world-canvas, .is-playing .ability-bar, .mobile-joystick { touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none }
+.is-playing .social-panel, .is-playing .target-panel { touch-action:pan-y; overscroll-behavior:contain }
+.is-playing .minimap { width:100%; height:auto; aspect-ratio:1 }
+.hud-menu-button { min-width:36px; min-height:36px }
+.map-toggle svg { width:18px; height:18px }
+.fullscreen-toggle { font-size:23px; justify-content:center }
+.mobile-joystick { display:none }
+.exit-confirmation { max-width:440px }
+.is-playing .minimap-panel { height:auto }
+
+/* A touch layout is a different arrangement, never a scaled-down desktop HUD. */
+.touch-layout.is-playing { --control-edge:20px; --stick-size:124px; --skill-size:58px; --attack-size:76px }
+.touch-layout .mobile-joystick {
+  display:grid; place-items:center; position:absolute; pointer-events:auto;
+  left:calc(var(--safe-left) + var(--control-edge)); bottom:calc(var(--safe-bottom) + 24px);
+  width:var(--stick-size); height:var(--stick-size); border-radius:50%; border:2px solid #c6e7ff40;
+  background:radial-gradient(circle, #49739614 0 48%, #18374c30 49%); box-shadow:inset 0 0 20px #15344d22, 0 3px 20px #0004;
+}
+.joystick-knob { width:46%; height:46%; border-radius:50%; border:2px solid #b6dcf566; background:radial-gradient(circle at 35% 30%, #77aec160, #30567465); box-shadow:0 3px 12px #0005; pointer-events:none }
+.touch-layout .combat-hud { left:auto; right:calc(var(--safe-right) + var(--control-edge)); bottom:calc(var(--safe-bottom) + 22px); width:190px; height:174px; max-width:none; transform:none; display:block }
+.touch-layout .combat-instruction, .touch-layout .combat-caption { display:none }
+.touch-layout .ability-bar { position:relative; width:100%; height:100%; display:block; padding:0; border:0; background:none; box-shadow:none; backdrop-filter:none; pointer-events:none }
+.touch-layout .ability-button { position:absolute; width:var(--skill-size); height:var(--skill-size); border-radius:50%; pointer-events:auto; border:2px solid color-mix(in srgb, var(--ability-color) 65%, transparent); background:radial-gradient(circle at 35% 25%, #415745e8, #142a28ed); box-shadow:0 3px 12px #0006; gap:0; overflow:hidden }
+.touch-layout .ability-button[data-slot=basic] { width:var(--attack-size); height:var(--attack-size); right:0; bottom:0; border-color:#ffbf80; background:radial-gradient(circle at 35% 25%, #bd7152ed, #743e39ed) }
+.touch-layout .ability-button[data-slot=q] { right:0; top:0 }
+.touch-layout .ability-button[data-slot=e] { left:48px; top:28px }
+.touch-layout .ability-button[data-slot=r] { left:0; bottom:4px }
+.touch-layout .ability-button kbd, .touch-layout .ability-name { display:none }
+.touch-layout .ability-art { margin:0 }
+.touch-layout .ability-art svg { width:27px; height:27px; stroke-width:1.7 }
+.touch-layout [data-slot=basic] .ability-art svg { width:34px; height:34px }
+.touch-layout .ability-cost { top:auto; bottom:4px; left:0; right:0; text-align:center; color:#edf0d7; font-size:10px }
+.touch-layout .cooldown-count { font-size:23px }
+.touch-layout .ability-button[aria-disabled=true]:not(.on-cooldown) { opacity:.55 }
+.touch-layout .touch-pressed { border-color:white; filter:brightness(1.2) }
+.touch-layout .touch-aiming::after { content:''; position:absolute; width:32px; height:3px; top:50%; left:50%; background:#fff4d8; transform-origin:left center; transform:rotate(var(--aim-angle)); border-radius:3px; pointer-events:none }
+.touch-layout .player-panel { top:calc(var(--safe-top) + 8px); left:calc(var(--safe-left) + 12px); width:194px; padding:8px; gap:6px }
+.touch-layout .player-portrait { display:none }
+.touch-layout .player-name-row { margin-bottom:5px; gap:6px }
+.touch-layout .player-name-row strong { font-size:12px }
+.touch-layout .player-name-row>span { font-size:10px }
+.touch-layout .vital-row>span { font-size:9px; width:19px }
+.touch-layout .meter { height:14px }
+.touch-layout .meter>span { font-size:10px; line-height:12px }
+.touch-layout .xp-meter { margin-top:5px; margin-left:25px }
+.touch-layout .game-top-right { top:calc(var(--safe-top) + 8px); right:calc(var(--safe-right) + 12px); gap:4px; flex-direction:column-reverse }
+.touch-layout .menu-buttons { gap:4px }
+.touch-layout .hud-menu-button { width:44px; height:44px; min-width:44px; padding:8px; justify-content:center }
+.touch-layout .hud-menu-button>span { display:none }
+.touch-layout .hud-menu-button svg { width:20px; height:20px }
+.touch-layout .server-status { display:none }
+.touch-layout .gold-counter { padding:4px 8px }
+.touch-layout .gold-counter b { font-size:12px }
+.touch-layout .world-location { top:calc(var(--safe-top) + 8px); left:50%; transform:translateX(-50%); width:calc(100% - 440px - var(--safe-left) - var(--safe-right)); max-width:280px; min-width:0; padding:6px; text-align:center }
+.touch-layout .world-location div { display:block; min-width:0; width:100% }
+.touch-layout .world-location strong { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.touch-layout .world-location div>span { font-size:10px; letter-spacing:0; margin-top:3px }
+.touch-layout .location-dot, .touch-layout .location-decoration, .touch-layout .world-tip { display:none }
+.touch-layout .effect-list { left:calc(var(--safe-left) + 12px); top:calc(var(--safe-top) + 88px); max-width:194px; max-height:26px; overflow:hidden; gap:3px }
+.touch-layout .effect-chip { font-size:9px; padding:4px }
+.touch-layout .target-panel { left:calc(var(--safe-left) + 12px); top:calc(var(--safe-top) + 119px); width:194px; padding:8px; max-height:calc(var(--game-height) - 290px - var(--safe-top) - var(--safe-bottom)); overflow:auto; pointer-events:auto }
+.touch-layout .target-heading { font-size:9px; margin:0 }
+.touch-layout .target-heading>button, .touch-layout .social-header>button { width:44px; height:44px; flex-shrink:0 }
+.touch-layout .target-panel>strong { font-size:12px }
+.touch-layout .target-panel>small { font-size:10px; margin:4px 0 }
+.touch-layout .target-actions>button, .touch-layout .social-row-actions>button { min-height:44px; font-size:11px }
+.touch-layout .target-health { height:6px }
+.touch-layout .minimap-panel { top:calc(var(--safe-top) + 95px); bottom:auto; right:auto; left:50%; transform:translateX(-50%); width:142px; padding:5px; pointer-events:auto }
+.touch-layout .minimap-panel>div { font-size:8px; letter-spacing:0; padding:4px 0 0 }
+.touch-layout .arena-status { top:auto; bottom:calc(var(--safe-bottom) + 10px); left:50%; transform:translateX(-50%); width:calc(100% - 450px - var(--safe-left) - var(--safe-right)); max-width:340px; font-size:10px; padding:6px; max-height:48px; overflow:auto; pointer-events:auto; touch-action:pan-y }
+.touch-layout .social-panel { top:calc(var(--safe-top) + 60px); bottom:calc(var(--safe-bottom) + 12px); left:50%; right:auto; transform:translateX(-50%); width:min(420px, calc(100% - 32px)); z-index:10; background:#14261ff7 }
+.touch-layout.is-playing .toast-stack { left:50%; right:auto; transform:translateX(-50%); top:calc(var(--safe-top) + 60px); bottom:auto; max-width:calc(100% - 440px); width:300px; max-height:30px; overflow:hidden; pointer-events:none }
+.touch-layout .toast { font-size:11px; padding:8px }
+.touch-layout .connection-banner { top:45%; max-width:calc(100% - 40px); min-width:0; width:300px; font-size:12px }
+.touch-layout .death-overlay { pointer-events:none }
+@media (orientation:landscape) {
+  .touch-layout .toast { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 8px }
+}
+@media (orientation:portrait) {
+  .touch-layout.is-playing { --control-edge:18px; --stick-size:116px; --skill-size:56px; --attack-size:72px }
+  .touch-layout .player-panel { width:calc(100% - 180px); min-width:152px }
+  .touch-layout .game-top-right { max-width:144px }
+  .touch-layout .menu-buttons { flex-wrap:wrap; justify-content:flex-end; max-width:144px }
+  .touch-layout .world-location { top:calc(var(--safe-top) + 140px); width:calc(100% - 24px); max-width:none }
+  .touch-layout .effect-list { top:calc(var(--safe-top) + 87px); max-width:calc(100% - 180px) }
+  .touch-layout .combat-hud { width:180px; height:170px }
+  .touch-layout .ability-button[data-slot=e] { left:44px }
+  .touch-layout .target-panel { top:calc(var(--safe-top) + 196px); width:calc(100% - 180px); min-width:160px; max-height:calc(var(--game-height) - 413px) }
+  .touch-layout .minimap-panel { top:calc(var(--safe-top) + 196px); left:auto; right:calc(var(--safe-right) + 12px); transform:none; width:140px }
+  .touch-layout .arena-status { top:auto; bottom:calc(var(--safe-bottom) + 210px); width:calc(100% - 32px); max-width:none; max-height:52px; font-size:11px }
+  .touch-layout.is-playing .toast-stack { top:auto; bottom:calc(var(--safe-bottom) + 267px); max-width:calc(100% - 32px); max-height:80px }
+}
+@media (orientation:landscape) and (max-height:370px) {
+  .touch-layout.is-playing { --stick-size:106px; --skill-size:52px; --attack-size:66px }
+  .touch-layout .combat-hud { width:174px; height:156px; bottom:calc(var(--safe-bottom) + 14px) }
+  .touch-layout .mobile-joystick { bottom:calc(var(--safe-bottom) + 14px) }
+  .touch-layout .target-panel { top:calc(var(--safe-top) + 120px); max-height:calc(var(--game-height) - 255px - var(--safe-top) - var(--safe-bottom)) }
+  .touch-layout .effect-list { top:calc(var(--safe-top) + 90px) }
+}
+
+.touch-layout .ability-button[data-targeting=directional]::before { content:""; position:absolute; top:6px; left:calc(50% - 3px); width:6px; height:6px; border-top:1px solid #ffffff99; border-right:1px solid #ffffff99; transform:rotate(-45deg); pointer-events:none }

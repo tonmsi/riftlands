@@ -2,6 +2,7 @@ import { CLASSES, levelFromXp } from '../shared/config';
 import { ARENA_GATE } from '../shared/arena';
 import { bindingLabel, defaultControls, type ControlSettings } from './controls';
 import { ControlOptions } from './control-options';
+import { GameDisplay } from './game-display';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, PublicAccount, Snapshot, SocialState } from '../shared/types';
 
 const PROFILE_URLS: Partial<Record<ClassId, string>> = {
@@ -22,6 +23,7 @@ export interface UIActions {
   cast: (slot: AbilitySlot) => void;
   previewClass?: (classId: ClassId) => void;
   controlsChanged?: (settings: ControlSettings) => void;
+  releaseControls?: () => void;
 }
 
 const SLOTS: AbilitySlot[] = ['basic', 'q', 'e', 'r'];
@@ -82,6 +84,10 @@ export class GameUI {
   private previousGold?: number;
   private controls = defaultControls();
   private readonly options: ControlOptions;
+  private readonly display: GameDisplay;
+  private readonly exitDialog = document.createElement('dialog');
+  private readonly mapToggle = document.createElement('button');
+  private mapVisible = true;
 
   constructor(private root: HTMLElement, private actions: UIActions) {
     root.className = 'rift-app';
@@ -170,6 +176,27 @@ export class GameUI {
     this.minimap = root.querySelector<HTMLCanvasElement>('.minimap')!;
     this.nameInput = this.ref('name') as HTMLInputElement;
     this.passwordInput = this.ref('password') as HTMLInputElement;
+    this.display = new GameDisplay(root, () => this.actions.releaseControls?.(), () => this.confirmLeave(), message => this.toast(message));
+    this.exitDialog.className = 'control-options exit-confirmation';
+    this.exitDialog.setAttribute('aria-labelledby', 'exit-title');
+    this.exitDialog.innerHTML = '<h2 id="exit-title">Tornare al menu?</h2><p>Il personaggio resta nel mondo per 20 secondi dopo l’uscita.</p><div class="options-footer"><button type="button" data-resume>Continua a giocare</button><button type="button" data-exit>Torna al menu</button></div>';
+    root.append(this.exitDialog);
+    this.exitDialog.querySelector('[data-resume]')!.addEventListener('click', () => { this.exitDialog.close(); this.display.resume(); });
+    this.exitDialog.querySelector('[data-exit]')!.addEventListener('click', () => { this.exitDialog.close(); this.actions.leave(); });
+    this.exitDialog.addEventListener('cancel', () => this.display.resume());
+    this.mapVisible = !this.display.touch;
+    try { const saved = localStorage.getItem('riftlands.minimap'); if (saved !== null) this.mapVisible = saved === 'visible'; } catch { /* Device preference is optional. */ }
+    const mapPanel = root.querySelector<HTMLElement>('.minimap-panel')!; mapPanel.id = 'game-minimap';
+    this.mapToggle.type = 'button'; this.mapToggle.className = 'glass hud-menu-button map-toggle';
+    this.mapToggle.innerHTML = `${icon('<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2ZM9 3v16M15 5v16"/>')}<span>Mappa</span>`;
+    this.mapToggle.setAttribute('aria-controls', mapPanel.id);
+    this.mapToggle.addEventListener('click', () => {
+      this.mapVisible = !this.mapVisible; this.updateMap();
+      try { localStorage.setItem('riftlands.minimap', this.mapVisible ? 'visible' : 'hidden'); } catch { /* Ignore storage restrictions. */ }
+    });
+    root.querySelector('.menu-buttons')!.prepend(this.mapToggle); this.updateMap();
+    this.ref('leave').setAttribute('aria-label', 'Torna al menu');
+    this.ref('social-toggle').setAttribute('aria-label', 'Compagni');
     this.options = new ControlOptions(root, () => !this.isPlaying && this.status !== 'connecting' && this.status !== 'reconnecting', settings => {
       this.setControls(settings); this.actions.controlsChanged?.(settings);
     });
@@ -190,6 +217,7 @@ export class GameUI {
       if (this.status === 'connecting') return;
 
       if (this.savedAccount) {
+        if (this.display.touch) void this.display.enterFullscreen();
         this.actions.joinSaved(this.currentClass);
         return;
       }
@@ -200,6 +228,7 @@ export class GameUI {
         this.toast('Compila nome e password per procedere.', 'error');
         return;
       }
+      if (this.display.touch) void this.display.enterFullscreen();
       this.actions.joinCredentials(this.authMode, name, password, this.currentClass);
     });
 
@@ -209,7 +238,7 @@ export class GameUI {
       this.actions.previewClass?.(this.currentClass);
     }));
 
-    this.ref('leave').addEventListener('click', () => this.actions.leave());
+    this.ref('leave').addEventListener('click', () => { if (this.display.touch) this.confirmLeave(); else this.actions.leave(); });
     this.ref('social-toggle').addEventListener('click', () => this.toggleSocial());
     this.ref('social-close').addEventListener('click', () => this.toggleSocial(false));
     this.ref('target-close').addEventListener('click', () => this.actions.select(null));
@@ -218,13 +247,25 @@ export class GameUI {
 
     this.ref('ability-bar').addEventListener('click', event => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-slot]');
-      if (button && !button.disabled) this.actions.cast(button.dataset.slot as AbilitySlot);
+      if (button && !button.disabled && button.getAttribute('aria-disabled') !== 'true' && !this.inputBlocked) this.actions.cast(button.dataset.slot as AbilitySlot);
     });
 
     this.renderClass();
   }
 
   get selectedClass(): ClassId { return this.currentClass; }
+  get minimapVisible(): boolean { return this.mapVisible; }
+  get inputBlocked(): boolean { return this.exitDialog.open || !this.ref('social-panel').hidden; }
+  private updateMap(): void {
+    this.root.querySelector<HTMLElement>('.minimap-panel')!.hidden = !this.mapVisible;
+    this.mapToggle.setAttribute('aria-expanded', String(this.mapVisible));
+    this.mapToggle.setAttribute('aria-label', this.mapVisible ? 'Nascondi mappa' : 'Mostra mappa');
+    this.mapToggle.title = this.mapVisible ? 'Nascondi mappa' : 'Mostra mappa';
+  }
+  private confirmLeave(): void {
+    if (!this.isPlaying || this.exitDialog.open) return;
+    this.actions.releaseControls?.(); this.exitDialog.showModal();
+  }
   private keyLabel(slot: AbilitySlot): string { return bindingLabel(this.controls.bindings[slot][0]); }
   setControls(settings: ControlSettings): void {
     if (this.isPlaying) return;
@@ -232,7 +273,9 @@ export class GameUI {
     const movement = settings.movement === 'mouse'
       ? `${settings.bindings.movePointer.map(bindingLabel).join(' / ')} tenuto: segui il cursore`
       : `${(['up', 'left', 'down', 'right'] as const).map(action => settings.bindings[action].map(bindingLabel).join('/')).join(' · ')}: muovi`;
-    this.root.querySelector('.lobby-controls')!.textContent = `${movement} · ${settings.bindings.basic.map(bindingLabel).join(' / ')}: attacca · ${(['q', 'e', 'r'] as const).map(slot => this.keyLabel(slot)).join(' / ')}: abilità · Mouse: mira`;
+    this.root.querySelector('.lobby-controls')!.textContent = this.display.touch
+      ? 'Joystick: muovi · Trascina le abilità direzionali per mirare, rilascia per usarle · Tocca le abilità per usarle · Tocca i personaggi per selezionarli'
+      : `${movement} · ${settings.bindings.basic.map(bindingLabel).join(' / ')}: attacca · ${(['q', 'e', 'r'] as const).map(slot => this.keyLabel(slot)).join(' / ')}: abilità · Mouse: mira`;
     this.root.querySelector('.combat-instruction')!.textContent = `${movement} · Mouse: mira · Clic sinistro: seleziona`;
     this.root.querySelector('.combat-caption > span:last-child')!.textContent = `${settings.bindings.basic.map(bindingLabel).join(' / ')} per attaccare`;
   }
@@ -304,6 +347,8 @@ export class GameUI {
 
   setPlaying(playing: boolean): void {
     this.isPlaying = playing;
+    this.display.setPlaying(playing);
+    if (!playing) this.exitDialog.close();
     if (playing) this.options.close();
     this.root.querySelector<HTMLButtonElement>('.options-button')!.disabled = playing || this.status === 'connecting' || this.status === 'reconnecting';
     this.root.classList.toggle('is-playing', playing);
@@ -389,7 +434,11 @@ export class GameUI {
       const cooldown = Math.max(0, player.cooldowns[slot] - snapshot.time);
       const safeBlocked = snapshot.sanctuary === 'safe' && ability.kind !== 'heal' && ability.kind !== 'shield';
       const unavailable = cooldown > 0 || player.resource < ability.cost || remaining > 0 || safeBlocked;
-      button.disabled = unavailable;
+      // Keep pointer capture alive while cooldown snapshots arrive during a touch gesture.
+      button.disabled = unavailable && !this.display.touch;
+      button.setAttribute('aria-disabled', String(unavailable));
+      button.dataset.targeting = ability.targeting;
+      button.setAttribute('aria-label', `${ability.name} (${this.display.touch ? ability.targeting === 'directional' ? 'trascina per mirare, rilascia per attaccare' : 'tocca per usare' : this.keyLabel(slot)})`);
       button.classList.toggle('on-cooldown', cooldown > 0);
       button.classList.toggle('low-resource', player.resource < ability.cost);
       (button.querySelector('.cooldown-shade') as HTMLElement).style.height = `${Math.min(100, cooldown / (ability.cooldown * 1000) * 100)}%`;
@@ -439,6 +488,7 @@ export class GameUI {
     const panel = this.ref('social-panel');
     const visible = open ?? panel.hidden;
     panel.hidden = !visible;
+    if (visible) this.actions.releaseControls?.();
     this.ref('social-toggle').setAttribute('aria-expanded', String(visible));
     if (visible) this.renderSocial();
   }
@@ -509,6 +559,7 @@ export class GameUI {
 
   toast(message: string, tone: 'info' | 'error' | 'success' = 'info'): void {
     const toast = textElement('div', `toast toast-${tone}`, message);
+    toast.title = message;
     const stack = this.ref('toasts');
     stack.append(toast);
     while (stack.childElementCount > 4) stack.firstElementChild?.remove();

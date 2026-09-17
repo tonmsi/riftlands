@@ -1,5 +1,5 @@
 import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../shared/config';
-import type { Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec2, RoomMode } from '../shared/types';
+import type { AbilitySlot, Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec2, RoomMode } from '../shared/types';
 import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
 import { OUTPOST, OUTPOST_HUTS, outpostHutAt } from '../shared/outpost';
@@ -7,7 +7,7 @@ import type { ArenaGateState } from '../shared/types';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
-import { spriteDirectionRow } from './sprite-direction';
+import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -97,6 +97,7 @@ export interface RenderFrame {
   playing: boolean;
   /** Direction requested by the local player; null means standing still. */
   moveDirection?: Vec2 | null;
+  aimPreview?: { slot: AbilitySlot; angle: number } | null;
 }
 const TAU = Math.PI * 2;
 const PICKUP_COLORS: Record<Pickup['kind'], string> = {
@@ -132,6 +133,7 @@ export class Renderer {
   readonly camera: Vec2 = { x: 0, y: 0 };
   private readonly ctx: CanvasRenderingContext2D;
   private readonly resizeObserver: ResizeObserver;
+  private readonly touchQuery = matchMedia('(pointer: coarse)');
   private width = 1;
   private height = 1;
   private dpr = 1;
@@ -205,7 +207,9 @@ export class Renderer {
     // huge amount of procedural terrain in one frame.
     const viewportScale = Math.max(1, this.width / MAX_LOGICAL_VIEWPORT.width, this.height / MAX_LOGICAL_VIEWPORT.height);
     this.zoom = baseZoom * viewportScale;
-    if (this.world.mode === 'arena') this.zoom = Math.max(0.3, Math.min((this.width - 40) / 960, (this.height - 230) / 768));
+    if (this.world.mode === 'arena') this.zoom = this.touchQuery.matches
+      ? Math.max(0.8, Math.min(this.width / 960, this.height / 768))
+      : Math.max(0.3, Math.min((this.width - 40) / 960, (this.height - 230) / 768));
   }
 
   render(frame: RenderFrame): void {
@@ -213,7 +217,8 @@ export class Renderer {
     const now = performance.now();
     const delta = this.lastTime ? Math.max(0, Math.min(80, now - this.lastTime)) : 16;
     this.lastTime = now;
-    const target = this.world.mode === 'arena' && frame.playing ? { x: 0, y: 0 } : frame.self && frame.playing ? frame.self : {
+    if (this.dpr !== Math.min(window.devicePixelRatio || 1, MAX_RENDER_DPR)) this.resize();
+    const target = this.world.mode === 'arena' && frame.playing && !this.touchQuery.matches ? { x: 0, y: 0 } : frame.self && frame.playing ? frame.self : {
       x: 25 + Math.sin(frame.time * 0.000025) * 18,
       y: 12 + Math.cos(frame.time * 0.000019) * 12,
     };
@@ -270,6 +275,21 @@ export class Renderer {
       ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff0c5'; ctx.fillText(`${gold.amount} gold`, 0, -23); ctx.restore();
     }
     const events = frame.events.filter(event => frame.time >= event.at && frame.time - event.at < event.duration);
+    if (frame.self && frame.self.hp > 0 && frame.aimPreview != null) {
+      const ability = CLASSES[frame.self.classId].abilities[frame.aimPreview.slot];
+      ctx.save(); ctx.translate(frame.self.x, frame.self.y); ctx.rotate(frame.aimPreview.angle);
+      ctx.strokeStyle = '#fff1c470'; ctx.fillStyle = '#fff1c40c'; ctx.lineWidth = 1 / this.zoom;
+      if (ability.kind === 'melee') {
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, ability.range, -0.65, 0.65); ctx.closePath(); ctx.fill(); ctx.stroke();
+      } else if (ability.kind === 'trap') {
+        circle(ctx, Math.min(ability.range || 60, 60), 0, ability.radius); ctx.stroke();
+      } else {
+        ctx.setLineDash([5, 9]);
+        ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(ability.range, 0); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(ability.range - 7, -4); ctx.lineTo(ability.range, 0); ctx.lineTo(ability.range - 7, 4); ctx.stroke();
+      }
+      ctx.restore();
+    }
     for (const event of events) this.drawGroundEvent(event, frame.time);
     const pickups = frame.playing ? frame.pickups : [
       ...this.world.getChunk(0, 0).pickups, ...this.world.getChunk(-1, 0).pickups,
@@ -761,9 +781,7 @@ export class Renderer {
       if (moving) {
         const directionX = controlledDirection ? moveDirection!.x : dx;
         const directionY = controlledDirection ? moveDirection!.y : dy;
-        // Diagonals use the horizontal spritesheet row; only pure vertical
-        // movement uses the up/down rows.
-        row = directionX !== 0 ? (directionX < 0 ? 2 : 3) : directionY < 0 ? 1 : 0;
+        row = playerSpriteDirectionRow(directionX, directionY, row, this.touchQuery.matches);
       }
       const startedAt = moving && (!previous || !previous.moving || previous.row !== row || Math.hypot(actor.x - previous.x, actor.y - previous.y) > 20)
         ? time : previous?.startedAt ?? time;
@@ -1003,7 +1021,12 @@ export class Renderer {
 export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = []): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const width = canvas.width, height = canvas.height;
+  const rect = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, MAX_RENDER_DPR);
+  const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
+  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+    canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const scale = Math.min(width, height) / 1600;
   const center = self ?? { x: 0, y: 0 };
   const left = center.x - width / (2 * scale), top = center.y - height / (2 * scale);

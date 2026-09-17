@@ -9,7 +9,7 @@ export interface ArenaGateState { phase: 'waiting' | 'countdown' | 'combat' | 'r
 export type TileKind = 'grass' | 'path' | 'water' | 'rock' | 'bush' | 'mud';
 export type Biome = 'meadow' | 'forest' | 'marsh';
 export type PickupKind = 'heal' | 'haste' | 'power' | 'weakness';
-export interface AbilityDef { name: string; description: string; cost: number; cooldown: number; range: number; damage: number; kind: 'projectile' | 'melee' | 'area' | 'heal' | 'shield' | 'dash' | 'trap'; radius: number; color: string; duration?: number; speed?: number; slow?: number; }
+export interface AbilityDef { targeting: 'directional' | 'self'; name: string; description: string; cost: number; cooldown: number; range: number; damage: number; kind: 'projectile' | 'melee' | 'area' | 'heal' | 'shield' | 'dash' | 'trap'; radius: number; color: string; duration?: number; speed?: number; slow?: number; }
 export interface ClassDef { id: ClassId; name: string; subtitle: string; description: string; color: string; resource: 'mana' | 'rage'; maxHp: number; maxResource: number; speed: number; armor: number; abilities: Record<AbilitySlot, AbilityDef>; }
 export interface InputCommand { seq: number; dx: number; dy: number; aim: number; cast?: AbilitySlot; }
 export interface StatusEffect { kind: 'haste' | 'power' | 'weakness' | 'slow' | 'shield' | 'root'; until: number; }
