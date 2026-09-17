@@ -1,3 +1,37 @@
+.options-button, .control-options button, .control-options select {
+  border:1px solid #52675e; background:#1c302b; color:#e7ebe3; padding:10px 14px; border-radius:6px; font:inherit;
+}
+.options-button:hover, .control-options button:hover { border-color:#bbdfc5; background:#2a4237 }
+.control-options {
+  width:min(680px, calc(100vw - 24px)); max-height:calc(100dvh - 32px); overflow:auto;
+  padding:28px; color:#e7ebe3; background:#14251f; border:1px solid #52675e; border-radius:14px;
+  box-shadow:0 24px 90px #0008;
+}
+.control-options::backdrop { background:#07100de0; backdrop-filter:blur(5px) }
+.options-heading, .movement-option, .options-footer { display:flex; align-items:center; justify-content:space-between; gap:12px }
+.options-heading h2 { margin:6px 0 0; font-size:28px }
+.options-heading button { font-size:24px; line-height:1 }
+.control-options p { color:#b4c5bb; line-height:1.55 }
+.movement-option { margin-top:24px; font-weight:600 }
+.options-help { font-size:12px }
+.binding-row { display:grid; grid-template-columns:minmax(0, 1.3fr) repeat(2, minmax(0, 1fr)); gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid #ffffff0e }
+.binding-row span { font-size:13px }
+.binding-row button { min-height:42px; overflow-wrap:anywhere; font-size:12px }
+.control-options .is-capturing { border-color:#bbdfc5; background:#365544 }
+.options-status { min-height:42px; font-size:13px }
+.options-footer { flex-wrap:wrap; margin-top:16px }
+.options-footer [data-save] { background:#bbdfc5; color:#14251f; font-weight:600 }
+.ability-button kbd { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+@media(max-width:650px) {
+  .control-options { padding:18px }
+  .options-button { padding:8px 10px }
+  .binding-row { gap:6px; grid-template-columns:minmax(0, 1.1fr) repeat(2, minmax(0, 1fr)) }
+  .binding-row button { padding:8px 5px }
+  .movement-option { align-items:flex-start; flex-direction:column }
+  .control-options select { width:100% }
+  .options-footer button { flex:1 1 auto }
+}
+
 :root {
   font-family:Inter,"Segoe UI",Arial,sans-serif;
   color:#e7ebe3;

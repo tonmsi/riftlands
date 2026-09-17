@@ -1,6 +1,6 @@
 import './style.css';
 import { TICK_RATE } from '../shared/config';
-import type { AbilitySlot, Actor, GameEvent, InputCommand, PublicAccount, Snapshot, Vec2 } from '../shared/types';
+import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import { GameConnection } from './net';
 import { predictMovement, reconcile } from './prediction';
 import { LocalMovementView, LocalPresentationDelay } from './motion';
@@ -8,6 +8,7 @@ import { SnapshotBuffer } from './snapshots';
 import { Renderer, drawMinimap } from './render';
 import { GameUI } from './ui';
 import { dungeonAt } from '../shared/dungeons';
+import { CONTROLS_STORAGE_KEY, defaultControls, GameControls, parseControls } from './controls';
 
 let playing = false;
 let latest: Snapshot | null = null;
@@ -15,10 +16,8 @@ let predicted: Actor | null = null;
 let pending: InputCommand[] = [];
 let seq = 0;
 let selectedId: string | null = null;
-let pendingCast: AbilitySlot | undefined;
-let primaryHeld = false;
-let pointer: Vec2 | null = null;
-const keys = new Set<string>();
+const controls = new GameControls(defaultControls());
+try { controls.settings = parseControls(localStorage.getItem(CONTROLS_STORAGE_KEY)); } catch { /* Storage may be unavailable. */ }
 const snapshotBuffer = new SnapshotBuffer();
 let renderedActors: Actor[] = [];
 const effects = new Map<string, GameEvent>();
@@ -29,7 +28,7 @@ const localPresentation = new LocalPresentationDelay(LOCAL_PRESENTATION_DELAY_MS
 let lastMinimap = 0;
 let profileCache = '';
 let joinGeneration = 0;
-const releaseControls = (): void => { keys.clear(); primaryHeld = false; pendingCast = undefined; };
+const releaseControls = (): void => controls.clear();
 
 const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   joinCredentials: (mode, name, password, classId) => {
@@ -56,13 +55,20 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   leave: () => {
     joinGeneration++;
     connection.leave(); playing = false; latest = null; predicted = null; selectedId = null; localPresentation.reset();
-    keys.clear(); primaryHeld = false; pendingCast = undefined; snapshotBuffer.clear(); renderedActors = []; effects.clear();
+    releaseControls(); snapshotBuffer.clear(); renderedActors = []; effects.clear();
     ui.setPlaying(false); ui.setSelected(null);
   },
   social: (action, targetId) => { connection.send({ type: 'social', action, targetId }); },
   select: id => { selectedId = id; ui.setSelected(latest?.actors.find(actor => actor.id === id) ?? null); },
-  cast: slot => { if (playing && connection.connected) pendingCast = slot; }
+  cast: slot => { if (playing && connection.connected) controls.cast(slot); },
+  controlsChanged: settings => {
+    if (playing) return;
+    releaseControls(); controls.settings = settings;
+    try { localStorage.setItem(CONTROLS_STORAGE_KEY, JSON.stringify(settings)); ui.toast('Controlli salvati su questo dispositivo.', 'success'); }
+    catch { ui.toast('Controlli applicati. Il browser non consente il salvataggio: al prossimo avvio saranno ripristinati.', 'error'); }
+  }
 });
+ui.setControls(controls.settings);
 
 const renderer = new Renderer(ui.canvas);
 const connection = new GameConnection({
@@ -85,14 +91,14 @@ const connection = new GameConnection({
       ui.setSocial(message.social);
       ui.setPlaying(true);
       playing = true;
-      pointer = null;
+      releaseControls();
       effects.clear();
       latest = null;
     } else if (message.type === 'room') {
       renderer.setSeed(message.room.seed, message.room.mode);
       latest = null;
       selectedId = null;
-      pointer = null;
+      releaseControls();
       effects.clear();
       lastMinimap = 0;
       ui.setSelected(null);
@@ -151,57 +157,53 @@ try {
 
 const isTyping = (): boolean => {
   const active = document.activeElement;
-  return active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || (active instanceof HTMLElement && active.isContentEditable);
+  return active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement || (active instanceof HTMLElement && active.isContentEditable);
 };
 
 window.addEventListener('keydown', event => {
   if (!playing || !connection.connected || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
-  const code = event.code;
-  if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyQ', 'KeyE', 'KeyR'].includes(code)) event.preventDefault();
-  keys.add(code);
-  if (!event.repeat && ['KeyQ', 'KeyE', 'KeyR'].includes(code)) pendingCast = code.slice(3).toLowerCase() as AbilitySlot;
+  if (controls.press(event.code)) event.preventDefault();
 });
 
-window.addEventListener('keyup', event => keys.delete(event.code));
+window.addEventListener('keyup', event => controls.release(event.code));
 window.addEventListener('blur', releaseControls);
+document.addEventListener('focusin', () => { if (isTyping()) releaseControls(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) releaseControls(); });
-ui.canvas.addEventListener('pointermove', event => { pointer = { x: event.clientX, y: event.clientY }; });
+ui.canvas.addEventListener('pointermove', event => { if (playing && event.pointerType === 'mouse') controls.setPointer({ x: event.clientX, y: event.clientY }); });
 ui.canvas.addEventListener('pointerdown', event => {
-  if (!playing || !connection.connected || ![0, 2].includes(event.button)) return;
-  pointer = { x: event.clientX, y: event.clientY };
-  ui.canvas.setPointerCapture(event.pointerId);
-  if (event.button === 2) { primaryHeld = true; return; }
+  if (!playing || !connection.connected || ![0, 1, 2].includes(event.button)) return;
+  ui.canvas.focus({ preventScroll: true });
+  if (event.pointerType === 'mouse') {
+    controls.setPointer({ x: event.clientX, y: event.clientY });
+    ui.canvas.setPointerCapture(event.pointerId);
+    if (event.button !== 0) { event.preventDefault(); controls.press(`Mouse${event.button}`); return; }
+  }
   const position = renderer.screenToWorld(event.clientX, event.clientY);
   const target = renderedActors.find(actor => actor.id !== predicted?.id && Math.hypot(actor.x - position.x, actor.y - position.y) < actor.radius + 14);
   if (target) { selectedId = target.id; ui.setSelected(target); }
   else if (selectedId) { selectedId = null; ui.setSelected(null); }
 });
 
-window.addEventListener('pointerup', () => { primaryHeld = false; });
+window.addEventListener('pointerup', event => { if (event.pointerType === 'mouse') controls.release(`Mouse${event.button}`); });
 window.addEventListener('pointercancel', releaseControls);
+ui.canvas.addEventListener('lostpointercapture', event => { if (event.pointerType === 'mouse') { controls.release('Mouse1'); controls.release('Mouse2'); } });
 ui.canvas.addEventListener('contextmenu', event => event.preventDefault());
+ui.canvas.addEventListener('auxclick', event => event.preventDefault());
 
 function inputTick(): void {
   if (!playing || !connection.connected || !predicted || document.hidden) return;
   localMovement.advance(predicted, predicted);
   if (pending.length > 120) { releaseControls(); return; }
-  const right = keys.has('KeyD') || keys.has('ArrowRight'), left = keys.has('KeyA') || keys.has('ArrowLeft');
-  const down = keys.has('KeyS') || keys.has('ArrowDown'), up = keys.has('KeyW') || keys.has('ArrowUp');
-  let dx = isTyping() ? 0 : Number(right) - Number(left), dy = isTyping() ? 0 : Number(down) - Number(up);
-  const magnitude = Math.hypot(dx, dy);
-  if (magnitude > 1) { dx /= magnitude; dy /= magnitude; }
-  const worldPointer = pointer ? renderer.screenToWorld(pointer.x, pointer.y) : null;
-  let aim = predicted.aim;
-  if (worldPointer) aim = Math.atan2(worldPointer.y - predicted.y, worldPointer.x - predicted.x);
-  else if (magnitude) aim = Math.atan2(dy, dx);
-  const cast = isTyping() ? undefined : pendingCast ?? ((primaryHeld || keys.has('Space')) ? 'basic' : undefined);
+  const { dx, dy, aim, cast } = isTyping() || predicted.hp <= 0
+    ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined })
+    : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
   const input: InputCommand = { seq: ++seq, dx, dy, aim, ...(cast ? { cast } : {}) };
   if (connection.send({ type: 'input', input })) {
     pending.push(input);
     const next = predictMovement(predicted, input, renderer.world, connection.serverTime());
     localMovement.advance(predicted, next);
     predicted = next;
-    pendingCast = undefined;
+    controls.consumeCast();
   } else seq--;
 }
 
@@ -215,11 +217,11 @@ function advanceInputs(now: number): void {
 setInterval(() => advanceInputs(performance.now()), 8);
 
 const touchControls = document.createElement('div'); touchControls.className = 'touch-controls';
-for (const [label, code, className] of [['↑', 'KeyW', 'up'], ['←', 'KeyA', 'left'], ['↓', 'KeyS', 'down'], ['→', 'KeyD', 'right']]) {
-  const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.className = className;
-  button.setAttribute('aria-label', `Muoviti ${({ KeyW: 'su', KeyA: 'a sinistra', KeyS: 'giù', KeyD: 'a destra' })[code as 'KeyW']}`);
-  button.addEventListener('pointerdown', event => { event.preventDefault(); button.setPointerCapture(event.pointerId); keys.add(code); });
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(event, () => keys.delete(code));
+for (const [label, action] of [['↑', 'up'], ['←', 'left'], ['↓', 'down'], ['→', 'right']] as const) {
+  const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.className = action;
+  button.setAttribute('aria-label', `Muoviti ${({ up: 'su', left: 'a sinistra', down: 'giù', right: 'a destra' })[action]}`);
+  button.addEventListener('pointerdown', event => { if (!playing || !connection.connected) return; event.preventDefault(); button.setPointerCapture(event.pointerId); controls.setTouchDirection(action, true); });
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(event, () => controls.setTouchDirection(action, false));
   touchControls.append(button);
 }
 document.querySelector('.rift-app')?.append(touchControls);
@@ -251,10 +253,10 @@ function frame(now: number): void {
     selectedId,
     previewClass: ui.selectedClass,
     playing,
-    moveDirection: playing && !isTyping() ? {
-      x: Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft')),
-      y: Number(keys.has('KeyS') || keys.has('ArrowDown')) - Number(keys.has('KeyW') || keys.has('ArrowUp')),
-    } : null,
+    moveDirection: playing && !isTyping() && predicted ? (() => {
+      const input = controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
+      return { x: input.dx, y: input.dy };
+    })() : null,
   });
   if (self && playing && now - lastMinimap > 250) {
     drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? []); lastMinimap = now;

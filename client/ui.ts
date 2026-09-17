@@ -1,5 +1,7 @@
 import { CLASSES, levelFromXp } from '../shared/config';
 import { ARENA_GATE } from '../shared/arena';
+import { bindingLabel, defaultControls, type ControlSettings } from './controls';
+import { ControlOptions } from './control-options';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, PublicAccount, Snapshot, SocialState } from '../shared/types';
 
 const PROFILE_URLS: Partial<Record<ClassId, string>> = {
@@ -19,10 +21,10 @@ export interface UIActions {
   select: (id: string | null) => void;
   cast: (slot: AbilitySlot) => void;
   previewClass?: (classId: ClassId) => void;
+  controlsChanged?: (settings: ControlSettings) => void;
 }
 
 const SLOTS: AbilitySlot[] = ['basic', 'q', 'e', 'r'];
-const KEYS = { basic: '␣', q: 'Q', e: 'E', r: 'R' };
 const CLASS_ICONS: Record<ClassId, string> = {
   mage: '<path d="M12 2 14.7 9.3 22 12l-7.3 2.7L12 22l-2.7-7.3L2 12l7.3-2.7Z"/><path d="m19 2 1 3 3 1M3 19l-1 3"/>',
   warrior: '<path d="m5 3 4 1 10 12-3 3L4 7Z"/><path d="m19 3-4 1-4 5M5 16l4-4M3 17l4 4M17 15l4 4M5 19l-2 3M19 19l3 3"/>',
@@ -78,6 +80,8 @@ export class GameUI {
   private lastSanctuary: Snapshot['sanctuary'];
   private readonly goldWallet: HTMLElement;
   private previousGold?: number;
+  private controls = defaultControls();
+  private readonly options: ControlOptions;
 
   constructor(private root: HTMLElement, private actions: UIActions) {
     root.className = 'rift-app';
@@ -166,6 +170,13 @@ export class GameUI {
     this.minimap = root.querySelector<HTMLCanvasElement>('.minimap')!;
     this.nameInput = this.ref('name') as HTMLInputElement;
     this.passwordInput = this.ref('password') as HTMLInputElement;
+    this.options = new ControlOptions(root, () => !this.isPlaying && this.status !== 'connecting' && this.status !== 'reconnecting', settings => {
+      this.setControls(settings); this.actions.controlsChanged?.(settings);
+    });
+    const optionsButton = document.createElement('button'); optionsButton.type = 'button';
+    optionsButton.className = 'options-button'; optionsButton.textContent = 'Opzioni';
+    optionsButton.addEventListener('click', () => this.options.open(this.controls));
+    root.querySelector('.header-right')!.prepend(optionsButton);
 
     this.ref('tab-login').addEventListener('click', () => this.setAuthMode('login'));
     this.ref('tab-register').addEventListener('click', () => this.setAuthMode('register'));
@@ -214,6 +225,17 @@ export class GameUI {
   }
 
   get selectedClass(): ClassId { return this.currentClass; }
+  private keyLabel(slot: AbilitySlot): string { return bindingLabel(this.controls.bindings[slot][0]); }
+  setControls(settings: ControlSettings): void {
+    if (this.isPlaying) return;
+    this.controls = structuredClone(settings); this.activeClass = null; this.renderClass();
+    const movement = settings.movement === 'mouse'
+      ? `${settings.bindings.movePointer.map(bindingLabel).join(' / ')} tenuto: segui il cursore`
+      : `${(['up', 'left', 'down', 'right'] as const).map(action => settings.bindings[action].map(bindingLabel).join('/')).join(' · ')}: muovi`;
+    this.root.querySelector('.lobby-controls')!.textContent = `${movement} · ${settings.bindings.basic.map(bindingLabel).join(' / ')}: attacca · ${(['q', 'e', 'r'] as const).map(slot => this.keyLabel(slot)).join(' / ')}: abilità · Mouse: mira`;
+    this.root.querySelector('.combat-instruction')!.textContent = `${movement} · Mouse: mira · Clic sinistro: seleziona`;
+    this.root.querySelector('.combat-caption > span:last-child')!.textContent = `${settings.bindings.basic.map(bindingLabel).join(' / ')} per attaccare`;
+  }
   private ref(name: string): HTMLElement { return this.refs.get(name)!; }
   private write(name: string, value: string): void { const node = this.ref(name); if (node.textContent !== value) node.textContent = value; }
   private fill(name: string, fraction: number): void { this.ref(name).style.width = `${Math.max(0, Math.min(1, fraction)) * 100}%`; }
@@ -259,11 +281,14 @@ export class GameUI {
       button.classList.toggle('selected', active);
       button.setAttribute('aria-pressed', String(active));
     });
-    this.ref('class-detail').innerHTML = `<div class="class-detail-heading"><h3>${chosen.subtitle}</h3><div class="class-stats"><span><i class="stat-health"></i>${chosen.maxHp} PV</span><span><i class="stat-resource" style="background:${chosen.color}"></i>${chosen.maxResource} ${chosen.resource === 'rage' ? 'RAGE' : 'MANA'}</span></div></div><p>${chosen.description}</p><div class="lobby-abilities">${SLOTS.map(slot => `<div class="lobby-ability" title="${chosen.abilities[slot].description}"><kbd>${KEYS[slot]}</kbd><span>${chosen.abilities[slot].name}</span></div>`).join('')}</div>`;
+    this.ref('class-detail').innerHTML = `<div class="class-detail-heading"><h3>${chosen.subtitle}</h3><div class="class-stats"><span><i class="stat-health"></i>${chosen.maxHp} PV</span><span><i class="stat-resource" style="background:${chosen.color}"></i>${chosen.maxResource} ${chosen.resource === 'rage' ? 'RAGE' : 'MANA'}</span></div></div><p>${chosen.description}</p><div class="lobby-abilities">${SLOTS.map(slot => `<div class="lobby-ability" title="${chosen.abilities[slot].description}"><kbd>${this.keyLabel(slot)}</kbd><span>${chosen.abilities[slot].name}</span></div>`).join('')}</div>`;
   }
 
   setConnection(status: 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline', detail?: string): void {
     this.status = status;
+    if (status === 'connecting' || status === 'reconnecting') this.options.close();
+    const optionsButton = this.root.querySelector<HTMLButtonElement>('.options-button');
+    if (optionsButton) optionsButton.disabled = this.isPlaying || status === 'connecting' || status === 'reconnecting';
     const labels = { idle: 'Pronto a esplorare', connecting: 'Connessione in corso', online: 'Connesso al mondo', reconnecting: 'Riconnessione…', offline: 'Connessione interrotta' };
     const pill = this.ref('lobby-connection');
     pill.dataset.status = status;
@@ -279,6 +304,8 @@ export class GameUI {
 
   setPlaying(playing: boolean): void {
     this.isPlaying = playing;
+    if (playing) this.options.close();
+    this.root.querySelector<HTMLButtonElement>('.options-button')!.disabled = playing || this.status === 'connecting' || this.status === 'reconnecting';
     this.root.classList.toggle('is-playing', playing);
     (this.root.querySelector('.lobby') as HTMLElement).hidden = playing;
     (this.root.querySelector('.game-hud') as HTMLElement).hidden = !playing;
@@ -307,7 +334,7 @@ export class GameUI {
       this.write('combat-class', definition.name);
       this.ref('ability-bar').innerHTML = SLOTS.map(slot => {
         const ability = definition.abilities[slot];
-        return `<button class="ability-button" data-slot="${slot}" style="--ability-color:${ability.color}" aria-label="${ability.name} (${slot === 'basic' ? 'Spazio' : slot.toUpperCase()})" title="${ability.name} — ${ability.description}\n${ability.cost} ${definition.resource === 'rage' ? 'rabbia' : 'mana'} · ${ability.cooldown}s di recupero"><kbd>${KEYS[slot]}</kbd><span class="ability-art">${icon(ABILITY_ICONS[ability.kind])}</span><span class="ability-name">${ability.name}</span><span class="ability-cost">${ability.cost || '—'}</span><span class="cooldown-shade"></span><span class="cooldown-count"></span></button>`;
+        return `<button class="ability-button" data-slot="${slot}" style="--ability-color:${ability.color}" aria-label="${ability.name} (${this.keyLabel(slot)})" title="${ability.name} — ${ability.description}\n${ability.cost} ${definition.resource === 'rage' ? 'rabbia' : 'mana'} · ${ability.cooldown}s di recupero"><kbd>${this.keyLabel(slot)}</kbd><span class="ability-art">${icon(ABILITY_ICONS[ability.kind])}</span><span class="ability-name">${ability.name}</span><span class="ability-cost">${ability.cost || '—'}</span><span class="cooldown-shade"></span><span class="cooldown-count"></span></button>`;
       }).join('');
     }
     this.write('player-name', player.name);

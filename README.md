@@ -29,6 +29,12 @@ I test browser usano Edge su Windows. Su Linux/macOS installare Chromium con `np
 
 ## Comandi e classi
 
+Dal menu principale, **Opzioni → Controlli** permette di cambiare i comandi di movimento, attacco base e abilità, con un'associazione principale e una alternativa. **Salva controlli** applica le modifiche e le conserva sul dispositivo; **Annulla** scarta le modifiche. **Ripristina predefiniti** ripristina la configurazione iniziale, da confermare con Salva controlli. Durante una partita le opzioni non sono disponibili: occorre tornare al menu principale.
+
+La modalità **Segui il cursore** muove il personaggio verso il puntatore mentre si tiene premuto il comando configurato (mouse destro per impostazione iniziale). Il rilascio arresta il movimento; il personaggio si ferma vicino al cursore e collide normalmente con gli ostacoli, senza calcolare un percorso. Il clic sinistro resta riservato alla selezione. Passando a questa modalità, il destro viene rimosso dall'attacco base, che resta su Spazio; eventuali altri conflitti tra movimento e attacchi vengono risolti e mostrati nelle opzioni. Le associazioni duplicate attive vengono rifiutate.
+
+`client/controls.ts` separa input fisici e azioni di gioco. Movimento touch e mira touch sono indipendenti dalle associazioni desktop: il futuro joystick userà `setTouchMovement`, mentre lo swipe sull'attacco direzionale userà `setTouchAim`. Le altre abilità continueranno a usare `cast` tramite tocco. Il joystick e lo swipe non sono ancora implementati; il pad touch esistente usa già le azioni indipendenti dai tasti.
+
 | Comando | Azione |
 | --- | --- |
 | WASD / frecce | Movimento |
