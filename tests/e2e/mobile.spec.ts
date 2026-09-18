@@ -18,6 +18,54 @@ async function emulateDeniedFullscreen(page: Page): Promise<void> {
   });
 }
 
+test('mobile notices are read in sequence without clipping in either orientation', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 568, height: 320 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  let notice: (message: string) => void = () => { throw new Error('Socket not connected'); };
+  await page.routeWebSocket('**/ws', socket => {
+    socket.connectToServer();
+    notice = message => socket.send(JSON.stringify({ type: 'notice', message, tone: 'info' }));
+  });
+  // Standalone avoids the fullscreen help notice during this notification test.
+  await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));
+  await register(page, 'Notices');
+  await expect(page.locator('.toast')).toHaveCount(0);
+  const messages = ['Fuori dall’avamposto: PvP attivo.', 'Zona sicura: PvP disattivato.', 'Per giocare senza la barra di Safari: Condividi → Aggiungi alla schermata Home, poi apri Riftlands dalla nuova icona.'];
+  messages.forEach(message => notice(message));
+  for (let i = 0; i < messages.length; i++) {
+    await expect(page.locator('.toast')).toHaveText(messages[i]);
+    await expect(page.locator('.toast')).toHaveCount(1);
+    if (i === 2) await page.setViewportSize({ width: 360, height: 640 });
+    await expect.poll(() => page.locator('.toast').evaluate(toast => {
+      const box = toast.getBoundingClientRect();
+      const stack = toast.parentElement!.getBoundingClientRect();
+      return toast.scrollHeight <= toast.clientHeight && toast.scrollWidth <= toast.clientWidth
+        && box.top >= stack.top && box.bottom <= stack.bottom + 1
+        && box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight;
+    })).toBe(true);
+  }
+  await context.close();
+});
+
+test('iOS fullscreen fallback explains Home Screen launch and standalone skips fullscreen', async ({ browser }) => {
+  for (const standalone of [false, true]) {
+    const context = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
+    const page = await context.newPage();
+    await page.addInitScript(value => Object.defineProperty(navigator, 'standalone', { value }), standalone);
+    await emulateDeniedFullscreen(page);
+    await register(page, standalone ? 'Home' : 'Safari');
+    if (standalone) {
+      await expect(page.getByRole('button', { name: 'Schermo intero', exact: true })).toBeHidden();
+      expect(await page.evaluate(() => (window as any).fullscreenCalls)).toEqual([]);
+    } else {
+      await expect(page.locator('.toast')).toContainText('Aggiungi alla schermata Home');
+    }
+    const manifest = await (await page.request.get('/manifest.webmanifest')).json();
+    expect(manifest.display).toBe('standalone');
+    await context.close();
+  }
+});
+
 for (const classId of ['mage', 'warrior', 'paladin', 'hunter'] as const) {
   test(`${classId}: non-basic directional skills aim and cast their own slot`, async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
@@ -75,7 +123,7 @@ test('real multi-touch: joystick, aim on attack release, ability taps, cancellat
   await register(other, 'Friend');
   await expect.poll(() => snapshot?.actors.some(actor => actor.kind === 'player' && actor.id !== snapshot?.self.id)).toBe(true);
   const friend = snapshot!.actors.find(actor => actor.kind === 'player' && actor.id !== snapshot!.self.id)!;
-  await page.touchscreen.tap(422 + (friend.x - snapshot!.self.x) * 0.95, 195 + (friend.y - snapshot!.self.y) * 0.95);
+  await page.touchscreen.tap(422 + (friend.x - snapshot!.self.x) * 0.76, 195 + (friend.y - snapshot!.self.y) * 0.76);
   await expect(page.locator('[data-ref="target-name"]')).toHaveText(friend.name);
   await page.locator('[data-ref="target-close"]').tap();
   await otherContext.close();
@@ -187,6 +235,8 @@ test('responsive HUD and canvases stay usable across portrait, landscape and tab
     }
     await page.getByRole('button', { name: 'Mostra mappa', exact: true }).tap();
     await expect(page.locator('.minimap-panel')).toBeVisible();
+    await expect(page.locator('[data-ref="map-ping"]')).toBeVisible();
+    await expect(page.locator('[data-ref="map-ping"]')).toHaveText(/\d+ ms/);
     await expect.poll(() => page.locator('.minimap').evaluate((canvas: HTMLCanvasElement) => canvas.width === Math.round(canvas.getBoundingClientRect().width * 2))).toBe(true);
     await page.screenshot({ path: `test-results/mobile-${viewport.width}x${viewport.height}.png` });
     await page.getByRole('button', { name: 'Nascondi mappa', exact: true }).tap();

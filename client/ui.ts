@@ -88,6 +88,8 @@ export class GameUI {
   private readonly exitDialog = document.createElement('dialog');
   private readonly mapToggle = document.createElement('button');
   private mapVisible = true;
+  private readonly toastQueue: { message: string; tone: 'info' | 'error' | 'success' }[] = [];
+  private mobileToastActive = false;
 
   constructor(private root: HTMLElement, private actions: UIActions) {
     root.className = 'rift-app';
@@ -159,7 +161,7 @@ export class GameUI {
         <div class="effect-list" data-ref="effects"></div>
         <section class="target-panel glass" data-ref="target" hidden><div class="target-heading"><span data-ref="target-type">GIOCATORE</span><button data-ref="target-close" aria-label="Deseleziona bersaglio">×</button></div><strong data-ref="target-name"></strong><small data-ref="target-detail"></small><div class="meter hp-meter target-health"><i data-ref="target-fill"></i></div><div class="target-actions" data-ref="target-actions"><button data-ref="target-friend">+ Amico</button><button data-ref="target-team">+ Team</button></div></section>
         <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><div><span class="eyebrow">NON VIAGGIARE DA SOLO</span><h2>I tuoi compagni</h2></div><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
-        <div class="minimap-panel glass"><canvas class="minimap" width="168" height="168" aria-label="Mappa locale"></canvas><div><span>LE TERRE DI SOGLIA</span><span>N ↑</span></div></div>
+        <div class="minimap-panel glass"><canvas class="minimap" width="168" height="168" aria-label="Mappa locale"></canvas><div><span>LE TERRE DI SOGLIA</span><span>N ↑</span></div><div class="map-network"><span>PING</span><span data-ref="map-ping">— ms</span></div></div>
         <div class="combat-hud"><div class="combat-instruction"><span>WASD / FRECCE <b>muovi</b></span><span>SINISTRO PREMUTO <b>mira</b></span><span>CLIC <b>seleziona</b></span></div><div class="ability-bar glass" data-ref="ability-bar"></div><div class="combat-caption"><span data-ref="combat-class"></span><span>·</span><span>SPAZIO / CLIC DESTRO per attaccare</span></div></div>
         <div class="world-tip glass"><span>✧</span><span>I cespugli ti nascondono.<br><b>Attaccare rivela la tua posizione.</b></span></div>
         <div class="connection-banner" data-ref="connection-banner" hidden>Riconnessione al mondo…</div>
@@ -424,6 +426,8 @@ export class GameUI {
     this.arenaStatus.dataset.phase = bossPreparation ? 'boss-countdown' : gate?.phase ?? (snapshot.matchEndsAt ? 'match' : 'idle');
     this.write('ping', Number.isFinite(ping) ? `${Math.round(ping)} ms` : '— ms');
     this.ref('ping').classList.toggle('high-ping', ping > 180);
+    this.write('map-ping', Number.isFinite(ping) ? `${Math.round(ping)} ms` : '— ms');
+    this.ref('map-ping').classList.toggle('high-ping', ping > 180);
     const remaining = Math.max(0, player.deadUntil - snapshot.time);
     this.ref('death').hidden = remaining <= 0;
     this.write('death-count', String(Math.ceil(remaining / 1000)));
@@ -558,6 +562,26 @@ export class GameUI {
   }
 
   toast(message: string, tone: 'info' | 'error' | 'success' = 'info'): void {
+    if (this.display.touch) {
+      this.toastQueue.push({ message, tone });
+      this.nextMobileToast();
+      return;
+    }
+    this.showToast(message, tone);
+  }
+
+  private nextMobileToast(): void {
+    if (this.mobileToastActive) return;
+    const next = this.toastQueue.shift();
+    if (!next) return;
+    this.mobileToastActive = true;
+    this.showToast(next.message, next.tone, () => {
+      this.mobileToastActive = false;
+      this.nextMobileToast();
+    });
+  }
+
+  private showToast(message: string, tone: 'info' | 'error' | 'success', complete?: () => void): void {
     const toast = textElement('div', `toast toast-${tone}`, message);
     toast.title = message;
     const stack = this.ref('toasts');
@@ -565,7 +589,7 @@ export class GameUI {
     while (stack.childElementCount > 4) stack.firstElementChild?.remove();
     window.setTimeout(() => {
       toast.classList.add('toast-leaving');
-      window.setTimeout(() => toast.remove(), 250);
-    }, tone === 'error' ? 6500 : 4200);
+      window.setTimeout(() => { toast.remove(); complete?.(); }, 250);
+    }, Math.max(tone === 'error' ? 6500 : 4200, message.length * 45));
   }
 }

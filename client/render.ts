@@ -201,14 +201,14 @@ export class Renderer {
     this.dpr = Math.min(window.devicePixelRatio || 1, MAX_RENDER_DPR);
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);
-    const baseZoom = this.width < 680 ? 0.8 : 0.95;
+    const baseZoom = (this.width < 680 ? 0.8 : 0.95) * (this.touchQuery.matches ? 0.8 : 1);
     // A browser zoom-out enlarges the CSS viewport without enlarging the actual
     // screen. Keep the logical world viewport bounded so it cannot generate a
     // huge amount of procedural terrain in one frame.
     const viewportScale = Math.max(1, this.width / MAX_LOGICAL_VIEWPORT.width, this.height / MAX_LOGICAL_VIEWPORT.height);
     this.zoom = baseZoom * viewportScale;
     if (this.world.mode === 'arena') this.zoom = this.touchQuery.matches
-      ? Math.max(0.8, Math.min(this.width / 960, this.height / 768))
+      ? Math.max(0.8, Math.min(this.width / 960, this.height / 768)) * 0.8
       : Math.max(0.3, Math.min((this.width - 40) / 960, (this.height - 230) / 768));
   }
 

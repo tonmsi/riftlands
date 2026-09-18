@@ -13,6 +13,8 @@ html.game-active, .game-active body { overflow:hidden; overscroll-behavior:none;
 .mobile-joystick { display:none }
 .exit-confirmation { max-width:440px }
 .is-playing .minimap-panel { height:auto }
+.minimap-panel .map-network { display:none }
+.touch-layout .minimap-panel .map-network { display:flex; font-size:10px; font-variant-numeric:tabular-nums }
 
 /* A touch layout is a different arrangement, never a scaled-down desktop HUD. */
 .touch-layout.is-playing { --control-edge:20px; --stick-size:124px; --skill-size:58px; --attack-size:76px }
@@ -75,12 +77,12 @@ html.game-active, .game-active body { overflow:hidden; overscroll-behavior:none;
 .touch-layout .minimap-panel>div { font-size:8px; letter-spacing:0; padding:4px 0 0 }
 .touch-layout .arena-status { top:auto; bottom:calc(var(--safe-bottom) + 10px); left:50%; transform:translateX(-50%); width:calc(100% - 450px - var(--safe-left) - var(--safe-right)); max-width:340px; font-size:10px; padding:6px; max-height:48px; overflow:auto; pointer-events:auto; touch-action:pan-y }
 .touch-layout .social-panel { top:calc(var(--safe-top) + 60px); bottom:calc(var(--safe-bottom) + 12px); left:50%; right:auto; transform:translateX(-50%); width:min(420px, calc(100% - 32px)); z-index:10; background:#14261ff7 }
-.touch-layout.is-playing .toast-stack { left:50%; right:auto; transform:translateX(-50%); top:calc(var(--safe-top) + 60px); bottom:auto; max-width:calc(100% - 440px); width:300px; max-height:30px; overflow:hidden; pointer-events:none }
-.touch-layout .toast { font-size:11px; padding:8px }
+.touch-layout.is-playing .toast-stack { left:50%; right:auto; transform:translateX(-50%); top:calc(var(--safe-top) + 60px); bottom:auto; max-width:calc(100% - 32px - var(--safe-left) - var(--safe-right)); width:clamp(240px, calc(100% - 440px), 340px); max-height:none; overflow:visible; pointer-events:none }
+.touch-layout .toast { width:100%; font-size:11px; padding:8px; white-space:normal; overflow-wrap:anywhere; flex-shrink:0 }
 .touch-layout .connection-banner { top:45%; max-width:calc(100% - 40px); min-width:0; width:300px; font-size:12px }
 .touch-layout .death-overlay { pointer-events:none }
-@media (orientation:landscape) {
-  .touch-layout .toast { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 8px }
+@media (orientation:landscape) and (max-width:700px) {
+  .touch-layout.is-playing .toast-stack { top:calc(var(--safe-top) + 112px) }
 }
 @media (orientation:portrait) {
   .touch-layout.is-playing { --control-edge:18px; --stick-size:116px; --skill-size:56px; --attack-size:72px }
@@ -94,7 +96,7 @@ html.game-active, .game-active body { overflow:hidden; overscroll-behavior:none;
   .touch-layout .target-panel { top:calc(var(--safe-top) + 196px); width:calc(100% - 180px); min-width:160px; max-height:calc(var(--game-height) - 413px) }
   .touch-layout .minimap-panel { top:calc(var(--safe-top) + 196px); left:auto; right:calc(var(--safe-right) + 12px); transform:none; width:140px }
   .touch-layout .arena-status { top:auto; bottom:calc(var(--safe-bottom) + 210px); width:calc(100% - 32px); max-width:none; max-height:52px; font-size:11px }
-  .touch-layout.is-playing .toast-stack { top:auto; bottom:calc(var(--safe-bottom) + 267px); max-width:calc(100% - 32px); max-height:80px }
+  .touch-layout.is-playing .toast-stack { top:auto; bottom:calc(var(--safe-bottom) + 267px); width:340px; max-height:none }
 }
 @media (orientation:landscape) and (max-height:370px) {
   .touch-layout.is-playing { --stick-size:106px; --skill-size:52px; --attack-size:66px }

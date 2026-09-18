@@ -28,10 +28,20 @@ export class GameDisplay {
     this.updateFullscreen();
   }
   get touch(): boolean { return this.touchQuery.matches; }
+  private get standalone(): boolean {
+    return matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches
+      || !!(navigator as Navigator & { standalone?: boolean }).standalone;
+  }
+  private fullscreenHelp(): void {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    this.notify(ios
+      ? 'Per giocare senza la barra di Safari: Condividi → Aggiungi alla schermata Home, poi apri Riftlands dalla nuova icona.'
+      : 'Schermo intero non disponibile. Puoi continuare a giocare o riprovare dal pulsante ⛶.');
+  }
   async enterFullscreen(): Promise<void> {
     this.fullscreenWanted = true;
-    if (document.fullscreenElement || this.fullscreenPending) return;
-    if (!document.documentElement.requestFullscreen) { this.notify('Schermo intero non disponibile in questo browser. Puoi continuare a giocare.'); return; }
+    if (this.standalone || document.fullscreenElement || this.fullscreenPending) return;
+    if (!document.documentElement.requestFullscreen) { this.fullscreenHelp(); return; }
     this.fullscreenPending = true;
     try {
       // Called directly in the join/click event, before asset loading or authentication.
@@ -41,7 +51,7 @@ export class GameDisplay {
         const orientation = screen.orientation as ScreenOrientation & { lock?: (orientation: string) => Promise<void> };
         try { await orientation?.lock?.('landscape'); } catch { /* Portrait layout remains usable. */ }
       }
-    } catch { if (this.fullscreenWanted) this.notify('Il browser non ha attivato lo schermo intero. Riprova dal pulsante ⛶.'); }
+    } catch { if (this.fullscreenWanted) this.fullscreenHelp(); }
     finally { this.fullscreenPending = false; this.updateFullscreen(); }
   }
   setPlaying(playing: boolean): void {
@@ -64,5 +74,5 @@ export class GameDisplay {
     history.pushState({ ...history.state, riftlandsGame: this.historyKey }, '', location.href);
     this.guarded = true;
   }
-  private updateFullscreen(): void { this.fullscreenButton.hidden = !!document.fullscreenElement; }
+  private updateFullscreen(): void { this.fullscreenButton.hidden = this.standalone || !!document.fullscreenElement; }
 }

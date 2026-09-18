@@ -1,0 +1,11 @@
+{
+  "id": "/",
+  "name": "Riftlands — Oltre il confine",
+  "short_name": "Riftlands",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101b1b",
+  "theme_color": "#101b1b",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

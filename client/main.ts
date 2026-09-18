@@ -24,7 +24,7 @@ const snapshotBuffer = new SnapshotBuffer();
 let renderedActors: Actor[] = [];
 const effects = new Map<string, GameEvent>();
 const localMovement = new LocalMovementView();
-const LOCAL_PRESENTATION_DELAY_MS = 30;
+const LOCAL_PRESENTATION_DELAY_MS = 50;
 // Presentation-only delay. Inputs still go to the server as soon as they are generated.
 const localPresentation = new LocalPresentationDelay(LOCAL_PRESENTATION_DELAY_MS);
 let lastMinimap = 0;
