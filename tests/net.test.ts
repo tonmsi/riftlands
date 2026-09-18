@@ -22,6 +22,9 @@ test('registration reconnects with the issued token and discards stale room owne
     connection.joinWithCredentials('register', 'Alice', 'secret', 'mage');
     sockets[0].onopen();
     sockets[0].onmessage({ data: JSON.stringify({ type: 'welcome', token: 'issued-token', time: 0 }) });
+    assert.ok(sockets[0].sent.some(message => message.type === 'ping'), 'measure latency immediately on welcome');
+    sockets[0].onmessage({ data: JSON.stringify({ type: 'pong', time: 1000, at: performance.now() - 300 }) });
+    assert.ok(connection.serverTime() >= 1150 && connection.serverTime() < 1180, 'first pong establishes the clock without slow convergence');
     sockets[0].onmessage({ data: JSON.stringify({ type: 'room', room: { id: 'world', epoch: 1 } }) });
     sockets[0].onclose({ code: 1006, reason: '' });
     t.mock.timers.tick(1000);

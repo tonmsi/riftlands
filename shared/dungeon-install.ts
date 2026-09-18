@@ -1,9 +1,12 @@
-import { BOSS_BY_ID, type BossDefinition } from './bosses';
+import { dungeonPlacementIssue } from './dungeon-placement';
+import type { BossDefinition } from './bosses';
+import { BOSS_TEMPLATE_BY_ID } from './boss-templates';
 import { compileDungeonDraft, type DungeonDraft } from './dungeon-draft';
 import { DUNGEON_DEFINITIONS, type DungeonDefinition } from './dungeons';
 export interface DungeonBundle {
     definition: DungeonDefinition;
     bosses: BossDefinition[];
+    draft?: DungeonDraft;
 }
 /** Resolve authored placements against implemented behavior; never execute imported code. */
 export function buildDungeonBundle(draft: DungeonDraft, existing: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS): DungeonBundle {
@@ -18,6 +21,8 @@ export function buildDungeonBundle(draft: DungeonDraft, existing: readonly Dunge
             || (bounds.minTx <= b.maxTx && bounds.maxTx >= b.minTx && bounds.minTy <= b.maxTy && bounds.maxTy >= b.minTy))
             throw new Error(`Mappa troppo vicina o sovrapposta a ${other.name}: cambia Origine X/Y.`);
     }
+    const placementIssue = dungeonPlacementIssue(draft.origin, draft.width, draft.height, existing);
+    if (placementIssue) throw new Error(placementIssue);
     const entrance = definition.passages.find(p => p.tiles.some(t => t.x === bounds.minTx || t.x === bounds.maxTx || t.y === bounds.minTy || t.y === bounds.maxTy));
     if (!entrance)
         throw new Error('Apri almeno una casella sul bordo della mappa per accedere dal mondo.');
@@ -29,14 +34,14 @@ export function buildDungeonBundle(draft: DungeonDraft, existing: readonly Dunge
     for (const encounter of definition.additionalEncounters ?? [])
         encounter.encounter.ejectTo = { ...outside };
     const bosses = compiled.bosses.map(placement => {
-        const template = BOSS_BY_ID.get(placement.template);
+        const template = BOSS_TEMPLATE_BY_ID.get(placement.template);
         if (!template)
             throw new Error(`${placement.name}: segnaposto senza comportamento. Seleziona un boss disponibile prima di installare.`);
-        const boss = structuredClone(template);
-        Object.assign(boss, { id: placement.id, dungeonId: definition.id, name: placement.name, radius: placement.radius });
+        const boss: BossDefinition = { ...structuredClone(template), id: placement.id, dungeonId: definition.id,
+            templateId: template.templateId ?? template.id, name: placement.name, radius: placement.radius };
         if (boss.behavior.unstuck)
             boss.behavior.unstuck.probeDistance = Math.max(boss.behavior.unstuck.probeDistance, boss.radius + 16);
         return boss;
     });
-    return { definition, bosses };
+    return { definition, bosses, draft: structuredClone(draft) };
 }

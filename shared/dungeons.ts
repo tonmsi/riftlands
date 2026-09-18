@@ -28,8 +28,10 @@ export type DungeonRegion = {
 };
 export interface DungeonEncounterDefinition {
   preparationMs: number;
+  /** Invisible, manually authored activation tiles, separate from player spawns. */
+  activationPoints?: readonly Vec2[];
   regions: {
-    /** Starts the preparation/fight when an eligible player enters it. */
+    /** Bounds within which authored entry points can activate the encounter. */
     trigger: DungeonRegion;
     /** Team members inside this region during preparation join the fight. */
     admission: DungeonRegion;
@@ -37,7 +39,7 @@ export interface DungeonEncounterDefinition {
     combat: DungeonRegion;
     /** Non-participants entering this region are moved to ejectTo. */
     ejectIntruders: DungeonRegion;
-    /** The boss only targets participants inside this region. */
+    /** Initial detection area, intersected with combat; pursuit persists after detection. */
     bossAggro: DungeonRegion;
     /** Movement, pathfinding and charge endpoints are constrained to this region. */
     bossLeash: DungeonRegion;
@@ -77,6 +79,7 @@ export interface DungeonDefinition {
     tiles?: readonly (Vec2 & { kind: TileKind })[];
   };
   passages: readonly DungeonPassage[];
+  /** Players are placed at these positions when the encounter starts. */
   spawnPoints: { boss: Vec2; party: readonly Vec2[] };
   npcSpawns?: readonly (Vec2 & { id: string; npcKind: NpcKind; level: number })[];
   encounter: DungeonEncounterDefinition;
@@ -85,13 +88,9 @@ export interface DungeonDefinition {
   theme: DungeonTheme;
 }
 
-const tileRange = (min: number, max: number): number[] => Array.from({ length: max - min + 1 }, (_, index) => min + index);
-const horizontalTiles = (ty: number): Vec2[] => [...tileRange(-8, -3), ...tileRange(2, 7)].map(tx => ({ x: tx, y: ty }));
-const ruinsNorthOpening = tileRange(-2, 1).map(tx => ({ x: tx, y: -87 }));
-const ruinsMainEntrance = tileRange(-2, 1).map(tx => ({ x: tx, y: -74 }));
-export function flameBarrierFromTiles(tiles: readonly Vec2[]): DungeonFlameBarrier {
+export function flameBarrierFromTiles(tiles: readonly Vec2[], singleTileVertical = false): DungeonFlameBarrier {
   if (!tiles.length) throw new Error('Una barriera dungeon deve occupare almeno una tile.');
-  const vertical = tiles.every(tile => tile.x === tiles[0].x);
+  const vertical = tiles.length === 1 ? singleTileVertical : tiles.every(tile => tile.x === tiles[0].x);
   const horizontal = tiles.every(tile => tile.y === tiles[0].y);
   if (!vertical && !horizontal) throw new Error('Le tile di una barriera dungeon devono essere allineate.');
   return {
@@ -102,121 +101,17 @@ export function flameBarrierFromTiles(tiles: readonly Vec2[]): DungeonFlameBarri
     angle: vertical ? Math.PI / 2 : 0,
   };
 }
-const mazeSeal = [5, 6, 7].map(y => ({ x: 85, y }));
-const mazeBoss = { x: 4200, y: 0 } as const;
-const circle = (center: Vec2, radius: number): DungeonRegion => ({ kind: 'circle', center, radius });
+/** Canvas flames grow along local +Y: face that normal towards the map's centre. Collision geometry is unchanged. */
+export function inwardFlameAngle(flame: DungeonFlameBarrier, bounds: DungeonTileRect): number {
+  const centerX = (bounds.minTx + bounds.maxTx + 1) * TILE_SIZE / 2;
+  const centerY = (bounds.minTy + bounds.maxTy + 1) * TILE_SIZE / 2;
+  const inward = (centerX - flame.x) * -Math.sin(flame.angle) + (centerY - flame.y) * Math.cos(flame.angle);
+  return inward < -1e-8 ? flame.angle + Math.PI : flame.angle;
+}
+export const DEFAULT_DUNGEON_THEME: DungeonTheme = { floor: '#918567', wall: '#5c5d52', wallTop: '#92917e', minimap: '#d8bd79', markerStone: '#777864', markerEdge: '#464e42', markerRune: '#d0b97999' };
 
-/**
- * The first dungeon is entirely described here. Adding another dungeon should
- * require one more definition, not another branch in world/server/renderer.
- */
-export const RUINS_DUNGEON: DungeonDefinition = {
-  id: 'ruins',
-  name: 'Rovine della Soglia',
-  bossId: 'boss:ruins:warden',
-  area: { x: 0, y: -3840, radius: 340 },
-  layout: {
-    bounds: { minTx: -8, maxTx: 7, minTy: -87, maxTy: -74 },
-    floor: 'path',
-    obstacles: [
-      { minTx: -8, maxTx: -8, minTy: -86, maxTy: -75 },
-      { minTx: 7, maxTx: 7, minTy: -86, maxTy: -75 },
-    ],
-    obstacleTiles: [
-      ...horizontalTiles(-87), ...horizontalTiles(-74),
-      { x: -4, y: -83 }, { x: 3, y: -83 }, { x: -4, y: -78 }, { x: 3, y: -78 },
-    ],
-  },
-  passages: [
-    { id: 'north-guard', position: { x: 0, y: -4152 }, tiles: ruinsNorthOpening,
-      fightState: 'flame', flame: flameBarrierFromTiles(ruinsNorthOpening) },
-    { id: 'main-entrance', position: { x: 0, y: -3528 }, tiles: ruinsMainEntrance, fightState: 'stone' },
-  ],
-  spawnPoints: {
-    boss: { x: 0, y: -3840 },
-    party: [{ x: -72, y: -3635 }, { x: -24, y: -3635 }, { x: 24, y: -3635 }, { x: 72, y: -3635 }],
-  },
-  encounter: {
-    preparationMs: 5000,
-    regions: {
-      trigger: circle({ x: 0, y: -3840 }, 260),
-      admission: circle({ x: 0, y: -3840 }, 260),
-      combat: circle({ x: 0, y: -3840 }, 420),
-      ejectIntruders: circle({ x: 0, y: -3840 }, 260),
-      bossAggro: circle({ x: 0, y: -3840 }, 420),
-      bossLeash: circle({ x: 0, y: -3840 }, 420),
-    },
-    ejectTo: { x: 0, y: -3400 },
-  },
-  spawnExclusionMargin: 220,
-  approach: {
-    from: { x: 0, y: -300 }, to: { x: 0, y: -3540 }, halfWidth: 70, corridorHalfWidth: 520,
-    waves: [{ amplitude: 145, cycles: 2 }, { amplitude: 48, cycles: 5 }],
-    markers: [420 / 3240, 1150 / 3240, 1920 / 3240, 2700 / 3240],
-  },
-  theme: {
-    floor: '#918567', wall: '#5c5d52', wallTop: '#92917e', minimap: '#d8bd79',
-    markerStone: '#777864', markerEdge: '#464e42', markerRune: '#d0b97999',
-  },
-};
-
-/** A second definition deliberately exercises horizontal approaches and a non-arena layout. */
-export const MAZE_DUNGEON: DungeonDefinition = {
-  id: 'ashen-maze',
-  name: 'Dedalo delle Ceneri',
-  bossId: 'boss:ashen-maze:stalker',
-  area: { x: 3840, y: 0, radius: 470 },
-  layout: {
-    bounds: { minTx: 70, maxTx: 89, minTy: -9, maxTy: 8 },
-    floor: 'path',
-    obstacles: [
-      { minTx: 70, maxTx: 89, minTy: -9, maxTy: -9 },
-      { minTx: 70, maxTx: 89, minTy: 8, maxTy: 8 },
-      { minTx: 70, maxTx: 70, minTy: -8, maxTy: -2 },
-      { minTx: 70, maxTx: 70, minTy: 1, maxTy: 7 },
-      { minTx: 89, maxTx: 89, minTy: -8, maxTy: 7 },
-      // Alternating openings create a wide serpentine route usable by boss-sized actors.
-      { minTx: 75, maxTx: 75, minTy: -8, maxTy: 4 },
-      { minTx: 80, maxTx: 80, minTy: -3, maxTy: 7 },
-      { minTx: 85, maxTx: 85, minTy: -8, maxTy: 4 },
-    ],
-    obstacleTiles: [],
-  },
-  passages: [
-    { id: 'west', position: { x: 3384, y: 0 }, tiles: [{ x: 70, y: -1 }, { x: 70, y: 0 }], fightState: 'open' },
-    { id: 'maze-exit', position: { x: 4104, y: 312 }, tiles: mazeSeal,
-      fightState: 'flame', flame: flameBarrierFromTiles(mazeSeal) },
-  ],
-  spawnPoints: {
-    boss: mazeBoss,
-    party: [{ x: 4160, y: -72 }, { x: 4160, y: -24 }, { x: 4160, y: 24 }, { x: 4160, y: 72 }],
-  },
-  encounter: {
-    preparationMs: 3000,
-    regions: {
-      trigger: circle(mazeBoss, 80),
-      admission: circle(mazeBoss, 100),
-      combat: circle(mazeBoss, 520),
-      ejectIntruders: circle(mazeBoss, 100),
-      bossAggro: circle(mazeBoss, 500),
-      bossLeash: circle(mazeBoss, 500),
-    },
-    ejectTo: { x: 3750, y: 312 },
-  },
-  spawnExclusionMargin: 180,
-  approach: {
-    from: { x: 300, y: 0 }, to: { x: 3360, y: 0 }, halfWidth: 72, corridorHalfWidth: 500,
-    waves: [{ amplitude: 105, cycles: 3 }, { amplitude: 34, cycles: 7 }],
-    markers: [0.2, 0.42, 0.65, 0.86],
-  },
-  theme: {
-    floor: '#665f59', wall: '#37363b', wallTop: '#655d64', minimap: '#d47a56',
-    markerStone: '#62595b', markerEdge: '#302d32', markerRune: '#e58b65aa',
-  },
-};
-
-export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] = [RUINS_DUNGEON, MAZE_DUNGEON,
-  ...(customDungeons as { definition: DungeonDefinition }[]).map(entry => entry.definition)];
+export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] =
+  (customDungeons as { definition: DungeonDefinition }[]).map(entry => entry.definition);
 export function dungeonEncounters(definition: DungeonDefinition): DungeonDefinition[] {
   return [definition, ...(definition.additionalEncounters ?? []).map(encounter => ({ ...definition, ...encounter, additionalEncounters: undefined }))];
 }
@@ -306,6 +201,12 @@ export function touchesDungeonFlame(definition: DungeonDefinition, position: Vec
   return dungeonFlames(definition).some(flame => touchesFlame(flame, position, radius));
 }
 
+export function atDungeonActivation(definition: DungeonDefinition, position: Vec2, radius = 0): boolean {
+  return insideDungeonRegion(definition.encounter.regions.trigger, position)
+    && insideDungeonRegion(definition.encounter.regions.combat, position, -radius)
+    && (definition.encounter.activationPoints ?? []).some(point => Math.hypot(position.x - point.x, position.y - point.y) <= TILE_SIZE / 2 + radius);
+}
+
 function approachProgress(definition: DungeonDefinition, position: Vec2): number {
   const approach = definition.approach;
   const dx = approach.to.x - approach.from.x, dy = approach.to.y - approach.from.y;
@@ -358,7 +259,7 @@ export function dungeonTileCenter(tile: Vec2): Vec2 {
   return { x: (tile.x + 0.5) * TILE_SIZE, y: (tile.y + 0.5) * TILE_SIZE };
 }
 
-function touchesFlame(flame: DungeonFlameBarrier, position: Vec2, radius = 0): boolean {
+export function touchesFlame(flame: DungeonFlameBarrier, position: Vec2, radius = 0): boolean {
   const tangentX = Math.cos(flame.angle), tangentY = Math.sin(flame.angle);
   const dx = position.x - flame.x, dy = position.y - flame.y;
   const along = dx * tangentX + dy * tangentY;
@@ -418,6 +319,11 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   }
   if (!Number.isFinite(definition.encounter.preparationMs) || definition.encounter.preparationMs < 0) fail('preparationMs non valido.');
   if (!finitePoint(definition.encounter.ejectTo)) fail('destinazione di espulsione non valida.');
+  const activationPoints = definition.encounter.activationPoints ?? [];
+  if (!Array.isArray(activationPoints) || activationPoints.length > 500
+    || activationPoints.some(point => !finitePoint(point)
+      || !insideDungeonRegion(definition.encounter.regions.trigger, point)
+      || !walkable(dungeonTile(definition, Math.floor(point.x / TILE_SIZE), Math.floor(point.y / TILE_SIZE))))) fail('punti di attivazione non validi.');
   const passageIds = new Set<string>(), passageTiles = new Map<string, string>(), stoneTiles = new Set<string>();
   const flames: DungeonFlameBarrier[] = [];
   for (const passage of definition.passages) {
@@ -460,7 +366,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   }
   if (!regionContained(regions.trigger, regions.admission)) fail('trigger deve essere contenuta in admission.');
   for (const [name, region] of [['trigger', regions.trigger], ['admission', regions.admission], ['ejectIntruders', regions.ejectIntruders],
-    ['bossAggro', regions.bossAggro], ['bossLeash', regions.bossLeash]] as const) {
+    ['bossLeash', regions.bossLeash]] as const) {
     if (!regionContained(region, regions.combat)) fail(`la regione ${name} deve essere contenuta in combat.`);
   }
   if (insideDungeonRegion(regions.combat, definition.encounter.ejectTo)) fail('ejectTo deve essere esterno alla regione combat.');

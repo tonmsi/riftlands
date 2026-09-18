@@ -7,6 +7,7 @@ import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '..
 import { GameConnection } from './net';
 import { predictMovement, reconcile } from './prediction';
 import { LocalMovementView } from './motion';
+import { LocalCombatPresentation } from './combat-presentation';
 import { SnapshotBuffer } from './snapshots';
 import { Renderer, drawMinimap } from './render';
 import { GameUI } from './ui';
@@ -28,6 +29,7 @@ const snapshotBuffer = new SnapshotBuffer();
 let renderedActors: Actor[] = [];
 const effects = new Map<string, GameEvent>();
 const localMovement = new LocalMovementView();
+const localCombat = new LocalCombatPresentation();
 let lastMinimap = 0;
 let profileCache = '';
 let joinGeneration = 0;
@@ -60,7 +62,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   leave: () => {
     joinGeneration++;
     connection.leave(); playing = false; latest = null; predicted = null; selectedId = null; localMovement.reset();
-    releaseControls(); snapshotBuffer.clear(); renderedActors = []; effects.clear(); audio.setActive(false);
+    releaseControls(); snapshotBuffer.clear(); renderedActors = []; effects.clear(); localCombat.reset(); audio.setActive(false);
     ui.setPlaying(false); ui.setSelected(null);
   },
   social: (action, targetId) => { connection.send({ type: 'social', action, targetId }); },
@@ -90,10 +92,10 @@ window.addEventListener('keydown', audio.unlock);
 
 const renderer = new Renderer(ui.canvas);
 const connection = new GameConnection({
-  reset: () => { releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); },
+  reset: () => { releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
   status: (status, detail) => {
     ui.setConnection(status, detail);
-    if (status === 'offline' || status === 'reconnecting') releaseControls();
+    if (status === 'offline' || status === 'reconnecting') { releaseControls(); localCombat.reset(); }
     if (status === 'offline') { playing = false; ui.setPlaying(false); if (detail) ui.toast(detail, 'error'); }
   },
   authExpired: () => {
@@ -131,6 +133,7 @@ const connection = new GameConnection({
       predicted = result.actor;
       localMovement.correct(old, predicted);
       snapshotBuffer.push(message, performance.now());
+      localCombat.receive(message, connection.serverTime());
       for (const event of message.events) {
         effects.set(event.id, event);
       }
@@ -190,7 +193,7 @@ window.addEventListener('keydown', event => {
 window.addEventListener('keyup', event => controls.release(event.code));
 window.addEventListener('blur', releaseControls);
 document.addEventListener('focusin', () => { if (isTyping()) releaseControls(); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { releaseControls(); audio.setActive(false); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { releaseControls(); localCombat.reset(); audio.setActive(false); } });
 ui.canvas.addEventListener('pointermove', event => { if (playing && event.pointerType === 'mouse') controls.setPointer({ x: event.clientX, y: event.clientY }); });
 ui.canvas.addEventListener('pointerdown', event => {
   if (!playing || !connection.connected || ui.inputBlocked || ![0, 1, 2].includes(event.button)) return;
@@ -225,9 +228,12 @@ function inputTick(): void {
   const { dx, dy, aim, cast, autoAim } = isTyping() || ui.inputBlocked || predicted.hp <= 0
     ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined, autoAim: false })
     : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
-  const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, analogMovement: matchMedia('(pointer: coarse)').matches || controls.settings.movement !== 'keyboard', ...(cast ? { cast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
+  const castTime = connection.serverTime(), castLead = Math.min(150, connection.ping / 2);
+  const readyCast = cast === 'basic' && !localCombat.basicReady(predicted, castTime + castLead) ? undefined : cast;
+  const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, analogMovement: matchMedia('(pointer: coarse)').matches || controls.settings.movement !== 'keyboard', ...(readyCast ? { cast: readyCast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
   if (connection.send({ type: 'input', input })) {
     pending.push(input);
+    localCombat.predict(input, predicted, latest, renderer.world, castTime, castLead);
     const next = predictMovement(predicted, input, renderer.world, connection.serverTime());
     localMovement.advance(predicted, next);
     predicted = next;
@@ -265,10 +271,11 @@ function frame(now: number): void {
   // Never switch the owner's body onto the delayed remote timeline near enemies.
   const self = immediateSelf;
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
-  const projectiles = remoteFrame?.projectiles ?? [];
+  const combat = localCombat.sample(self, remoteFrame?.projectiles ?? [], [...effects.values()], renderer.world, time);
+  const projectiles = combat.projectiles;
   const audible = playing && connection.connected && !document.hidden && !!self;
   audio.setActive(audible);
-  const frameEvents = [...effects.values()];
+  const frameEvents = combat.events;
   if (audible && self) audio.update(self, actors, frameEvents, latest?.bossWindups ?? [], time);
   renderer.render({
     arenaGate: latest?.arenaGate,

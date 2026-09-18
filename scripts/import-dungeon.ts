@@ -1,15 +1,25 @@
-import { readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseDungeonDraft } from '../shared/dungeon-draft';
-import { buildDungeonBundle, type DungeonBundle } from '../shared/dungeon-install';
+import { parseDungeonFile } from '../shared/dungeon-import';
+import { acquireDataLease } from '../server/data-lease';
+import { installDungeon } from './dungeon-library';
 
-const source = process.argv[2];
-if (!source || process.argv.length !== 3) throw new Error('Uso: npm run dungeon:import -- percorso/dungeon.draft.json');
-const path = fileURLToPath(new URL('../shared/custom-dungeons.json', import.meta.url));
-const draft = parseDungeonDraft(readFileSync(source, 'utf8'));
-const bundle = buildDungeonBundle(draft);
-const catalog = JSON.parse(readFileSync(path, 'utf8')) as DungeonBundle[];
-const temporary = `${path}.tmp`;
-writeFileSync(temporary, JSON.stringify([...catalog, bundle], null, 2) + '\n', 'utf8');
-renameSync(temporary, path);
-console.log(`Installato ${draft.name}: ${bundle.bosses.length} boss, ${draft.encounters.length} incontri. Esegui npm run build e riavvia il server. Conserva la bozza originale per le modifiche.`);
+async function importDungeonCommand(): Promise<void> {
+    const [source, ...flags] = process.argv.slice(2);
+    if (!source || flags.some(flag => !['--check', '--replace'].includes(flag)))
+        throw new Error('Uso: npm run dungeon:import -- percorso/dungeon.json [--check] [--replace]');
+    const catalogPath = fileURLToPath(new URL('../shared/custom-dungeons.json', import.meta.url));
+    const dataPath = process.env.DATA_FILE ? resolve(process.env.DATA_FILE) : fileURLToPath(new URL('../data/accounts.json', import.meta.url));
+    const { draft, warnings } = parseDungeonFile(await readFile(source, 'utf8'));
+    for (const warning of warnings) console.warn(warning);
+    const check = flags.includes('--check'), release = check ? () => {} : acquireDataLease(dataPath);
+    try {
+        const result = await installDungeon(draft, { catalogPath, dataPath, check, replace: flags.includes('--replace') });
+        console.log(`${check ? 'Valido' : 'Salvato'}: ${result.name}, ${result.bossCount} boss, ${result.encounters} incontri.`);
+        if (check) console.log('Nessun file modificato.');
+        else { for (const path of result.backups) console.log(`Backup: ${path}`); console.log('Esegui npm run build e riavvia il server.'); }
+    } finally { release(); }
+}
+
+importDungeonCommand().catch(error => { console.error(`Importazione non riuscita: ${error instanceof Error ? error.message : String(error)}`); process.exitCode = 1; });

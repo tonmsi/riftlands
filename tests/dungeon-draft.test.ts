@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileDungeonDraft, draftFromDungeon, DraftWorld, newDungeonDraft, parseDungeonDraft, validateDungeonDraft } from '../shared/dungeon-draft';
-import { DUNGEON_DEFINITIONS, dungeonTile, RUINS_DUNGEON, type DungeonDefinition } from '../shared/dungeons';
+import { DUNGEON_DEFINITIONS, dungeonTile, type DungeonDefinition } from '../shared/dungeons';
 import { World } from '../shared/world';
 import { moveWithCollisions } from '../shared/physics';
+import { parseDungeonFile } from '../shared/dungeon-import';
 
 function ready() {
   const draft = newDungeonDraft();
@@ -58,8 +59,25 @@ test('movement preview uses shared collision integration and catalog geometry ca
   const draft = ready(), world = new DraftWorld(draft);
   const moved = moveWithCollisions({ x: 72, y: 120, radius: 15 }, -1, 0, 500, world);
   assert.ok(moved.x >= 63);
-  const imported = draftFromDungeon(RUINS_DUNGEON);
+  const imported = draftFromDungeon(compileDungeonDraft(draft).definition);
   assert.equal(imported.tiles[0], 'rock');
   assert.equal(imported.entities.filter(e => e.kind === 'boss').length, 1);
-  assert.equal(imported.origin.y, -87);
+  assert.equal(imported.origin.y, draft.origin.y);
+});
+
+test('more than five activation points and per-boss aggro survive draft and runtime round trips', () => {
+  const draft = ready();
+  draft.entities[1].aggroRadius = 2000; // The circle may exceed the map; runtime intersects it with combat.
+  for(let x=2;x<12;x++) draft.entities.push({id:`trigger-${x}`,kind:'activation',template:'',label:'Trigger',x,y:5,level:1,radius:15});
+  const compiled = compileDungeonDraft(draft);
+  assert.equal(compiled.definition.encounter.activationPoints?.length,10);
+  assert.equal(compiled.definition.encounter.regions.bossAggro.kind,'circle');
+  const imported = parseDungeonFile(JSON.stringify(compiled)).draft;
+  assert.equal(imported.entities.filter(e=>e.kind==='activation').length,10);
+  assert.equal(imported.entities.find(e=>e.kind==='boss')?.aggroRadius,2000);
+  assert.deepEqual(compileDungeonDraft(imported).definition.encounter,compiled.definition.encounter);
+  for(const bad of [-1,0,10001]) {
+    draft.entities[1].aggroRadius=bad;
+    assert.throws(()=>parseDungeonDraft(JSON.stringify(draft)));
+  }
 });

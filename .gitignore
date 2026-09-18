@@ -5,6 +5,9 @@ test-results/
 playwright-report/
 artifacts/
 *.log
+*.bak
+*.tmp
+*.lock
 .env
 .DS_Store
 assets/notUsed

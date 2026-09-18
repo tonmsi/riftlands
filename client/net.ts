@@ -28,6 +28,7 @@ export class GameConnection {
   private generation = 0;
   private joinRequest: JoinRequest | null = null;
   private clockOffset = Date.now() - performance.now();
+  private clockSynced = false;
   private lastReceived = 0;
   private token: string | undefined;
   ping = 0;
@@ -151,8 +152,11 @@ export class GameConnection {
         } catch { /* Storage privato o limitato */ }
 
         this.clockOffset = message.time - performance.now();
+        this.clockSynced = false;
+        this.ping = 0;
         this.attempts = 0;
         this.welcomed = true;
+        this.send({ type: 'ping', at: performance.now() });
 
         if (!this.pingTimer) {
           this.pingTimer = setInterval(() => {
@@ -167,7 +171,8 @@ export class GameConnection {
         const rtt = Math.max(0, performance.now() - message.at);
         this.ping = Math.round(this.ping ? this.ping * 0.6 + rtt * 0.4 : rtt);
         const offset = message.time + rtt / 2 - performance.now();
-        this.clockOffset = this.clockOffset * 0.8 + offset * 0.2;
+        this.clockOffset = this.clockSynced ? this.clockOffset * 0.8 + offset * 0.2 : offset;
+        this.clockSynced = true;
       } else if (message.type === 'error' && message.fatal) {
         if (message.authExpired && this.joinRequest?.type === 'token') {
           // Token non più valido sul server

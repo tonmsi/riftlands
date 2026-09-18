@@ -10,12 +10,16 @@ import { Account, AccountStore, publicAccount } from './store';
 import { RoomManager } from './rooms';
 import { AuthBudget } from './auth-budget';
 import { NetworkMetrics } from './metrics';
+import { acquireDataLease } from './data-lease';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT deve essere tra 1 e 65535.');
-const store = new AccountStore(process.env.DATA_FILE ? resolve(process.env.DATA_FILE) : resolve(ROOT, 'data/accounts.json'));
+const dataPath = process.env.DATA_FILE ? resolve(process.env.DATA_FILE) : resolve(ROOT, 'data/accounts.json');
+const releaseData = acquireDataLease(dataPath);
+process.once('exit', releaseData);
+const store = new AccountStore(dataPath);
 const rooms = new RoomManager(store, WORLD_SEED);
 const simulation = rooms.global;
 let healthy = true;

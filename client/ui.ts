@@ -513,7 +513,7 @@ export class GameUI {
     if (bossPreparation) {
       const seconds = Math.max(0, (bossPreparation.endsAt - snapshot.time) / 1000).toFixed(1);
       const ready = `${bossPreparation.entrants} ${bossPreparation.entrants === 1 ? 'membro pronto' : 'membri pronti'}`;
-      arenaText = `Battaglia con ${bossPreparation.name} · ${seconds} s · ${ready} · Entra nelle rovine entro lo zero`;
+      arenaText = `Battaglia con ${bossPreparation.name} · ${seconds} s · ${ready} · Entra nella regione prima della chiusura`;
     } else if (snapshot.matchEndsAt) {
       const seconds = Math.max(0, Math.ceil((snapshot.matchEndsAt - snapshot.time) / 1000));
       arenaText = `Duello 1v1 · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} · Elimina l’avversario`;

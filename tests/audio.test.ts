@@ -2,10 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SoundCues, soundPosition } from '../client/audio';
 import type { Actor, GameEvent } from '../shared/types';
-import { BossEncounter } from '../server/boss-encounter';
-import { RUINS_WARDEN } from '../shared/bosses';
+import { WorldSimulation } from '../server/simulation';
 
-const actor = (): Actor => ({ ...new BossEncounter(RUINS_WARDEN, 1000, undefined).boss, id: 'player', kind: 'player', npcKind: undefined, x: 0, y: 0, spriteMoving: true });
+const actor = (): Actor => ({ ...new WorldSimulation().addPlayer({ id: 'player', name: 'Player', nameLower: 'player', salt: '', passwordHash: '', xp: 0, kills: 0, deaths: 0, friends: [], requests: [], lastSeen: 0 }, 'warrior'), x: 0, y: 0, spriteMoving: true });
 
 test('steps follow distance for self, friends and enemies, excluding pushes and teleports', () => {
   for (const kind of ['player', 'npc'] as const) {

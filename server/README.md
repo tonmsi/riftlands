@@ -2,7 +2,7 @@
 
 Le istanze arena/BG e il routing delle sessioni sono descritti in [ROOMS.md](ROOMS.md). Il runtime usa `RoomManager`; l'arena 1v1 si raggiunge dal cerchio a nord del Crocevia. Gli accessi 2v2 e BG non sono ancora attivi. `/health` include gli online totali, `worldOnline` e `matchRooms`.
 
-`index.ts` gestisce HTTP, WebSocket e ciclo di vita. `simulation.ts` contiene il mondo autorevole senza dipendenze di trasporto. `store.ts` gestisce identità e persistenza. `boss-encounter.ts` esegue le definizioni dati presenti in `shared/bosses.ts`; il caso delle rovine è documentato in [RUINS.md](RUINS.md). Il protocollo pubblico e le altre regole condivise sono in `shared/`.
+`index.ts` gestisce HTTP, WebSocket e ciclo di vita. `simulation.ts` contiene il mondo autorevole senza dipendenze di trasporto. `store.ts` gestisce identità e persistenza. `boss-encounter.ts` esegue le definizioni dati presenti in `shared/bosses.ts`; il flusso di authoring è documentato nella [guida del maker](../docs/dungeon-maker.md). Il protocollo pubblico e le altre regole condivise sono in `shared/`.
 
 ## Avvio
 

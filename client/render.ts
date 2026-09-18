@@ -4,7 +4,7 @@ import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
 import { OUTPOST, OUTPOST_HUTS, outpostHutAt } from '../shared/outpost';
 import type { ArenaGateState } from '../shared/types';
-import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames } from '../shared/dungeons';
+import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames, inwardFlameAngle } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
@@ -587,7 +587,7 @@ export class Renderer {
         const flames = Math.max(3, Math.round(gate.length / 15));
         ctx.save();
         ctx.translate(gate.x, gate.y);
-        ctx.rotate(gate.angle);
+        ctx.rotate(inwardFlameAngle(gate, dungeon.layout.bounds));
         ctx.globalCompositeOperation = 'screen';
         ctx.shadowColor = middle;
         ctx.shadowBlur = dangerous ? 15 : 9;

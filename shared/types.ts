@@ -16,9 +16,12 @@ export interface Actor { spriteRow?: number; spriteMoving?: boolean; }
 export interface StatusEffect { kind: 'haste' | 'power' | 'weakness' | 'slow' | 'shield' | 'root'; until: number; }
 export interface Actor extends Vec2 { id: string; kind: 'player' | 'npc'; name: string; classId: ClassId; radius: number; hp: number; maxHp: number; resource: number; maxResource: number; aim: number; speed: number; level: number; xp: number; kills: number; deaths: number; teamId: string | null; hidden: boolean; revealedUntil: number; deadUntil: number; spawnProtectedUntil: number; effects: StatusEffect[]; cooldowns: Record<AbilitySlot, number>; npcKind?: 'slime' | 'sentinel' | 'wisp' | 'boss'; bossKey?: string; bossSkin?: string; }
 export interface Projectile extends Vec2 { id: string; ownerId: string; vx: number; vy: number; radius: number; damage: number; expiresAt: number; color: string; slow?: number; }
+/** Correlation only: the server derives this from the consumed command, never from client projectile data. */
+export interface Projectile { inputSeq?: number; }
 export interface Pickup extends Vec2 { id: string; kind: PickupKind; radius: number; }
 export interface Trap extends Vec2 { id: string; ownerId: string; teamId: string | null; radius: number; damage: number; duration: number; expiresAt: number; color: string; }
 export interface GameEvent extends Vec2 { id: string; kind: 'cast' | 'hit' | 'heal' | 'death' | 'pickup' | 'respawn'; at: number; duration: number; radius: number; color: string; actorId?: string; targetId?: string; aim?: number; abilityKind?: AbilityDef['kind']; amount?: number; text?: string; }
+export interface GameEvent { inputSeq?: number; }
 export interface SocialPlayer { id: string; name: string; classId: ClassId; level: number; teamId: string | null; friend: boolean; }
 export interface SocialState { friends: { id: string; name: string; online: boolean }[]; requests: { id: string; name: string }[]; teamInvites: { id: string; name: string; teamId: string }[]; team: { id: string; leaderId: string; members: { id: string; name: string; online: boolean; hp?: number; maxHp?: number }[] } | null; nearby: SocialPlayer[]; }
 export interface PublicAccount { id: string; name: string; kills: number; deaths: number; xp: number; }

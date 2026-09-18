@@ -1,5 +1,5 @@
 import type { ClassDef, ClassId } from './types';
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
 export const SNAPSHOT_RATE = 15;
@@ -10,7 +10,7 @@ export const INTEREST_RADIUS = 1250;
 export const PLAYER_RADIUS = 15;
 export const WORLD_SEED = 734291;
 export const CLASSES: Record<ClassId, ClassDef> = {
- mage: { id: 'mage', name: 'Mago', subtitle: 'Il potere dell’arcano', description: 'Controlla il campo da lontano. Dardi arcani, gelo e una nova per chi si avvicina troppo.', color: '#b3a0ed', resource: 'mana', maxHp: 110, maxResource: 120, speed: 190, armor: 0.04,
+ mage: { id: 'mage', name: 'Mago', subtitle: 'Il potere dell’arcano', description: 'Controlla il campo da lontano. Dardi arcani, gelo e una nova per chi si avvicina troppo.', color: '#b3a0ed', resource: 'mana', maxHp: 110, maxResource: 120, speed: 500, armor: 0.04,
  abilities: {
  basic: { name: 'Dardo arcano', description: 'Proiettile magico direzionale.', cost: 0, cooldown: 0.5, range: 540, damage: 16, kind: 'projectile', targeting: 'directional', speed: 480, radius: 6, color: '#c5afff' },
  q: { name: 'Lancia di gelo', description: 'Un proiettile che rallenta il bersaglio per 2 secondi.', cost: 24, cooldown: 3.5, range: 620, damage: 28, kind: 'projectile', targeting: 'directional', speed: 440, radius: 10, color: '#91ddf4' },

@@ -107,28 +107,31 @@ Le grafie Canvas sono placeholder: per aggiungere sprite, tilemap, animazioni o 
 
 ### Architettura dei dungeon
 
-`shared/dungeons.ts` è la fonte unica per geografia, passaggi e regole spaziali dei dungeon. Ogni `DungeonDefinition` descrive identità, area, layout, spawn, percorso di accesso, tema e passaggi nominati. Ogni passaggio ha un solo stato durante il fight: `stone`, `flame` oppure `open`. Il tipo discriminato e il validatore impediscono che lo stesso varco contenga contemporaneamente pietre e fiamme.
+`shared/custom-dungeons.json` è l'unico catalogo delle mappe installate; `shared/dungeons.ts` ne definisce schema, validazione e geometria. Ogni `DungeonDefinition` descrive identità, area, layout, spawn, percorso di accesso, tema e passaggi nominati. Ogni passaggio ha un solo stato durante il fight: `stone`, `flame` oppure `open`. Il tipo discriminato e il validatore impediscono che lo stesso varco contenga contemporaneamente pietre e fiamme.
 
 Le mappe sono composte sulla griglia di tile del mondo: `layout.bounds` delimita l'area curata, `layout.obstacles` descrive muri rettangolari e `layout.obstacleTiles` consente correzioni puntuali. Il resto dell'area usa `layout.floor`. Le sei regioni dell'incontro (`trigger`, `admission`, `combat`, `ejectIntruders`, `bossAggro`, `bossLeash`) sono indipendenti e accettano cerchi o poligoni; `ejectTo` stabilisce dove riportare gli intrusi.
 
 Mondo, server e client consumano lo stesso catalogo: soltanto i passaggi `stone` diventano collisioni solide; i passaggi `flame` restano attraversabili e applicano le regole di partecipazione; quelli `open` non cambiano. Il validatore eseguito all'avvio controlla coordinate, regioni, spawn, tile solide, passaggi duplicati, sovrapposizioni pietra/fiamma e aperture di bordo non dichiarate. `BossDefinition` contiene soltanto combattimento e comportamento: non duplica più spawn, barriere o raggi della mappa.
 
-I punti di modifica principali sono volutamente concentrati: la forma della mappa è in `layout`, i varchi sono in `passages`, l'aggro è in `encounter.regions.bossAggro` e il limite fisico del boss è in `bossLeash`. Parametri puramente comportamentali, incluso l'eventuale recupero `behavior.unstuck`, appartengono invece alla relativa voce in `shared/bosses.ts`.
+I punti di modifica principali sono volutamente concentrati: la forma della mappa è in `layout`, i varchi sono in `passages`, l'aggro è in `encounter.regions.bossAggro` e il limite fisico del boss è in `bossLeash`. I modelli riutilizzabili di combattimento, incluso `behavior.unstuck`, sono in `shared/boss-templates.ts`, separati dalle istanze dei boss nelle mappe.
 
 Per aggiungere un dungeon:
 
-1. aggiungere una `DungeonDefinition` e registrarla in `DUNGEON_DEFINITIONS`;
-2. aggiungere la sua `BossDefinition`, collegata con `dungeonId` e `bossId`;
-3. aggiungere gli asset o una resa particolare solo se il fallback procedurale e il tema generico non bastano;
-4. aggiungere test sui dati e sulle eventuali meccaniche davvero specifiche.
+1. avviare `npm run dungeon:studio` e creare terreno, NPC, boss, incontri e fiamme nel maker;
+2. scegliere la posizione sulla mappa del mondo e premere **Installa bozza** a server di gioco fermo;
+3. ricompilare con `npm run build` e riavviare. Per le modifiche usare **Apri nel maker** e **Aggiorna bozza installata**; per la rimozione usare **Elimina dungeon selezionato**.
+
+La [guida del maker](docs/dungeon-maker.md) descrive anche i comandi CLI, i backup e il reset dello stato dei boss durante gli aggiornamenti. I test usano piccole mappe sintetiche create con il maker. I punti di attivazione e l’aggro del boss avviano subito il solo o 5 secondi di preparazione per i gruppi. Gli spawn gruppo sono separati: alla partenza ricevono i partecipanti. Ogni boss ha un raggio di aggro configurabile nel maker e può restare inattivo anche con le fiamme accese.
 
 Combattimento, team, aggro, lock, eliminazione, respawn, ricompense, terreno, esclusione degli spawn e indicatori non vanno duplicati per dungeon.
 
 ## Rete e limiti attuali
 
-Il server simula a **30 Hz** e invia snapshot a **15 Hz** (ogni 66,7 ms), filtrati per interesse spaziale. Accetta comandi sequenziali di durata fissa, non posizioni, danni o delta temporali scelti dal client. Il client predice solo il movimento, torna alla posizione confermata e rigioca i comandi non ancora riconosciuti. Il rendering locale interpola tra gli ultimi due tick, alla frequenza del display: aggiunge al massimo un tick grafico (33 ms), senza cambiare hitbox o velocità della simulazione. Le piccole correzioni vengono assorbite gradualmente; morte, respawn e grandi spostamenti azzerano la storia grafica. Non viene aggiunto un ritardo fisso locale né applicata la timeline remota al giocatore vicino ai nemici.
+Il server simula a **30 Hz** e invia snapshot a **15 Hz** (ogni 66,7 ms), filtrati per interesse spaziale. Accetta comandi sequenziali di durata fissa, non posizioni, danni o delta temporali scelti dal client. Il client predice lo stato di movimento, torna alla posizione confermata e rigioca i comandi non ancora riconosciuti. Il rendering locale interpola tra gli ultimi due tick, alla frequenza del display: aggiunge al massimo un tick grafico (33 ms), senza cambiare hitbox o velocità della simulazione. Le piccole correzioni vengono assorbite gradualmente; morte, respawn e grandi spostamenti azzerano la storia grafica. Non viene aggiunto un ritardo fisso locale né applicata la timeline remota al giocatore vicino ai nemici.
 
-Gli altri personaggi e i proiettili usano un buffer adattivo di **100–250 ms rispetto agli arrivi dei pacchetti**, indipendente dalle correzioni dell’orologio del ping. Il tempo di riproduzione avanza continuamente e non torna indietro al ricevimento di uno snapshot. Se la rete si interrompe, conserva l’ultima posizione nota anziché inventare movimento attraverso gli ostacoli. Vita, proiettili, risorse, cooldown e raccolte restano autorevoli. C'è rilevamento dei proiettili lungo il segmento percorso fra tick e controllo di visibilità per gli attacchi attraverso ostacoli.
+Gli altri personaggi e i loro proiettili usano un buffer adattivo di **100–250 ms rispetto agli arrivi dei pacchetti**, indipendente dalle correzioni dell’orologio del ping. Il tempo di riproduzione avanza continuamente e non torna indietro al ricevimento di uno snapshot. Se la rete si interrompe, conserva l’ultima posizione nota anziché inventare movimento attraverso gli ostacoli. Vita, proiettili, risorse, cooldown e raccolte restano autorevoli. C'è rilevamento dei proiettili lungo il segmento percorso fra tick e controllo di visibilità per gli attacchi attraverso ostacoli.
+
+I cast locali melee e a proiettile hanno predizione cosmetica: partono dalla posizione disegnata del personaggio e si collegano alla conferma tramite la sequenza input. Un rifiuto elimina il feedback speculativo; impatti e danni restano server-side. Il melee segue il corpo durante l'animazione; il proiettile vola indipendentemente e viene corretto verso lo stato autorevole senza un secondo spawn. I proiettili del proprietario non passano dal buffer remoto; l'estrapolazione è limitata a 100 ms e rispetta i muri. Aree a terra, trappole e dash non hanno predizione di gameplay. Client e server vanno aggiornati insieme (protocollo 7).
 
 Le code sono limitate; input accumulati troppo vecchi vengono scartati. Rate limit, limiti di payload, heartbeat, backpressure e gestione delle sessioni duplicate evitano alcuni abusi e accumuli. Gli NPC sono attivi nei chunk circostanti, le zone abbandonate vengono scaricate dopo 20 s, le cache hanno limiti e scadenze. Gli scontri usano celle spaziali per ridurre il numero di confronti.
 

@@ -1,9 +1,11 @@
+import { sweptWorldHit } from '../shared/projectiles';
+export { sweptWorldHit } from '../shared/projectiles';
 import { randomUUID } from 'node:crypto';
 import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, levelFromXp } from '../shared/config';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
 import { playerSpriteDirectionRow } from '../shared/sprite-direction';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2, RoomMode } from '../shared/types';
-import { World, chunkCoords, chunkKey, isSolid } from '../shared/world';
+import { World, chunkCoords, chunkKey } from '../shared/world';
 import { OUTPOST, inOutpost } from '../shared/outpost';
 import { insideArenaGate } from '../shared/arena';
 import { BOSS_BY_ID } from '../shared/bosses';
@@ -21,33 +23,6 @@ type ActiveChunk = { key: string; lastUsed: number; npcIds: string[]; pickupIds:
 type Team = { id: string; leaderId: string; members: Set<string> };
 type Invite = { fromId: string; teamId: string; expiresAt: number };
 export type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
-
-/** Exact sweep against tile rectangles expanded by a circular radius, including rounded corners. */
-export function sweptWorldHit(start: Vec2, end: Vec2, radius: number, world: World): number | null {
-  let earliest = Infinity;
-  const rectHit = (left: number, top: number, right: number, bottom: number): number | null => {
-    let enter = 0, leave = 1;
-    for (const [origin, delta, min, max] of [[start.x, end.x - start.x, left, right], [start.y, end.y - start.y, top, bottom]]) {
-      if (Math.abs(delta) < 1e-12) { if (origin < min || origin > max) return null; continue; }
-      let a = (min - origin) / delta, b = (max - origin) / delta;
-      if (a > b) [a, b] = [b, a];
-      enter = Math.max(enter, a);
-      leave = Math.min(leave, b);
-      if (enter > leave) return null;
-    }
-    return enter >= 0 && enter <= 1 ? enter : null;
-  };
-  for (let tx = Math.floor((Math.min(start.x, end.x) - radius) / TILE_SIZE); tx <= Math.floor((Math.max(start.x, end.x) + radius) / TILE_SIZE); tx++) {
-    for (let ty = Math.floor((Math.min(start.y, end.y) - radius) / TILE_SIZE); ty <= Math.floor((Math.max(start.y, end.y) + radius) / TILE_SIZE); ty++) {
-      if (!isSolid(world.getTile(tx, ty))) continue;
-      const left = tx * TILE_SIZE, top = ty * TILE_SIZE, right = left + TILE_SIZE, bottom = top + TILE_SIZE;
-      const hits = [rectHit(left - radius, top, right + radius, bottom), rectHit(left, top - radius, right, bottom + radius)];
-      for (const x of [left, right]) for (const y of [top, bottom]) hits.push(segmentCircleHit(start, end, { x, y }, radius));
-      for (const hit of hits) if (hit !== null) earliest = Math.min(earliest, hit);
-    }
-  }
-  return earliest === Infinity ? null : earliest;
-}
 
 /** Single authoritative simulation. Time fields are milliseconds; step delta is seconds. */
 export class WorldSimulation {
@@ -253,7 +228,7 @@ export class WorldSimulation {
     // Casts use the input consumed this tick, captured independently of queue length.
     for (const [id, input] of this.pendingCasts) {
       const actor = this.players.get(id);
-      if (actor && input.cast) this.cast(actor, input.cast, input.autoAim === true, input.targetId);
+      if (actor && input.cast) this.cast(actor, input.cast, input.autoAim === true, input.targetId, input.seq);
     }
     this.pendingCasts.clear();
     this.stepNpcs(dt);
@@ -436,7 +411,7 @@ export class WorldSimulation {
   }
 
   /** May be used directly by deterministic combat tests; input validation precedes this in transport. */
-  cast(actor: Actor, slot: AbilitySlot, autoAim = false, targetId?: string): boolean {
+  cast(actor: Actor, slot: AbilitySlot, autoAim = false, targetId?: string, inputSeq?: number): boolean {
     const ability = CLASSES[actor.classId].abilities[slot];
     if (this.isSafeProtected(actor) && ability.kind !== 'heal' && ability.kind !== 'shield') return false;
     if (actor.hp <= 0 || actor.cooldowns[slot] > this.now || actor.resource < ability.cost) return false;
@@ -453,10 +428,11 @@ export class WorldSimulation {
     actor.revealedUntil = this.now + 2500;
     const connection = this.connections.get(actor.id);
     if (connection) connection.combatAt = this.now;
-    this.emit({ kind: 'cast', x: actor.x, y: actor.y, radius: ability.radius, color: ability.color, duration: ability.kind === 'shield' ? 700 : 380, actorId: actor.id, aim: actor.aim, abilityKind: ability.kind, text: ability.name });
+    this.emit({ kind: 'cast', x: actor.x, y: actor.y, radius: ability.radius, color: ability.color, duration: ability.kind === 'shield' ? 700 : 380, actorId: actor.id, aim: actor.aim, abilityKind: ability.kind, text: ability.name, ...(inputSeq !== undefined ? { inputSeq } : {}) });
     if (ability.kind === 'projectile') {
       const speed = ability.speed ?? 400;
       const projectile: Projectile = { id: randomUUID(), ownerId: actor.id, x: actor.x, y: actor.y, vx: Math.cos(actor.aim) * speed, vy: Math.sin(actor.aim) * speed, radius: ability.radius, damage: ability.damage * this.damageMultiplier(actor), expiresAt: this.now + ability.range / speed * 1000, color: ability.color, slow: actor.classId === 'mage' && slot === 'q' ? 2000 : undefined };
+      if (inputSeq !== undefined) projectile.inputSeq = inputSeq;
       this.projectiles.set(projectile.id, projectile);
       this.projectileTeams.set(projectile.id, actor.teamId);
       return true;

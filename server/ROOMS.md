@@ -1,6 +1,6 @@
 # Istanze PvP: fondazione
 
-Il runtime usa un `RoomManager` unico. `global` mantiene il mondo procedurale con un piccolo avamposto iniziale e PvP libero all'esterno. Il corpo rimane per 20 secondi dopo ogni uscita ed è vulnerabile secondo le regole della zona. I gold del mini-boss sono descritti in [RUINS.md](RUINS.md); le istanze PvP non assegnano ricompense.
+Il runtime usa un `RoomManager` unico. `global` mantiene il mondo procedurale con un piccolo avamposto iniziale e PvP libero all'esterno. Il corpo rimane per 20 secondi dopo ogni uscita ed è vulnerabile secondo le regole della zona. I boss assegnano oro tramite loot privato ai partecipanti; le istanze PvP non assegnano ricompense.
 
 ## Avamposto e confine PvP
 

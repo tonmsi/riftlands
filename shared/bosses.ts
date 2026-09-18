@@ -1,5 +1,5 @@
 import type { ClassId, Vec2 } from './types';
-import { DUNGEON_BY_BOSS_ID, MAZE_DUNGEON, RUINS_DUNGEON, insideDungeonRegion } from './dungeons';
+import { DUNGEON_BY_BOSS_ID, insideDungeonRegion } from './dungeons';
 import customDungeons from './custom-dungeons.json';
 
 export type BossAttackKind = 'melee' | 'slam' | 'charge' | 'nova';
@@ -21,6 +21,7 @@ export interface BossBehaviorDefinition {
   unstuck?: { afterMs: number; durationMs: number; probeDistance: number };
 }
 export interface BossDefinition {
+  templateId?: string;
   id: string;
   dungeonId: string;
   name: string;
@@ -54,44 +55,8 @@ export interface BossWindup extends Vec2 {
 export interface BossLockState { bossId: string; locked: boolean; ownerId?: string; relation?: 'participant' | 'eliminated' | 'outsider'; }
 export interface BossPreparationState { bossId: string; name: string; endsAt: number; entrants: number; }
 
-export const RUINS_WARDEN: BossDefinition = {
-  id: RUINS_DUNGEON.bossId, dungeonId: RUINS_DUNGEON.id,
-  name: 'Custode delle Rovine', skin: 'stone-warden', classId: 'warrior',
-  radius: 28, hp: 460, speed: 100, level: 5,
-  attacks: [
-    { kind: 'melee', damage: 18, range: 82, radius: 82, windupMs: 0, cooldownMs: 1450 },
-    { kind: 'slam', damage: 31, range: 285, radius: 145, windupMs: 850, cooldownMs: 1450 },
-    { kind: 'melee', damage: 18, range: 82, radius: 82, windupMs: 0, cooldownMs: 1450 },
-    { kind: 'charge', damage: 27, range: 285, radius: 38, windupMs: 700, cooldownMs: 1450, travel: 250 },
-    { kind: 'melee', damage: 18, range: 82, radius: 82, windupMs: 0, cooldownMs: 1450 },
-    { kind: 'nova', damage: 24, range: 285, radius: 235, innerRadius: 82, windupMs: 1100, cooldownMs: 1450 },
-  ],
-  behavior: {
-    targeting: 'threat', attackSelection: 'sequence', preferredRange: 68, pathRefreshMs: 550,
-    unstuck: { afterMs: 900, durationMs: 550, probeDistance: 54 },
-  },
-  enrageAt: 0.45, enrageSpeed: 1.24, enrageCooldown: 0.72,
-  reward: { gold: 50, lootMs: 120_000 }, respawnMs: 60_000,
-};
-
-/** No dedicated sprite exists for this boss: clients intentionally use the procedural fallback. */
-export const MAZE_STALKER: BossDefinition = {
-  id: MAZE_DUNGEON.bossId, dungeonId: MAZE_DUNGEON.id,
-  name: 'Predatore del Dedalo', skin: 'maze-stalker', classId: 'warrior',
-  radius: 25, hp: 620, speed: 118, level: 8,
-  attacks: [
-    { kind: 'charge', damage: 34, range: 330, radius: 34, windupMs: 520, cooldownMs: 1050, travel: 300 },
-    { kind: 'melee', damage: 21, range: 76, radius: 76, windupMs: 0, cooldownMs: 900 },
-    { kind: 'slam', damage: 27, range: 190, radius: 105, windupMs: 620, cooldownMs: 1000 },
-    { kind: 'nova', damage: 22, range: 280, radius: 210, innerRadius: 105, windupMs: 850, cooldownMs: 1200 },
-  ],
-  behavior: { targeting: 'nearest', attackSelection: 'distance', preferredRange: 105, pathRefreshMs: 260 },
-  enrageAt: 0.55, enrageSpeed: 1.38, enrageCooldown: 0.62,
-  reward: { gold: 75, lootMs: 120_000 }, respawnMs: 75_000,
-};
-
-export const BOSS_DEFINITIONS: readonly BossDefinition[] = [RUINS_WARDEN, MAZE_STALKER,
-  ...(customDungeons as { bosses: BossDefinition[] }[]).flatMap(entry => entry.bosses)];
+export const BOSS_DEFINITIONS: readonly BossDefinition[] =
+  (customDungeons as { bosses: BossDefinition[] }[]).flatMap(entry => entry.bosses);
 export const BOSS_BY_ID = new Map(BOSS_DEFINITIONS.map(definition => [definition.id, definition]));
 for (const definition of BOSS_DEFINITIONS) {
   const dungeon = DUNGEON_BY_BOSS_ID.get(definition.id);

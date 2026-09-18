@@ -1,7 +1,7 @@
 {
   "name": "riftlands", "version": "0.1.0", "private": true, "type": "module",
   "description": "Mondo multiplayer procedurale con simulazione autorevole e client Canvas 2D",
-  "scripts": {"dev": "tsx server/index.ts", "build": "tsc --noEmit && vite build", "start": "tsx server/index.ts --production", "typecheck": "tsc --noEmit", "test": "tsx --test tests/*.test.ts", "test:e2e": "playwright test", "test:review": "tsx --test tests/integration/review-browser.test.ts tests/integration/sessions.test.ts", "dungeon:import": "tsx scripts/import-dungeon.ts", "benchmark:server": "tsx scripts/benchmark-server.ts"},
+  "scripts": {"dev": "tsx server/index.ts", "build": "tsc --noEmit && vite build", "start": "tsx server/index.ts --production", "typecheck": "tsc --noEmit", "test": "tsx --test tests/*.test.ts", "test:e2e": "playwright test", "test:review": "tsx --test tests/integration/review-browser.test.ts tests/integration/sessions.test.ts tests/integration/combat-browser.test.ts tests/integration/dungeon-studio.test.ts", "dungeon:import": "tsx scripts/import-dungeon.ts", "dungeon:remove": "tsx scripts/remove-dungeon.ts", "dungeon:studio": "tsx scripts/dungeon-studio.ts", "benchmark:server": "tsx scripts/benchmark-server.ts"},
   "dependencies": {"ws": "^8.18.3"},
   "devDependencies": {"@playwright/test": "^1.55.0", "@types/node": "^22.18.0", "@types/ws": "^8.18.1", "tsx": "^4.20.5", "typescript": "^5.9.2", "vite": "^7.1.5"},
   "engines": {"node": ">=22.12"}

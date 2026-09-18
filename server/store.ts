@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname, resolve } from 'node:path';
 import type { Actor, PublicAccount } from '../shared/types';
 import { CLASSES } from '../shared/config';
-import { validBossState, validBossStates, RUINS_WARDEN, type BossState } from '../shared/bosses';
+import { validBossStates, type BossState } from '../shared/bosses';
 
 export interface Account {
   gold?: number;
@@ -19,13 +19,6 @@ export interface Account {
   requests: string[];
   lastSeen: number;
   body?: Actor;
-}
-
-/** One-way persistence migration; legacy data never leaks into the game-domain API. */
-function migrateStoredRuinsState(value: unknown): BossState | undefined {
-  if (!value || typeof value !== 'object' || !('drops' in value) || !Array.isArray(value.drops)) return undefined;
-  const migrated = { ...value, drops: value.drops.map(drop => drop && typeof drop === 'object' ? { ...drop, bossId: RUINS_WARDEN.id } : drop) };
-  return validBossState(migrated, RUINS_WARDEN) ? migrated : undefined;
 }
 
 export function publicAccount(account: Account): PublicAccount {
@@ -99,11 +92,6 @@ export class AccountStore {
       if ('bosses' in parsed && parsed.bosses !== undefined) {
         if (!validBossStates(parsed.bosses)) throw new Error('Stato boss non valido.');
         this.bossStates = parsed.bosses;
-      } else if ('ruins' in parsed && parsed.ruins !== undefined) {
-        const legacy = migrateStoredRuinsState(parsed.ruins);
-        if (!legacy) throw new Error('Stato rovine non valido.');
-        this.bossStates[RUINS_WARDEN.id] = legacy;
-        this.dirty = true;
       }
       for (const entry of parsed.accounts) {
         if (!entry || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.nameLower !== 'string' || typeof entry.salt !== 'string' || typeof entry.passwordHash !== 'string' || !Array.isArray(entry.friends) || !Array.isArray(entry.requests) || ![entry.xp, entry.kills, entry.deaths, entry.lastSeen].every(Number.isFinite)) {

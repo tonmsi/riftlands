@@ -4,7 +4,7 @@ import type { Actor, InputCommand } from '../shared/types';
 import { World } from '../shared/world';
 import { playerSpriteDirectionRow } from '../shared/sprite-direction';
 
-/** Combat is never predicted: only movement uses the shared deterministic integrator. */
+/** Only movement changes predicted actor state; speculative combat visuals live separately. */
 export function predictMovement(actor: Actor, input: InputCommand, world: World, time: number): Actor {
   const position = moveWithCollisions(actor, input.dx, input.dy, movementSpeed(actor, time) * terrainSpeed(actor, world) * DT, world);
   return { ...actor, ...position, aim: input.aim,
