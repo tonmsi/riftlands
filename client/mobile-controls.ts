@@ -2,9 +2,11 @@ import type { AbilityDef, AbilitySlot, Vec2 } from '../shared/types';
 
 export function joystickVector(dx: number, dy: number, radius: number): Vec2 {
   const length = Math.hypot(dx, dy);
-  if (length < 8) return { x: 0, y: 0 };
-  const scale = Math.max(radius, length);
-  return { x: dx / scale, y: dy / scale };
+  const deadZone = 8;
+  if (!Number.isFinite(length) || !Number.isFinite(radius) || radius <= deadZone || length <= deadZone) return { x: 0, y: 0 };
+  // Remap the active travel: leaving the dead zone must not jump straight to 20% speed.
+  const magnitude = Math.min(1, (length - deadZone) / (radius - deadZone));
+  return { x: dx / length * magnitude, y: dy / length * magnitude };
 }
 interface MobileActions {
   enabled: () => boolean;

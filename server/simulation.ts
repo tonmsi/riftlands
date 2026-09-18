@@ -7,7 +7,8 @@ import { World, chunkCoords, chunkKey, isSolid } from '../shared/world';
 import { OUTPOST, inOutpost } from '../shared/outpost';
 import { insideArenaGate } from '../shared/arena';
 import { BOSS_BY_ID } from '../shared/bosses';
-import { DUNGEON_DEFINITIONS } from '../shared/dungeons';
+import { DUNGEON_BY_BOSS_ID } from '../shared/dungeons';
+import { NPC_CATALOG } from '../shared/npcs';
 import { BossEncounter } from './boss-encounter';
 import type { Account, AccountStore } from './store';
 
@@ -95,7 +96,7 @@ export class WorldSimulation {
     this.store = store;
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
     if (mode === 'world') {
-      for (const dungeon of DUNGEON_DEFINITIONS) {
+      for (const dungeon of DUNGEON_BY_BOSS_ID.values()) {
         const definition = BOSS_BY_ID.get(dungeon.bossId);
         if (!definition || definition.dungeonId !== dungeon.id) throw new Error(`Configurazione dungeon non valida: ${dungeon.id}`);
         const encounter = new BossEncounter(definition, now, store?.bossStates[definition.id], store);
@@ -103,6 +104,12 @@ export class WorldSimulation {
         this.npcs.set(encounter.boss.id, encounter.boss);
         if (store) store.bossStates[definition.id] = encounter.state;
       }
+      const groups = new Map<string, BossEncounter[]>();
+      for (const encounter of this.bosses.values()) if (encounter.dungeon.encounterGroupId) {
+        const key = `${encounter.dungeon.id}:${encounter.dungeon.encounterGroupId}`;
+        const members = groups.get(key) ?? []; members.push(encounter); groups.set(key, members);
+      }
+      for (const group of groups.values()) BossEncounter.linkGroup(group);
     }
   }
 
@@ -589,14 +596,20 @@ export class WorldSimulation {
     target.deadUntil = this.now + (target.kind === 'npc' ? 35_000 : 5000);
     target.effects = [];
     this.emit({ kind: 'death', x: target.x, y: target.y, actorId: target.id, radius: 65, duration: 800, color: '#ffd4a3' });
-    if (attacker?.kind === 'player') {
+    if (attacker?.kind === 'player' && !encounter) {
       if (target.kind === 'player') attacker.kills++;
       attacker.xp += target.kind === 'player' ? 50 : 20 + target.level * 3;
       attacker.level = levelFromXp(attacker.xp);
       this.persistPlayer(attacker.id);
     }
     if (target.kind === 'player') this.persistPlayer(target.id);
-    encounter?.killed(attacker?.kind === 'player' ? attacker.id : undefined, this.now, this.world);
+    for (const reward of encounter?.killed(attacker?.kind === 'player' ? attacker.id : undefined, this.now, this.world) ?? []) {
+      const recipient = this.players.get(reward.id);
+      if (!recipient) continue;
+      recipient.xp += reward.xp;
+      recipient.level = levelFromXp(recipient.xp);
+      this.persistPlayer(recipient.id);
+    }
     return true;
   }
 
@@ -662,11 +675,12 @@ export class WorldSimulation {
           if (this.npcs.size >= 3000) break;
           const slept = this.npcSleep.get(npc.id);
           const npcHp = 55 + Math.min(npc.level, 12) * 12;
+          const spec = NPC_CATALOG[npc.npcKind];
           const actor: Actor = slept ? copyActor(slept.body) : {
-            id: npc.id, kind: 'npc', npcKind: npc.npcKind, classId: npc.npcKind === 'wisp' ? 'mage' : 'warrior',
-            name: npc.npcKind === 'slime' ? 'Gelatina selvatica' : npc.npcKind === 'wisp' ? 'Fuoco fatuo' : 'Guardiano errante',
-            x: npc.x, y: npc.y, radius: npc.npcKind === 'sentinel' ? 19 : 13,
-            hp: npcHp, maxHp: npcHp, resource: 0, maxResource: 100, aim: 0, speed: npc.npcKind === 'slime' ? 95 : 120,
+            id: npc.id, kind: 'npc', npcKind: npc.npcKind, classId: spec.classId,
+            name: spec.name,
+            x: npc.x, y: npc.y, radius: spec.radius,
+            hp: npcHp, maxHp: npcHp, resource: 0, maxResource: 100, aim: 0, speed: spec.speed,
             level: npc.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: EMPTY_COOLDOWNS(),
           };
           this.npcs.set(actor.id, actor);

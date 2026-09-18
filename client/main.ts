@@ -6,7 +6,7 @@ import { CLASSES, TICK_RATE } from '../shared/config';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import { GameConnection } from './net';
 import { predictMovement, reconcile } from './prediction';
-import { LocalMovementView, LocalPresentationDelay, contactPresentation } from './motion';
+import { LocalMovementView } from './motion';
 import { SnapshotBuffer } from './snapshots';
 import { Renderer, drawMinimap } from './render';
 import { GameUI } from './ui';
@@ -28,9 +28,6 @@ const snapshotBuffer = new SnapshotBuffer();
 let renderedActors: Actor[] = [];
 const effects = new Map<string, GameEvent>();
 const localMovement = new LocalMovementView();
-const LOCAL_PRESENTATION_DELAY_MS = 50;
-// Presentation-only delay. Inputs still go to the server as soon as they are generated.
-const localPresentation = new LocalPresentationDelay(LOCAL_PRESENTATION_DELAY_MS);
 let lastMinimap = 0;
 let profileCache = '';
 let joinGeneration = 0;
@@ -62,7 +59,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   },
   leave: () => {
     joinGeneration++;
-    connection.leave(); playing = false; latest = null; predicted = null; selectedId = null; localPresentation.reset();
+    connection.leave(); playing = false; latest = null; predicted = null; selectedId = null; localMovement.reset();
     releaseControls(); snapshotBuffer.clear(); renderedActors = []; effects.clear(); audio.setActive(false);
     ui.setPlaying(false); ui.setSelected(null);
   },
@@ -93,7 +90,7 @@ window.addEventListener('keydown', audio.unlock);
 
 const renderer = new Renderer(ui.canvas);
 const connection = new GameConnection({
-  reset: () => { releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localPresentation.reset(); },
+  reset: () => { releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); },
   status: (status, detail) => {
     ui.setConnection(status, detail);
     if (status === 'offline' || status === 'reconnecting') releaseControls();
@@ -135,8 +132,7 @@ const connection = new GameConnection({
       localMovement.correct(old, predicted);
       snapshotBuffer.push(message, performance.now());
       for (const event of message.events) {
-        const localEvent = event.actorId === message.self.id || event.targetId === message.self.id;
-        effects.set(event.id, localEvent ? { ...event, at: event.at + LOCAL_PRESENTATION_DELAY_MS } : event);
+        effects.set(event.id, event);
       }
       // Prune even while animation frames are suspended in a background tab.
       for (const [id, effect] of effects) if (message.time > effect.at + effect.duration + 250) effects.delete(id);
@@ -266,8 +262,8 @@ function frame(now: number): void {
   const actors = remoteFrame?.actors ?? [];
   renderedActors = actors;
   const immediateSelf = predicted ? localMovement.sample(predicted, inputAccumulator / (1000 / TICK_RATE), delta) : latest?.self ?? null;
-  const localSelf = immediateSelf ? localPresentation.sample(immediateSelf, performance.now()) : null;
-  const self = localSelf && remoteFrame ? contactPresentation(localSelf, remoteFrame.self, actors) : localSelf;
+  // Never switch the owner's body onto the delayed remote timeline near enemies.
+  const self = immediateSelf;
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const projectiles = remoteFrame?.projectiles ?? [];
   const audible = playing && connection.connected && !document.hidden && !!self;

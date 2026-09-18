@@ -97,7 +97,7 @@ export class GameUI {
       <div class="world-stage"><canvas class="world-canvas" aria-label="Mondo di gioco multiplayer" tabindex="0"></canvas>
       </div>
       <div class="lobby">
-        <header class="site-header"><a class="brand" href="/" aria-label="Riftlands, ingresso"><span class="brand-symbol">${icon('<path d="m12 1 10 11-10 11L2 12Z"/><path d="m12 5 6 7-6 7-6-7ZM12 1v22"/>')}</span>RIFTLANDS</a><div class="header-right"><span class="connection-pill" data-ref="lobby-connection"><i></i><span>Pronto a esplorare</span></span></div></header>
+        <header class="site-header"><a class="brand" href="/" aria-label="Riftlands, ingresso"><span class="brand-symbol">${icon('<path d="m12 1 10 11-10 11L2 12Z"/><path d="m12 5 6 7-6 7-6-7ZM12 1v22"/>')}</span>RIFTLANDS</a><div class="header-right"><a href="/dungeon-maker.html">Dungeon maker</a><span class="connection-pill" data-ref="lobby-connection"><i></i><span>Pronto a esplorare</span></span></div></header>
         <main class="lobby-main"><section class="entry-panel" aria-label="Menu principale">
           <div class="intro"><span class="eyebrow">IL TUO ACCAMPAMENTO</span><h1>Prepara la tua avventura</h1><p>Scegli il campione e torna nelle Terre di Soglia.</p></div>
           

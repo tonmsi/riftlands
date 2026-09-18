@@ -1,6 +1,8 @@
 # Riftlands
 
-Prototipo multiplayer 2D dall’alto, senza asset: mondo procedurale, combattimento PvP/PvE e alleanze. Client Canvas e TypeScript, server Node.js autorevole con WebSocket. Il menu e tutti i comandi sono in italiano.
+Prototipo multiplayer 2D dall’alto: mondo procedurale, combattimento PvP/PvE e alleanze. Client Canvas e TypeScript, server Node.js autorevole con WebSocket. Il menu e tutti i comandi sono in italiano.
+
+La review di rete, mobile e architettura, con misure e priorità, è in [docs/code-review-2026-09-18.md](docs/code-review-2026-09-18.md). Il [dungeon maker](docs/dungeon-maker.md) si apre dal menu o da `/dungeon-maker.html`.
 
 ## Avvio
 
@@ -72,9 +74,9 @@ Mana: rigenerazione di 7/s. Rabbia: generata infliggendo/subendo danni, decade f
 
 ## Account e salvataggi
 
-Il browser conserva un token casuale in `localStorage`, chiave `riftlands.account`; il server conserva soltanto il suo hash. Nome, XP, statistiche, corpo del personaggio e amicizie sono in `data/accounts.json`, salvati tramite sostituzione atomica. Nuove identità e azioni sociali vengono salvate subito, i personaggi ogni 5 s e in chiusura regolare. Un arresto improvviso può perdere gli ultimi secondi di progressione. Un archivio danneggiato causa un errore esplicito e non viene sovrascritto.
+Il login usa nome e password, derivate con scrypt e salt. Il trasporto calcola le password in modo asincrono, con massimo quattro derivazioni simultanee e un budget per IP condiviso tra connessioni. Il browser conserva un JWT di 30 giorni in `localStorage`, chiave `riftlands.jwt`. Una riconnessione usa quel token senza ripetere la registrazione.
 
-Conserva la cartella `data` quando aggiorni il server. Nel menu, **Codice account** permette di copiare il codice, importarne uno conservato o creare esplicitamente un nuovo profilo. Conserva il codice prima di cancellare i dati del browser; non esiste ancora recupero tramite email/password. Il token è una credenziale: non condividerlo. L’IP serve solo ai limiti anti-abuso, non all’identità. La copia negli appunti richiede localhost o HTTPS.
+Conserva la cartella `data`: `accounts.json` contiene account, corpi e stati dei boss; `jwt.secret` contiene il segreto di firma (oppure impostare `JWT_SECRET`). La mancanza di database è voluta per questa fase. Le sostituzioni del JSON sono atomiche; scrittura e serializzazione restano sincrone. I personaggi vengono salvati ogni cinque secondi e alla chiusura regolare. Un crash può perdere gli ultimi secondi. Il vecchio formato account v1 viene azzerato all'apertura: conservarne un backup prima dell'aggiornamento. Il logout elimina il token dal dispositivo, senza revocare un token già copiato. Non esiste recupero password. Usare HTTPS/WSS in pubblico.
 
 ## Struttura
 
@@ -124,15 +126,15 @@ Combattimento, team, aggro, lock, eliminazione, respawn, ricompense, terreno, es
 
 ## Rete e limiti attuali
 
-Il server simula a **30 Hz** e invia snapshot a **10 Hz**, filtrati per interesse spaziale. Accetta comandi sequenziali di durata fissa, non posizioni, danni o delta temporali scelti dal client. Il client predice solo il movimento, torna alla posizione confermata e rigioca i comandi non ancora riconosciuti. Il rendering locale interpola tra gli ultimi due tick, alla frequenza del display: aggiunge al massimo un tick grafico (33 ms), senza cambiare hitbox o velocità della simulazione. Le piccole correzioni vengono assorbite gradualmente; morte, respawn e grandi spostamenti azzerano la storia grafica.
+Il server simula a **30 Hz** e invia snapshot a **15 Hz** (ogni 66,7 ms), filtrati per interesse spaziale. Accetta comandi sequenziali di durata fissa, non posizioni, danni o delta temporali scelti dal client. Il client predice solo il movimento, torna alla posizione confermata e rigioca i comandi non ancora riconosciuti. Il rendering locale interpola tra gli ultimi due tick, alla frequenza del display: aggiunge al massimo un tick grafico (33 ms), senza cambiare hitbox o velocità della simulazione. Le piccole correzioni vengono assorbite gradualmente; morte, respawn e grandi spostamenti azzerano la storia grafica. Non viene aggiunto un ritardo fisso locale né applicata la timeline remota al giocatore vicino ai nemici.
 
-Gli altri personaggi e i proiettili usano un buffer adattivo di **150–300 ms rispetto agli arrivi dei pacchetti**, indipendente dalle correzioni dell’orologio del ping. Il tempo di riproduzione avanza continuamente e non torna indietro al ricevimento di uno snapshot. Se la rete si interrompe, conserva l’ultima posizione nota anziché inventare movimento attraverso gli ostacoli. Vita, proiettili, risorse, cooldown e raccolte restano autorevoli. C'è rilevamento dei proiettili lungo il segmento percorso fra tick e controllo di visibilità per gli attacchi attraverso ostacoli.
+Gli altri personaggi e i proiettili usano un buffer adattivo di **100–250 ms rispetto agli arrivi dei pacchetti**, indipendente dalle correzioni dell’orologio del ping. Il tempo di riproduzione avanza continuamente e non torna indietro al ricevimento di uno snapshot. Se la rete si interrompe, conserva l’ultima posizione nota anziché inventare movimento attraverso gli ostacoli. Vita, proiettili, risorse, cooldown e raccolte restano autorevoli. C'è rilevamento dei proiettili lungo il segmento percorso fra tick e controllo di visibilità per gli attacchi attraverso ostacoli.
 
 Le code sono limitate; input accumulati troppo vecchi vengono scartati. Rate limit, limiti di payload, heartbeat, backpressure e gestione delle sessioni duplicate evitano alcuni abusi e accumuli. Gli NPC sono attivi nei chunk circostanti, le zone abbandonate vengono scaricate dopo 20 s, le cache hanno limiti e scadenze. Gli scontri usano celle spaziali per ridurre il numero di confronti.
 
 Questa è una **base funzionante su un singolo server**, non un’infrastruttura MMO già dimensionata per migliaia di utenti. Il tetto configurato di 128 giocatori è una protezione, **non una capacità certificata da un test di carico**. Rimangono da sviluppare:
 
-- Database transazionale e migrazioni, backup operativi, recupero account e autenticazione completa.
+- Backup operativi, revoca/recupero credenziali e persistenza JSON asincrona; database rimandato intenzionalmente.
 - Partizionamento del mondo, trasferimento tra server, bilanciamento del carico e chat/moderazione.
 - Compensazione della latenza sugli attacchi tramite rewind validato: per ora conta il tempo di ricezione del comando sul server; la riconciliazione del movimento è già presente.
 - Navigation/pathfinding evoluto per gli NPC: attualmente seguono il bersaglio con collisioni, linea di vista e ritorno all’origine, ma non pianificano percorsi intorno a grandi ostacoli.

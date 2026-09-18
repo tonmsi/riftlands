@@ -570,10 +570,14 @@ export class Renderer {
 
   private drawDungeonFlames(time: number, locks: BossLockState[] = []): void {
     const { ctx } = this;
+    const drawn = new Set<string>();
     for (const lock of locks) {
       if (!lock.locked) continue;
       const dungeon = DUNGEON_BY_BOSS_ID.get(lock.bossId);
       if (!dungeon) continue;
+      const group = `${dungeon.id}:${dungeon.encounterGroupId ?? dungeon.bossId}`;
+      if (drawn.has(group)) continue;
+      drawn.add(group);
       const dangerous = lock.relation === 'participant' || lock.relation === 'eliminated';
       const base = dangerous ? '#6d28d9' : '#237a3b';
       const middle = dangerous ? '#b45cff' : '#55d96f';

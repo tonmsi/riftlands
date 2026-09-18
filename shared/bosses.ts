@@ -1,5 +1,6 @@
 import type { ClassId, Vec2 } from './types';
-import { DUNGEON_BY_ID, MAZE_DUNGEON, RUINS_DUNGEON, insideDungeonRegion } from './dungeons';
+import { DUNGEON_BY_BOSS_ID, MAZE_DUNGEON, RUINS_DUNGEON, insideDungeonRegion } from './dungeons';
+import customDungeons from './custom-dungeons.json';
 
 export type BossAttackKind = 'melee' | 'slam' | 'charge' | 'nova';
 export interface BossAttackDefinition {
@@ -89,11 +90,12 @@ export const MAZE_STALKER: BossDefinition = {
   reward: { gold: 75, lootMs: 120_000 }, respawnMs: 75_000,
 };
 
-export const BOSS_DEFINITIONS: readonly BossDefinition[] = [RUINS_WARDEN, MAZE_STALKER];
+export const BOSS_DEFINITIONS: readonly BossDefinition[] = [RUINS_WARDEN, MAZE_STALKER,
+  ...(customDungeons as { bosses: BossDefinition[] }[]).flatMap(entry => entry.bosses)];
 export const BOSS_BY_ID = new Map(BOSS_DEFINITIONS.map(definition => [definition.id, definition]));
 for (const definition of BOSS_DEFINITIONS) {
-  const dungeon = DUNGEON_BY_ID.get(definition.dungeonId);
-  if (!dungeon || dungeon.bossId !== definition.id) throw new Error(`Boss ${definition.id}: dungeon ${definition.dungeonId} assente o non associato.`);
+  const dungeon = DUNGEON_BY_BOSS_ID.get(definition.id);
+  if (!dungeon || dungeon.id !== definition.dungeonId) throw new Error(`Boss ${definition.id}: dungeon ${definition.dungeonId} assente o non associato.`);
   const unstuck = definition.behavior.unstuck;
   if (unstuck && (![unstuck.afterMs, unstuck.durationMs, unstuck.probeDistance].every(Number.isFinite)
     || unstuck.afterMs <= 0 || unstuck.durationMs <= 0 || unstuck.probeDistance <= definition.radius)) {
@@ -103,7 +105,7 @@ for (const definition of BOSS_DEFINITIONS) {
 
 export function validBossState(value: unknown, definition: BossDefinition): value is BossState {
   const state = value as BossState;
-  const dungeon = DUNGEON_BY_ID.get(definition.dungeonId);
+  const dungeon = DUNGEON_BY_BOSS_ID.get(definition.id);
   return !!state && Number.isFinite(state.respawnAt) && state.respawnAt >= 0 && !!state.corpse
     && !!dungeon && [state.corpse.x, state.corpse.y].every(Number.isFinite) && insideDungeonRegion(dungeon.encounter.regions.combat, state.corpse, 400)
     && Array.isArray(state.drops) && state.drops.length <= 10 && new Set(state.drops.map(drop => drop?.id)).size === state.drops.length

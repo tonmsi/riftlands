@@ -1,5 +1,7 @@
 import { TILE_SIZE } from './config';
 import type { TileKind, Vec2 } from './types';
+import { NPC_CATALOG, type NpcKind } from './npcs';
+import customDungeons from './custom-dungeons.json';
 
 export interface DungeonTileRect { minTx: number; maxTx: number; minTy: number; maxTy: number; }
 export interface DungeonFlameBarrier extends Vec2 { length: number; thickness: number; angle: number; }
@@ -64,15 +66,19 @@ export interface DungeonDefinition {
   id: string;
   name: string;
   bossId: string;
+  encounterGroupId?: string;
+  additionalEncounters?: readonly { bossId: string; encounterGroupId: string; spawnPoints: DungeonDefinition['spawnPoints']; encounter: DungeonEncounterDefinition; passages: readonly DungeonPassage[] }[];
   area: Vec2 & { radius: number };
   layout: {
     bounds: DungeonTileRect;
     floor: TileKind;
     obstacles: readonly DungeonTileRect[];
     obstacleTiles: readonly Vec2[];
+    tiles?: readonly (Vec2 & { kind: TileKind })[];
   };
   passages: readonly DungeonPassage[];
   spawnPoints: { boss: Vec2; party: readonly Vec2[] };
+  npcSpawns?: readonly (Vec2 & { id: string; npcKind: NpcKind; level: number })[];
   encounter: DungeonEncounterDefinition;
   spawnExclusionMargin: number;
   approach: DungeonApproach;
@@ -209,21 +215,36 @@ export const MAZE_DUNGEON: DungeonDefinition = {
   },
 };
 
-export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] = [RUINS_DUNGEON, MAZE_DUNGEON];
+export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] = [RUINS_DUNGEON, MAZE_DUNGEON,
+  ...(customDungeons as { definition: DungeonDefinition }[]).map(entry => entry.definition)];
+export function dungeonEncounters(definition: DungeonDefinition): DungeonDefinition[] {
+  return [definition, ...(definition.additionalEncounters ?? []).map(encounter => ({ ...definition, ...encounter, additionalEncounters: undefined }))];
+}
 if (new Set(DUNGEON_DEFINITIONS.map(dungeon => dungeon.id)).size !== DUNGEON_DEFINITIONS.length
   || new Set(DUNGEON_DEFINITIONS.map(dungeon => dungeon.bossId)).size !== DUNGEON_DEFINITIONS.length) {
   throw new Error('Il catalogo dungeon contiene id dungeon o boss duplicati.');
 }
 export const DUNGEON_BY_ID = new Map(DUNGEON_DEFINITIONS.map(definition => [definition.id, definition]));
-export const DUNGEON_BY_BOSS_ID = new Map(DUNGEON_DEFINITIONS.map(definition => [definition.bossId, definition]));
+export const DUNGEON_BY_BOSS_ID = new Map(DUNGEON_DEFINITIONS.flatMap(dungeonEncounters).map(definition => [definition.bossId, definition]));
+if (DUNGEON_BY_BOSS_ID.size !== DUNGEON_DEFINITIONS.flatMap(dungeonEncounters).length) throw new Error('ID boss duplicato nel catalogo dungeon.');
 
 const insideRect = (tx: number, ty: number, rect: DungeonTileRect): boolean =>
   tx >= rect.minTx && tx <= rect.maxTx && ty >= rect.minTy && ty <= rect.maxTy;
+const paintedTileIndexes = new WeakMap<object, Map<string, TileKind>>();
 
 export function dungeonTile(definition: DungeonDefinition, tx: number, ty: number): TileKind | undefined {
   if (!insideRect(tx, ty, definition.layout.bounds)) return undefined;
   if (definition.layout.obstacles.some(rect => insideRect(tx, ty, rect))
     || definition.layout.obstacleTiles.some(tile => tile.x === tx && tile.y === ty)) return 'rock';
+  if (definition.layout.tiles) {
+    let index = paintedTileIndexes.get(definition.layout.tiles);
+    if (!index) {
+      index = new Map(definition.layout.tiles.map(tile => [`${tile.x},${tile.y}`, tile.kind]));
+      paintedTileIndexes.set(definition.layout.tiles, index);
+    }
+    const painted = index.get(`${tx},${ty}`);
+    if (painted) return painted;
+  }
   return definition.layout.floor;
 }
 
@@ -328,8 +349,9 @@ export function inDungeonApproachCorridor(definition: DungeonDefinition, positio
 }
 
 export function isClosedDungeonTile(tx: number, ty: number, lockedBosses: ReadonlySet<string>): boolean {
-  return DUNGEON_DEFINITIONS.some(definition => lockedBosses.has(definition.bossId)
-    && dungeonStoneTiles(definition).some(tile => tile.x === tx && tile.y === ty));
+  for (const definition of DUNGEON_BY_BOSS_ID.values()) if (lockedBosses.has(definition.bossId)
+    && dungeonStoneTiles(definition).some(tile => tile.x === tx && tile.y === ty)) return true;
+  return false;
 }
 
 export function dungeonTileCenter(tile: Vec2): Vec2 {
@@ -370,6 +392,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   const fail = (message: string): never => { throw new Error(`Dungeon ${definition.id || '<senza id>'}: ${message}`); };
   if (!definition.id || !definition.name || !definition.bossId) fail('id, nome e bossId sono obbligatori.');
   const bounds = definition.layout.bounds;
+  const walkable = (tile: TileKind | undefined) => tile !== undefined && tile !== 'water' && tile !== 'rock';
   if (![bounds.minTx, bounds.maxTx, bounds.minTy, bounds.maxTy].every(Number.isInteger)
     || bounds.minTx > bounds.maxTx || bounds.minTy > bounds.maxTy) fail('limiti della mappa non validi.');
   if (!finitePoint(definition.area) || !Number.isFinite(definition.area.radius) || definition.area.radius <= 0) fail('area mondo non valida.');
@@ -377,7 +400,21 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
     || definition.spawnPoints.party.some(point => !finitePoint(point))) fail('spawn boss/party non validi.');
   for (const [name, point] of [['boss', definition.spawnPoints.boss], ...definition.spawnPoints.party.map((point, index) => [`party ${index}`, point] as const)] as const) {
     const tx = Math.floor(point.x / TILE_SIZE), ty = Math.floor(point.y / TILE_SIZE);
-    if (dungeonTile(definition, tx, ty) !== definition.layout.floor) fail(`spawn ${name} sopra una tile solida o fuori mappa.`);
+    if (!walkable(dungeonTile(definition, tx, ty))) fail(`spawn ${name} sopra una tile solida o fuori mappa.`);
+  }
+  const paintedKeys = new Set<string>();
+  for (const tile of definition.layout.tiles ?? []) {
+    const key = tileKey(tile);
+    if (!Number.isInteger(tile.x) || !Number.isInteger(tile.y) || !insideRect(tile.x, tile.y, bounds)
+      || !['grass', 'path', 'mud', 'bush', 'water', 'rock'].includes(tile.kind) || paintedKeys.has(key)) fail('tile dipinta non valida o duplicata.');
+    paintedKeys.add(key);
+  }
+  const npcIds = new Set<string>();
+  for (const npc of definition.npcSpawns ?? []) {
+    if (!npc.id || npcIds.has(npc.id) || !Object.hasOwn(NPC_CATALOG, npc.npcKind) || !finitePoint(npc)
+      || !Number.isInteger(npc.level) || npc.level < 1 || npc.level > 25
+      || !walkable(dungeonTile(definition, Math.floor(npc.x / TILE_SIZE), Math.floor(npc.y / TILE_SIZE)))) fail('spawn NPC non valido.');
+    npcIds.add(npc.id);
   }
   if (!Number.isFinite(definition.encounter.preparationMs) || definition.encounter.preparationMs < 0) fail('preparationMs non valido.');
   if (!finitePoint(definition.encounter.ejectTo)) fail('destinazione di espulsione non valida.');
@@ -389,7 +426,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
     if (!finitePoint(passage.position) || !passage.tiles.length) fail(`passaggio ${passage.id} senza posizione o tile.`);
     for (const tile of passage.tiles) {
       if (!Number.isInteger(tile.x) || !Number.isInteger(tile.y) || !insideRect(tile.x, tile.y, bounds)) fail(`tile fuori mappa nel passaggio ${passage.id}.`);
-      if (dungeonTile(definition, tile.x, tile.y) !== definition.layout.floor) fail(`il passaggio ${passage.id} occupa una tile solida.`);
+      if (!walkable(dungeonTile(definition, tile.x, tile.y))) fail(`il passaggio ${passage.id} occupa una tile solida.`);
       const key = tileKey(tile), previous = passageTiles.get(key);
       if (previous) fail(`i passaggi ${previous} e ${passage.id} condividono la tile ${key}.`);
       passageTiles.set(key, passage.id);
@@ -431,10 +468,10 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   // Every walkable boundary opening must be named, otherwise a map edit could create an accidental escape route.
   for (let ty = bounds.minTy; ty <= bounds.maxTy; ty++) for (let tx = bounds.minTx; tx <= bounds.maxTx; tx++) {
     if (tx !== bounds.minTx && tx !== bounds.maxTx && ty !== bounds.minTy && ty !== bounds.maxTy) continue;
-    if (dungeonTile(definition, tx, ty) === definition.layout.floor && !passageTiles.has(tileKey({ x: tx, y: ty }))) {
+    if (walkable(dungeonTile(definition, tx, ty)) && !passageTiles.has(tileKey({ x: tx, y: ty }))) {
       fail(`apertura sul bordo ${tx},${ty} non dichiarata come passaggio.`);
     }
   }
 }
 
-for (const definition of DUNGEON_DEFINITIONS) assertValidDungeonDefinition(definition);
+for (const definition of DUNGEON_DEFINITIONS.flatMap(dungeonEncounters)) assertValidDungeonDefinition(definition);

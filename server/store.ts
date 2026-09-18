@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Actor, PublicAccount } from '../shared/types';
@@ -131,6 +131,31 @@ export class AccountStore {
     return scryptSync(password, salt, 64).toString('hex');
   }
 
+  private hashPasswordAsync(password: string, salt: string): Promise<string> {
+    return new Promise((resolve, reject) => scrypt(password, salt, 64, (error, key) => {
+      if (error) reject(error); else resolve(key.toString('hex'));
+    }));
+  }
+
+  /** Live transport uses the worker pool; synchronous methods are for offline fixtures. */
+  async registerAsync(name: string, password: string): Promise<{ account: Account; token: string }> {
+    this.validateRegistration(name, password);
+    const salt = randomBytes(16).toString('hex');
+    const passwordHash = await this.hashPasswordAsync(password, salt);
+    // Recheck uniqueness after awaiting: two sockets may race for the same name.
+    return this.createAccount(name, password, salt, passwordHash);
+  }
+
+  async loginAsync(name: string, password: string): Promise<{ account: Account; token: string }> {
+    if (typeof password !== 'string' || password.length > 100) throw new Error('Nome personaggio o password non validi.');
+    const id = this.accountsByName.get(cleanName(name).toLowerCase());
+    const account = id ? this.accounts.get(id) : undefined;
+    // Unknown users still pay the same hash cost, under the transport's bounded budget.
+    const computed = await this.hashPasswordAsync(password, account?.salt ?? 'riftlands-unknown-account');
+    if (!account) throw new Error('Nome personaggio o password non validi.');
+    return this.finishLogin(account, computed);
+  }
+
   signJwt(account: Account): string {
     const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
     const now = Math.floor(Date.now() / 1000);
@@ -154,14 +179,15 @@ export class AccountStore {
       .update(`${header}.${payload}`)
       .digest('base64url');
     
-    if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    const actualBytes = Buffer.from(signature), expectedBytes = Buffer.from(expected);
+    if (actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) {
       return null;
     }
 
     try {
       const data = JSON.parse(base64UrlDecode(payload));
       if (!data || typeof data !== 'object' || typeof data.sub !== 'string' || typeof data.exp !== 'number') return null;
-      if (data.exp < Math.floor(Date.now() / 1000)) return null;
+      if (!Number.isFinite(data.exp) || data.exp <= Math.floor(Date.now() / 1000)) return null;
       return { sub: data.sub, name: data.name ?? '' };
     } catch {
       return null;
@@ -169,6 +195,12 @@ export class AccountStore {
   }
 
   register(name: string, password: string): { account: Account; token: string } {
+    this.validateRegistration(name, password);
+    const salt = randomBytes(16).toString('hex');
+    return this.createAccount(name, password, salt, this.hashPassword(password, salt));
+  }
+
+  private validateRegistration(name: string, password: string): void {
     const cleaned = cleanName(name);
     if (cleaned.length < 2) throw new Error('Il nome del personaggio deve avere almeno 2 caratteri.');
     if (cleaned.length > 20) throw new Error('Il nome del personaggio può contenere al massimo 20 caratteri.');
@@ -181,8 +213,11 @@ export class AccountStore {
       throw new Error('Questo nome è già stato scelto da un altro giocatore.');
     }
 
-    const salt = randomBytes(16).toString('hex');
-    const passwordHash = this.hashPassword(password, salt);
+  }
+
+  private createAccount(name: string, password: string, salt: string, passwordHash: string): { account: Account; token: string } {
+    this.validateRegistration(name, password);
+    const cleaned = cleanName(name), nameLower = cleaned.toLowerCase();
     const account: Account = {
       id: randomUUID(),
       name: cleaned,
@@ -215,8 +250,12 @@ export class AccountStore {
     if (!account) throw new Error('Nome personaggio o password non validi.');
 
     const computed = this.hashPassword(password, account.salt);
-    const match = computed.length === account.passwordHash.length &&
-      timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(account.passwordHash, 'hex'));
+    return this.finishLogin(account, computed);
+  }
+
+  private finishLogin(account: Account, computed: string): { account: Account; token: string } {
+    const actual = Buffer.from(computed, 'hex'), expected = Buffer.from(account.passwordHash, 'hex');
+    const match = actual.length === expected.length && timingSafeEqual(actual, expected);
     if (!match) throw new Error('Nome personaggio o password non validi.');
 
     account.lastSeen = Date.now();

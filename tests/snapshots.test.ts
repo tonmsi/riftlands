@@ -22,8 +22,23 @@ function projectile(x: number): Projectile {
   return { id: 'shot', ownerId: 'remote', x, y: 0, vx: 200, vy: 0, radius: 6, damage: 10, expiresAt: 5000, color: '#fff' };
 }
 
-test('local contact body and remote bodies are sampled on the same timeline', () => {
+test('15 Hz default buffer presents stable traffic about 100 ms behind arrivals without stalls', () => {
   const buffer = new SnapshotBuffer();
+  let previous = 0;
+  for (let frame = 0; frame < 360; frame++) {
+    const now = frame * 1000 / 60;
+    if (frame % 4 === 0) buffer.push(snapshot(1000 + now), now);
+    const result = buffer.sample(now)!;
+    if (frame > 30) {
+      assert.ok(Math.abs(result.time - (1000 + now - 100)) < 2);
+      assert.ok(result.actors[0].x > previous);
+    }
+    previous = result.actors[0].x;
+  }
+});
+
+test('local contact body and remote bodies are sampled on the same timeline', () => {
+  const buffer = new SnapshotBuffer(100);
   const first = snapshot(1000, 30), second = snapshot(1100, 50);
   first.self.x = 0; second.self.x = 20;
   buffer.push(first, 0); buffer.push(second, 100);
@@ -33,15 +48,16 @@ test('local contact body and remote bodies are sampled on the same timeline', ()
   }
 });
 
-test('10 Hz snapshots remain continuous at 60 Hz with 100 ms one-way delay and jitter', () => {
-  const buffer = new SnapshotBuffer();
+for (const rate of [10, 15]) test(`${rate} Hz snapshots remain continuous at 60 Hz with 100 ms one-way delay and jitter`, () => {
+  const interval = 1000 / rate;
+  const buffer = new SnapshotBuffer(interval);
   const packets = Array.from({ length: 100 }, (_, i) => {
-    const time = 1000 + i * 100;
-    return { data: snapshot(time), received: i * 100 + 100 + [0, 18, -12, 36, -8, 5][i % 6] };
+    const time = 1000 + i * interval;
+    return { data: snapshot(time), received: i * interval + 100 + [0, 18, -12, 36, -8, 5][i % 6] };
   });
   let next = 0;
   const positions: number[] = [], times: number[] = [];
-  for (let now = 0; now < 9700; now += 1000 / 60) {
+  for (let now = 0; now < 97 * interval; now += 1000 / 60) {
     while (next < packets.length && packets[next].received <= now) {
       buffer.push(packets[next].data, packets[next].received); next++;
     }
@@ -56,7 +72,7 @@ test('10 Hz snapshots remain continuous at 60 Hz with 100 ms one-way delay and j
 });
 
 test('starvation holds the last state without extrapolation, then recovers without rewinding', () => {
-  const buffer = new SnapshotBuffer();
+  const buffer = new SnapshotBuffer(100);
   for (let i = 0; i < 30; i++) {
     buffer.push(snapshot(1000 + i * 100), i * 100);
     for (let frame = 0; frame < 6; frame++) buffer.sample(i * 100 + frame * 1000 / 60);
@@ -75,7 +91,7 @@ test('starvation holds the last state without extrapolation, then recovers witho
 });
 
 test('oldest underflow and newest overflow select the appropriate endpoints', () => {
-  const buffer = new SnapshotBuffer();
+  const buffer = new SnapshotBuffer(100);
   buffer.push(snapshot(1000), 0);
   assert.equal(buffer.sample(0)!.actors[0].x, 200);
   for (let i = 1; i <= 20; i++) buffer.push(snapshot(1000 + i * 100), i * 100);
@@ -84,7 +100,7 @@ test('oldest underflow and newest overflow select the appropriate endpoints', ()
 });
 
 test('latest visibility removes hidden and departed actors immediately; death and teleport never lerp', () => {
-  const buffer = new SnapshotBuffer();
+  const buffer = new SnapshotBuffer(100);
   buffer.push(snapshot(1000, 0), 0);
   const hidden = snapshot(1100, 20); hidden.actors = [];
   buffer.push(hidden, 100);
@@ -102,7 +118,7 @@ test('latest visibility removes hidden and departed actors immediately; death an
 });
 
 test('projectiles share the actor timeline, never appear before observation, and vanish on impact', () => {
-  const buffer = new SnapshotBuffer();
+  const buffer = new SnapshotBuffer(100);
   const first = snapshot(1000, 0), second = snapshot(1100, 20);
   first.projectiles = [projectile(0)]; second.projectiles = [projectile(20)];
   buffer.push(first, 0); buffer.push(second, 100);
@@ -118,7 +134,7 @@ test('projectiles share the actor timeline, never appear before observation, and
 });
 
 test('clear, long gaps and identity changes reset history; duplicate snapshots do not rewind playback', () => {
-  const buffer = new SnapshotBuffer();
+  const buffer = new SnapshotBuffer(100);
   assert.equal(buffer.sample(0), null);
   buffer.push(snapshot(1000, 0), 0); buffer.push(snapshot(1100, 20), 100);
   const before = buffer.sample(200)!;
@@ -137,7 +153,7 @@ test('clear, long gaps and identity changes reset history; duplicate snapshots d
 
 
 test('crowded snapshots release obsolete history and never retain departed actors in presentation', () => {
-  const buffer = new SnapshotBuffer();
+  const buffer = new SnapshotBuffer(100);
   let finalFrame;
   for (let packet = 0; packet < 80; packet++) {
     const data = snapshot(1000 + packet * 100);

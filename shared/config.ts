@@ -1,8 +1,8 @@
 import type { ClassDef, ClassId } from './types';
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
-export const SNAPSHOT_RATE = 10;
+export const SNAPSHOT_RATE = 15;
 export const TILE_SIZE = 48;
 export const CHUNK_TILES = 16;
 export const CHUNK_SIZE = TILE_SIZE * CHUNK_TILES;

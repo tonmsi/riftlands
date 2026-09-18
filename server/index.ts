@@ -8,6 +8,8 @@ import { CLASSES, DT, PROTOCOL_VERSION, SNAPSHOT_RATE, TICK_RATE, WORLD_SEED } f
 import type { ClassId, ClientMessage, ServerMessage } from '../shared/types';
 import { Account, AccountStore, publicAccount } from './store';
 import { RoomManager } from './rooms';
+import { AuthBudget } from './auth-budget';
+import { NetworkMetrics } from './metrics';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
@@ -19,6 +21,7 @@ const simulation = rooms.global;
 let healthy = true;
 let closing = false;
 let tickCostMs = 0;
+const metrics = new NetworkMetrics();
 const dist = resolve(ROOT, 'dist');
 const mime: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 
@@ -46,7 +49,7 @@ const server = createServer((request, response) => {
   }
   if (path === '/health') {
     response.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    response.end(JSON.stringify({ ok: healthy, online: byAccount.size, worldOnline: simulation.online, matchRooms: rooms.rooms.size, tick: simulation.tick, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE, activeChunks: simulation.activeChunks.size + [...rooms.rooms.values()].reduce((sum, room) => sum + room.simulation.activeChunks.size, 0), npcs: simulation.npcs.size, tickCostMs: Math.round(tickCostMs * 100) / 100 }));
+    response.end(JSON.stringify({ ok: healthy, online: byAccount.size, worldOnline: simulation.online, matchRooms: rooms.rooms.size, tick: simulation.tick, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE, activeChunks: simulation.activeChunks.size + [...rooms.rooms.values()].reduce((sum, room) => sum + room.simulation.activeChunks.size, 0), npcs: simulation.npcs.size, tickCostMs: Math.round(tickCostMs * 100) / 100, metrics: metrics.read() }));
     return;
   }
   if (!production) {
@@ -73,11 +76,12 @@ if (!production) {
 } else if (!existsSync(resolve(dist, 'index.html'))) throw new Error('Build frontend assente. Esegui npm run build prima di npm start.');
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
-type Session = { ws: WebSocket; id?: string; roomEpoch?: number; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
+type Session = { ws: WebSocket; id?: string; authenticating?: boolean; roomEpoch?: number; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
 const sessions = new Map<WebSocket, Session>();
 const byAccount = new Map<string, Session>();
 const ipConnections = new Map<string, number>();
 const registrations = new Map<string, { count: number; until: number }>();
+const authBudget = new AuthBudget();
 
 server.on('upgrade', (request, socket, head) => {
   if ((request.url ?? '').split('?')[0] !== '/ws') {
@@ -99,8 +103,10 @@ server.on('upgrade', (request, socket, head) => {
 function send(session: Session, message: ServerMessage): void {
   if (session.ws.readyState !== WebSocket.OPEN) return;
   if (session.ws.bufferedAmount > 1024 * 1024) { session.ws.close(1008, 'Connessione troppo lenta'); return; }
-  if (message.type === 'snapshot' && session.ws.bufferedAmount > 256 * 1024) return;
-  session.ws.send(JSON.stringify(message));
+  if (message.type === 'snapshot' && session.ws.bufferedAmount > 0) return;
+  const encoded = JSON.stringify(message);
+  session.ws.send(encoded);
+  if (message.type === 'snapshot') { metrics.snapshotsSent++; metrics.snapshotBytes += Buffer.byteLength(encoded); }
 }
 
 function fatal(session: Session, message: string, authExpired = false): void {
@@ -113,6 +119,9 @@ function socialBroadcast(): void {
 }
 
 function sendSnapshot(session: Session): void {
+  // Skip obsolete state before building/copying it. Reliable control messages retain priority.
+  if (session.ws.readyState !== WebSocket.OPEN || session.ws.bufferedAmount > 0) { metrics.snapshotsSkipped++; return; }
+  const started = performance.now();
   const state = rooms.stateFor(session.id!);
   if (session.roomEpoch !== state.epoch) {
     send(session, { type: 'room', room: state });
@@ -122,6 +131,7 @@ function sendSnapshot(session: Session): void {
   if (notice) send(session, { type: 'notice', message: notice, tone: 'info' });
   const snapshot = rooms.snapshotFor(session.id!);
   if (snapshot) send(session, snapshot);
+  metrics.snapshot(performance.now() - started);
 }
 
 wss.on('connection', (ws, request) => {
@@ -131,7 +141,7 @@ wss.on('connection', (ws, request) => {
   sessions.set(ws, session);
   ws.on('pong', () => { session.alive = true; });
   ws.on('error', () => { /* close callback owns lifecycle; malformed clients are isolated. */ });
-  ws.on('message', (raw, binary) => {
+  ws.on('message', async (raw, binary) => {
     const at = performance.now();
     const elapsed = Math.max(0, (at - session.receivedAt) / 1000);
     session.tokens = Math.min(100, session.tokens + elapsed * 75);
@@ -147,7 +157,7 @@ wss.on('connection', (ws, request) => {
     } catch { fatal(session, 'Messaggio non valido.'); return; }
 
     if (message.type === 'hello') {
-      if (session.id) { fatal(session, 'Accesso già completato.'); return; }
+      if (session.id || session.authenticating) { fatal(session, 'Accesso già in corso o completato.'); return; }
       if (message.protocol !== PROTOCOL_VERSION || typeof message.classId !== 'string' || !Object.hasOwn(CLASSES, message.classId)) {
         fatal(session, 'Client non compatibile o dati non validi.');
         return;
@@ -155,6 +165,8 @@ wss.on('connection', (ws, request) => {
 
       let authResult: { account: Account; token: string };
       let authenticated = false;
+      let releaseAuth: (() => void) | null = null;
+      session.authenticating = true;
       try {
         if (message.token) {
           if (typeof message.token !== 'string') throw new Error('Formato token di sessione non valido.');
@@ -164,21 +176,24 @@ wss.on('connection', (ws, request) => {
           const name = typeof message.name === 'string' ? message.name : '';
           const password = typeof message.password === 'string' ? message.password : '';
           if (!name || !password) throw new Error('Inserisci sia il nome sia la password.');
+          releaseAuth = authBudget.acquire(ip, performance.now());
+          if (!releaseAuth) throw new Error('Troppi tentativi di accesso. Riprova tra poco.');
 
           if (mode === 'register') {
             let entry = registrations.get(ip);
             if (!entry || entry.until < Date.now()) { entry = { count: 0, until: Date.now() + 600_000 }; registrations.set(ip, entry); }
             if (entry.count >= 20) throw new Error('Troppi nuovi personaggi creati di recente. Riprova tra poco.');
             entry.count++;
-            authResult = store.register(name, password);
+            authResult = await store.registerAsync(name, password);
           } else if (mode === 'login') {
-            authResult = store.login(name, password);
+            authResult = await store.loginAsync(name, password);
           } else {
             throw new Error('Modalità di accesso non supportata.');
           }
         }
 
         authenticated = true;
+        if (closing || ws.readyState !== WebSocket.OPEN || !sessions.has(ws)) return;
         const { account, token } = authResult;
         const previous = byAccount.get(account.id);
         const player = rooms.connect(account, message.classId as ClassId);
@@ -194,6 +209,9 @@ wss.on('connection', (ws, request) => {
         socialBroadcast();
       } catch (error) {
         fatal(session, error instanceof Error ? error.message : 'Accesso non riuscito.', !!message.token && !authenticated);
+      } finally {
+        releaseAuth?.();
+        session.authenticating = false;
       }
       return;
     }
@@ -245,16 +263,21 @@ const stepTimer = setInterval(() => {
   accumulator += Math.min(250, current - previousTime);
   previousTime = current;
   let steps = 0;
+  let snapshotDue = false;
   const started = performance.now();
   try {
-    while (accumulator >= 1000 / TICK_RATE && steps++ < 5) {
+    while (accumulator >= 1000 / TICK_RATE && steps < 5) {
+      steps++;
+      const stepStarted = performance.now();
       rooms.step(DT);
+      metrics.step(performance.now() - stepStarted);
       accumulator -= 1000 / TICK_RATE;
-      if (simulation.tick % (TICK_RATE / SNAPSHOT_RATE) === 0) for (const session of byAccount.values()) {
-        sendSnapshot(session);
-      }
+      if (simulation.tick % (TICK_RATE / SNAPSHOT_RATE) === 0) snapshotDue = true;
     }
+    // Catch-up ticks publish only the freshest state, never a burst of stale snapshots.
+    if (snapshotDue) for (const session of byAccount.values()) sendSnapshot(session);
     if (steps >= 5) accumulator = Math.min(accumulator, 1000 / TICK_RATE);
+    metrics.catchupTicks += Math.max(0, steps - 1);
     tickCostMs = performance.now() - started;
   } catch (error) { console.error('Simulazione arrestata:', error); healthy = false; void shutdown(1); }
 }, 8);

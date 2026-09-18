@@ -6,7 +6,10 @@ import { CLASSES } from '../shared/config';
 
 test('joystick has a dead zone, analog travel and clamped diagonal movement', () => {
   assert.deepEqual(joystickVector(3, 4, 40), { x: 0, y: 0 });
-  assert.deepEqual(joystickVector(20, 0, 40), { x: 0.5, y: 0 });
+  assert.deepEqual(joystickVector(20, 0, 40), { x: 0.375, y: 0 });
+  assert.deepEqual(joystickVector(8, 0, 40), { x: 0, y: 0 });
+  assert.ok(joystickVector(8.01, 0, 40).x < .001, 'no speed jump at the dead-zone boundary');
+  assert.deepEqual(joystickVector(40, 0, 40), { x: 1, y: 0 });
   const diagonal = joystickVector(100, 100, 40);
   assert.ok(Math.abs(Math.hypot(diagonal.x, diagonal.y) - 1) < 1e-10);
 });

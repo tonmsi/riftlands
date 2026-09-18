@@ -61,6 +61,7 @@ test('real transport: room handshake, reconnect, duplicate session ownership and
     assert.equal(guestLobby.leaderboard[0].name, 'TransportTester');
     assert.equal('passwordHash' in guestLobby.leaderboard[0], false);
     assert.equal((await fetch(lobbyUrl, { headers: { Authorization: 'Bearer invalid' } })).status, 401);
+    assert.equal((await fetch(lobbyUrl, { headers: { Authorization: `Bearer h.p.${'é'.repeat(43)}` } })).status, 401);
     const ownLobby = await (await fetch(lobbyUrl, { headers: { Authorization: `Bearer ${welcome.token}` } })).json();
     assert.equal(ownLobby.account.id, welcome.playerId);
     assert.equal('passwordHash' in ownLobby.account, false);

@@ -24,13 +24,13 @@ const snapshot = sim.snapshotFor(actor.id);
 sim.disconnectPlayer(actor.id);
 ```
 
-Tutti i timestamp del protocollo sono **millisecondi**; `step` riceve **secondi**. La simulazione avanza a 30 Hz e invia snapshot a 10 Hz. Il client comunica soltanto direzione, mira e abilità: posizione, danni e delta temporale rimangono autorità del server. Ogni tick consuma al massimo un comando per giocatore; la coda conserva al massimo sei comandi e lo snapshot include il numero di sequenza riconosciuto. I comandi scartati dalla coda vengono corretti tramite riconciliazione, senza simulare tempo extra.
+Tutti i timestamp del protocollo sono **millisecondi**; `step` riceve **secondi**. La simulazione avanza a 30 Hz e invia snapshot a 15 Hz. Il client comunica soltanto direzione, mira e abilità: posizione, danni e delta temporale rimangono autorità del server. Ogni tick consuma al massimo un comando per giocatore; la coda conserva al massimo sei comandi e lo snapshot include il numero di sequenza riconosciuto. I comandi scartati dalla coda vengono corretti tramite riconciliazione, senza simulare tempo extra. I cicli di recupero pubblicano una sola fotografia finale; socket con dati ancora in coda saltano la costruzione degli snapshot. `/health` include p95 e massimo di tick e snapshot, byte inviati e conteggio degli snapshot saltati.
 
 `cast`, `socialAction`, `socialFor`, `snapshotFor` e le mappe degli attori sono accessibili per i test della simulazione. Il trasporto valida i messaggi prima di invocarle. Il client riceve solo attori entro il raggio di interesse; un nemico nascosto nei cespugli viene escluso anche dalle liste sociali e dagli eventi se non rivelato.
 
 ## Persistenza e sessioni
 
-L'identità è un token casuale a 256 bit. Solo SHA-256 del token viene salvato nel file account; il token originale viene inviato al client durante l'accesso. Non è un sistema di autenticazione tramite IP. Possedere il token permette di usare l'account: va trattato come una password. Il menu consente copia e importazione del codice; non esiste recupero senza il codice originale o revoca delle credenziali.
+L'identità usa nome/password con scrypt e un JWT HS256 di 30 giorni. Il trasporto deriva le password in modo asincrono e limita concorrenza e tentativi per IP. Il segreto è in `jwt.secret` o `JWT_SECRET`. Il browser usa `riftlands.jwt` e riprende le connessioni tramite quel token. Non sono disponibili recupero password o revoca server del token al logout. Il formato account v1 viene ancora azzerato: fare un backup prima di caricare un archivio di quella versione.
 
 Gli account salvano nome, XP, uccisioni, morti, amicizie, richieste e stato del personaggio. Le scritture sostituiscono atomicamente il JSON attraverso un file temporaneo. Nuovi account vengono scritti prima di confermare l'accesso; le modifiche sociali sono scritte immediatamente, lo stato del mondo ogni cinque secondi e alla chiusura ordinata. Un crash può perdere gli ultimi cinque secondi di progresso. Un file corrotto interrompe l'avvio con una richiesta esplicita di ripristino, senza sovrascriverlo. Conservare backup esterni del file.
 

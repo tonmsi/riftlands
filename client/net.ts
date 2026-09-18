@@ -144,6 +144,8 @@ export class GameConnection {
         if (this.deadlineTimer) clearTimeout(this.deadlineTimer);
         this.deadlineTimer = null;
         this.token = message.token;
+        // A reconnect after registration must resume the account, not register it again.
+        if (this.joinRequest) this.joinRequest = { type: 'token', classId: this.joinRequest.classId };
         try {
           localStorage.setItem(JWT_KEY, message.token);
         } catch { /* Storage privato o limitato */ }
@@ -193,6 +195,7 @@ export class GameConnection {
   private retireSocket(): void {
     this.generation++;
     this.welcomed = false;
+    this.room = null;
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.deadlineTimer) clearTimeout(this.deadlineTimer);
     if (this.watchdogTimer) clearInterval(this.watchdogTimer);

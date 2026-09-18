@@ -1,8 +1,7 @@
 import type { Actor, Projectile, Snapshot } from '../shared/types';
+import { SNAPSHOT_RATE } from '../shared/config';
 import { interpolateActor } from './prediction';
 
-const MIN_BUFFER_MS = 150;
-const MAX_BUFFER_MS = 300;
 const RESET_GAP_MS = 1000;
 const MAX_SNAPSHOTS = 32;
 
@@ -10,6 +9,7 @@ export interface BufferedFrame { self: Actor; actors: Actor[]; projectiles: Proj
 
 /** Remote presentation follows packet arrival time, never the ping-adjusted combat clock. */
 export class SnapshotBuffer {
+  constructor(private readonly intervalMs = 1000 / SNAPSHOT_RATE) {}
   private snapshots: Snapshot[] = [];
   // Weak keys release indexes as soon as their buffered snapshot is discarded.
   private indexes = new WeakMap<Snapshot, { actors: Map<string, Actor>; projectiles: Map<string, Projectile> }>();
@@ -41,7 +41,7 @@ export class SnapshotBuffer {
     if (this.snapshots.length > MAX_SNAPSHOTS) this.snapshots.shift();
     this.lastReceived = receivedAt;
     if (this.playhead === null) {
-      this.playhead = snapshot.time - MIN_BUFFER_MS;
+      this.playhead = snapshot.time - this.intervalMs * 1.5;
       this.lastSample = receivedAt;
     }
   }
@@ -49,14 +49,14 @@ export class SnapshotBuffer {
   sample(now: number): BufferedFrame | null {
     const latest = this.snapshots.at(-1);
     if (!latest || this.playhead === null) return null;
-    const delay = Math.min(MAX_BUFFER_MS, MIN_BUFFER_MS + this.jitter * 2);
+    const delay = Math.min(this.intervalMs * 3 + 50, this.intervalMs * 1.5 + this.jitter * 2);
     const target = latest.time + Math.max(0, now - this.lastReceived) - delay;
     const elapsed = Math.max(0, now - (this.lastSample ?? now));
     if (elapsed > RESET_GAP_MS) {
       // A suspended tab resumes around the current buffer instead of replaying seconds of history.
       this.playhead = Math.max(this.playhead, Math.min(latest.time, target));
     } else {
-      const error = target - this.playhead;
+      const error = target - (this.playhead + elapsed);
       const speed = Math.abs(error) < 10 ? 1 : 1 + Math.max(-0.08, Math.min(0.08, error / 1000));
       this.playhead = Math.min(latest.time, this.playhead + elapsed * speed);
     }

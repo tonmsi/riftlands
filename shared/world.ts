@@ -104,6 +104,10 @@ export class World {
     }
     if (this.mode === 'world' && cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
     if (this.mode === 'world' && cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
+    if (this.mode === 'world') for (const dungeon of DUNGEON_DEFINITIONS) for (const npc of dungeon.npcSpawns ?? []) {
+      const position = chunkCoords(npc.x, npc.y);
+      if (position.cx === cx && position.cy === cy) chunk.npcs.push({ ...npc, id: `dungeon:${dungeon.id}:${npc.id}` });
+    }
     this.cache.set(key, chunk);
     while (this.cache.size > Math.max(1, this.cacheLimit)) this.cache.delete(this.cache.keys().next().value!);
     return chunk;

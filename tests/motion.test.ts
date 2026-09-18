@@ -2,31 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DT } from '../shared/config';
 import type { Actor } from '../shared/types';
-import { LocalMovementView, contactPresentation } from '../client/motion';
-
-for (const boss of [false, true]) test(`contact presentation uses authoritative relative positions against ${boss ? 'bosses' : 'players'}`, () => {
-  const local = { ...actor(50), y: 12 }, authoritative = actor(0);
-  const other: Actor = { ...actor(boss ? 60 : 30), id: 'other', radius: boss ? 45 : 15,
-    kind: boss ? 'npc' : 'player', ...(boss ? { npcKind: 'boss' as const } : {}) };
-  const saved = structuredClone(other);
-  const shown = contactPresentation(local, authoritative, [authoritative, other]);
-  assert.equal(shown.x, authoritative.x);
-  assert.equal(shown.y, authoritative.y);
-  assert.equal(other.x - shown.x, other.x - authoritative.x, 'prediction cannot put the other actor on the wrong side');
-  assert.deepEqual(other, saved);
-  assert.equal(local.x, 50, 'input prediction is untouched');
-});
-
-test('contact presentation restores free movement and ignores corpses, respawns and other identities', () => {
-  const local = actor(50), authoritative = actor();
-  assert.equal(contactPresentation(local, authoritative, [actor(50)]).x, 50, 'self is not a collision partner');
-  assert.equal(contactPresentation(local, authoritative, [{ ...actor(70), id: 'dead', hp: 0 }]).x, 50);
-  assert.equal(contactPresentation(local, authoritative, [{ ...actor(400), id: 'far' }]).x, 50);
-  assert.equal(contactPresentation(local, { ...authoritative, deadUntil: 20 }, [{ ...actor(30), id: 'near' }]), local);
-  assert.equal(contactPresentation(local, { ...authoritative, id: 'old-session' }, []), local);
-  const blended = contactPresentation(local, authoritative, [{ ...actor(140), id: 'near' }]);
-  assert.ok(blended.x > authoritative.x && blended.x < local.x);
-});
+import { LocalMovementView } from '../client/motion';
 
 function actor(x = 0): Actor {
   return { id: 'self', x, y: 0, kind: 'player', name: 'Test', classId: 'mage', radius: 15, hp: 110, maxHp: 110, resource: 120, maxResource: 120, aim: 0, speed: 190, level: 1, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 } };

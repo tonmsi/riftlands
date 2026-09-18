@@ -1,21 +1,5 @@
 import type { Actor, Vec2 } from '../shared/types';
 
-/** Near contact, show both bodies on the same authoritative timeline. Never move remote actors locally. */
-export function contactPresentation(local: Actor, authoritative: Actor, actors: Actor[]): Actor {
-  if (local.id !== authoritative.id || local.hp <= 0 || authoritative.hp <= 0
-    || local.deadUntil !== authoritative.deadUntil || Math.hypot(local.x - authoritative.x, local.y - authoritative.y) > 250) return local;
-  let gap = Infinity;
-  for (const actor of actors) {
-    if (actor.id === local.id || actor.hp <= 0) continue;
-    gap = Math.min(gap, Math.hypot(local.x - actor.x, local.y - actor.y) - local.radius - actor.radius,
-      Math.hypot(authoritative.x - actor.x, authoritative.y - actor.y) - authoritative.radius - actor.radius);
-  }
-  // Ease into the shared timeline before circles touch; restore prediction away from actors.
-  const t = Math.max(0, Math.min(1, (100 - gap) / 76));
-  const weight = t * t * (3 - 2 * t);
-  return { ...local, x: local.x + (authoritative.x - local.x) * weight, y: local.y + (authoritative.y - local.y) * weight };
-}
-
 /** Presentation only: authoritative/predicted states never receive smoothed coordinates. */
 export class LocalMovementView {
   private previous: Vec2 | null = null;
@@ -55,31 +39,5 @@ export class LocalMovementView {
   private discontinuity(before: Actor, after: Actor): boolean {
     return before.id !== after.id || before.classId !== after.classId || (before.hp <= 0) !== (after.hp <= 0)
       || before.deadUntil !== after.deadUntil || Math.hypot(after.x - before.x, after.y - before.y) > 100;
-  }
-}
-
-/** Delays only the local presentation; input and authoritative simulation stay immediate. */
-export class LocalPresentationDelay {
-  private samples: { at: number; actor: Actor }[] = [];
-
-  constructor(private readonly delayMs = 150) {}
-
-  reset(): void { this.samples = []; }
-
-  sample(actor: Actor, now: number): Actor {
-    this.samples.push({ at: now, actor: { ...actor } });
-    const target = now - this.delayMs;
-    while (this.samples.length > 2 && this.samples[1].at <= target) this.samples.shift();
-    const before = this.samples[0];
-    const after = this.samples[1] ?? before;
-    if (before.actor.id !== actor.id || after.actor.id !== actor.id) return actor;
-    const alpha = before.at === after.at ? 1 : Math.max(0, Math.min(1, (target - before.at) / (after.at - before.at)));
-    const angle = Math.atan2(Math.sin(after.actor.aim - before.actor.aim), Math.cos(after.actor.aim - before.actor.aim));
-    return {
-      ...actor,
-      x: before.actor.x + (after.actor.x - before.actor.x) * alpha,
-      y: before.actor.y + (after.actor.y - before.actor.y) * alpha,
-      aim: before.actor.aim + angle * alpha,
-    };
   }
 }
