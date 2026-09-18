@@ -125,6 +125,7 @@ test('real multi-touch: joystick, aim on attack release, ability taps, cancellat
   const friend = snapshot!.actors.find(actor => actor.kind === 'player' && actor.id !== snapshot!.self.id)!;
   await page.touchscreen.tap(422 + (friend.x - snapshot!.self.x) * 0.76, 195 + (friend.y - snapshot!.self.y) * 0.76);
   await expect(page.locator('[data-ref="target-name"]')).toHaveText(friend.name);
+  await expect.poll(() => input?.targetId).toBe(friend.id);
   await page.locator('[data-ref="target-close"]').tap();
   await otherContext.close();
   const session = await context.newCDPSession(page);

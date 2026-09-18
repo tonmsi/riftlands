@@ -201,7 +201,7 @@ wss.on('connection', (ws, request) => {
       try {
         const notice = rooms.socialAction(session.id, message.action, message.targetId);
         store.flush();
-        send(session, { type: 'notice', message: notice, tone: 'success' });
+        if (notice) send(session, { type: 'notice', message: notice, tone: 'success' });
         socialBroadcast();
       } catch (error) { send(session, { type: 'notice', message: error instanceof Error ? error.message : 'Azione non riuscita.', tone: 'error' }); }
     } else fatal(session, 'Tipo di messaggio sconosciuto.');

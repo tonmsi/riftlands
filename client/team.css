@@ -1,16 +1,15 @@
-/* The roster and selected target share a scrollable column below the player. */
+/* Compact roster below the player; targeting stays alongside the player panel. */
 .player-details { position:absolute; top:154px; left:24px; width:224px; max-height:calc(var(--game-height, 100dvh) - 190px); display:flex; flex-direction:column; gap:8px; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; pointer-events:auto; scrollbar-width:thin; scrollbar-color:#809e78 #132820; border-radius:7px }
-.player-details .target-panel { position:static; width:100%; min-width:0; max-height:none; flex:none; overflow:visible }
-.team-roster { padding:8px; flex:none }
+.team-roster { padding:6px; flex:none }
 .team-roster h3 { margin:0 0 6px; font-size:10px; color:#b5cba9; text-transform:uppercase; letter-spacing:1px }
-.team-member { padding:7px 0; border-top:1px solid #95ad8824 }
+.team-member { padding:4px 0; border-top:1px solid #95ad8824 }
 .team-member-label { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px }
 .team-member-label strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .team-member-health { flex:none; font-size:10px; font-variant-numeric:tabular-nums; color:#d1ddc6 }
-.team-member-meter { height:6px; background:#152019; border-radius:3px; overflow:hidden; margin-top:5px }
+.team-member-meter { height:4px; background:#152019; border-radius:3px; overflow:hidden; margin-top:3px }
 .team-member-meter i { display:block; height:100%; background:linear-gradient(90deg,#4b8556,#94bc6b); transition:width .1s linear }
 .team-member.is-offline { opacity:.6 }
-.team-invite { position:absolute; top:112px; right:24px; width:300px; max-width:calc(100% - 24px); padding:12px; z-index:12; pointer-events:auto }
+.team-invite { position:absolute; top:164px; right:24px; width:300px; max-width:calc(100% - 24px); padding:12px; z-index:12; pointer-events:auto }
 .team-invite p { margin:0 0 10px; font-size:12px; line-height:1.5; overflow-wrap:anywhere; color:#e3ebd6 }
 .team-invite-actions { display:flex; gap:8px }
 .team-invite-actions button { flex:1; min-height:44px; border:1px solid #91b27b70; border-radius:5px; color:#e3ebd6; background:#34563c; cursor:pointer; font:inherit; font-size:12px }
@@ -18,7 +17,6 @@
 .team-invite-actions button:focus-visible { outline:2px solid #e3d395; outline-offset:2px }
 .team-invite small { display:block; margin-top:6px; color:#a5b49a; font-size:10px }
 .touch-layout .player-details { top:calc(var(--safe-top) + 119px); left:calc(var(--safe-left) + 12px); width:194px; max-height:calc(var(--game-height, 100dvh) - var(--safe-top) - var(--safe-bottom) - 159px - var(--stick-size)); gap:6px }
-.touch-layout .player-details .target-panel { position:static; width:100%; min-width:0; max-height:none; overflow:visible }
 .touch-layout .team-invite { top:calc(var(--safe-top) + 88px); right:calc(var(--safe-right) + 12px); width:260px; max-width:calc(100% - 24px - var(--safe-left) - var(--safe-right)); padding:10px; max-height:calc(var(--game-height, 100dvh) - var(--safe-top) - var(--safe-bottom) - 120px); overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y }
 .touch-layout .team-member-label { font-size:10px; gap:4px }
 .touch-layout .team-member-health { font-size:9px }
@@ -26,6 +24,32 @@
   .touch-layout .team-invite { top:calc(var(--safe-top) + 60px); right:auto; left:50%; transform:translateX(-50%); width:calc(100% - 412px - var(--safe-left) - var(--safe-right)); min-width:156px }
 }
 @media (orientation:portrait) {
-  .touch-layout .player-details { top:calc(var(--safe-top) + 196px); width:calc(100% - 180px); min-width:160px; max-height:calc(var(--game-height, 100dvh) - var(--safe-top) - var(--safe-bottom) - 236px - var(--stick-size)) }
+  .touch-layout .player-details { top:calc(var(--safe-top) + 119px); width:calc(100% - 180px); min-width:152px; max-height:calc(var(--game-height, 100dvh) - var(--safe-top) - var(--safe-bottom) - 159px - var(--stick-size)) }
   .touch-layout .team-invite { top:calc(var(--safe-top) + 116px) }
+}
+
+.rift-app .target-panel { top:22px; left:310px; width:224px; max-height:260px; overflow:auto; pointer-events:auto }
+.rift-app .world-location { top:108px; left:auto; right:24px; transform:none; min-width:0; width:180px; max-width:180px; padding:7px 10px; cursor:pointer; min-height:44px }
+.rift-app .world-location strong { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.rift-app .world-location .location-decoration, .rift-app .world-location .location-dot { display:none }
+.rift-app .world-location div { min-width:0; width:100% }
+.touch-layout .target-panel { top:calc(var(--safe-top) + 8px); left:calc(var(--safe-left) + 214px); width:194px; min-width:0; max-height:calc(var(--game-height) - var(--safe-top) - var(--safe-bottom) - 172px); padding:8px }
+.touch-layout .target-heading { height:0 }
+.touch-layout .target-heading>span { display:none }
+.touch-layout .target-heading>button { position:absolute; top:0; right:0; width:44px; height:44px }
+.touch-layout .target-panel>strong { padding-right:32px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px }
+.touch-layout .target-panel>small { padding-right:28px; font-size:9px; line-height:1.4 }
+.touch-layout .target-actions { gap:4px; margin-top:6px }
+.touch-layout .target-actions>button { font-size:10px; padding:4px; min-width:0 }
+.touch-layout .world-location { top:calc(var(--safe-top) + 86px); right:calc(var(--safe-right) + 12px); left:auto; width:140px; max-width:140px; transform:none; padding:5px 7px }
+.touch-layout .world-location div>span { font-size:9px }
+@media (orientation:landscape) {
+  .touch-layout.is-playing .toast-stack { top:calc(var(--safe-top) + 138px); width:clamp(156px, calc(100% - 440px), 340px) }
+}
+@media (orientation:portrait) {
+  .touch-layout .target-panel { left:auto; right:calc(var(--safe-right) + 12px); top:calc(var(--safe-top) + 8px); width:148px; max-height:132px }
+  .touch-layout .game-top-right { top:calc(var(--safe-top) + 148px) }
+  .touch-layout .world-location { top:calc(var(--safe-top) + 232px) }
+  .touch-layout .minimap-panel { top:calc(var(--safe-top) + 284px) }
+  .touch-layout .team-invite { top:calc(var(--safe-top) + 224px) }
 }

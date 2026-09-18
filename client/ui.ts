@@ -92,6 +92,7 @@ export class GameUI {
   private mobileToastActive = false;
   private inviteKey = '';
   private rosterKey = '';
+  private readonly inviteCooldowns = new Map<string, number>();
 
   constructor(private root: HTMLElement, private actions: UIActions) {
     root.className = 'rift-app';
@@ -162,7 +163,7 @@ export class GameUI {
         <div class="game-top-right"><div class="status-row"><div class="gold-counter glass" title="Gold raccolti">${icon('<circle cx="12" cy="12" r="8"/><path d="M14.8 8.7a4.5 4.5 0 1 0 0 6.6M9 10h5M9 14h5"/>')}<b data-ref="hud-gold">0</b></div><div class="server-status glass"><span class="save-dot"></span><b data-ref="online">1</b> online<span class="status-separator"></span><span data-ref="ping">— ms</span></div></div><div class="menu-buttons"><button class="glass hud-menu-button" data-ref="social-toggle" aria-expanded="false">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}<span>Compagni</span><i class="notification-dot" data-ref="social-dot" hidden></i></button><button class="glass hud-menu-button" data-ref="leave" title="Torna al menu">${icon('<path d="M10 3H3v18h7M8 12h14M17 7l5 5-5 5"/>')}<span>Esci</span></button></div></div>
         <div class="effect-list" data-ref="effects"></div>
         <aside class="team-invite glass" data-ref="team-invite" aria-label="Invito al team" hidden></aside>
-        <div class="player-details" data-ref="player-details" role="region" aria-label="Compagni e bersaglio" tabindex="0"><section class="team-roster glass" data-ref="team-roster" aria-label="Membri del team" hidden></section></div>
+        <div class="player-details" data-ref="player-details" role="region" aria-label="Compagni del team" tabindex="0"><section class="team-roster glass" data-ref="team-roster" aria-label="Membri del team" hidden></section></div>
         <section class="target-panel glass" data-ref="target" hidden><div class="target-heading"><span data-ref="target-type">GIOCATORE</span><button data-ref="target-close" aria-label="Deseleziona bersaglio">×</button></div><strong data-ref="target-name"></strong><small data-ref="target-detail"></small><div class="meter hp-meter target-health"><i data-ref="target-fill"></i></div><div class="target-actions" data-ref="target-actions"><button data-ref="target-friend">+ Amico</button><button data-ref="target-team">+ Team</button></div></section>
         <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><div><span class="eyebrow">NON VIAGGIARE DA SOLO</span><h2>I tuoi compagni</h2></div><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
         <div class="minimap-panel glass"><canvas class="minimap" width="168" height="168" aria-label="Mappa locale"></canvas><div><span>LE TERRE DI SOGLIA</span><span>N ↑</span></div><div class="map-network"><span>PING</span><span data-ref="map-ping">— ms</span></div></div>
@@ -174,7 +175,6 @@ export class GameUI {
       <div class="toast-stack" data-ref="toasts" aria-live="polite" aria-atomic="false"></div>`;
 
     root.querySelectorAll<HTMLElement>('[data-ref]').forEach(element => this.refs.set(element.dataset.ref!, element));
-    this.ref('player-details').append(this.ref('target'));
     this.arenaStatus.className = 'arena-status';
     this.arenaStatus.setAttribute('role', 'status');
     root.append(this.arenaStatus);
@@ -194,14 +194,16 @@ export class GameUI {
     this.mapVisible = !this.display.touch;
     try { const saved = localStorage.getItem('riftlands.minimap'); if (saved !== null) this.mapVisible = saved === 'visible'; } catch { /* Device preference is optional. */ }
     const mapPanel = root.querySelector<HTMLElement>('.minimap-panel')!; mapPanel.id = 'game-minimap';
-    this.mapToggle.type = 'button'; this.mapToggle.className = 'glass hud-menu-button map-toggle';
-    this.mapToggle.innerHTML = `${icon('<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2ZM9 3v16M15 5v16"/>')}<span>Mappa</span>`;
+    this.mapToggle.type = 'button'; this.mapToggle.className = 'world-location glass map-toggle';
+    const location = root.querySelector('.world-location')!;
+    this.mapToggle.append(...Array.from(location.childNodes));
+    location.replaceWith(this.mapToggle);
     this.mapToggle.setAttribute('aria-controls', mapPanel.id);
     this.mapToggle.addEventListener('click', () => {
       this.mapVisible = !this.mapVisible; this.updateMap();
       try { localStorage.setItem('riftlands.minimap', this.mapVisible ? 'visible' : 'hidden'); } catch { /* Ignore storage restrictions. */ }
     });
-    root.querySelector('.menu-buttons')!.prepend(this.mapToggle); this.updateMap();
+    this.updateMap();
     this.ref('leave').setAttribute('aria-label', 'Torna al menu');
     this.ref('social-toggle').setAttribute('aria-label', 'Compagni');
     this.options = new ControlOptions(root, () => !this.isPlaying && this.status !== 'connecting' && this.status !== 'reconnecting', settings => {
@@ -250,7 +252,7 @@ export class GameUI {
     this.ref('social-close').addEventListener('click', () => this.toggleSocial(false));
     this.ref('target-close').addEventListener('click', () => this.actions.select(null));
     this.ref('target-friend').addEventListener('click', () => { if (this.selected) this.actions.social('friend-request', this.selected.id); });
-    this.ref('target-team').addEventListener('click', () => { if (this.selected) this.actions.social('team-invite', this.selected.id); });
+    this.ref('target-team').addEventListener('click', () => { if (this.selected) this.sendSocial('team-invite', this.selected.id); });
 
     this.ref('ability-bar').addEventListener('click', event => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-slot]');
@@ -468,6 +470,7 @@ export class GameUI {
     }
     if (this.selected) this.setSelected(snapshot.actors.find(actor => actor.id === this.selected!.id) || null);
     this.renderTeamRoster();
+    this.updateInviteButtons();
   }
 
   setSocial(state: SocialState): void {
@@ -476,6 +479,7 @@ export class GameUI {
     this.renderSocial();
     this.renderTeamInvite();
     this.renderTeamRoster();
+    this.updateInviteButtons();
   }
 
   private renderTeamInvite(): void {
@@ -550,8 +554,9 @@ export class GameUI {
     const sameTeam = !!actor.teamId && actor.teamId === this.latest?.self.teamId;
     (this.ref('target-friend') as HTMLButtonElement).disabled = !!isFriend;
     this.write('target-friend', isFriend ? '✓ Amico' : '+ Amico');
-    (this.ref('target-team') as HTMLButtonElement).disabled = sameTeam;
-    this.write('target-team', sameTeam ? '✓ Nel team' : '+ Team');
+    const invited = (this.inviteCooldowns.get(actor.id) ?? 0) > Date.now();
+    (this.ref('target-team') as HTMLButtonElement).disabled = sameTeam || invited;
+    this.write('target-team', sameTeam ? '✓ Nel team' : invited ? 'Inviato' : '+ Team');
   }
 
   setLocation(name: string): void { this.write('biome', name); }
@@ -572,8 +577,26 @@ export class GameUI {
     button.dataset.socialAction = action;
     if (id) button.dataset.targetId = id;
     if (label === '×') button.setAttribute('aria-label', action === 'team-decline' ? 'Rifiuta invito al team' : 'Rifiuta richiesta di amicizia');
-    button.addEventListener('click', () => this.actions.social(action, id));
+    button.addEventListener('click', () => this.sendSocial(action, id));
     return button;
+  }
+
+  private sendSocial(action: SocialAction, id?: string): void {
+    if (action === 'team-invite' && id) {
+      if ((this.inviteCooldowns.get(id) ?? 0) > Date.now()) return;
+      this.inviteCooldowns.set(id, Date.now() + 3000);
+      this.updateInviteButtons();
+      window.setTimeout(() => { this.inviteCooldowns.delete(id); this.updateInviteButtons(); }, 3000);
+    }
+    this.actions.social(action, id);
+  }
+
+  private updateInviteButtons(): void {
+    for (const button of this.root.querySelectorAll<HTMLButtonElement>('[data-social-action="team-invite"]')) {
+      const pending = (this.inviteCooldowns.get(button.dataset.targetId!) ?? 0) > Date.now();
+      button.disabled = pending; button.textContent = pending ? 'Inviato' : '+ Team';
+    }
+    if (this.selected) this.setSelected(this.selected);
   }
 
   private renderSocial(): void {

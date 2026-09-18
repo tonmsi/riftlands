@@ -23,10 +23,14 @@ test('team popup consent, live health, scrollable mobile roster and automatic di
   }
   const [leader, mobile] = pages;
   let leaderSnapshot: Snapshot | undefined;
-  leader.on('websocket', socket => socket.on('framereceived', frame => {
+  let sentInvites = 0;
+  leader.on('websocket', socket => {
+    socket.on('framesent', frame => { const message = JSON.parse(String(frame.payload)); if (message.type === 'social' && message.action === 'team-invite') sentInvites++; });
+    socket.on('framereceived', frame => {
     const message = JSON.parse(String(frame.payload));
     if (message.type === 'snapshot') leaderSnapshot = message;
-  }));
+    });
+  });
   let injured = false;
   await mobile.routeWebSocket('**/ws', socket => {
     const server = socket.connectToServer();
@@ -48,6 +52,10 @@ test('team popup consent, live health, scrollable mobile roster and automatic di
       await expect(pages[i].locator('.team-invite')).toContainText(`${names[0]} ti ha invitato nel suo team`);
     };
     await invite(1);
+    await leader.locator('[data-social-action="team-invite"]:disabled').evaluateAll(buttons => {
+      for (let i = 0; i < 20; i++) for (const button of buttons) (button as HTMLButtonElement).click();
+    });
+    expect(sentInvites).toBe(1);
     await expect(mobile.locator('.social-panel')).toBeHidden();
     expect(leaderSnapshot?.self.teamId).toBeNull();
     const popup = (await mobile.locator('.team-invite').boundingBox())!;
@@ -68,8 +76,21 @@ test('team popup consent, live health, scrollable mobile roster and automatic di
     await expect(mobile.locator('.team-member')).toHaveCount(4);
     injured = true;
     await expect(mobile.locator('.team-member').filter({ hasText: names[0] }).locator('.team-member-health')).toHaveText(/^37 \/ \d+ PV$/);
+    await mobile.locator('[data-ref="social-toggle"]').click();
+    await mobile.locator('.social-section').filter({ has: mobile.getByRole('heading', { name: /^Nelle vicinanze/ }) }).locator('.social-row').filter({ hasText: names[0] }).locator('.social-person').click();
+    await mobile.locator('[data-ref="social-close"]').click();
     for (const size of [{ width: 568, height: 320 }, { width: 844, height: 390 }, { width: 360, height: 640 }]) {
       await mobile.setViewportSize(size);
+      const player = (await mobile.locator('.player-panel').boundingBox())!;
+      const target = (await mobile.locator('.target-panel').boundingBox())!;
+      expect(target.x).toBeGreaterThanOrEqual(player.x + player.width);
+      expect(target.y).toBe(player.y);
+      expect(target.x + target.width).toBeLessThanOrEqual(size.width);
+      await expect(mobile.locator('.world-location')).toHaveRole('button');
+      await mobile.locator('.world-location').click();
+      await expect(mobile.locator('.minimap-panel')).toBeVisible();
+      await mobile.locator('.world-location').click();
+      await expect(mobile.locator('.minimap-panel')).toBeHidden();
       const list = (await mobile.locator('.player-details').boundingBox())!;
       const joystick = (await mobile.locator('.mobile-joystick').boundingBox())!;
       expect(list.y + list.height).toBeLessThan(joystick.y);

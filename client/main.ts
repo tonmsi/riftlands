@@ -208,7 +208,7 @@ function inputTick(): void {
   const { dx, dy, aim, cast, autoAim } = isTyping() || ui.inputBlocked || predicted.hp <= 0
     ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined, autoAim: false })
     : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
-  const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, ...(cast ? { cast } : {}) };
+  const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, ...(cast ? { cast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
   if (connection.send({ type: 'input', input })) {
     pending.push(input);
     const next = predictMovement(predicted, input, renderer.world, connection.serverTime());

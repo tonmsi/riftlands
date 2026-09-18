@@ -195,6 +195,7 @@ export class WorldSimulation {
   enqueueInput(id: string, input: InputCommand): boolean {
     const connection = this.connections.get(id);
     if (input.autoAim !== undefined && typeof input.autoAim !== 'boolean') return false;
+    if (input.targetId !== undefined && (typeof input.targetId !== 'string' || input.targetId.length > 80 || !input.targetId.length)) return false;
     if (!connection?.connected || !Number.isSafeInteger(input.seq) || input.seq <= connection.highestSeq || input.seq > connection.highestSeq + 120 || ![input.dx, input.dy, input.aim].every(Number.isFinite) || Math.abs(input.dx) > 1 || Math.abs(input.dy) > 1 || Math.abs(input.aim) > 1e6 || (input.cast !== undefined && !['basic', 'q', 'e', 'r'].includes(input.cast))) return false;
     connection.highestSeq = input.seq;
     if (connection.inputs.length >= 6) connection.inputs.shift();
@@ -240,7 +241,7 @@ export class WorldSimulation {
     // Casts use the input consumed this tick, captured independently of queue length.
     for (const [id, input] of this.pendingCasts) {
       const actor = this.players.get(id);
-      if (actor && input.cast) this.cast(actor, input.cast, input.autoAim === true);
+      if (actor && input.cast) this.cast(actor, input.cast, input.autoAim === true, input.targetId);
     }
     this.pendingCasts.clear();
     this.stepNpcs(dt);
@@ -319,13 +320,17 @@ export class WorldSimulation {
     let nearestDistance = INTEREST_RADIUS;
     for (const target of this.near(actor, INTEREST_RADIUS)) {
       const d = distance(actor, target);
-      if (d >= nearestDistance || target.hp <= 0 || this.allied(actor, target) || target.spawnProtectedUntil > this.now) continue;
-      if (!this.visibleTo(actor, target) || !hasLineOfSight(actor, target, this.world)) continue;
-      if (target.kind === 'player' && this.isSafeProtected(target)) continue;
-      if (target.bossKey && !this.bosses.get(target.bossKey)?.canDamage(actor)) continue;
+      if (d >= nearestDistance || !this.canAutoAim(actor, target)) continue;
       nearest = target; nearestDistance = d;
     }
     return nearest;
+  }
+
+  private canAutoAim(actor: Actor, target: Actor): boolean {
+    return target.hp > 0 && !this.allied(actor, target) && target.spawnProtectedUntil <= this.now
+      && distance(actor, target) < INTEREST_RADIUS && this.visibleTo(actor, target) && hasLineOfSight(actor, target, this.world)
+      && !(target.kind === 'player' && this.isSafeProtected(target))
+      && (!target.bossKey || !!this.bosses.get(target.bossKey)?.canDamage(actor));
   }
 
   private emit(event: Omit<GameEvent, 'id' | 'at'>): void {
@@ -419,13 +424,15 @@ export class WorldSimulation {
   }
 
   /** May be used directly by deterministic combat tests; input validation precedes this in transport. */
-  cast(actor: Actor, slot: AbilitySlot, autoAim = false): boolean {
+  cast(actor: Actor, slot: AbilitySlot, autoAim = false, targetId?: string): boolean {
     const ability = CLASSES[actor.classId].abilities[slot];
     if (this.isSafeProtected(actor) && ability.kind !== 'heal' && ability.kind !== 'shield') return false;
     if (actor.hp <= 0 || actor.cooldowns[slot] > this.now || actor.resource < ability.cost) return false;
     if (ability.kind === 'projectile' && this.projectiles.size >= 1000) return false;
     if (autoAim && ability.targeting === 'directional') {
-      const target = this.nearestEnemy(actor);
+      // An explicit selection never silently switches to a different enemy.
+      const selected = targetId ? this.players.get(targetId) ?? this.npcs.get(targetId) : undefined;
+      const target = targetId ? (selected && this.canAutoAim(actor, selected) ? selected : undefined) : this.nearestEnemy(actor);
       if (target) actor.aim = Math.atan2(target.y - actor.y, target.x - actor.x);
     }
     actor.resource -= ability.cost;
@@ -824,6 +831,7 @@ export class WorldSimulation {
       account.friends = account.friends.filter(friend => friend !== targetId);
       target!.friends = target!.friends.filter(friend => friend !== id);
     } else if (action === 'team-invite') {
+      if ((this.invites.get(targetId!) ?? []).some(invite => invite.fromId === id && invite.expiresAt > this.now && this.teams.get(invite.teamId)?.members.has(id))) return '';
       if (!this.connections.get(targetId!)?.connected) throw new Error('Questo giocatore è offline.');
       if ((this.teamFor(targetId!)?.members.size ?? 0) > 1) throw new Error('Il giocatore è già in un team.');
       let team = this.teamFor(id);

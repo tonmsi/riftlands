@@ -59,6 +59,64 @@ test('automatic input aims at the nearest enemy while manual input preserves its
   assert.equal(a.aim, Math.PI);
 });
 
+test('manual aim overrides selection, selection overrides proximity and follows the target on each cast', () => {
+  const { simulation, a, b } = arena();
+  Object.assign(b, { x: 0, y: 180 });
+  const c = simulation.addPlayer(account('carol'), 'warrior');
+  Object.assign(c, { x: -300, y: 0, spawnProtectedUntil: 0 });
+  simulation.enqueueInput(a.id, { seq: 1, dx: 0, dy: 0, aim: 0, cast: 'basic', autoAim: true, targetId: c.id });
+  simulation.step();
+  assert.equal(a.aim, Math.PI);
+  a.cooldowns.basic = 0;
+  Object.assign(c, { x: 0, y: -300 });
+  simulation.enqueueInput(a.id, { seq: 2, dx: 0, dy: 0, aim: 0, cast: 'basic', autoAim: true, targetId: c.id });
+  simulation.step();
+  assert.equal(a.aim, -Math.PI / 2);
+  a.cooldowns.basic = 0;
+  simulation.enqueueInput(a.id, { seq: 3, dx: 0, dy: 0, aim: Math.PI / 4, cast: 'basic', autoAim: false, targetId: c.id });
+  simulation.step();
+  assert.equal(a.aim, Math.PI / 4);
+  a.cooldowns.basic = 0;
+  simulation.enqueueInput(a.id, { seq: 4, dx: 0, dy: 0, aim: 0, cast: 'basic', autoAim: true });
+  simulation.step();
+  assert.equal(a.aim, Math.PI / 2);
+});
+
+test('invalid or allied selections do not redirect to a nearby enemy', () => {
+  for (const selected of ['missing', 'ally', 'dead', 'hidden', 'protected', 'far', 'wall']) {
+    const { simulation, a, b } = arena();
+    Object.assign(b, { x: 0, y: 180 });
+    const c = simulation.addPlayer(account('carol'), 'warrior');
+    Object.assign(c, { x: 300, y: 0, spawnProtectedUntil: 0 });
+    if (selected === 'ally') team(simulation, a, c);
+    if (selected === 'dead') c.hp = 0;
+    if (selected === 'hidden') c.hidden = true;
+    if (selected === 'protected') c.spawnProtectedUntil = simulation.now + 10000;
+    if (selected === 'far') c.x = 100000;
+    if (selected === 'wall') simulation.world.getTile = (tx, ty) => tx === 1 && ty === 0 ? 'rock' : 'grass';
+    a.aim = Math.PI;
+    simulation.cast(a, 'basic', true, selected === 'missing' ? 'gone' : c.id);
+    assert.equal(a.aim, Math.PI, selected);
+  }
+});
+
+test('malformed selected target identifiers are rejected by input validation', () => {
+  const { simulation, a } = arena();
+  for (const targetId of ['', 'x'.repeat(81), 42]) {
+    assert.equal(simulation.enqueueInput(a.id, { seq: 1, dx: 0, dy: 0, aim: 0, targetId: targetId as string }), false);
+  }
+});
+
+test('repeated team invites are silent and do not extend their lifetime', () => {
+  const { simulation, a, b } = arena();
+  assert.equal(simulation.socialAction(a.id, 'team-invite', b.id), 'Invito al team inviato.');
+  advance(simulation, 30);
+  for (let i = 0; i < 20; i++) assert.equal(simulation.socialAction(a.id, 'team-invite', b.id), '');
+  assert.equal(simulation.socialFor(b.id).teamInvites.length, 1);
+  advance(simulation, 31);
+  assert.equal(simulation.socialFor(b.id).teamInvites.length, 0);
+});
+
 for (const excluded of ['ally', 'dead', 'protected', 'hidden', 'wall'] as const) {
   test(`automatic aim skips a nearer ${excluded} target`, () => {
     const { simulation, a, b } = arena();
