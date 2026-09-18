@@ -142,7 +142,7 @@ export class WorldSimulation {
       radius: PLAYER_RADIUS, hp: validSaved ? Math.max(0, Math.min(spec.maxHp, spec.maxHp * saved.hp / saved.maxHp)) : spec.maxHp,
       maxHp: spec.maxHp, resource: validSaved ? (sameClass ? Math.min(spec.maxResource, saved.resource) : 0) : (spec.resource === 'mana' ? spec.maxResource : 0),
       maxResource: spec.maxResource, aim: 0, speed: spec.speed, level: levelFromXp(account.xp), xp: account.xp,
-      kills: account.kills, deaths: account.deaths, teamId: this.teamFor(account.id)?.id ?? null,
+      kills: account.kills, deaths: account.deaths, teamId: (this.teamFor(account.id)?.members.size ?? 0) > 1 ? this.teamFor(account.id)!.id : null,
       hidden: false, revealedUntil: 0, deadUntil: validSaved ? saved.deadUntil : 0,
       spawnProtectedUntil: validSaved ? saved.spawnProtectedUntil : this.now + 5000,
       pvpUntil: validSaved ? saved.pvpUntil ?? 0 : 0,
@@ -214,11 +214,7 @@ export class WorldSimulation {
         this.persistPlayer(id);
         this.players.delete(id);
         this.connections.delete(id);
-        const team = this.teamFor(id);
-        if (team?.leaderId === id) {
-          const successor = [...team.members].find(member => member !== id && this.connections.get(member)?.connected);
-          if (successor) team.leaderId = successor;
-        }
+        this.leaveTeam(id);
         continue;
       }
       actor.effects = actor.effects.filter(effect => effect.until > this.now);
@@ -766,6 +762,31 @@ export class WorldSimulation {
 
   private teamFor(id: string): Team | undefined { return [...this.teams.values()].find(team => team.members.has(id)); }
 
+  private dissolveTeam(team: Team): void {
+    for (const id of team.members) {
+      const actor = this.players.get(id);
+      if (actor) actor.teamId = null;
+    }
+    this.teams.delete(team.id);
+    for (const [id, invites] of this.invites) {
+      const remaining = invites.filter(invite => invite.teamId !== team.id);
+      if (remaining.length) this.invites.set(id, remaining); else this.invites.delete(id);
+    }
+  }
+
+  /** Also used on logout and after the reconnect grace; room transfers keep membership. */
+  leaveTeam(id: string): void {
+    const team = this.teamFor(id);
+    if (!team) return;
+    team.members.delete(id);
+    const actor = this.players.get(id);
+    if (actor) actor.teamId = null;
+    if (team.members.size < 2) this.dissolveTeam(team);
+    else if (team.leaderId === id) {
+      team.leaderId = [...team.members].sort((a, b) => Number(!!this.connections.get(b)?.connected || this.awayPlayers.has(b)) - Number(!!this.connections.get(a)?.connected || this.awayPlayers.has(a)))[0];
+    }
+  }
+
   socialFor(id: string): SocialState {
     const account = this.accounts.get(id)!;
     const actor = this.players.get(id);
@@ -776,7 +797,7 @@ export class WorldSimulation {
       friends: account.friends.map(friendId => ({ id: friendId, name: name(friendId), online: online(friendId) })),
       requests: account.requests.map(requestId => ({ id: requestId, name: name(requestId) })),
       teamInvites: (this.invites.get(id) ?? []).filter(invite => invite.expiresAt > this.now && this.teams.get(invite.teamId)?.members.has(invite.fromId)).map(invite => ({ id: invite.fromId, name: name(invite.fromId), teamId: invite.teamId })),
-      team: team ? { id: team.id, leaderId: team.leaderId, members: [...team.members].map(memberId => ({ id: memberId, name: name(memberId), online: online(memberId) })) } : null,
+      team: team && team.members.size > 1 ? { id: team.id, leaderId: team.leaderId, members: [...team.members].map(memberId => ({ id: memberId, name: name(memberId), online: online(memberId), hp: this.players.get(memberId)?.hp, maxHp: this.players.get(memberId)?.maxHp })) } : null,
       nearby: actor ? [...this.players.values()].filter(player => player.id !== id && online(player.id) && distance(actor, player) < INTEREST_RADIUS && (!player.hidden || player.revealedUntil > this.now || distance(actor, player) < 120 || (!!actor.teamId && actor.teamId === player.teamId))).slice(0, 40).map(player => ({ id: player.id, name: player.name, classId: player.classId, level: player.level, teamId: player.teamId, friend: account.friends.includes(player.id) })) : [],
     };
   }
@@ -804,9 +825,9 @@ export class WorldSimulation {
       target!.friends = target!.friends.filter(friend => friend !== id);
     } else if (action === 'team-invite') {
       if (!this.connections.get(targetId!)?.connected) throw new Error('Questo giocatore è offline.');
-      if (this.teamFor(targetId!)) throw new Error('Il giocatore è già in un team.');
+      if ((this.teamFor(targetId!)?.members.size ?? 0) > 1) throw new Error('Il giocatore è già in un team.');
       let team = this.teamFor(id);
-      if (!team) { team = { id: randomUUID(), leaderId: id, members: new Set([id]) }; this.teams.set(team.id, team); this.players.get(id)!.teamId = team.id; }
+      if (!team) { team = { id: randomUUID(), leaderId: id, members: new Set([id]) }; this.teams.set(team.id, team); }
       if (team.leaderId !== id) throw new Error('Solo il caposquadra può invitare.');
       if (team.members.size >= 5) throw new Error('Il team è completo (5 giocatori).');
       const invitations = (this.invites.get(targetId!) ?? []).filter(invite => invite.expiresAt > this.now && invite.teamId !== team.id);
@@ -814,24 +835,26 @@ export class WorldSimulation {
       invitations.push({ fromId: id, teamId: team.id, expiresAt: this.now + 60_000 });
       this.invites.set(targetId!, invitations);
     } else if (action === 'team-accept') {
-      if (this.teamFor(id)) throw new Error('Esci dal team attuale prima di accettare.');
+      const previous = this.teamFor(id);
+      if (previous && previous.members.size > 1) throw new Error('Esci dal team attuale prima di accettare.');
       const invitation = (this.invites.get(id) ?? []).find(invite => invite.fromId === targetId && invite.expiresAt > this.now);
       const team = invitation ? this.teams.get(invitation.teamId) : undefined;
       if (!team || !team.members.has(targetId!)) throw new Error('Invito scaduto.');
       if (team.members.size >= 5) throw new Error('Il team è completo.');
+      if (previous) this.dissolveTeam(previous);
       team.members.add(id);
-      this.players.get(id)!.teamId = team.id;
+      for (const memberId of team.members) {
+        const member = this.players.get(memberId);
+        if (member) member.teamId = team.id;
+      }
       this.invites.delete(id);
     } else if (action === 'team-decline') this.invites.set(id, (this.invites.get(id) ?? []).filter(invite => invite.fromId !== targetId));
     else if (action === 'team-leave') {
       const team = this.teamFor(id);
       if (!team) throw new Error('Non fai parte di un team.');
-      team.members.delete(id);
-      const actor = this.players.get(id);
-      if (actor) actor.teamId = null;
-      if (team.members.size === 0) this.teams.delete(team.id);
-      else if (team.leaderId === id) team.leaderId = [...team.members].sort((a, b) => Number(this.connections.get(b)?.connected) - Number(this.connections.get(a)?.connected))[0];
+      this.leaveTeam(id);
     }
+    this.pruneTeams();
     this.store?.touch();
     return ({ 'friend-request': 'Richiesta di amicizia inviata.', 'friend-accept': 'Amicizia accettata.', 'friend-decline': 'Richiesta rifiutata.', 'friend-remove': 'Amicizia rimossa.', 'team-invite': 'Invito al team inviato.', 'team-accept': 'Sei entrato nel team.', 'team-decline': 'Invito rifiutato.', 'team-leave': 'Hai lasciato il team.' } as const)[action];
   }
@@ -852,10 +875,17 @@ export class WorldSimulation {
   private pruneCaches(): void {
     for (const [id, saved] of this.npcSleep) if (saved.until < this.now) this.npcSleep.delete(id);
     while (this.npcSleep.size > 5000) this.npcSleep.delete(this.npcSleep.keys().next().value!);
+    this.pruneTeams();
+  }
+
+  private pruneTeams(): void {
     for (const [id, invitations] of this.invites) {
-      const active = invitations.filter(invite => invite.expiresAt > this.now && this.teams.has(invite.teamId));
+      const active = invitations.filter(invite => invite.expiresAt > this.now && this.teams.get(invite.teamId)?.members.has(invite.fromId));
       if (active.length) this.invites.set(id, active); else this.invites.delete(id);
     }
-    for (const [id, team] of this.teams) if (![...team.members].some(member => this.players.has(member) || this.awayPlayers.has(member))) this.teams.delete(id);
+    for (const team of this.teams.values()) {
+      const pending = [...this.invites.values()].some(invites => invites.some(invite => invite.teamId === team.id));
+      if ((team.members.size < 2 && !pending) || ![...team.members].some(member => this.players.has(member) || this.awayPlayers.has(member))) this.dissolveTeam(team);
+    }
   }
 }

@@ -51,7 +51,7 @@ test('two independent players: move, cast, friend consent, team consent, reconne
     await nearB.getByRole('button', { name: '+ Team', exact: true }).click();
     await expect(b.locator('.social-row').filter({ hasText: 'Invito al team' })).toBeVisible();
     expect(seenB.snapshot!.self.teamId).toBeNull();
-    await b.getByRole('button', { name: 'Unisciti', exact: true }).click();
+    await b.locator('.team-invite').getByRole('button', { name: 'Accetta', exact: true }).click();
     await expect.poll(() => seenB.snapshot?.self.teamId).toBeTruthy();
     await expect.poll(() => seenA.snapshot?.self.teamId).toBe(seenB.snapshot!.self.teamId);
     await a.locator('[data-ref="social-close"]').click();

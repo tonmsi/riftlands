@@ -281,15 +281,71 @@ test('disconnect keeps a combat body for 20 seconds; reconnect and class changes
   assert.equal(restored.hp, savedHp);
 });
 
-test('team leader transfers after disconnect grace while offline membership survives reconnect', () => {
+test('a short disconnect preserves the party, but expired grace dissolves a two-player team', () => {
   const { simulation, a, b, aAccount } = arena();
   team(simulation, a, b);
   simulation.disconnectPlayer(a.id);
-  advance(simulation, 20.2);
-  assert.equal(simulation.socialFor(b.id).team!.leaderId, b.id);
+  advance(simulation, 5);
   assert.equal(simulation.socialFor(b.id).team!.members.find(member => member.id === a.id)!.online, false);
+  assert.equal(simulation.addPlayer(aAccount, 'mage').teamId, b.teamId);
+  simulation.disconnectPlayer(a.id);
+  advance(simulation, 20.2);
+  assert.equal(simulation.socialFor(b.id).team, null);
+  assert.equal(b.teamId, null);
   simulation.addPlayer(aAccount, 'mage');
-  assert.equal(simulation.socialFor(a.id).team!.leaderId, b.id);
+  assert.equal(simulation.socialFor(a.id).team, null);
+});
+
+test('pending, declined and expired invitations never leave the inviter in a solo team', () => {
+  const { simulation, a, b } = arena();
+  simulation.socialAction(a.id, 'team-invite', b.id);
+  assert.equal(a.teamId, null);
+  assert.equal(simulation.socialFor(a.id).team, null);
+  simulation.socialAction(b.id, 'team-decline', a.id);
+  assert.equal(simulation.teams.size, 0);
+  simulation.socialAction(a.id, 'team-invite', b.id);
+  advance(simulation, 66);
+  assert.equal(simulation.teams.size, 0);
+  assert.deepEqual(simulation.socialFor(b.id).teamInvites, []);
+});
+
+test('either member leaving a pair dissolves the team and revokes its outstanding invites', () => {
+  for (const leaderLeaves of [false, true]) {
+    const { simulation, a, b } = arena();
+    const c = simulation.addPlayer(account('charlie'), 'mage');
+    team(simulation, a, b);
+    simulation.socialAction(a.id, 'team-invite', c.id);
+    simulation.socialAction(leaderLeaves ? a.id : b.id, 'team-leave');
+    assert.equal(a.teamId, null);
+    assert.equal(b.teamId, null);
+    assert.equal(simulation.teams.size, 0);
+    assert.deepEqual(simulation.socialFor(c.id).teamInvites, []);
+    assert.throws(() => simulation.socialAction(c.id, 'team-accept', a.id));
+  }
+});
+
+test('larger parties promote a remaining leader and dissolve at the last member', () => {
+  const { simulation, a, b } = arena();
+  const c = simulation.addPlayer(account('charlie'), 'mage');
+  team(simulation, a, b);
+  simulation.socialAction(a.id, 'team-invite', c.id);
+  simulation.socialAction(c.id, 'team-accept', a.id);
+  simulation.socialAction(a.id, 'team-leave');
+  assert.equal(simulation.socialFor(b.id).team!.leaderId, b.id);
+  assert.equal(simulation.socialFor(b.id).team!.members.length, 2);
+  simulation.socialAction(c.id, 'team-leave');
+  assert.equal(simulation.socialFor(b.id).team, null);
+  assert.equal(b.teamId, null);
+});
+
+test('a player can accept another invite while their own invitation is pending', () => {
+  const { simulation, a, b } = arena();
+  simulation.socialAction(a.id, 'team-invite', b.id);
+  simulation.socialAction(b.id, 'team-invite', a.id);
+  simulation.socialAction(a.id, 'team-accept', b.id);
+  assert.equal(a.teamId, b.teamId);
+  assert.equal(simulation.teams.size, 1);
+  assert.deepEqual(simulation.socialFor(b.id).teamInvites, []);
 });
 
 test('bush concealment filters enemies and social nearby lists, but nearby or revealed enemies appear', () => {

@@ -68,6 +68,7 @@ export class RoomManager {
     const member = this.memberships.get(id);
     if (!member || !member.connected) return;
     member.connected = false;
+    if (voluntary) this.global.leaveTeam(id);
     this.gateEntries.delete(id);
     this.notices.delete(id);
     if (member.roomId === 'world') {
@@ -140,7 +141,7 @@ export class RoomManager {
     member.roomId = 'world';
     member.epoch++;
     member.expiresAt = undefined;
-    if (!member.connected) this.memberships.delete(id);
+    if (!member.connected) { this.global.leaveTeam(id); this.memberships.delete(id); }
     if (!room.members.size) this.rooms.delete(room.id);
   }
 
@@ -224,7 +225,10 @@ export class RoomManager {
     const state = this.global.socialFor(id);
     const online = (playerId: string) => !!this.memberships.get(playerId)?.connected;
     state.friends = state.friends.map(friend => ({ ...friend, online: online(friend.id) }));
-    if (state.team) state.team.members = state.team.members.map(member => ({ ...member, online: online(member.id) }));
+    if (state.team) state.team.members = state.team.members.map(member => {
+      const actor = this.memberships.has(member.id) ? this.simulationFor(member.id).players.get(member.id) : undefined;
+      return { ...member, online: online(member.id), hp: actor?.hp, maxHp: actor?.maxHp };
+    });
     if (this.membership(id).roomId !== 'world') {
       state.nearby = [];
       state.teamInvites = [];

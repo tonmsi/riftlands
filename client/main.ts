@@ -1,5 +1,6 @@
 import './style.css';
 import './mobile.css';
+import './team.css';
 import { CLASSES, TICK_RATE } from '../shared/config';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import { GameConnection } from './net';

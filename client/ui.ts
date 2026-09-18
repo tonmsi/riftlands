@@ -90,6 +90,8 @@ export class GameUI {
   private mapVisible = true;
   private readonly toastQueue: { message: string; tone: 'info' | 'error' | 'success' }[] = [];
   private mobileToastActive = false;
+  private inviteKey = '';
+  private rosterKey = '';
 
   constructor(private root: HTMLElement, private actions: UIActions) {
     root.className = 'rift-app';
@@ -159,6 +161,8 @@ export class GameUI {
         <div class="world-location glass"><span class="location-dot"></span><div><strong data-ref="biome">Terre di Soglia</strong><span data-ref="coords">0 · 0</span></div><span class="location-decoration">✦</span></div>
         <div class="game-top-right"><div class="status-row"><div class="gold-counter glass" title="Gold raccolti">${icon('<circle cx="12" cy="12" r="8"/><path d="M14.8 8.7a4.5 4.5 0 1 0 0 6.6M9 10h5M9 14h5"/>')}<b data-ref="hud-gold">0</b></div><div class="server-status glass"><span class="save-dot"></span><b data-ref="online">1</b> online<span class="status-separator"></span><span data-ref="ping">— ms</span></div></div><div class="menu-buttons"><button class="glass hud-menu-button" data-ref="social-toggle" aria-expanded="false">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}<span>Compagni</span><i class="notification-dot" data-ref="social-dot" hidden></i></button><button class="glass hud-menu-button" data-ref="leave" title="Torna al menu">${icon('<path d="M10 3H3v18h7M8 12h14M17 7l5 5-5 5"/>')}<span>Esci</span></button></div></div>
         <div class="effect-list" data-ref="effects"></div>
+        <aside class="team-invite glass" data-ref="team-invite" aria-label="Invito al team" hidden></aside>
+        <div class="player-details" data-ref="player-details" role="region" aria-label="Compagni e bersaglio" tabindex="0"><section class="team-roster glass" data-ref="team-roster" aria-label="Membri del team" hidden></section></div>
         <section class="target-panel glass" data-ref="target" hidden><div class="target-heading"><span data-ref="target-type">GIOCATORE</span><button data-ref="target-close" aria-label="Deseleziona bersaglio">×</button></div><strong data-ref="target-name"></strong><small data-ref="target-detail"></small><div class="meter hp-meter target-health"><i data-ref="target-fill"></i></div><div class="target-actions" data-ref="target-actions"><button data-ref="target-friend">+ Amico</button><button data-ref="target-team">+ Team</button></div></section>
         <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><div><span class="eyebrow">NON VIAGGIARE DA SOLO</span><h2>I tuoi compagni</h2></div><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
         <div class="minimap-panel glass"><canvas class="minimap" width="168" height="168" aria-label="Mappa locale"></canvas><div><span>LE TERRE DI SOGLIA</span><span>N ↑</span></div><div class="map-network"><span>PING</span><span data-ref="map-ping">— ms</span></div></div>
@@ -170,6 +174,7 @@ export class GameUI {
       <div class="toast-stack" data-ref="toasts" aria-live="polite" aria-atomic="false"></div>`;
 
     root.querySelectorAll<HTMLElement>('[data-ref]').forEach(element => this.refs.set(element.dataset.ref!, element));
+    this.ref('player-details').append(this.ref('target'));
     this.arenaStatus.className = 'arena-status';
     this.arenaStatus.setAttribute('role', 'status');
     root.append(this.arenaStatus);
@@ -365,6 +370,9 @@ export class GameUI {
       this.activeClass = null;
       this.lastSanctuary = undefined;
       this.previousGold = undefined;
+      this.socialState = null;
+      this.renderTeamInvite();
+      this.renderTeamRoster();
     }
   }
 
@@ -459,12 +467,72 @@ export class GameUI {
       this.ref('effects').replaceChildren(...effects.map(effect => textElement('span', 'effect-chip', effect)));
     }
     if (this.selected) this.setSelected(snapshot.actors.find(actor => actor.id === this.selected!.id) || null);
+    this.renderTeamRoster();
   }
 
   setSocial(state: SocialState): void {
     this.socialState = state;
     this.ref('social-dot').hidden = !state.requests.length && !state.teamInvites.length;
     this.renderSocial();
+    this.renderTeamInvite();
+    this.renderTeamRoster();
+  }
+
+  private renderTeamInvite(): void {
+    const invites = this.socialState?.teamInvites ?? [];
+    const invite = invites[0];
+    const panel = this.ref('team-invite');
+    panel.hidden = !invite;
+    const key = JSON.stringify(invites);
+    if (key === this.inviteKey) return;
+    this.inviteKey = key;
+    panel.replaceChildren();
+    if (!invite) return;
+    const message = textElement('p', '', `${invite.name} ti ha invitato nel suo team`);
+    message.setAttribute('role', 'status');
+    const actions = textElement('div', 'team-invite-actions', '');
+    actions.append(this.socialButton('Accetta', 'team-accept', invite.id), this.socialButton('Rifiuta', 'team-decline', invite.id));
+    panel.append(message, actions);
+    if (invites.length > 1) panel.append(textElement('small', '', `Altri inviti in attesa: ${invites.length - 1}`));
+  }
+
+  private renderTeamRoster(): void {
+    const team = this.socialState?.team;
+    const self = this.latest?.self;
+    const members = team && self ? team.members.filter(member => member.id !== self.id) : [];
+    const roster = this.ref('team-roster');
+    roster.hidden = !members.length;
+    const key = JSON.stringify(members.map(member => [member.id, member.name]));
+    if (key !== this.rosterKey) {
+      this.rosterKey = key;
+      roster.replaceChildren(textElement('h3', '', 'Il tuo team'));
+      for (const member of members) {
+        const row = textElement('div', 'team-member', '');
+        row.dataset.memberId = member.id;
+        const label = textElement('div', 'team-member-label', '');
+        label.append(textElement('strong', '', member.name), textElement('span', 'team-member-health', ''));
+        const meter = textElement('div', 'team-member-meter', '');
+        meter.setAttribute('role', 'meter'); meter.setAttribute('aria-label', `Vita di ${member.name}`);
+        meter.setAttribute('aria-valuemin', '0');
+        meter.append(document.createElement('i'));
+        row.append(label, meter); roster.append(row);
+      }
+    }
+    for (const row of roster.querySelectorAll<HTMLElement>('.team-member')) {
+      const member = members.find(member => member.id === row.dataset.memberId)!;
+      const actor = this.latest?.actors.find(actor => actor.id === member.id);
+      const hp = actor?.hp ?? member.hp;
+      const maxHp = actor?.maxHp ?? member.maxHp;
+      const available = member.online && hp !== undefined && maxHp !== undefined && maxHp > 0;
+      row.classList.toggle('is-offline', !member.online);
+      row.querySelector('.team-member-health')!.textContent = !member.online ? 'Offline' : available ? `${Math.ceil(hp!)} / ${Math.ceil(maxHp!)} PV` : 'In altra area';
+      const meter = row.querySelector<HTMLElement>('.team-member-meter')!;
+      meter.hidden = !available;
+      if (available) {
+        meter.setAttribute('aria-valuemax', String(maxHp)); meter.setAttribute('aria-valuenow', String(Math.max(0, hp!)));
+        meter.querySelector('i')!.style.width = `${Math.max(0, Math.min(100, hp! / maxHp! * 100))}%`;
+      }
+    }
   }
 
   setSelected(actor: Actor | null): void {
@@ -537,7 +605,7 @@ export class GameUI {
     if (state.requests.length || state.teamInvites.length) {
       const requests = section('Inviti in arrivo', state.requests.length + state.teamInvites.length);
       state.requests.forEach(request => requests.append(row(request.name, 'Richiesta di amicizia', [this.socialButton('Accetta', 'friend-accept', request.id), this.socialButton('×', 'friend-decline', request.id)])));
-      state.teamInvites.forEach(invite => requests.append(row(invite.name, 'Invito al team', [this.socialButton('Unisciti', 'team-accept', invite.id), this.socialButton('×', 'team-decline', invite.id)])));
+      state.teamInvites.forEach(invite => requests.append(row(invite.name, 'Invito al team', [this.socialButton('Accetta', 'team-accept', invite.id), this.socialButton('Rifiuta', 'team-decline', invite.id)])));
     }
     const team = section('Il tuo team', state.team?.members.length || 0);
     if (state.team) {

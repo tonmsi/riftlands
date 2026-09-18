@@ -19,6 +19,27 @@ function advance(manager: RoomManager, seconds: number) {
   for (let i = 0; i < seconds * 10; i++) manager.step(0.1);
 }
 
+test('voluntary logout immediately dissolves a pair without removing the combat body', () => {
+  const { manager, ids } = setup(2);
+  manager.socialAction(ids[0], 'team-invite', ids[1]);
+  manager.socialAction(ids[1], 'team-accept', ids[0]);
+  manager.disconnect(ids[1], true);
+  assert.equal(manager.socialFor(ids[0]).team, null);
+  assert.equal(manager.global.players.get(ids[0])!.teamId, null);
+  assert.ok(manager.global.players.has(ids[1]), 'combat logout grace still keeps the body');
+});
+
+test('an expired instance disconnect removes global party membership', () => {
+  const { manager, ids } = setup(3);
+  manager.socialAction(ids[0], 'team-invite', ids[1]);
+  manager.socialAction(ids[1], 'team-accept', ids[0]);
+  manager.createMatch('arena', [[ids[1]], [ids[2]]]);
+  manager.disconnect(ids[1]);
+  advance(manager, 21);
+  assert.equal(manager.socialFor(ids[0]).team, null);
+  assert.equal(manager.global.players.get(ids[0])!.teamId, null);
+});
+
 test('rooms isolate actors and terrain; transfers remove owned projectiles and old bodies', () => {
   const { manager, ids } = setup();
   const old = manager.stateFor(ids[0]);
