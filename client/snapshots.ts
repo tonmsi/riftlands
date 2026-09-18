@@ -1,16 +1,18 @@
 import type { Actor, Projectile, Snapshot } from '../shared/types';
-import { interpolateActors } from './prediction';
+import { interpolateActor } from './prediction';
 
 const MIN_BUFFER_MS = 150;
 const MAX_BUFFER_MS = 300;
 const RESET_GAP_MS = 1000;
 const MAX_SNAPSHOTS = 32;
 
-export interface BufferedFrame { actors: Actor[]; projectiles: Projectile[]; time: number; }
+export interface BufferedFrame { self: Actor; actors: Actor[]; projectiles: Projectile[]; time: number; }
 
 /** Remote presentation follows packet arrival time, never the ping-adjusted combat clock. */
 export class SnapshotBuffer {
   private snapshots: Snapshot[] = [];
+  // Weak keys release indexes as soon as their buffered snapshot is discarded.
+  private indexes = new WeakMap<Snapshot, { actors: Map<string, Actor>; projectiles: Map<string, Projectile> }>();
   private lastReceived = 0;
   private lastSample: number | null = null;
   private playhead: number | null = null;
@@ -18,6 +20,7 @@ export class SnapshotBuffer {
 
   clear(): void {
     this.snapshots.length = 0;
+    this.indexes = new WeakMap();
     this.lastReceived = 0;
     this.lastSample = this.playhead = null;
     this.jitter = 0;
@@ -33,6 +36,7 @@ export class SnapshotBuffer {
       const variation = Math.abs((receivedAt - this.lastReceived) - (snapshot.time - previous.time));
       this.jitter += (Math.min(150, variation) - this.jitter) * 0.1;
     }
+    this.indexes.set(snapshot, { actors: new Map(snapshot.actors.map(actor => [actor.id, actor])), projectiles: new Map(snapshot.projectiles.map(projectile => [projectile.id, projectile])) });
     this.snapshots.push(snapshot);
     if (this.snapshots.length > MAX_SNAPSHOTS) this.snapshots.shift();
     this.lastReceived = receivedAt;
@@ -69,10 +73,17 @@ export class SnapshotBuffer {
       }
     }
     const alpha = before.time === after.time ? 1 : Math.max(0, Math.min(1, (this.playhead - before.time) / (after.time - before.time)));
-    const visible = new Set(latest.actors.map(actor => actor.id));
-    const actors = interpolateActors(before.actors, after.actors, alpha).filter(actor => visible.has(actor.id));
-    const liveProjectiles = new Set(latest.projectiles.map(projectile => projectile.id));
-    const oldProjectiles = new Map(before.projectiles.map(projectile => [projectile.id, projectile]));
+    // The playhead never rewinds: older history can no longer be sampled.
+    const obsolete = this.snapshots.indexOf(before);
+    if (obsolete > 0) this.snapshots.splice(0, obsolete);
+    const live = this.indexes.get(latest)!;
+    const previous = this.indexes.get(before)!;
+    const actors: Actor[] = [];
+    for (const actor of after.actors) {
+      if (live.actors.has(actor.id)) actors.push(interpolateActor(previous.actors.get(actor.id), actor, alpha));
+    }
+    const liveProjectiles = live.projectiles;
+    const oldProjectiles = previous.projectiles;
     const projectiles: Projectile[] = [];
     for (const projectile of after.projectiles) {
       if (!liveProjectiles.has(projectile.id)) continue;
@@ -85,6 +96,7 @@ export class SnapshotBuffer {
         y: old.y + (projectile.y - old.y) * alpha,
       } : { ...projectile });
     }
-    return { actors, projectiles, time: this.playhead };
+    const self = interpolateActor(before.self, after.self, alpha);
+    return { self, actors, projectiles, time: this.playhead };
   }
 }

@@ -2,11 +2,14 @@
 .player-details { position:absolute; top:154px; left:24px; width:224px; max-height:calc(var(--game-height, 100dvh) - 190px); display:flex; flex-direction:column; gap:8px; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; pointer-events:auto; scrollbar-width:thin; scrollbar-color:#809e78 #132820; border-radius:7px }
 .team-roster { padding:6px; flex:none }
 .team-roster h3 { margin:0 0 6px; font-size:10px; color:#b5cba9; text-transform:uppercase; letter-spacing:1px }
-.team-member { padding:4px 0; border-top:1px solid #95ad8824 }
+.team-member { display:block; width:100%; min-height:44px; padding:4px; border:0; border-top:1px solid #95ad8824; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; border-radius:4px }
+.team-member:disabled { cursor:default }
+.team-member:not(:disabled):hover, .team-member[aria-pressed=true] { background:#95ad8824 }
+.team-member:focus-visible { outline:2px solid #e3d395; outline-offset:-2px }
 .team-member-label { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px }
 .team-member-label strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .team-member-health { flex:none; font-size:10px; font-variant-numeric:tabular-nums; color:#d1ddc6 }
-.team-member-meter { height:4px; background:#152019; border-radius:3px; overflow:hidden; margin-top:3px }
+.team-member-meter { display:block; height:4px; background:#152019; border-radius:3px; overflow:hidden; margin-top:3px }
 .team-member-meter i { display:block; height:100%; background:linear-gradient(90deg,#4b8556,#94bc6b); transition:width .1s linear }
 .team-member.is-offline { opacity:.6 }
 .team-invite { position:absolute; top:164px; right:24px; width:300px; max-width:calc(100% - 24px); padding:12px; z-index:12; pointer-events:auto }
@@ -44,7 +47,7 @@
 .touch-layout .world-location { top:calc(var(--safe-top) + 86px); right:calc(var(--safe-right) + 12px); left:auto; width:140px; max-width:140px; transform:none; padding:5px 7px }
 .touch-layout .world-location div>span { font-size:9px }
 @media (orientation:landscape) {
-  .touch-layout.is-playing .toast-stack { top:calc(var(--safe-top) + 138px); width:clamp(156px, calc(100% - 440px), 340px) }
+  .touch-layout.is-playing .toast-stack { width:clamp(156px, calc(100% - 440px), 340px) }
 }
 @media (orientation:portrait) {
   .touch-layout .target-panel { left:auto; right:calc(var(--safe-right) + 12px); top:calc(var(--safe-top) + 8px); width:148px; max-height:132px }
@@ -57,6 +60,11 @@
 .touch-layout .menu-buttons .world-location { width:96px; max-width:96px; padding:5px 7px; height:44px }
 .touch-layout .menu-buttons .world-location strong { font-size:11px }
 .rift-app .minimap-panel { top:auto; right:24px; bottom:24px; left:auto; transform:none; width:280px; height:auto; padding:10px; max-height:calc(var(--game-height, 100dvh) - 156px); overflow:auto; pointer-events:auto; z-index:20 }
+.minimap-panel .map-actions { justify-content:flex-end; gap:6px; padding:0 0 8px; letter-spacing:0 }
+.map-actions .hud-menu-button { min-width:44px; min-height:44px; justify-content:center }
+.player-name-row { gap:6px; flex-wrap:wrap }
+.player-name-row strong { flex:1; min-width:32px }
+.player-name-row .player-ping { flex:none; margin-left:auto; letter-spacing:0; font-variant-numeric:tabular-nums }
 .map-heading { display:flex; flex-direction:column; gap:5px; padding:2px 2px 9px; text-align:left }
 .map-heading>span { font-size:9px; letter-spacing:1px; color:#a9bd94 }
 .map-heading>strong { font-size:13px; line-height:1.35; color:#e0e8d3; overflow-wrap:anywhere }
@@ -67,7 +75,7 @@
 .rift-app:not(.touch-layout) .team-invite { z-index:25 }
 .touch-layout.map-open .toast-stack, .touch-layout.map-open .arena-status { display:none }
 .touch-layout .map-dismiss { display:block; position:absolute; inset:0; z-index:19; background:#07171245; pointer-events:auto; touch-action:none }
-.touch-layout .minimap { width:min(100%, calc(var(--game-height, 100dvh) - 164px - var(--safe-top) - var(--safe-bottom))); margin-inline:auto }
+.touch-layout .minimap { width:min(100%, calc(var(--game-height, 100dvh) - 216px - var(--safe-top) - var(--safe-bottom))); margin-inline:auto }
 .touch-layout .minimap-panel { top:50%; left:50%; right:auto; bottom:auto; transform:translate(-50%, -50%); width:min(340px, calc(100% - 32px - var(--safe-left) - var(--safe-right)), calc(var(--game-height, 100dvh) - 110px - var(--safe-top) - var(--safe-bottom))); max-height:calc(var(--game-height, 100dvh) - 24px - var(--safe-top) - var(--safe-bottom)); padding:8px; touch-action:pan-y; overscroll-behavior:contain; z-index:22 }
 @media (orientation:landscape) and (max-width:700px) {
   .touch-layout .menu-buttons .world-location { width:44px; max-width:44px; padding:4px }
@@ -78,4 +86,23 @@
   .touch-layout .right-hud-column .target-panel, .touch-layout .right-hud-column .game-top-right { position:relative; inset:auto; width:100%; flex:none }
   .touch-layout .game-top-right, .touch-layout .menu-buttons { max-width:148px }
   .touch-layout .menu-buttons .world-location { width:48px; max-width:48px; padding:5px }
+}
+
+.player-name-row .player-network { display:inline-flex; align-items:center; gap:7px; margin-left:auto; letter-spacing:0; font-variant-numeric:tabular-nums; white-space:nowrap }
+.player-network .network-dot { width:4px; height:4px; border-radius:50%; background:#e36c63; flex:none }
+.rift-app .settings-toggle { width:44px; height:44px; min-width:44px; padding:0; justify-content:center }
+.settings-panel { position:absolute; top:112px; right:24px; width:220px; padding:10px; z-index:40; pointer-events:auto; max-height:calc(var(--game-height, 100dvh) - 140px); overflow:auto }
+.settings-actions { display:flex; flex-direction:column; gap:8px }
+.rift-app .settings-actions .hud-menu-button { width:100%; min-height:44px; justify-content:flex-start; font-size:12px }
+.rift-app .settings-actions .hud-menu-button span { display:inline }
+.touch-layout .settings-panel { top:calc(var(--safe-top) + 112px); right:calc(var(--safe-right) + 12px) }
+
+.rift-app .settings-toggle svg { width:18px; height:18px }
+
+.rift-app:not(.touch-layout) .game-top-right .menu-buttons { order:-1 }
+/* Anchor notifications to the canvas viewport, clear of the touch controls. */
+.touch-layout.is-playing .toast-stack { position:absolute; top:auto; bottom:calc(var(--safe-bottom) + 68px); left:50%; right:auto; transform:translateX(-50%); align-items:center }
+@media (orientation:portrait) {
+  .touch-layout.is-playing .toast-stack { bottom:calc(var(--safe-bottom) + 200px) }
+  .touch-layout .arena-status { bottom:calc(var(--safe-bottom) + 252px) }
 }

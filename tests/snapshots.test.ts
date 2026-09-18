@@ -22,6 +22,17 @@ function projectile(x: number): Projectile {
   return { id: 'shot', ownerId: 'remote', x, y: 0, vx: 200, vy: 0, radius: 6, damage: 10, expiresAt: 5000, color: '#fff' };
 }
 
+test('local contact body and remote bodies are sampled on the same timeline', () => {
+  const buffer = new SnapshotBuffer();
+  const first = snapshot(1000, 30), second = snapshot(1100, 50);
+  first.self.x = 0; second.self.x = 20;
+  buffer.push(first, 0); buffer.push(second, 100);
+  for (let now = 100; now <= 350; now += 10) {
+    const frame = buffer.sample(now)!;
+    assert.ok(Math.abs(frame.actors[0].x - frame.self.x - 30) < 1e-8);
+  }
+});
+
 test('10 Hz snapshots remain continuous at 60 Hz with 100 ms one-way delay and jitter', () => {
   const buffer = new SnapshotBuffer();
   const packets = Array.from({ length: 100 }, (_, i) => {
@@ -122,4 +133,23 @@ test('clear, long gaps and identity changes reset history; duplicate snapshots d
   buffer.clear(); assert.equal(buffer.sample(4200), null);
   buffer.push(snapshot(500, 15), 4300);
   assert.equal(buffer.sample(4300)!.actors[0].x, 15);
+});
+
+
+test('crowded snapshots release obsolete history and never retain departed actors in presentation', () => {
+  const buffer = new SnapshotBuffer();
+  let finalFrame;
+  for (let packet = 0; packet < 80; packet++) {
+    const data = snapshot(1000 + packet * 100);
+    data.actors = Array.from({ length: 2000 }, (_, i) => actor(`batch-${packet}-${i}`, i));
+    buffer.push(data, packet * 100);
+    for (let frame = 0; frame < 6; frame++) finalFrame = buffer.sample(packet * 100 + frame * 16);
+    assert.ok(finalFrame!.actors.every(actor => actor.id.startsWith(`batch-${packet}-`)), 'latest visibility wins over buffered history');
+  }
+  const retained = (buffer as unknown as { snapshots: Snapshot[] }).snapshots;
+  assert.ok(retained.length <= 5, `obsolete snapshots retained: ${retained.length}`);
+  const empty = snapshot(9100); empty.actors = [];
+  buffer.push(empty, 8100);
+  assert.deepEqual(buffer.sample(8150)!.actors, []);
+  buffer.clear(); assert.equal(buffer.sample(8200), null);
 });

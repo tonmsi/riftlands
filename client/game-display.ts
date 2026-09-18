@@ -10,8 +10,8 @@ export class GameDisplay {
   constructor(private root: HTMLElement, private interrupt: () => void, private requestExit: () => void, private notify: (message: string) => void) {
     this.fullscreenButton = document.createElement('button');
     this.fullscreenButton.type = 'button'; this.fullscreenButton.className = 'glass hud-menu-button fullscreen-toggle';
-    this.fullscreenButton.textContent = '⛶'; this.fullscreenButton.title = 'Schermo intero'; this.fullscreenButton.setAttribute('aria-label', 'Schermo intero');
-    root.querySelector('.menu-buttons')!.prepend(this.fullscreenButton);
+    this.fullscreenButton.textContent = '⛶ Schermo intero'; this.fullscreenButton.title = 'Schermo intero'; this.fullscreenButton.setAttribute('aria-label', 'Schermo intero');
+    root.querySelector('.settings-actions')!.prepend(this.fullscreenButton);
     this.fullscreenButton.addEventListener('click', () => void this.enterFullscreen());
     const resize = () => {
       root.style.setProperty('--game-height', `${window.visualViewport?.height ?? innerHeight}px`);

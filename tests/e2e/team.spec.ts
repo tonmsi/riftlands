@@ -76,9 +76,10 @@ test('team popup consent, live health, scrollable mobile roster and automatic di
     await expect(mobile.locator('.team-member')).toHaveCount(4);
     injured = true;
     await expect(mobile.locator('.team-member').filter({ hasText: names[0] }).locator('.team-member-health')).toHaveText(/^37 \/ \d+ PV$/);
-    await mobile.locator('[data-ref="social-toggle"]').click();
-    await mobile.locator('.social-section').filter({ has: mobile.getByRole('heading', { name: /^Nelle vicinanze/ }) }).locator('.social-row').filter({ hasText: names[0] }).locator('.social-person').click();
-    await mobile.locator('[data-ref="social-close"]').click();
+    const teammate = mobile.locator('.team-member').filter({ hasText: names[0] });
+    await teammate.click();
+    await expect(teammate).toHaveAttribute('aria-pressed', 'true');
+    await expect(mobile.locator('[data-ref="target-name"]')).toHaveText(names[0]);
     for (const size of [{ width: 568, height: 320 }, { width: 844, height: 390 }, { width: 360, height: 640 }]) {
       await mobile.setViewportSize(size);
       const player = (await mobile.locator('.player-panel').boundingBox())!;

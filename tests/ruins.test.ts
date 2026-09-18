@@ -31,6 +31,19 @@ function fixture(store?: AccountStore) {
 }
 function advance(sim: WorldSimulation, seconds: number) { for (let i = 0; i < Math.round(seconds * 10); i++) sim.step(0.1); }
 
+test('boss collision pushes keep its idle sprite and facing in observer snapshots', () => {
+  const { sim, a, boss, encounter } = fixture();
+  boss.spriteRow = 2;
+  encounter.windup = { bossId: boss.id, kind: 'slam', x: boss.x, y: boss.y, radius: 100, damage: 1, startedAt: sim.now, resolvesAt: sim.now + 1000 };
+  Object.assign(a, { x: boss.x + 5, y: boss.y });
+  const before = { x: boss.x, y: boss.y };
+  sim.step();
+  assert.ok(Math.hypot(boss.x - before.x, boss.y - before.y) > 0, 'physical collision still separates the bodies');
+  const observed = sim.snapshotFor(a.id)!.actors.find(actor => actor.id === boss.id)!;
+  assert.equal(observed.spriteMoving, false);
+  assert.equal(observed.spriteRow, 2);
+});
+
 test('boss death creates private physical loot; observer only sees corpse and cannot collect', () => {
   const { sim, a, b, aa, bb, boss, kill } = fixture();
   kill();

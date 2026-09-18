@@ -5,13 +5,14 @@ import { CLASSES, TICK_RATE } from '../shared/config';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import { GameConnection } from './net';
 import { predictMovement, reconcile } from './prediction';
-import { LocalMovementView, LocalPresentationDelay } from './motion';
+import { LocalMovementView, LocalPresentationDelay, contactPresentation } from './motion';
 import { SnapshotBuffer } from './snapshots';
 import { Renderer, drawMinimap } from './render';
 import { GameUI } from './ui';
 import { dungeonAt } from '../shared/dungeons';
 import { CONTROLS_STORAGE_KEY, defaultControls, GameControls, parseControls } from './controls';
 import { MobileControls } from './mobile-controls';
+import { GameAudio } from './audio';
 
 let playing = false;
 let latest: Snapshot | null = null;
@@ -20,6 +21,7 @@ let pending: InputCommand[] = [];
 let seq = 0;
 let selectedId: string | null = null;
 const controls = new GameControls(defaultControls());
+const audio = new GameAudio();
 try { controls.settings = parseControls(localStorage.getItem(CONTROLS_STORAGE_KEY)); } catch { /* Storage may be unavailable. */ }
 const snapshotBuffer = new SnapshotBuffer();
 let renderedActors: Actor[] = [];
@@ -60,7 +62,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   leave: () => {
     joinGeneration++;
     connection.leave(); playing = false; latest = null; predicted = null; selectedId = null; localPresentation.reset();
-    releaseControls(); snapshotBuffer.clear(); renderedActors = []; effects.clear();
+    releaseControls(); snapshotBuffer.clear(); renderedActors = []; effects.clear(); audio.setActive(false);
     ui.setPlaying(false); ui.setSelected(null);
   },
   social: (action, targetId) => { connection.send({ type: 'social', action, targetId }); },
@@ -74,10 +76,23 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   }
 });
 ui.setControls(controls.settings);
+const audioButton = document.createElement('button');
+audioButton.className = 'glass hud-menu-button';
+const refreshAudioButton = (): void => {
+  audioButton.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M11 4 6 8H2v8h4l5 4Z"/><path d="${audio.muted ? 'm16 9 6 6m0-6-6 6' : 'M15 8a6 6 0 0 1 0 8M18 4a11 11 0 0 1 0 16'}"/></svg><span>${audio.muted ? 'Audio: spento' : 'Audio: acceso'}</span>`;
+  audioButton.title = audio.muted ? 'Attiva suoni' : 'Disattiva suoni';
+  audioButton.setAttribute('aria-label', 'Disattiva suoni');
+  audioButton.setAttribute('aria-pressed', String(audio.muted));
+};
+refreshAudioButton();
+audioButton.addEventListener('click', () => { audio.setMuted(!audio.muted); refreshAudioButton(); });
+document.querySelector('.settings-actions')!.append(audioButton);
+window.addEventListener('pointerdown', audio.unlock);
+window.addEventListener('keydown', audio.unlock);
 
 const renderer = new Renderer(ui.canvas);
 const connection = new GameConnection({
-  reset: () => { releaseControls(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localPresentation.reset(); },
+  reset: () => { releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localPresentation.reset(); },
   status: (status, detail) => {
     ui.setConnection(status, detail);
     if (status === 'offline' || status === 'reconnecting') releaseControls();
@@ -98,6 +113,7 @@ const connection = new GameConnection({
       playing = true;
       releaseControls();
       effects.clear();
+      audio.reset();
       latest = null;
     } else if (message.type === 'room') {
       renderer.setSeed(message.room.seed, message.room.mode);
@@ -105,6 +121,7 @@ const connection = new GameConnection({
       selectedId = null;
       releaseControls();
       effects.clear();
+      audio.reset();
       lastMinimap = 0;
       ui.setSelected(null);
     } else if (message.type === 'snapshot') {
@@ -120,6 +137,9 @@ const connection = new GameConnection({
         const localEvent = event.actorId === message.self.id || event.targetId === message.self.id;
         effects.set(event.id, localEvent ? { ...event, at: event.at + LOCAL_PRESENTATION_DELAY_MS } : event);
       }
+      // Prune even while animation frames are suspended in a background tab.
+      for (const [id, effect] of effects) if (message.time > effect.at + effect.duration + 250) effects.delete(id);
+      while (effects.size > 1024) effects.delete(effects.keys().next().value!);
       ui.setSnapshot(message, connection.ping);
       const { id, name, xp, kills, deaths } = message.self;
       if (renderer.world.mode === 'world') saveProfile({ id, name, xp, kills, deaths, gold: message.gold ?? 0 });
@@ -173,7 +193,7 @@ window.addEventListener('keydown', event => {
 window.addEventListener('keyup', event => controls.release(event.code));
 window.addEventListener('blur', releaseControls);
 document.addEventListener('focusin', () => { if (isTyping()) releaseControls(); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) releaseControls(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { releaseControls(); audio.setActive(false); } });
 ui.canvas.addEventListener('pointermove', event => { if (playing && event.pointerType === 'mouse') controls.setPointer({ x: event.clientX, y: event.clientY }); });
 ui.canvas.addEventListener('pointerdown', event => {
   if (!playing || !connection.connected || ui.inputBlocked || ![0, 1, 2].includes(event.button)) return;
@@ -208,7 +228,7 @@ function inputTick(): void {
   const { dx, dy, aim, cast, autoAim } = isTyping() || ui.inputBlocked || predicted.hp <= 0
     ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined, autoAim: false })
     : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
-  const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, ...(cast ? { cast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
+  const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, analogMovement: matchMedia('(pointer: coarse)').matches || controls.settings.movement !== 'keyboard', ...(cast ? { cast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
   if (connection.send({ type: 'input', input })) {
     pending.push(input);
     const next = predictMovement(predicted, input, renderer.world, connection.serverTime());
@@ -238,15 +258,21 @@ mobileControls = new MobileControls(document.querySelector<HTMLElement>('.rift-a
 let lastFrame = performance.now();
 function frame(now: number): void {
   const delta = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
-  advanceInputs(performance.now());
+  if (document.hidden) { requestAnimationFrame(frame); return; }
+  advanceInputs(now);
   const time = connection.serverTime();
   const remoteFrame = snapshotBuffer.sample(performance.now());
   const actors = remoteFrame?.actors ?? [];
   renderedActors = actors;
   const immediateSelf = predicted ? localMovement.sample(predicted, inputAccumulator / (1000 / TICK_RATE), delta) : latest?.self ?? null;
-  const self = immediateSelf ? localPresentation.sample(immediateSelf, performance.now()) : null;
+  const localSelf = immediateSelf ? localPresentation.sample(immediateSelf, performance.now()) : null;
+  const self = localSelf && remoteFrame ? contactPresentation(localSelf, remoteFrame.self, actors) : localSelf;
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const projectiles = remoteFrame?.projectiles ?? [];
+  const audible = playing && connection.connected && !document.hidden && !!self;
+  audio.setActive(audible);
+  const frameEvents = [...effects.values()];
+  if (audible && self) audio.update(self, actors, frameEvents, latest?.bossWindups ?? [], time);
   renderer.render({
     arenaGate: latest?.arenaGate,
     goldDrops: latest?.goldDrops,
@@ -258,7 +284,7 @@ function frame(now: number): void {
     projectiles,
     pickups: latest?.pickups ?? [],
     traps: latest?.traps ?? [],
-    events: [...effects.values()],
+    events: frameEvents,
     selectedId,
     previewClass: ui.selectedClass,
     playing,

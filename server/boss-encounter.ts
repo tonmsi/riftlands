@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { spriteDirectionRow } from '../shared/sprite-direction';
 import type { Actor, Vec2 } from '../shared/types';
 import type { BossAttackDefinition, BossDefinition, BossLockState, BossPreparationState, BossState, BossWindup } from '../shared/bosses';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, segmentCircleHit } from '../shared/physics';
@@ -44,6 +45,7 @@ export class BossEncounter {
       radius: definition.radius, hp: dead ? 0 : definition.hp, maxHp: definition.hp, resource: 0, maxResource: 100, aim: Math.PI / 2,
       speed: definition.speed, level: definition.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0,
       deadUntil: dead ? this.state.respawnAt : 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 },
+      spriteRow: 0, spriteMoving: false,
     };
   }
 
@@ -100,6 +102,7 @@ export class BossEncounter {
 
   step(now: number, dt: number, players: Actor[], connected: (id: string) => boolean, world: World, damage: (target: Actor, amount: number) => void): void {
     const boss = this.boss;
+    boss.spriteMoving = false;
     if (this.state.drops.some(drop => drop.expiresAt <= now)) {
       this.state.drops = this.state.drops.filter(drop => drop.expiresAt > now);
       this.save();
@@ -204,7 +207,7 @@ export class BossEncounter {
     if (windup.kind === 'charge') {
       const target = { x: windup.targetX ?? windup.x, y: windup.targetY ?? windup.y };
       const dx = target.x - this.boss.x, dy = target.y - this.boss.y, start = { x: this.boss.x, y: this.boss.y };
-      Object.assign(this.boss, moveWithCollisions(this.boss, dx, dy, Math.hypot(dx, dy), world));
+      this.moveBody(moveWithCollisions(this.boss, dx, dy, Math.hypot(dx, dy), world));
       for (const player of players) if (segmentCircleHit(start, this.boss, player, windup.radius + player.radius) !== null) damage(player, windup.damage);
     } else {
       for (const player of players) {
@@ -235,7 +238,7 @@ export class BossEncounter {
     this.boss.aim = angle;
     const speed = this.boss.hp <= this.boss.maxHp * this.definition.enrageAt ? this.definition.enrageSpeed : 1;
     const before = { x: this.boss.x, y: this.boss.y };
-    Object.assign(this.boss, moveWithCollisions(this.boss, Math.cos(angle), Math.sin(angle), movementSpeed(this.boss, now) * speed * dt, world));
+    this.moveBody(moveWithCollisions(this.boss, Math.cos(angle), Math.sin(angle), movementSpeed(this.boss, now) * speed * dt, world));
     const moved = Math.hypot(this.boss.x - before.x, this.boss.y - before.y);
     const unstuck = this.definition.behavior.unstuck;
     if (!unstuck || moved > Math.max(0.6, movementSpeed(this.boss, now) * dt * 0.2)) {
@@ -275,8 +278,18 @@ export class BossEncounter {
     if (now >= this.unstuckUntil) return false;
     this.boss.aim = this.unstuckAngle;
     const distance = movementSpeed(this.boss, now) * dt;
-    Object.assign(this.boss, moveWithCollisions(this.boss, Math.cos(this.unstuckAngle), Math.sin(this.unstuckAngle), distance, world));
+    this.moveBody(moveWithCollisions(this.boss, Math.cos(this.unstuckAngle), Math.sin(this.unstuckAngle), distance, world));
     return true;
+  }
+
+  /** Only AI locomotion animates the sprite; collision pushes retain its idle facing. */
+  private moveBody(position: Vec2): void {
+    const dx = position.x - this.boss.x, dy = position.y - this.boss.y;
+    if (Math.hypot(dx, dy) > 0.02) {
+      this.boss.spriteMoving = true;
+      this.boss.spriteRow = spriteDirectionRow(dx, dy, this.boss.spriteRow ?? 0);
+    }
+    Object.assign(this.boss, position);
   }
 
   private cooldown(attack: BossAttackDefinition): number {

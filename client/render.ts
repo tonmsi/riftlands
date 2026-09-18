@@ -298,19 +298,24 @@ export class Renderer {
     if (frame.traps) {
       for (const trap of frame.traps) if (this.visible(trap)) this.drawTrap(trap, frame.time);
     }
-    const actors = frame.playing ? [...frame.actors] : this.previewActors(frame.previewClass, frame.time);
+    // Cull before sorting; distant teammates still reach the edge indicators.
+    const actors = frame.playing ? frame.actors.filter(actor => this.visible(actor)) : this.previewActors(frame.previewClass, frame.time);
     if (frame.self && frame.playing) {
       const index = actors.findIndex(actor => actor.id === frame.self!.id);
       if (index >= 0) actors[index] = frame.self;
       else actors.push(frame.self);
     }
+    const liveMotion = new Set(actors.map(actor => actor.id));
+    for (const id of this.classMotion.keys()) if (!liveMotion.has(id)) this.classMotion.delete(id);
+    const hitTargets = new Set<string>();
+    for (const event of events) if (event.kind === 'hit' && event.targetId && frame.time - event.at < 130) hitTargets.add(event.targetId);
     actors.sort((a, b) => a.y - b.y);
     for (const actor of actors) {
       if (!this.visible(actor)) continue;
       const self = actor.id === frame.self?.id || (!frame.playing && actor.id === 'preview');
       const allied = !!frame.self?.teamId && actor.teamId === frame.self.teamId;
-      this.drawActor(actor, frame.time, self, allied, actor.id === frame.selectedId, events,
-        self ? frame.moveDirection : undefined);
+      this.drawActor(actor, frame.time, self, allied, actor.id === frame.selectedId, hitTargets,
+        self ? frame.moveDirection : undefined, actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss');
     }
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);
@@ -680,7 +685,7 @@ export class Renderer {
   }
 
   private drawActor(actor: Actor, time: number, self: boolean, allied: boolean, selected: boolean,
-    events: GameEvent[], moveDirection?: Vec2 | null): void {
+    hitTargets: ReadonlySet<string>, moveDirection?: Vec2 | null, detailed = true): void {
     const { ctx } = this;
     const dead = actor.hp <= 0;
     const color = dead ? '#91968a' : CLASSES[actor.classId].color;
@@ -699,8 +704,10 @@ export class Renderer {
       ctx.stroke();
     }
     if (dead) ctx.globalAlpha = 0.45;
-    ctx.fillStyle = 'rgba(36, 48, 37, 0.28)';
-    ctx.beginPath(); ctx.ellipse(1, 13, r + 5, r * 0.56, 0, 0, TAU); ctx.fill();
+    if (detailed) {
+      ctx.fillStyle = 'rgba(36, 48, 37, 0.28)';
+      ctx.beginPath(); ctx.ellipse(1, 13, r + 5, r * 0.56, 0, 0, TAU); ctx.fill();
+    }
     if (self || allied || selected) {
       ctx.strokeStyle = self ? '#f1e7c2' : allied ? '#abd6c0' : '#f0b7a0';
       ctx.lineWidth = selected ? 2 : 1.5;
@@ -735,7 +742,7 @@ export class Renderer {
     }
     if (actor.kind === 'npc') this.drawNpc(actor, time, color);
     else this.drawPlayer(actor, color, dead, time, moveDirection);
-    if (!dead && events.some(event => event.kind === 'hit' && event.targetId === actor.id && time - event.at < 130)) {
+    if (!dead && hitTargets.has(actor.id)) {
       circle(ctx, 0, 0, r + 2); ctx.fillStyle = 'rgba(255,241,221,0.48)'; ctx.fill();
     }
     if (self && !dead) {
@@ -749,7 +756,7 @@ export class Renderer {
       ctx.fillStyle = 'rgba(24,32,24,0.75)'; ctx.fillRect(-barWidth / 2 - 1, barY - 1, barWidth + 2, 5);
       ctx.fillStyle = self || allied ? '#c7d59d' : actor.kind === 'npc' ? '#dab07f' : '#d49381';
       ctx.fillRect(-barWidth / 2, barY, barWidth * Math.max(0, Math.min(1, actor.hp / actor.maxHp)), 3);
-      if (actor.kind === 'player') {
+      if (actor.kind === 'player' && detailed) {
         ctx.textAlign = 'center'; ctx.font = `${self ? '600' : '500'} 10px Inter, system-ui, sans-serif`;
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(34,43,29,0.65)';
         const label = `${actor.name.slice(0, 20)}${self ? ' · tu' : ''}`;
@@ -776,12 +783,12 @@ export class Renderer {
       const dy = previous ? actor.y - previous.y : 0;
       const distanceMoved = Math.hypot(dx, dy);
       const controlledDirection = moveDirection !== undefined;
-      const moving = controlledDirection ? Math.hypot(moveDirection?.x ?? 0, moveDirection?.y ?? 0) > 0 : distanceMoved > 0.02;
-      let row = previous?.row ?? 0;
-      if (moving) {
+      const moving = actor.spriteMoving ?? (controlledDirection ? Math.hypot(moveDirection?.x ?? 0, moveDirection?.y ?? 0) > 0 : distanceMoved > 0.02);
+      let row = actor.spriteRow ?? previous?.row ?? 0;
+      if (moving && actor.spriteRow === undefined) {
         const directionX = controlledDirection ? moveDirection!.x : dx;
         const directionY = controlledDirection ? moveDirection!.y : dy;
-        row = playerSpriteDirectionRow(directionX, directionY, row, this.touchQuery.matches);
+        row = playerSpriteDirectionRow(directionX, directionY, row, controlledDirection ? this.touchQuery.matches : true);
       }
       const startedAt = moving && (!previous || !previous.moving || previous.row !== row || Math.hypot(actor.x - previous.x, actor.y - previous.y) > 20)
         ? time : previous?.startedAt ?? time;
@@ -868,9 +875,9 @@ export class Renderer {
       const previous = this.classMotion.get(actor.id);
       const dx = previous ? actor.x - previous.x : 0;
       const dy = previous ? actor.y - previous.y : 0;
-      const moving = Math.hypot(dx, dy) > 0.02;
-      let row = previous?.row ?? 0;
-      if (moving) row = spriteDirectionRow(dx, dy, row);
+      const moving = actor.spriteMoving ?? Math.hypot(dx, dy) > 0.02;
+      let row = actor.spriteRow ?? previous?.row ?? 0;
+      if (moving && actor.spriteRow === undefined) row = spriteDirectionRow(dx, dy, row);
       const startedAt = moving && (!previous || !previous.moving || previous.row !== row)
         ? time : previous?.startedAt ?? time;
       this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });

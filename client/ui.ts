@@ -158,16 +158,16 @@ export class GameUI {
         <footer class="lobby-footer"><div><span class="feature-icon">∞</span><span><b>Nessun confine</b><small>Biomi e incontri generati lungo il cammino</small></span></div><div><span class="feature-icon">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}</span><span><b>La forza di un’alleanza</b><small>Incontra giocatori, aggiungi amici, crea un team</small></span></div><div><span class="feature-icon">${icon('<path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/>')}</span><span><b>Ogni scelta conta</b><small>Combatti, esplora e padroneggia la tua classe</small></span></div><span class="footer-version">PROTOTIPO GIOCABILE<br>AUTENTICAZIONE SICURA</span></footer>
       </div>
       <div class="game-hud" hidden>
-        <section class="player-panel glass"><div class="player-portrait" data-ref="portrait"></div><div class="player-vitals"><div class="player-name-row"><strong data-ref="player-name"></strong><span data-ref="player-level">LV 1</span></div><div class="vital-row"><span>HP</span><div class="meter hp-meter"><i data-ref="hp-fill"></i><span data-ref="hp-label"></span></div></div><div class="vital-row"><span data-ref="resource-name">MP</span><div class="meter resource-meter"><i data-ref="resource-fill"></i><span data-ref="resource-label"></span></div></div><div class="xp-meter"><i data-ref="xp-fill"></i></div></div></section>
-        <div class="world-location glass"><span class="location-dot"></span><div><strong data-ref="biome">Terre di Soglia</strong><span data-ref="coords">0 · 0</span></div><span class="location-decoration">✦</span></div>
-        <div class="game-top-right"><div class="status-row"><div class="gold-counter glass" title="Gold raccolti">${icon('<circle cx="12" cy="12" r="8"/><path d="M14.8 8.7a4.5 4.5 0 1 0 0 6.6M9 10h5M9 14h5"/>')}<b data-ref="hud-gold">0</b></div><div class="server-status glass"><span class="save-dot"></span><b data-ref="online">1</b> online<span class="status-separator"></span><span data-ref="ping">— ms</span></div></div><div class="menu-buttons"><button class="glass hud-menu-button" data-ref="social-toggle" aria-expanded="false">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}<span>Compagni</span><i class="notification-dot" data-ref="social-dot" hidden></i></button><button class="glass hud-menu-button" data-ref="leave" title="Torna al menu">${icon('<path d="M10 3H3v18h7M8 12h14M17 7l5 5-5 5"/>')}<span>Esci</span></button></div></div>
-        <div class="effect-list" data-ref="effects"></div>
+        <section class="player-panel glass"><div class="player-portrait" data-ref="portrait"></div><div class="player-vitals"><div class="player-name-row"><strong data-ref="player-name"></strong><span data-ref="player-level">LV 1</span><span class="player-network"><span data-ref="online" title="Giocatori online">1</span><i class="network-dot" aria-hidden="true"></i><span data-ref="ping">— ms</span></span></div><div class="vital-row"><span>HP</span><div class="meter hp-meter"><i data-ref="hp-fill"></i><span data-ref="hp-label"></span></div></div><div class="vital-row"><span data-ref="resource-name">MP</span><div class="meter resource-meter"><i data-ref="resource-fill"></i><span data-ref="resource-label"></span></div></div><div class="xp-meter"><i data-ref="xp-fill"></i></div></div></section>
+        <div class="world-location glass"><span class="location-dot"></span><div><strong data-ref="biome">Terre di Soglia</strong></div><span class="location-decoration">✦</span></div>
+        <div class="game-top-right"><div class="status-row"><div class="gold-counter glass" title="Gold raccolti">${icon('<circle cx="12" cy="12" r="8"/><path d="M14.8 8.7a4.5 4.5 0 1 0 0 6.6M9 10h5M9 14h5"/>')}<b data-ref="hud-gold">0</b></div></div><div class="menu-buttons"><button type="button" class="glass hud-menu-button settings-toggle" data-ref="settings-toggle" aria-label="Impostazioni" title="Impostazioni" aria-expanded="false" aria-controls="game-settings">${icon('<path d="M4 7h16M4 17h16M8 4v6M16 14v6"/>')}</button><button class="glass hud-menu-button" data-ref="social-toggle" aria-expanded="false">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}<span>Compagni</span><i class="notification-dot" data-ref="social-dot" hidden></i></button></div></div>
+        <aside id="game-settings" class="settings-panel glass" data-ref="settings-panel" aria-label="Impostazioni" hidden><div class="settings-actions"><button class="glass hud-menu-button" data-ref="leave" title="Torna al menu" aria-label="Torna al menu">${icon('<path d="M10 3H3v18h7M8 12h14M17 7l5 5-5 5"/>')}<span>Esci</span></button></div></aside><div class="effect-list" data-ref="effects"></div>
         <aside class="team-invite glass" data-ref="team-invite" aria-label="Invito al team" hidden></aside>
         <div class="player-details" data-ref="player-details" role="region" aria-label="Compagni del team" tabindex="0"><section class="team-roster glass" data-ref="team-roster" aria-label="Membri del team" hidden></section></div>
         <section class="target-panel glass" data-ref="target" hidden><div class="target-heading"><span data-ref="target-type">GIOCATORE</span><button data-ref="target-close" aria-label="Deseleziona bersaglio">×</button></div><strong data-ref="target-name"></strong><small data-ref="target-detail"></small><div class="meter hp-meter target-health"><i data-ref="target-fill"></i></div><div class="target-actions" data-ref="target-actions"><button data-ref="target-friend">+ Amico</button><button data-ref="target-team">+ Team</button></div></section>
         <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><div><span class="eyebrow">NON VIAGGIARE DA SOLO</span><h2>I tuoi compagni</h2></div><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
         <div class="map-dismiss" data-ref="map-dismiss" hidden aria-hidden="true"></div>
-        <div class="minimap-panel glass"><header class="map-heading"><span>LE TERRE DI SOGLIA</span><strong data-ref="map-location">Terre di Soglia</strong></header><canvas class="minimap" width="260" height="260" aria-label="Mappa locale"></canvas><div><span>MAPPA LOCALE</span><span>N ↑</span></div><div class="map-network"><span>PING</span><span data-ref="map-ping">— ms</span></div></div>
+        <div class="minimap-panel glass"><header class="map-heading"><span>LE TERRE DI SOGLIA</span><strong data-ref="map-location">Terre di Soglia</strong></header><canvas class="minimap" width="260" height="260" aria-label="Mappa locale"></canvas><div><span>MAPPA LOCALE</span><span>N ↑</span></div></div>
         <div class="combat-hud"><div class="combat-instruction"><span>WASD / FRECCE <b>muovi</b></span><span>SINISTRO PREMUTO <b>mira</b></span><span>CLIC <b>seleziona</b></span></div><div class="ability-bar glass" data-ref="ability-bar"></div><div class="combat-caption"><span data-ref="combat-class"></span><span>·</span><span>SPAZIO / CLIC DESTRO per attaccare</span></div></div>
         <div class="world-tip glass"><span>✧</span><span>I cespugli ti nascondono.<br><b>Attaccare rivela la tua posizione.</b></span></div>
         <div class="connection-banner" data-ref="connection-banner" hidden>Riconnessione al mondo…</div>
@@ -180,9 +180,6 @@ export class GameUI {
     rightColumn.className = 'right-hud-column';
     rightColumn.append(this.ref('target'), root.querySelector('.game-top-right')!);
     root.querySelector('.game-hud')!.append(rightColumn);
-    const mapCoordinates = textElement('small', 'map-coordinates', '');
-    this.refs.set('map-coordinates', mapCoordinates);
-    root.querySelector('.map-heading')!.append(mapCoordinates);
     const mapStatus = textElement('small', 'map-status', '');
     this.refs.set('map-status', mapStatus);
     root.querySelector('.map-heading')!.append(mapStatus);
@@ -264,6 +261,14 @@ export class GameUI {
     }));
 
     this.ref('leave').addEventListener('click', () => { if (this.display.touch) this.confirmLeave(); else this.actions.leave(); });
+    this.ref('settings-toggle').addEventListener('click', () => this.toggleSettings());
+    document.addEventListener('pointerdown', event => {
+      const target = event.target as Node;
+      if (!this.ref('settings-panel').contains(target) && !this.ref('settings-toggle').contains(target)) this.toggleSettings(false);
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !this.ref('settings-panel').hidden) { this.toggleSettings(false); this.ref('settings-toggle').focus(); }
+    });
     this.ref('social-toggle').addEventListener('click', () => this.toggleSocial());
     this.ref('social-close').addEventListener('click', () => this.toggleSocial(false));
     this.ref('target-close').addEventListener('click', () => this.actions.select(null));
@@ -280,7 +285,12 @@ export class GameUI {
 
   get selectedClass(): ClassId { return this.currentClass; }
   get minimapVisible(): boolean { return this.mapVisible; }
-  get inputBlocked(): boolean { return this.exitDialog.open || !this.ref('social-panel').hidden || (this.display.touch && this.mapVisible); }
+  get inputBlocked(): boolean { return !this.ref('settings-panel').hidden || this.exitDialog.open || !this.ref('social-panel').hidden || (this.display.touch && this.mapVisible); }
+  private toggleSettings(open = this.ref('settings-panel').hidden): void {
+    this.ref('settings-panel').hidden = !open;
+    this.ref('settings-toggle').setAttribute('aria-expanded', String(open));
+    if (open) this.actions.releaseControls?.();
+  }
   private setMapVisible(visible: boolean): void {
     this.mapVisible = visible;
     if (visible && this.display.touch) this.actions.releaseControls?.();
@@ -380,6 +390,7 @@ export class GameUI {
 
   setPlaying(playing: boolean): void {
     this.isPlaying = playing;
+    this.toggleSettings(false);
     this.display.setPlaying(playing);
     if (!playing) this.exitDialog.close();
     if (playing) this.options.close();
@@ -425,10 +436,6 @@ export class GameUI {
     this.fill('resource-fill', player.resource / player.maxResource);
     this.write('resource-label', `${Math.floor(player.resource)} / ${player.maxResource}`);
     this.fill('xp-fill', (player.xp % 100) / 100);
-    const coordinates = `${Math.round(player.x)} · ${Math.round(player.y)}`;
-    this.write('coords', coordinates);
-    this.ref('coords').title = coordinates;
-    this.write('map-coordinates', coordinates);
     this.write('map-status', snapshot.sanctuary === 'safe' ? 'ZONA SICURA · NO PVP' : snapshot.sanctuary === 'combat' ? `VULNERABILE · ${Math.max(0, Math.ceil(((player.pvpUntil ?? 0) - snapshot.time) / 1000))}s` : snapshot.sanctuary === 'outside' ? 'PVP ATTIVO' : 'ISTANZA PVP');
     if (snapshot.sanctuary && this.lastSanctuary && snapshot.sanctuary !== this.lastSanctuary) {
       this.toast(snapshot.sanctuary === 'safe' ? 'Zona sicura: PvP disattivato.' : snapshot.sanctuary === 'combat' ? 'Sei ancora in combattimento: resti vulnerabile.' : 'Fuori dall’avamposto: PvP attivo.', 'info');
@@ -463,9 +470,7 @@ export class GameUI {
     this.arenaStatus.hidden = !arenaText;
     this.arenaStatus.dataset.phase = bossPreparation ? 'boss-countdown' : gate?.phase ?? (snapshot.matchEndsAt ? 'match' : 'idle');
     this.write('ping', Number.isFinite(ping) ? `${Math.round(ping)} ms` : '— ms');
-    this.ref('ping').classList.toggle('high-ping', ping > 180);
-    this.write('map-ping', Number.isFinite(ping) ? `${Math.round(ping)} ms` : '— ms');
-    this.ref('map-ping').classList.toggle('high-ping', ping > 180);
+
     const remaining = Math.max(0, player.deadUntil - snapshot.time);
     this.ref('death').hidden = remaining <= 0;
     this.write('death-count', String(Math.ceil(remaining / 1000)));
@@ -539,24 +544,31 @@ export class GameUI {
       this.rosterKey = key;
       roster.replaceChildren(textElement('h3', '', 'Il tuo team'));
       for (const member of members) {
-        const row = textElement('div', 'team-member', '');
+        const row = textElement('button', 'team-member', '') as HTMLButtonElement;
+        row.type = 'button';
         row.dataset.memberId = member.id;
-        const label = textElement('div', 'team-member-label', '');
+        row.addEventListener('click', () => {
+          if (this.latest?.actors.some(actor => actor.id === member.id)) this.actions.select(member.id);
+        });
+        const label = textElement('span', 'team-member-label', '');
         label.append(textElement('strong', '', member.name), textElement('span', 'team-member-health', ''));
-        const meter = textElement('div', 'team-member-meter', '');
+        const meter = textElement('span', 'team-member-meter', '');
         meter.setAttribute('role', 'meter'); meter.setAttribute('aria-label', `Vita di ${member.name}`);
         meter.setAttribute('aria-valuemin', '0');
         meter.append(document.createElement('i'));
         row.append(label, meter); roster.append(row);
       }
     }
-    for (const row of roster.querySelectorAll<HTMLElement>('.team-member')) {
+    for (const row of roster.querySelectorAll<HTMLButtonElement>('.team-member')) {
       const member = members.find(member => member.id === row.dataset.memberId)!;
       const actor = this.latest?.actors.find(actor => actor.id === member.id);
       const hp = actor?.hp ?? member.hp;
       const maxHp = actor?.maxHp ?? member.maxHp;
       const available = member.online && hp !== undefined && maxHp !== undefined && maxHp > 0;
       row.classList.toggle('is-offline', !member.online);
+      row.disabled = !member.online || !actor;
+      row.title = row.disabled ? `${member.name}: ${member.online ? 'fuori portata o in altra area' : 'offline'}` : `Seleziona ${member.name}`;
+      row.setAttribute('aria-pressed', String(this.selected?.id === member.id));
       row.querySelector('.team-member-health')!.textContent = !member.online ? 'Offline' : available ? `${Math.ceil(hp!)} / ${Math.ceil(maxHp!)} PV` : 'In altra area';
       const meter = row.querySelector<HTMLElement>('.team-member-meter')!;
       meter.hidden = !available;
@@ -570,6 +582,9 @@ export class GameUI {
   setSelected(actor: Actor | null): void {
     if (actor?.id === this.latest?.self.id) actor = null;
     this.selected = actor;
+    for (const row of this.ref('team-roster').querySelectorAll<HTMLElement>('.team-member')) {
+      row.setAttribute('aria-pressed', String(row.dataset.memberId === actor?.id));
+    }
     this.ref('target').hidden = !actor;
     if (!actor) return;
     this.write('target-type', actor.kind === 'npc' ? 'CREATURA DEL MONDO' : 'VIAGGIATORE');

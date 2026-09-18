@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, levelFromXp } from '../shared/config';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
+import { playerSpriteDirectionRow } from '../shared/sprite-direction';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2, RoomMode } from '../shared/types';
 import { World, chunkCoords, chunkKey, isSolid } from '../shared/world';
 import { OUTPOST, inOutpost } from '../shared/outpost';
@@ -142,6 +143,7 @@ export class WorldSimulation {
       radius: PLAYER_RADIUS, hp: validSaved ? Math.max(0, Math.min(spec.maxHp, spec.maxHp * saved.hp / saved.maxHp)) : spec.maxHp,
       maxHp: spec.maxHp, resource: validSaved ? (sameClass ? Math.min(spec.maxResource, saved.resource) : 0) : (spec.resource === 'mana' ? spec.maxResource : 0),
       maxResource: spec.maxResource, aim: 0, speed: spec.speed, level: levelFromXp(account.xp), xp: account.xp,
+      spriteRow: 0, spriteMoving: false,
       kills: account.kills, deaths: account.deaths, teamId: (this.teamFor(account.id)?.members.size ?? 0) > 1 ? this.teamFor(account.id)!.id : null,
       hidden: false, revealedUntil: 0, deadUntil: validSaved ? saved.deadUntil : 0,
       spawnProtectedUntil: validSaved ? saved.spawnProtectedUntil : this.now + 5000,
@@ -195,6 +197,7 @@ export class WorldSimulation {
   enqueueInput(id: string, input: InputCommand): boolean {
     const connection = this.connections.get(id);
     if (input.autoAim !== undefined && typeof input.autoAim !== 'boolean') return false;
+    if (input.analogMovement !== undefined && typeof input.analogMovement !== 'boolean') return false;
     if (input.targetId !== undefined && (typeof input.targetId !== 'string' || input.targetId.length > 80 || !input.targetId.length)) return false;
     if (!connection?.connected || !Number.isSafeInteger(input.seq) || input.seq <= connection.highestSeq || input.seq > connection.highestSeq + 120 || ![input.dx, input.dy, input.aim].every(Number.isFinite) || Math.abs(input.dx) > 1 || Math.abs(input.dy) > 1 || Math.abs(input.aim) > 1e6 || (input.cast !== undefined && !['basic', 'q', 'e', 'r'].includes(input.cast))) return false;
     connection.highestSeq = input.seq;
@@ -220,6 +223,7 @@ export class WorldSimulation {
       }
       actor.effects = actor.effects.filter(effect => effect.until > this.now);
       const input = connection.inputs.shift();
+      actor.spriteMoving = actor.hp > 0 && !!input && Math.hypot(input.dx, input.dy) > 0;
       if (input) connection.ack = input.seq;
       if (actor.hp <= 0) {
         if (this.mode !== 'arena' && this.now >= actor.deadUntil) this.respawn(actor);
@@ -230,6 +234,7 @@ export class WorldSimulation {
       if (this.now - connection.combatAt > 10_000) actor.hp = Math.min(actor.maxHp, actor.hp + 2 * dt);
       if (input) {
         actor.aim = input.aim;
+        actor.spriteRow = playerSpriteDirectionRow(input.dx, input.dy, actor.spriteRow ?? 0, input.analogMovement === true);
         if (input.cast) this.pendingCasts.set(id, input);
         const magnitude = Math.hypot(input.dx, input.dy);
         if (magnitude > 0) Object.assign(actor, moveWithCollisions(actor, input.dx / Math.max(1, magnitude), input.dy / Math.max(1, magnitude), movementSpeed(actor, this.now) * terrainSpeed(actor, this.world) * dt, this.world));

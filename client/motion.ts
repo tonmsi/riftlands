@@ -1,5 +1,21 @@
 import type { Actor, Vec2 } from '../shared/types';
 
+/** Near contact, show both bodies on the same authoritative timeline. Never move remote actors locally. */
+export function contactPresentation(local: Actor, authoritative: Actor, actors: Actor[]): Actor {
+  if (local.id !== authoritative.id || local.hp <= 0 || authoritative.hp <= 0
+    || local.deadUntil !== authoritative.deadUntil || Math.hypot(local.x - authoritative.x, local.y - authoritative.y) > 250) return local;
+  let gap = Infinity;
+  for (const actor of actors) {
+    if (actor.id === local.id || actor.hp <= 0) continue;
+    gap = Math.min(gap, Math.hypot(local.x - actor.x, local.y - actor.y) - local.radius - actor.radius,
+      Math.hypot(authoritative.x - actor.x, authoritative.y - actor.y) - authoritative.radius - actor.radius);
+  }
+  // Ease into the shared timeline before circles touch; restore prediction away from actors.
+  const t = Math.max(0, Math.min(1, (100 - gap) / 76));
+  const weight = t * t * (3 - 2 * t);
+  return { ...local, x: local.x + (authoritative.x - local.x) * weight, y: local.y + (authoritative.y - local.y) * weight };
+}
+
 /** Presentation only: authoritative/predicted states never receive smoothed coordinates. */
 export class LocalMovementView {
   private previous: Vec2 | null = null;

@@ -13,7 +13,7 @@ html.game-active, .game-active body { overflow:hidden; overscroll-behavior:none;
 .mobile-joystick { display:none }
 .exit-confirmation { max-width:440px }
 .is-playing .minimap-panel { height:auto }
-.minimap-panel .map-network { display:none }
+.minimap-panel .map-network { display:flex; font-size:10px; letter-spacing:0; font-variant-numeric:tabular-nums }
 .touch-layout .minimap-panel .map-network { display:flex; font-size:10px; font-variant-numeric:tabular-nums }
 
 /* A touch layout is a different arrangement, never a scaled-down desktop HUD. */
