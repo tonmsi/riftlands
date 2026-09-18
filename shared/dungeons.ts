@@ -30,6 +30,8 @@ export interface DungeonEncounterDefinition {
   preparationMs: number;
   /** Invisible, manually authored activation tiles, separate from player spawns. */
   activationPoints?: readonly Vec2[];
+  /** World tile coordinates accessible to non-participants while this encounter is locked. */
+  visitorTiles?: readonly Vec2[];
   regions: {
     /** Bounds within which authored entry points can activate the encounter. */
     trigger: DungeonRegion;
@@ -207,6 +209,25 @@ export function atDungeonActivation(definition: DungeonDefinition, position: Vec
     && (definition.encounter.activationPoints ?? []).some(point => Math.hypot(position.x - point.x, position.y - point.y) <= TILE_SIZE / 2 + radius);
 }
 
+const visitorIndexes = new WeakMap<object, Set<string>>();
+/** Test the player's whole circle against the painted union, preserving shared edges between tiles. */
+export function insideDungeonVisitorArea(definition: DungeonDefinition, position: Vec2, radius = 0): boolean {
+  const tiles = definition.encounter.visitorTiles;
+  if (!tiles?.length) return false;
+  let index = visitorIndexes.get(tiles);
+  if (!index) { index = new Set(tiles.map(p=>`${p.x},${p.y}`)); visitorIndexes.set(tiles,index); }
+  if (!index.has(`${Math.floor(position.x/TILE_SIZE)},${Math.floor(position.y/TILE_SIZE)}`)) return false;
+  for(let ty=Math.floor((position.y-radius)/TILE_SIZE);ty<=Math.floor((position.y+radius)/TILE_SIZE);ty++)
+    for(let tx=Math.floor((position.x-radius)/TILE_SIZE);tx<=Math.floor((position.x+radius)/TILE_SIZE);tx++) {
+      if (index.has(`${tx},${ty}`)) continue;
+      const x=Math.max(tx*TILE_SIZE,Math.min((tx+1)*TILE_SIZE,position.x));
+      const y=Math.max(ty*TILE_SIZE,Math.min((ty+1)*TILE_SIZE,position.y));
+      if (Math.hypot(position.x-x,position.y-y)<radius
+        && insideDungeonRegion(definition.encounter.regions.ejectIntruders,dungeonTileCenter({x:tx,y:ty}))) return false;
+    }
+  return true;
+}
+
 function approachProgress(definition: DungeonDefinition, position: Vec2): number {
   const approach = definition.approach;
   const dx = approach.to.x - approach.from.x, dy = approach.to.y - approach.from.y;
@@ -324,6 +345,11 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
     || activationPoints.some(point => !finitePoint(point)
       || !insideDungeonRegion(definition.encounter.regions.trigger, point)
       || !walkable(dungeonTile(definition, Math.floor(point.x / TILE_SIZE), Math.floor(point.y / TILE_SIZE))))) fail('punti di attivazione non validi.');
+  const visitorTiles = definition.encounter.visitorTiles ?? [], visitorKeys = new Set<string>();
+  if (!Array.isArray(visitorTiles) || visitorTiles.length > (bounds.maxTx-bounds.minTx+1)*(bounds.maxTy-bounds.minTy+1)
+    || visitorTiles.some(p => !p || !Number.isInteger(p.x) || !Number.isInteger(p.y) || !insideRect(p.x,p.y,bounds)
+      || !insideDungeonRegion(definition.encounter.regions.combat,dungeonTileCenter(p))
+      || visitorKeys.has(tileKey(p)) || !visitorKeys.add(tileKey(p)))) fail('zona visitatori non valida.');
   const passageIds = new Set<string>(), passageTiles = new Map<string, string>(), stoneTiles = new Set<string>();
   const flames: DungeonFlameBarrier[] = [];
   for (const passage of definition.passages) {

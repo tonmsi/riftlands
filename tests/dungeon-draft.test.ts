@@ -81,3 +81,19 @@ test('more than five activation points and per-boss aggro survive draft and runt
     assert.throws(()=>parseDungeonDraft(JSON.stringify(draft)));
   }
 });
+
+test('painted visitor areas preserve the terrain and roundtrip through runtime and draft, with bounded tile coordinates', () => {
+  const draft=ready(), before=[...draft.tiles];
+  draft.encounters[0].visitorTiles=[{x:2,y:3},{x:3,y:3},{x:2,y:4}];
+  const compiled=compileDungeonDraft(draft);
+  assert.deepEqual(draft.tiles,before);
+  assert.deepEqual(compiled.definition.encounter.visitorTiles,draft.encounters[0].visitorTiles.map(p=>({x:p.x+draft.origin.x,y:p.y+draft.origin.y})));
+  const imported=parseDungeonFile(JSON.stringify(compiled)).draft;
+  assert.deepEqual(imported.encounters[0].visitorTiles,draft.encounters[0].visitorTiles);
+  draft.encounters[0].visitorTiles.push({x:2,y:3});
+  assert.throws(()=>parseDungeonDraft(JSON.stringify(draft)));
+  draft.encounters[0].visitorTiles=[{x:10000,y:3}];
+  assert.throws(()=>parseDungeonDraft(JSON.stringify(draft)));
+  draft.encounters[0].visitorTiles=[{x:1,y:3}]; draft.encounters[0].x=2; draft.encounters[0].width-=2;
+  assert.ok(validateDungeonDraft(draft).some(issue=>issue.includes('zona visitatori')));
+});

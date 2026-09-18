@@ -4,7 +4,7 @@ import { newDungeonDraft, compileDungeonDraft, parseDungeonDraft, validateDungeo
 import { buildDungeonBundle } from '../shared/dungeon-install';
 import { BOSS_BY_ID } from '../shared/bosses';
 import { STONE_WARDEN, MAZE_STALKER } from '../shared/boss-templates';
-import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonFlames, type DungeonDefinition } from '../shared/dungeons';
+import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonFlames, insideDungeonRegion, insideDungeonVisitorArea, type DungeonDefinition } from '../shared/dungeons';
 import { WorldSimulation } from '../server/simulation';
 import type { Actor } from '../shared/types';
 function ready(separate = false) {
@@ -137,6 +137,35 @@ test('damaging a dormant boss engages it without requiring proximity', () => {
         assert.equal(boss.targetId,undefined);
         boss.recordDamage(f.player.id,1); f.sim.step();
         assert.equal(boss.targetId,f.player.id);
+    } finally {f.cleanup();}
+});
+
+test('enemies, late teammates and eliminated players can visit painted tiles but cannot join or damage the boss', () => {
+    const f=fixture();
+    try {
+        const encounter=f.encounters[0], bounds=encounter.dungeon.layout.bounds;
+        const tile={x:bounds.minTx+10,y:bounds.minTy+15};
+        encounter.dungeon.encounter.visitorTiles=[tile,{x:tile.x+1,y:tile.y}];
+        const blue={x:(tile.x+.5)*48,y:(tile.y+.5)*48};
+        f.player.teamId='test-party';
+        for(const [id,teamId] of [['enemy',null],['late','test-party'],['eliminated','test-party']] as const) {
+            const visitor=f.sim.addPlayer({id,name:id,nameLower:id,salt:'',passwordHash:'',xp:0,kills:0,deaths:0,friends:[],requests:[],lastSeen:0},'warrior');
+            Object.assign(visitor,blue,{teamId,spawnProtectedUntil:0});
+            if(id==='eliminated') {encounter.participantIds.add(id);encounter.eliminate(id);}
+            f.sim.step();
+            assert.deepEqual({x:visitor.x,y:visitor.y},blue);
+            assert.equal(encounter.isActiveParticipant(id),false);
+            assert.equal(encounter.canDamage(visitor),false);
+            assert.notEqual(encounter.targetId,id);
+            // A body may span the shared edge between adjacent blue tiles.
+            const seam={x:(tile.x+1)*48,y:blue.y};
+            assert.equal(insideDungeonVisitorArea(encounter.dungeon,seam,visitor.radius),true);
+            assert.equal(insideDungeonVisitorArea(encounter.dungeon,{x:blue.x,y:tile.y*48+5},visitor.radius),false);
+            visitor.y-=96; f.sim.step();
+            assert.equal(insideDungeonRegion(encounter.dungeon.encounter.regions.combat,visitor),false);
+            assert.ok(Math.hypot(visitor.x-encounter.dungeon.encounter.ejectTo.x,visitor.y-encounter.dungeon.encounter.ejectTo.y)<100);
+            assert.equal(encounter.lockState().locked,true);
+        }
     } finally {f.cleanup();}
 });
 

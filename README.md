@@ -121,7 +121,7 @@ Per aggiungere un dungeon:
 2. scegliere la posizione sulla mappa del mondo e premere **Installa bozza** a server di gioco fermo;
 3. ricompilare con `npm run build` e riavviare. Per le modifiche usare **Apri nel maker** e **Aggiorna bozza installata**; per la rimozione usare **Elimina dungeon selezionato**.
 
-La [guida del maker](docs/dungeon-maker.md) descrive anche i comandi CLI, i backup e il reset dello stato dei boss durante gli aggiornamenti. I test usano piccole mappe sintetiche create con il maker. I punti di attivazione e l’aggro del boss avviano subito il solo o 5 secondi di preparazione per i gruppi. Gli spawn gruppo sono separati: alla partenza ricevono i partecipanti. Ogni boss ha un raggio di aggro configurabile nel maker e può restare inattivo anche con le fiamme accese.
+La [guida del maker](docs/dungeon-maker.md) descrive anche i comandi CLI, i backup e il reset dello stato dei boss durante gli aggiornamenti. I test usano piccole mappe sintetiche create con il maker. I punti di attivazione e l’aggro del boss avviano subito il solo o 5 secondi di preparazione per i gruppi. Gli spawn gruppo sono separati: alla partenza ricevono i partecipanti. Ogni boss ha un raggio di aggro configurabile nel maker e può restare inattivo anche con le fiamme accese. Il pennello blu Zona visitatori consente accesso limitato ai non partecipanti durante lo scontro. Lo Studio gestisce anche la cancellazione dei backup per dungeon e delle copie storiche condivise.
 
 Combattimento, team, aggro, lock, eliminazione, respawn, ricompense, terreno, esclusione degli spawn e indicatori non vanno duplicati per dungeon.
 

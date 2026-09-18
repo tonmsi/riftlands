@@ -7,11 +7,13 @@ import { chromium, expect } from '@playwright/test';
 import { startDungeonStudio } from '../../scripts/dungeon-studio-server';
 import { acquireDataLease } from '../../server/data-lease';
 import { studioDraft } from '../fixtures/studio-draft';
+import { listDungeonBackups } from '../../scripts/dungeon-backups';
 
 test('local Studio manages authored dungeons in the browser and refuses unauthorized or concurrent writes', { timeout: 60_000 }, async () => {
     const directory = await mkdtemp(join(tmpdir(), 'riftlands-studio-'));
     const options = { root: resolve('.'), port: 0, catalogPath: join(directory, 'catalog.json'), dataPath: join(directory, 'accounts.json') };
     await writeFile(options.catalogPath, '[]');
+    await writeFile(`${options.catalogPath}.old.bak`,'[]');
     await writeFile(options.dataPath, JSON.stringify({ version: 2, accounts: [{ id: 'preserve', gold: 50 }], bosses: {} }));
     const studio = await startDungeonStudio(options);
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
@@ -40,6 +42,11 @@ test('local Studio manages authored dungeons in the browser and refuses unauthor
         const from=tile(3,5),to=tile(10,5);
         await page.mouse.move(from.x,from.y); await page.mouse.down();
         await page.mouse.move(to.x,to.y,{steps:14}); await page.mouse.up();
+        await page.locator('[data-tool="visitors"]').click();
+        const blueStart=tile(3,7),blueEnd=tile(8,7);
+        await page.mouse.move(blueStart.x,blueStart.y);await page.mouse.down();await page.mouse.move(blueEnd.x,blueEnd.y,{steps:1});await page.mouse.up();
+        await page.locator('[data-tool="visitors-erase"]').click();await page.mouse.click(blueEnd.x,blueEnd.y);
+        await page.locator('#undo').click();
         await expect(page.locator('#issues')).toHaveText('Terreno e posizioni validi.');
         await page.locator('#name').fill('Studio aggiornato'); await page.locator('#name').press('Tab');
         await page.locator('[data-action="update"]').click();
@@ -47,10 +54,12 @@ test('local Studio manages authored dungeons in the browser and refuses unauthor
         const installed=JSON.parse(await readFile(options.catalogPath,'utf8'))[0];
         assert.equal(installed.definition.encounter.activationPoints.length,8);
         assert.equal(installed.definition.encounter.regions.bossAggro.radius,432);
+        assert.equal(installed.definition.encounter.visitorTiles.length,6);
         await page.locator('[data-library="open"]').click();
         const restored=await page.evaluate(()=>JSON.parse(localStorage.getItem('riftlands.dungeon-draft.v2')!));
         assert.equal(restored.entities.filter((e:any)=>e.kind==='activation').length,8);
         assert.equal(restored.entities.find((e:any)=>e.kind==='boss').aggroRadius,432);
+        assert.equal(restored.encounters[0].visitorTiles.length,6);
         const endpoint = new URL('/__studio/library', studio.url), origin = endpoint.origin;
         const library = await (await fetch(endpoint)).json() as { token: string };
         const write = (headers: Record<string, string>) => fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ action: 'remove', id: 'studio-test' }) });
@@ -61,9 +70,21 @@ test('local Studio manages authored dungeons in the browser and refuses unauthor
             const blocked = await write({ Origin: origin, 'X-Studio-Token': library.token });
             assert.equal(blocked.status, 400);
             assert.match(await blocked.text(), /Salvataggio in uso/);
+            const blockedBackups=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Origin:origin,'X-Studio-Token':library.token},body:JSON.stringify({action:'remove-backups',scope:'all'})});
+            assert.equal(blockedBackups.status,400);
         } finally { release(); }
         await page.locator('[data-action="remove"]').click();
         await expect(page.locator('#dungeon-library option')).toHaveCount(0);
+        await page.locator('#backup-scope').selectOption('dungeon:studio-test');
+        await expect(page.locator('#backup-summary')).toContainText('6 file');
+        await page.locator('#delete-backups').click();
+        await expect(page.locator('#status')).toContainText('Eliminati 6 file di backup');
+        assert.deepEqual((await listDungeonBackups(options)).map(g=>g.scope),['legacy']);
+        await page.locator('#backup-scope').selectOption('all');
+        await page.locator('#delete-backups').click();
+        await expect(page.locator('#status')).toContainText('Eliminati 1 file di backup');
+        await expect(page.locator('#delete-backups')).toBeDisabled();
+        assert.deepEqual(await listDungeonBackups(options),[]);
         assert.deepEqual(JSON.parse(await readFile(options.catalogPath, 'utf8')), []);
         assert.deepEqual(JSON.parse(await readFile(options.dataPath, 'utf8')).accounts, [{ id: 'preserve', gold: 50 }]);
         assert.deepEqual(errors, []);

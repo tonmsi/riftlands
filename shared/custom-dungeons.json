@@ -753,32 +753,32 @@
           {
             "x": -11,
             "y": -31,
-            "kind": "bush"
+            "kind": "rock"
           },
           {
             "x": -10,
             "y": -31,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -9,
             "y": -31,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -8,
             "y": -31,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -7,
             "y": -31,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -6,
             "y": -31,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -5,
@@ -873,32 +873,32 @@
           {
             "x": -11,
             "y": -30,
-            "kind": "bush"
+            "kind": "rock"
           },
           {
             "x": -10,
             "y": -30,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -9,
             "y": -30,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -8,
             "y": -30,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -7,
             "y": -30,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -6,
             "y": -30,
-            "kind": "path"
+            "kind": "rock"
           },
           {
             "x": -5,
@@ -2825,12 +2825,12 @@
         "water",
         "water",
         "water",
-        "bush",
-        "path",
-        "path",
-        "path",
-        "path",
-        "path",
+        "rock",
+        "rock",
+        "rock",
+        "rock",
+        "rock",
+        "rock",
         "path",
         "path",
         "path",
@@ -2849,12 +2849,12 @@
         "water",
         "water",
         "water",
-        "bush",
-        "path",
-        "path",
-        "path",
-        "path",
-        "path",
+        "rock",
+        "rock",
+        "rock",
+        "rock",
+        "rock",
+        "rock",
         "path",
         "path",
         "path",

@@ -15,7 +15,7 @@ export interface DraftEntity extends Vec2 {
   id: string; kind: 'npc' | 'boss' | 'party' | 'activation' | 'flame'; encounterId?: string; span?: number; vertical?: boolean; aggroRadius?: number; template: string; label: string; level: number; radius: number;
 }
 export const DEFAULT_BOSS_AGGRO_RADIUS = 288;
-export interface DraftEncounter { id: string; name: string; x: number; y: number; width: number; height: number; }
+export interface DraftEncounter { id: string; name: string; x: number; y: number; width: number; height: number; visitorTiles?: Vec2[]; }
 export interface DungeonDraft {
   version: 1; id: string; name: string; width: number; height: number;
   encounters: DraftEncounter[]; origin: Vec2; tiles: TileKind[]; entities: DraftEntity[];
@@ -47,7 +47,13 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
       || ![group.x, group.y, group.width, group.height].every(Number.isInteger)
       || group.x < 0 || group.y < 0 || group.width < 3 || group.height < 3 || group.x + group.width > value.width || group.y + group.height > value.height) fail();
     groupIds.add(group.id);
-    return { id: group.id, name: group.name, x: group.x, y: group.y, width: group.width, height: group.height };
+    const seen = new Set<string>();
+    if (group.visitorTiles !== undefined && (!Array.isArray(group.visitorTiles) || group.visitorTiles.length > value.width * value.height
+      || group.visitorTiles.some(p => !p || !Number.isInteger(p.x) || !Number.isInteger(p.y)
+        || p.x < 0 || p.y < 0 || p.x >= value.width || p.y >= value.height
+        || seen.has(`${p.x},${p.y}`) || !seen.add(`${p.x},${p.y}`)))) fail();
+    return { id: group.id, name: group.name, x: group.x, y: group.y, width: group.width, height: group.height,
+      ...(group.visitorTiles !== undefined ? { visitorTiles: group.visitorTiles.map(p => ({x:p.x,y:p.y})) } : {}) };
   });
   const ids = new Set<string>();
   const entities = value.entities.map(entity => {
@@ -86,6 +92,8 @@ export function validateDungeonDraft(draft: DungeonDraft): string[] {
   if (!bosses.length || bosses.length > 32) issues.push('Posiziona da 1 a 32 boss, anche come segnaposto.');
   const groups = draft.encounters;
   for (const group of groups) {
+    if (group.visitorTiles?.some(p => p.x < group.x || p.y < group.y || p.x >= group.x + group.width || p.y >= group.y + group.height))
+      issues.push(`${group.name}: zona visitatori fuori dalla regione dell'incontro.`);
     const belongs = (e: DraftEntity) => (e.encounterId ?? groups[0].id) === group.id;
     if (!bosses.some(belongs)) issues.push(`${group.name}: manca un boss.`);
     const count = party.filter(belongs).length;
@@ -159,7 +167,8 @@ export function draftFromDungeon(definition: DungeonDefinition, bossRadius = 36)
       const y = Math.max(0, Math.floor(Math.min(...points.map(p=>p.y))/TILE_SIZE)-b.minTy);
       const right = Math.min(width, Math.ceil(Math.max(...points.map(p=>p.x))/TILE_SIZE)-b.minTx);
       const bottom = Math.min(height, Math.ceil(Math.max(...points.map(p=>p.y))/TILE_SIZE)-b.minTy);
-      draft.encounters.push({ id: groupId, name: `Incontro ${draft.encounters.length+1}`, x, y, width: Math.max(3,right-x), height: Math.max(3,bottom-y) });
+      draft.encounters.push({ id: groupId, name: `Incontro ${draft.encounters.length+1}`, x, y, width: Math.max(3,right-x), height: Math.max(3,bottom-y),
+        ...(encounter.encounter.visitorTiles !== undefined ? { visitorTiles: encounter.encounter.visitorTiles.map(p=>({x:p.x-b.minTx,y:p.y-b.minTy})) } : {}) });
       draft.entities.push(...encounter.spawnPoints.party.map((p,i): DraftEntity=>({id:`party-${index}-${i}`,kind:'party',template:'',label:`Spawn gruppo ${i+1}`,level:1,radius:15,encounterId:groupId,...position(p)})));
       draft.entities.push(...(encounter.encounter.activationPoints ?? []).map((p,i): DraftEntity=>({id:`activation-${index}-${i}`,kind:'activation',template:'',label:'Attivazione',level:1,radius:15,encounterId:groupId,...position(p)})));
       for (const passage of encounter.passages) if (passage.fightState === 'flame') {
@@ -217,6 +226,7 @@ export function compileDungeonDraft(input: DungeonDraft) {
     return { bossId: `boss:${draft.id}:${index === 0 ? 'main' : `spawn:${entity.id}`}`, encounterGroupId: group.id,
       spawnPoints: { boss: position(entity), party: party.map(position) }, passages,
       encounter: { preparationMs: 5000,
+        ...(group.visitorTiles !== undefined ? { visitorTiles: group.visitorTiles.map(p=>({x:p.x+draft.origin.x,y:p.y+draft.origin.y})) } : {}),
         activationPoints: draft.entities.filter(e => e.kind === 'activation' && (e.encounterId ?? draft.encounters[0].id) === group.id).map(position),
         regions: { trigger: region, admission: region, combat: region, ejectIntruders: region,
           bossAggro: { kind: 'circle' as const, center: position(entity), radius: entity.aggroRadius ?? DEFAULT_BOSS_AGGRO_RADIUS }, bossLeash: region }, ejectTo } };

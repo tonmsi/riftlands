@@ -50,7 +50,8 @@ export async function changeCatalog(options: { id: string; catalogPath: string; 
     const result = { id, bossIds, removedStates, dataExists: dataText !== undefined, backups: [] as string[] };
     if (check) return result;
 
-    const tag = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`;
+    if (id !== '--all' && !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) throw new Error('ID dungeon non valido.');
+    const tag = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}--${id === '--all' ? 'catalog' : `dungeon-${id}`}`;
     const files = [{ path: catalogPath, before: catalogText,
         after: JSON.stringify(next, null, 2) + '\n' }];
     // Save cleanup first: if interrupted, the old catalog can still load the cleaned save.

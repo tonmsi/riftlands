@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import { acquireDataLease } from '../server/data-lease';
 import { installDungeon } from './dungeon-library';
 import { readCatalog, removeDungeon } from './dungeon-removal';
+import { listDungeonBackups, removeDungeonBackups } from './dungeon-backups';
 
 async function body(request: IncomingMessage): Promise<any> {
     const chunks: Buffer[] = []; let size = 0;
@@ -34,7 +35,7 @@ export async function startDungeonStudio(options: { root: string; catalogPath: s
         void (async () => {
             if (request.method === 'GET') {
                 const catalog = await readCatalog(options.catalogPath);
-                reply(200, { token, dungeons: catalog.bundles.map(b => ({ id: b.definition.id, name: b.definition.name, draft: b.draft })) });
+                reply(200, { token, dungeons: catalog.bundles.map(b => ({ id: b.definition.id, name: b.definition.name, draft: b.draft })), backups: await listDungeonBackups(options) });
                 return;
             }
             const supplied = Buffer.from(String(request.headers['x-studio-token'] ?? ''));
@@ -44,12 +45,16 @@ export async function startDungeonStudio(options: { root: string; catalogPath: s
             }
             const payload = await body(request);
             if (busy) { reply(409, { error: 'Operazione già in corso.' }); return; }
-            if (!payload || !['install', 'update', 'remove'].includes(payload.action)) throw new Error('Operazione non valida.');
+            if (!payload || !['install', 'update', 'remove', 'remove-backups'].includes(payload.action)) throw new Error('Operazione non valida.');
             if (payload.action === 'remove' && (typeof payload.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(payload.id))) throw new Error('ID dungeon non valido.');
             busy = true;
             let release: (() => void) | undefined;
             try {
                 release = acquireDataLease(options.dataPath);
+                if (payload.action === 'remove-backups') {
+                    reply(200, await removeDungeonBackups(options,payload.scope));
+                    return;
+                }
                 const result = payload.action === 'remove'
                     ? await removeDungeon({ ...options, id: payload.id })
                     : await installDungeon(payload.draft, { ...options, replace: payload.action === 'update' });

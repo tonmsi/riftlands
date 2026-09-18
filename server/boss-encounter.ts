@@ -4,7 +4,7 @@ import type { Actor, Vec2 } from '../shared/types';
 import type { BossAttackDefinition, BossDefinition, BossLockState, BossPreparationState, BossState, BossWindup } from '../shared/bosses';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, segmentCircleHit } from '../shared/physics';
 import type { World } from '../shared/world';
-import { DUNGEON_BY_BOSS_ID, clampToDungeonRegion, insideDungeonRegion, touchesDungeonFlame, atDungeonActivation } from '../shared/dungeons';
+import { DUNGEON_BY_BOSS_ID, clampToDungeonRegion, insideDungeonRegion, insideDungeonVisitorArea, touchesDungeonFlame, atDungeonActivation } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
 import type { Account, AccountStore } from './store';
 
@@ -186,7 +186,8 @@ export class BossEncounter {
       for (const player of players) if (this.hasParticipant(player.id) && player.hp > 0
         && touchesDungeonFlame(this.dungeon, player, player.radius)) damage(player, Number.MAX_SAFE_INTEGER);
       for (const player of players) if (!this.isActiveParticipant(player.id) && player.hp > 0
-        && insideDungeonRegion(this.dungeon.encounter.regions.ejectIntruders, player)) this.eject(player);
+        && insideDungeonRegion(this.dungeon.encounter.regions.ejectIntruders, player)
+        && !insideDungeonVisitorArea(this.dungeon, player, player.radius)) this.eject(player);
       for (const player of players) if (this.isActiveParticipant(player.id) && player.hp > 0
         && !insideDungeonRegion(this.dungeon.encounter.regions.combat, player)) damage(player, Number.MAX_SAFE_INTEGER);
     }
