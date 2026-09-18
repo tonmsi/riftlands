@@ -166,7 +166,8 @@ export class GameUI {
         <div class="player-details" data-ref="player-details" role="region" aria-label="Compagni del team" tabindex="0"><section class="team-roster glass" data-ref="team-roster" aria-label="Membri del team" hidden></section></div>
         <section class="target-panel glass" data-ref="target" hidden><div class="target-heading"><span data-ref="target-type">GIOCATORE</span><button data-ref="target-close" aria-label="Deseleziona bersaglio">×</button></div><strong data-ref="target-name"></strong><small data-ref="target-detail"></small><div class="meter hp-meter target-health"><i data-ref="target-fill"></i></div><div class="target-actions" data-ref="target-actions"><button data-ref="target-friend">+ Amico</button><button data-ref="target-team">+ Team</button></div></section>
         <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><div><span class="eyebrow">NON VIAGGIARE DA SOLO</span><h2>I tuoi compagni</h2></div><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
-        <div class="minimap-panel glass"><canvas class="minimap" width="168" height="168" aria-label="Mappa locale"></canvas><div><span>LE TERRE DI SOGLIA</span><span>N ↑</span></div><div class="map-network"><span>PING</span><span data-ref="map-ping">— ms</span></div></div>
+        <div class="map-dismiss" data-ref="map-dismiss" hidden aria-hidden="true"></div>
+        <div class="minimap-panel glass"><header class="map-heading"><span>LE TERRE DI SOGLIA</span><strong data-ref="map-location">Terre di Soglia</strong></header><canvas class="minimap" width="260" height="260" aria-label="Mappa locale"></canvas><div><span>MAPPA LOCALE</span><span>N ↑</span></div><div class="map-network"><span>PING</span><span data-ref="map-ping">— ms</span></div></div>
         <div class="combat-hud"><div class="combat-instruction"><span>WASD / FRECCE <b>muovi</b></span><span>SINISTRO PREMUTO <b>mira</b></span><span>CLIC <b>seleziona</b></span></div><div class="ability-bar glass" data-ref="ability-bar"></div><div class="combat-caption"><span data-ref="combat-class"></span><span>·</span><span>SPAZIO / CLIC DESTRO per attaccare</span></div></div>
         <div class="world-tip glass"><span>✧</span><span>I cespugli ti nascondono.<br><b>Attaccare rivela la tua posizione.</b></span></div>
         <div class="connection-banner" data-ref="connection-banner" hidden>Riconnessione al mondo…</div>
@@ -175,6 +176,16 @@ export class GameUI {
       <div class="toast-stack" data-ref="toasts" aria-live="polite" aria-atomic="false"></div>`;
 
     root.querySelectorAll<HTMLElement>('[data-ref]').forEach(element => this.refs.set(element.dataset.ref!, element));
+    const rightColumn = document.createElement('div');
+    rightColumn.className = 'right-hud-column';
+    rightColumn.append(this.ref('target'), root.querySelector('.game-top-right')!);
+    root.querySelector('.game-hud')!.append(rightColumn);
+    const mapCoordinates = textElement('small', 'map-coordinates', '');
+    this.refs.set('map-coordinates', mapCoordinates);
+    root.querySelector('.map-heading')!.append(mapCoordinates);
+    const mapStatus = textElement('small', 'map-status', '');
+    this.refs.set('map-status', mapStatus);
+    root.querySelector('.map-heading')!.append(mapStatus);
     this.arenaStatus.className = 'arena-status';
     this.arenaStatus.setAttribute('role', 'status');
     root.append(this.arenaStatus);
@@ -197,11 +208,16 @@ export class GameUI {
     this.mapToggle.type = 'button'; this.mapToggle.className = 'world-location glass map-toggle';
     const location = root.querySelector('.world-location')!;
     this.mapToggle.append(...Array.from(location.childNodes));
-    location.replaceWith(this.mapToggle);
+    location.remove();
+    root.querySelector('.menu-buttons')!.prepend(this.mapToggle);
     this.mapToggle.setAttribute('aria-controls', mapPanel.id);
     this.mapToggle.addEventListener('click', () => {
-      this.mapVisible = !this.mapVisible; this.updateMap();
-      try { localStorage.setItem('riftlands.minimap', this.mapVisible ? 'visible' : 'hidden'); } catch { /* Ignore storage restrictions. */ }
+      this.setMapVisible(!this.mapVisible);
+    });
+    this.ref('map-dismiss').addEventListener('pointerdown', event => {
+      if (!this.display.touch || !this.mapVisible) return;
+      event.preventDefault(); event.stopPropagation();
+      this.setMapVisible(false);
     });
     this.updateMap();
     this.ref('leave').setAttribute('aria-label', 'Torna al menu');
@@ -264,12 +280,20 @@ export class GameUI {
 
   get selectedClass(): ClassId { return this.currentClass; }
   get minimapVisible(): boolean { return this.mapVisible; }
-  get inputBlocked(): boolean { return this.exitDialog.open || !this.ref('social-panel').hidden; }
+  get inputBlocked(): boolean { return this.exitDialog.open || !this.ref('social-panel').hidden || (this.display.touch && this.mapVisible); }
+  private setMapVisible(visible: boolean): void {
+    this.mapVisible = visible;
+    if (visible && this.display.touch) this.actions.releaseControls?.();
+    this.updateMap();
+    try { localStorage.setItem('riftlands.minimap', visible ? 'visible' : 'hidden'); } catch { /* Ignore storage restrictions. */ }
+  }
   private updateMap(): void {
+    this.root.classList.toggle('map-open', this.mapVisible);
     this.root.querySelector<HTMLElement>('.minimap-panel')!.hidden = !this.mapVisible;
     this.mapToggle.setAttribute('aria-expanded', String(this.mapVisible));
     this.mapToggle.setAttribute('aria-label', this.mapVisible ? 'Nascondi mappa' : 'Mostra mappa');
     this.mapToggle.title = this.mapVisible ? 'Nascondi mappa' : 'Mostra mappa';
+    this.ref('map-dismiss').hidden = !this.mapVisible;
   }
   private confirmLeave(): void {
     if (!this.isPlaying || this.exitDialog.open) return;
@@ -401,7 +425,11 @@ export class GameUI {
     this.fill('resource-fill', player.resource / player.maxResource);
     this.write('resource-label', `${Math.floor(player.resource)} / ${player.maxResource}`);
     this.fill('xp-fill', (player.xp % 100) / 100);
-    this.write('coords', snapshot.sanctuary === 'safe' ? 'ZONA SICURA · NO PVP' : snapshot.sanctuary === 'combat' ? `VULNERABILE · ${Math.max(0, Math.ceil(((player.pvpUntil ?? 0) - snapshot.time) / 1000))}s` : snapshot.sanctuary === 'outside' ? 'PVP ATTIVO' : 'ISTANZA PVP');
+    const coordinates = `${Math.round(player.x)} · ${Math.round(player.y)}`;
+    this.write('coords', coordinates);
+    this.ref('coords').title = coordinates;
+    this.write('map-coordinates', coordinates);
+    this.write('map-status', snapshot.sanctuary === 'safe' ? 'ZONA SICURA · NO PVP' : snapshot.sanctuary === 'combat' ? `VULNERABILE · ${Math.max(0, Math.ceil(((player.pvpUntil ?? 0) - snapshot.time) / 1000))}s` : snapshot.sanctuary === 'outside' ? 'PVP ATTIVO' : 'ISTANZA PVP');
     if (snapshot.sanctuary && this.lastSanctuary && snapshot.sanctuary !== this.lastSanctuary) {
       this.toast(snapshot.sanctuary === 'safe' ? 'Zona sicura: PvP disattivato.' : snapshot.sanctuary === 'combat' ? 'Sei ancora in combattimento: resti vulnerabile.' : 'Fuori dall’avamposto: PvP attivo.', 'info');
     }
@@ -559,7 +587,7 @@ export class GameUI {
     this.write('target-team', sameTeam ? '✓ Nel team' : invited ? 'Inviato' : '+ Team');
   }
 
-  setLocation(name: string): void { this.write('biome', name); }
+  setLocation(name: string): void { this.write('biome', name); this.write('map-location', name); }
 
   private toggleSocial(open?: boolean): void {
     const panel = this.ref('social-panel');

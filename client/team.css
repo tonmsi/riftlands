@@ -48,8 +48,34 @@
 }
 @media (orientation:portrait) {
   .touch-layout .target-panel { left:auto; right:calc(var(--safe-right) + 12px); top:calc(var(--safe-top) + 8px); width:148px; max-height:132px }
-  .touch-layout .game-top-right { top:calc(var(--safe-top) + 148px) }
-  .touch-layout .world-location { top:calc(var(--safe-top) + 232px) }
-  .touch-layout .minimap-panel { top:calc(var(--safe-top) + 284px) }
   .touch-layout .team-invite { top:calc(var(--safe-top) + 224px) }
+}
+
+/* The location participates in toolbar layout, so it cannot overlap its siblings. */
+.rift-app .menu-buttons .world-location { position:relative; inset:auto; transform:none; width:180px; max-width:180px; flex:none; margin:0; z-index:21; text-align:left }
+.rift-app .menu-buttons .world-location div>span { display:block; margin-top:3px; font-size:9px; letter-spacing:0; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.touch-layout .menu-buttons .world-location { width:96px; max-width:96px; padding:5px 7px; height:44px }
+.touch-layout .menu-buttons .world-location strong { font-size:11px }
+.rift-app .minimap-panel { top:auto; right:24px; bottom:24px; left:auto; transform:none; width:280px; height:auto; padding:10px; max-height:calc(var(--game-height, 100dvh) - 156px); overflow:auto; pointer-events:auto; z-index:20 }
+.map-heading { display:flex; flex-direction:column; gap:5px; padding:2px 2px 9px; text-align:left }
+.map-heading>span { font-size:9px; letter-spacing:1px; color:#a9bd94 }
+.map-heading>strong { font-size:13px; line-height:1.35; color:#e0e8d3; overflow-wrap:anywhere }
+.map-coordinates, .map-status { font-size:10px; color:#a9bd94; font-variant-numeric:tabular-nums }
+.right-hud-column { display:contents }
+.map-dismiss { display:none }
+.rift-app:not(.touch-layout) .social-panel { z-index:24 }
+.rift-app:not(.touch-layout) .team-invite { z-index:25 }
+.touch-layout.map-open .toast-stack, .touch-layout.map-open .arena-status { display:none }
+.touch-layout .map-dismiss { display:block; position:absolute; inset:0; z-index:19; background:#07171245; pointer-events:auto; touch-action:none }
+.touch-layout .minimap { width:min(100%, calc(var(--game-height, 100dvh) - 164px - var(--safe-top) - var(--safe-bottom))); margin-inline:auto }
+.touch-layout .minimap-panel { top:50%; left:50%; right:auto; bottom:auto; transform:translate(-50%, -50%); width:min(340px, calc(100% - 32px - var(--safe-left) - var(--safe-right)), calc(var(--game-height, 100dvh) - 110px - var(--safe-top) - var(--safe-bottom))); max-height:calc(var(--game-height, 100dvh) - 24px - var(--safe-top) - var(--safe-bottom)); padding:8px; touch-action:pan-y; overscroll-behavior:contain; z-index:22 }
+@media (orientation:landscape) and (max-width:700px) {
+  .touch-layout .menu-buttons .world-location { width:44px; max-width:44px; padding:4px }
+  .touch-layout .target-panel { width:150px }
+}
+@media (orientation:portrait) {
+  .touch-layout .right-hud-column { display:flex; flex-direction:column; gap:8px; position:absolute; top:calc(var(--safe-top) + 8px); right:calc(var(--safe-right) + 12px); width:148px }
+  .touch-layout .right-hud-column .target-panel, .touch-layout .right-hud-column .game-top-right { position:relative; inset:auto; width:100%; flex:none }
+  .touch-layout .game-top-right, .touch-layout .menu-buttons { max-width:148px }
+  .touch-layout .menu-buttons .world-location { width:48px; max-width:48px; padding:5px }
 }

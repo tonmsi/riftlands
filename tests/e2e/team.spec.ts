@@ -86,10 +86,15 @@ test('team popup consent, live health, scrollable mobile roster and automatic di
       expect(target.x).toBeGreaterThanOrEqual(player.x + player.width);
       expect(target.y).toBe(player.y);
       expect(target.x + target.width).toBeLessThanOrEqual(size.width);
+      if (size.width < size.height) {
+        const menu = (await mobile.locator('.game-top-right').boundingBox())!;
+        expect(menu.y).toBeGreaterThanOrEqual(target.y + target.height);
+        expect(menu.y - target.y - target.height).toBeLessThanOrEqual(9);
+      }
       await expect(mobile.locator('.world-location')).toHaveRole('button');
       await mobile.locator('.world-location').click();
       await expect(mobile.locator('.minimap-panel')).toBeVisible();
-      await mobile.locator('.world-location').click();
+      await mobile.touchscreen.tap(5, size.height - 5);
       await expect(mobile.locator('.minimap-panel')).toBeHidden();
       const list = (await mobile.locator('.player-details').boundingBox())!;
       const joystick = (await mobile.locator('.mobile-joystick').boundingBox())!;
@@ -101,6 +106,9 @@ test('team popup consent, live health, scrollable mobile roster and automatic di
       }
       await mobile.screenshot({ path: `test-results/team-roster-${size.width}.png` });
     }
+    await mobile.locator('[data-ref="target-close"]').click();
+    const menuWithoutTarget = (await mobile.locator('.game-top-right').boundingBox())!;
+    expect(menuWithoutTarget.y).toBe((await mobile.locator('.player-panel').boundingBox())!.y);
     for (const page of pages.slice(1)) {
       await page.locator('[data-ref="social-toggle"]').click();
       await page.getByRole('button', { name: 'Lascia il team', exact: true }).click();

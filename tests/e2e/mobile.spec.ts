@@ -18,6 +18,51 @@ async function emulateDeniedFullscreen(page: Page): Promise<void> {
   });
 }
 
+for (const mobile of [false, true]) {
+  test(`location toolbar and expanded map: ${mobile ? 'touch outside dismisses' : 'desktop outside keeps map open'}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: mobile ? 844 : 1440, height: mobile ? 390 : 960 }, isMobile: mobile, hasTouch: mobile });
+    const page = await context.newPage(); await emulateDeniedFullscreen(page); await register(page, mobile ? 'TouchMap' : 'DeskMap');
+    for (const viewport of mobile ? [{ width: 844, height: 390 }, { width: 568, height: 320 }, { width: 360, height: 640 }] : [{ width: 1440, height: 960 }, { width: 1024, height: 768 }]) {
+      await page.setViewportSize(viewport);
+      const location = page.locator('.world-location');
+      const place = (await location.boundingBox())!;
+      const fullscreen = (await page.locator('.fullscreen-toggle').boundingBox())!;
+      expect(place.y).toBe(fullscreen.y);
+      expect(place.x + place.width).toBeLessThanOrEqual(fullscreen.x);
+      await expect(location.locator('[data-ref="coords"]')).toBeVisible();
+      await expect(location.locator('[data-ref="coords"]')).toHaveText(/^-?\d+ · -?\d+$/);
+      if (mobile && viewport.width < viewport.height) {
+        const player = (await page.locator('.player-panel').boundingBox())!;
+        expect(place.y).toBe(player.y);
+      }
+      for (const selector of ['.gold-counter', '[data-ref="social-toggle"]', '[data-ref="leave"]']) {
+        const box = (await page.locator(selector).boundingBox())!;
+        expect(place.x < box.x + box.width && place.x + place.width > box.x && place.y < box.y + box.height && place.y + place.height > box.y).toBe(false);
+      }
+      if (await location.getAttribute('aria-expanded') === 'false') await location.click();
+      const panel = page.locator('.minimap-panel');
+      await expect(panel).toBeVisible();
+      await expect(panel.locator('.map-heading')).toContainText('LE TERRE DI SOGLIA');
+      await expect(panel.locator('[data-ref="map-location"]')).toHaveText('Avamposto del Crocevia');
+      const map = (await panel.boundingBox())!;
+      expect(map.width).toBeGreaterThan(mobile ? 190 : 250);
+      expect(map.x).toBeGreaterThanOrEqual(0); expect(map.y).toBeGreaterThanOrEqual(0);
+      expect(map.y + map.height).toBeLessThanOrEqual(viewport.height);
+      if (!mobile) expect(Math.round(viewport.height - map.y - map.height)).toBe(24);
+      expect(await panel.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+      await expect(panel.locator('.map-coordinates')).toHaveText(await location.locator('[data-ref="coords"]').innerText());
+      await panel.locator('.map-heading').click();
+      await expect(panel).toBeVisible();
+      await page.screenshot({ path: `test-results/expanded-map-${viewport.width}.png` });
+      if (mobile) await page.touchscreen.tap(5, viewport.height - 5);
+      else await page.mouse.click(5, viewport.height - 5);
+      if (mobile) await expect(panel).toBeHidden();
+      else { await expect(panel).toBeVisible(); await location.click(); await expect(panel).toBeHidden(); }
+    }
+    await context.close();
+  });
+}
+
 test('mobile notices are read in sequence without clipping in either orientation', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 568, height: 320 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
@@ -240,7 +285,7 @@ test('responsive HUD and canvases stay usable across portrait, landscape and tab
     await expect(page.locator('[data-ref="map-ping"]')).toHaveText(/\d+ ms/);
     await expect.poll(() => page.locator('.minimap').evaluate((canvas: HTMLCanvasElement) => canvas.width === Math.round(canvas.getBoundingClientRect().width * 2))).toBe(true);
     await page.screenshot({ path: `test-results/mobile-${viewport.width}x${viewport.height}.png` });
-    await page.getByRole('button', { name: 'Nascondi mappa', exact: true }).tap();
+    await page.touchscreen.tap(5, viewport.height - 5);
   }
   await context.close();
 });
