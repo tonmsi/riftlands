@@ -54,6 +54,16 @@ test('real transport: room handshake, reconnect, duplicate session ownership and
     const first = await client();
     first.send({ type: 'hello', mode: 'register', name: 'TransportTester', password: 'test-password', classId: 'mage', protocol: PROTOCOL_VERSION });
     const welcome = await first.next('welcome');
+    const lobbyUrl = `http://127.0.0.1:${port}/api/lobby`;
+    const guestLobby = await (await fetch(lobbyUrl)).json();
+    assert.equal(guestLobby.account, null);
+    assert.deepEqual(guestLobby.friends, []);
+    assert.equal(guestLobby.leaderboard[0].name, 'TransportTester');
+    assert.equal('passwordHash' in guestLobby.leaderboard[0], false);
+    assert.equal((await fetch(lobbyUrl, { headers: { Authorization: 'Bearer invalid' } })).status, 401);
+    const ownLobby = await (await fetch(lobbyUrl, { headers: { Authorization: `Bearer ${welcome.token}` } })).json();
+    assert.equal(ownLobby.account.id, welcome.playerId);
+    assert.equal('passwordHash' in ownLobby.account, false);
     const room = (await first.next('room')).room;
     assert.equal(room.mode, 'world');
     assert.equal((await first.next('snapshot')).self.id, welcome.playerId);

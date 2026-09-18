@@ -25,6 +25,25 @@ const mime: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js
 const server = createServer((request, response) => {
   const path = (request.url ?? '/').split('?')[0];
   response.setHeader('X-Content-Type-Options', 'nosniff');
+  if (path === '/api/lobby' && request.method === 'GET') {
+    response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('Content-Type', 'application/json');
+    const authorization = request.headers.authorization;
+    let account: Account | undefined;
+    if (authorization) {
+      const identity = store.verifyJwt(authorization.replace(/^Bearer /, ''));
+      account = identity ? store.accounts.get(identity.sub) : undefined;
+      if (!account) { response.writeHead(401); response.end(JSON.stringify({ error: 'Sessione scaduta. Accedi di nuovo.' })); return; }
+    }
+    const leaderboard = [...store.accounts.values()].sort((a, b) => b.xp - a.xp || b.kills - a.kills || a.name.localeCompare(b.name)).slice(0, 20)
+      .map(({ id, name, xp, kills }) => ({ id, name, xp, kills }));
+    const friends = account?.friends.flatMap(id => {
+      const friend = store.accounts.get(id);
+      return friend ? [{ id, name: friend.name, online: byAccount.has(id) }] : [];
+    }) ?? [];
+    response.end(JSON.stringify({ account: account ? publicAccount(account) : null, friends, leaderboard }));
+    return;
+  }
   if (path === '/health') {
     response.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     response.end(JSON.stringify({ ok: healthy, online: byAccount.size, worldOnline: simulation.online, matchRooms: rooms.rooms.size, tick: simulation.tick, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE, activeChunks: simulation.activeChunks.size + [...rooms.rooms.values()].reduce((sum, room) => sum + room.simulation.activeChunks.size, 0), npcs: simulation.npcs.size, tickCostMs: Math.round(tickCostMs * 100) / 100 }));
