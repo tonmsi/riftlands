@@ -18,7 +18,7 @@ export class ControlOptions {
     this.rows.className = 'binding-rows';
     this.status.className = 'options-status'; this.status.setAttribute('role', 'status');
     const hint = document.createElement('p'); hint.className = 'options-help';
-    hint.textContent = 'Clicca un comando e premi il nuovo tasto, oppure il mouse destro o centrale. Esc annulla, Canc rimuove il comando alternativo. Il clic sinistro seleziona sempre un personaggio. Il movimento col mouse richiede di tenere premuto il comando e si ferma agli ostacoli.';
+    hint.textContent = 'Clicca un comando e premi il nuovo tasto, oppure il mouse destro o centrale. Esc annulla, Canc rimuove il comando alternativo. Il clic sinistro seleziona un personaggio; tenendolo premuto attivi la mira manuale con anteprima. Senza mira, attacchi il nemico visibile più vicino. Il movimento col mouse richiede di tenere premuto il comando e si ferma agli ostacoli.';
     const footer = document.createElement('div'); footer.className = 'options-footer';
     footer.innerHTML = '<button type="button" data-reset>Ripristina predefiniti</button><button type="button" data-cancel>Annulla</button><button type="button" data-save>Salva controlli</button>';
     this.dialog.append(label, hint, this.rows, this.status, footer); root.append(this.dialog);

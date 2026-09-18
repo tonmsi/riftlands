@@ -99,12 +99,18 @@ test('real multi-touch: joystick, aim on attack release, ability taps, cancellat
   const beforeCast = sent.length;
   await touch('touchEnd', [{ ...aim, y: aim.y - 50 }]);
   await expect.poll(() => sent.slice(beforeCast).filter(command => command.cast === 'basic').length).toBe(1);
+  expect(sent.slice(beforeCast).find(command => command.cast === 'basic')?.autoAim).toBe(false);
   await expect.poll(() => input?.dy ?? 0).toBeGreaterThan(0.5);
   const shield = center((await page.locator('[data-slot="r"]').boundingBox())!);
   const beforeShield = sent.length;
   await touch('touchStart', [move, { id: 3, ...shield }]); await touch('touchEnd', [{ id: 3, ...shield }]);
   await expect.poll(() => sent.slice(beforeShield).filter(command => command.cast === 'r').length).toBe(1);
   expect(input!.aim).toBeCloseTo(-Math.PI / 2);
+  await expect.poll(() => input?.autoAim).toBe(true);
+  await expect(page.locator('[data-slot="basic"]')).toHaveAttribute('aria-disabled', 'false');
+  const beforeTap = sent.length;
+  await touch('touchStart', [move, aim]); await touch('touchEnd', [aim]);
+  await expect.poll(() => sent.slice(beforeTap).some(command => command.cast === 'basic' && command.autoAim === true)).toBe(true);
   await touch('touchStart', [move, aim]);
   await touch('touchMove', [move, { ...aim, x: aim.x - 45 }]);
   const beforeCancel = sent.length;

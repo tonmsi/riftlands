@@ -180,7 +180,7 @@ ui.canvas.addEventListener('pointerdown', event => {
   if (event.pointerType === 'mouse') {
     controls.setPointer({ x: event.clientX, y: event.clientY });
     ui.canvas.setPointerCapture(event.pointerId);
-    if (event.button !== 0) { event.preventDefault(); controls.press(`Mouse${event.button}`); return; }
+    if (event.button !== 0) return;
   }
   const position = renderer.screenToWorld(event.clientX, event.clientY);
   const target = renderedActors.find(actor => actor.id !== predicted?.id && Math.hypot(actor.x - position.x, actor.y - position.y) < actor.radius + 14);
@@ -188,9 +188,15 @@ ui.canvas.addEventListener('pointerdown', event => {
   else if (selectedId) { selectedId = null; ui.setSelected(null); }
 });
 
-window.addEventListener('pointerup', event => { if (event.pointerType === 'mouse') controls.release(`Mouse${event.button}`); });
+// Mouse events fire for every button in a chord; pointerdown/up only fire for the first/last.
+ui.canvas.addEventListener('mousedown', event => {
+  if (!playing || !connection.connected || ui.inputBlocked || ![0, 1, 2].includes(event.button)) return;
+  controls.setPointer({ x: event.clientX, y: event.clientY });
+  if (controls.press(`Mouse${event.button}`)) event.preventDefault();
+});
+window.addEventListener('mouseup', event => controls.release(`Mouse${event.button}`));
 window.addEventListener('pointercancel', event => { if (event.pointerType === 'mouse') releaseControls(); });
-ui.canvas.addEventListener('lostpointercapture', event => { if (event.pointerType === 'mouse') { controls.release('Mouse1'); controls.release('Mouse2'); } });
+ui.canvas.addEventListener('lostpointercapture', event => { if (event.pointerType === 'mouse') { controls.release('Mouse0'); controls.release('Mouse1'); controls.release('Mouse2'); } });
 ui.canvas.addEventListener('contextmenu', event => event.preventDefault());
 ui.canvas.addEventListener('auxclick', event => event.preventDefault());
 
@@ -198,10 +204,10 @@ function inputTick(): void {
   if (!playing || !connection.connected || !predicted || document.hidden) return;
   localMovement.advance(predicted, predicted);
   if (pending.length > 120) { releaseControls(); return; }
-  const { dx, dy, aim, cast } = isTyping() || ui.inputBlocked || predicted.hp <= 0
-    ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined })
+  const { dx, dy, aim, cast, autoAim } = isTyping() || ui.inputBlocked || predicted.hp <= 0
+    ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined, autoAim: false })
     : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
-  const input: InputCommand = { seq: ++seq, dx, dy, aim, ...(cast ? { cast } : {}) };
+  const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, ...(cast ? { cast } : {}) };
   if (connection.send({ type: 'input', input })) {
     pending.push(input);
     const next = predictMovement(predicted, input, renderer.world, connection.serverTime());
@@ -255,7 +261,8 @@ function frame(now: number): void {
     selectedId,
     previewClass: ui.selectedClass,
     playing,
-    aimPreview: mobileControls?.aimPreview,
+    aimPreview: mobileControls?.aimPreview ?? (playing && !ui.inputBlocked && !isTyping() && predicted && predicted.hp > 0 && controls.manualPointerAim && CLASSES[predicted.classId].abilities[controls.previewSlot].targeting === 'directional'
+      ? { slot: controls.previewSlot, angle: controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y)).aim } : null),
     moveDirection: playing && !isTyping() && predicted ? (() => {
       const input = controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
       return { x: input.dx, y: input.dy };

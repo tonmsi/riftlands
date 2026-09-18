@@ -194,6 +194,7 @@ export class WorldSimulation {
 
   enqueueInput(id: string, input: InputCommand): boolean {
     const connection = this.connections.get(id);
+    if (input.autoAim !== undefined && typeof input.autoAim !== 'boolean') return false;
     if (!connection?.connected || !Number.isSafeInteger(input.seq) || input.seq <= connection.highestSeq || input.seq > connection.highestSeq + 120 || ![input.dx, input.dy, input.aim].every(Number.isFinite) || Math.abs(input.dx) > 1 || Math.abs(input.dy) > 1 || Math.abs(input.aim) > 1e6 || (input.cast !== undefined && !['basic', 'q', 'e', 'r'].includes(input.cast))) return false;
     connection.highestSeq = input.seq;
     if (connection.inputs.length >= 6) connection.inputs.shift();
@@ -243,7 +244,7 @@ export class WorldSimulation {
     // Casts use the input consumed this tick, captured independently of queue length.
     for (const [id, input] of this.pendingCasts) {
       const actor = this.players.get(id);
-      if (actor && input.cast) this.cast(actor, input.cast);
+      if (actor && input.cast) this.cast(actor, input.cast, input.autoAim === true);
     }
     this.pendingCasts.clear();
     this.stepNpcs(dt);
@@ -310,6 +311,25 @@ export class WorldSimulation {
 
   private allied(a: Actor, b: Actor): boolean {
     return a.id === b.id || (a.kind === 'npc' && b.kind === 'npc') || (!!a.teamId && a.teamId === b.teamId);
+  }
+
+  private visibleTo(observer: Actor, target: Actor): boolean {
+    return target.id === observer.id || (!!observer.teamId && target.teamId === observer.teamId)
+      || !target.hidden || target.revealedUntil > this.now || distance(observer, target) < 120;
+  }
+
+  private nearestEnemy(actor: Actor): Actor | undefined {
+    let nearest: Actor | undefined;
+    let nearestDistance = INTEREST_RADIUS;
+    for (const target of this.near(actor, INTEREST_RADIUS)) {
+      const d = distance(actor, target);
+      if (d >= nearestDistance || target.hp <= 0 || this.allied(actor, target) || target.spawnProtectedUntil > this.now) continue;
+      if (!this.visibleTo(actor, target) || !hasLineOfSight(actor, target, this.world)) continue;
+      if (target.kind === 'player' && this.isSafeProtected(target)) continue;
+      if (target.bossKey && !this.bosses.get(target.bossKey)?.canDamage(actor)) continue;
+      nearest = target; nearestDistance = d;
+    }
+    return nearest;
   }
 
   private emit(event: Omit<GameEvent, 'id' | 'at'>): void {
@@ -403,11 +423,15 @@ export class WorldSimulation {
   }
 
   /** May be used directly by deterministic combat tests; input validation precedes this in transport. */
-  cast(actor: Actor, slot: AbilitySlot): boolean {
+  cast(actor: Actor, slot: AbilitySlot, autoAim = false): boolean {
     const ability = CLASSES[actor.classId].abilities[slot];
     if (this.isSafeProtected(actor) && ability.kind !== 'heal' && ability.kind !== 'shield') return false;
     if (actor.hp <= 0 || actor.cooldowns[slot] > this.now || actor.resource < ability.cost) return false;
     if (ability.kind === 'projectile' && this.projectiles.size >= 1000) return false;
+    if (autoAim && ability.targeting === 'directional') {
+      const target = this.nearestEnemy(actor);
+      if (target) actor.aim = Math.atan2(target.y - actor.y, target.x - actor.x);
+    }
     actor.resource -= ability.cost;
     actor.cooldowns[slot] = this.now + ability.cooldown * 1000;
     actor.spawnProtectedUntil = 0;
@@ -718,7 +742,7 @@ export class WorldSimulation {
   snapshotFor(id: string): Snapshot | undefined {
     const self = this.players.get(id), connection = this.connections.get(id);
     if (!self || !connection) return undefined;
-    const visible = (actor: Actor) => actor.id === id || (!!self.teamId && actor.teamId === self.teamId) || (!actor.hidden || actor.revealedUntil > this.now || distance(self, actor) < 120);
+    const visible = (actor: Actor) => this.visibleTo(self, actor);
     // I compagni restano sincronizzati anche quando sono molto lontani: il client
     // può così mostrarli sul bordo dello schermo invece di perderne la posizione.
     const actors = [...this.players.values(), ...this.npcs.values()].filter(actor =>

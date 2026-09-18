@@ -22,8 +22,9 @@ test('simultaneous joystick and attack aim keep independent directions through a
   const controls = new GameControls(defaultControls());
   controls.setTouchMovement({ x: 0.5, y: 0 }); controls.setTouchAim(-Math.PI / 2); controls.cast('basic');
   const sample = () => controls.sample({ x: 0, y: 0 }, 0, (x, y) => ({ x, y }));
-  assert.deepEqual(sample(), { dx: 0.5, dy: 0, aim: -Math.PI / 2, cast: 'basic' });
+  controls.setTouchAim(null);
+  assert.deepEqual(sample(), { dx: 0.5, dy: 0, aim: -Math.PI / 2, autoAim: false, cast: 'basic' });
   controls.consumeCast(); controls.setTouchMovement({ x: 0, y: 1 }); controls.cast('r');
-  assert.deepEqual(sample(), { dx: 0, dy: 1, aim: -Math.PI / 2, cast: 'r' });
-  controls.clear(); assert.deepEqual(sample(), { dx: 0, dy: 0, aim: 0, cast: undefined });
+  assert.deepEqual(sample(), { dx: 0, dy: 1, aim: 0, autoAim: true, cast: 'r' });
+  controls.clear(); assert.deepEqual(sample(), { dx: 0, dy: 0, aim: 0, autoAim: true, cast: undefined });
 });

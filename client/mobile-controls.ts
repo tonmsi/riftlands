@@ -10,7 +10,7 @@ interface MobileActions {
   enabled: () => boolean;
   ability: (slot: AbilitySlot) => AbilityDef;
   move: (vector: Vec2) => void;
-  aim: (angle: number) => void;
+  aim: (angle: number | null) => void;
   cast: (slot: AbilitySlot) => void;
 }
 /** Separate pointer ownership lets movement and attacks run simultaneously. */
@@ -42,6 +42,7 @@ export class MobileControls {
       const slot = button.dataset.slot as AbilitySlot;
       if (this.actions.ability(slot).targeting === 'directional') {
         if (this.attack) return;
+        this.actions.aim(null);
         this.attack = { id: event.pointerId, slot, button, origin: { x: event.clientX, y: event.clientY } };
         button.classList.add('touch-pressed');
       } else {
@@ -64,6 +65,7 @@ export class MobileControls {
         const { button, slot } = this.attack;
         this.attack = null; this.aimPreview = null; button.classList.remove('touch-pressed', 'touch-aiming');
         if (!cancelled && this.actions.enabled() && button.getAttribute('aria-disabled') !== 'true') this.actions.cast(slot);
+        this.actions.aim(null);
       }
       const button = this.taps.get(event.pointerId);
       if (button) {
@@ -85,6 +87,7 @@ export class MobileControls {
     this.actions.move(vector); this.knob.style.transform = `translate(${vector.x * radius}px, ${vector.y * radius}px)`;
   }
   reset(): void {
+    this.actions.aim(null);
     this.movePointer = null; this.attack?.button.classList.remove('touch-pressed', 'touch-aiming');
     for (const button of this.taps.values()) button.classList.remove('touch-pressed');
     this.taps.clear(); this.attack = null; this.aimPreview = null; this.knob.style.transform = ''; this.actions.move({ x: 0, y: 0 });

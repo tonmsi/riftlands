@@ -44,6 +44,59 @@ function team(simulation: WorldSimulation, a: Actor, b: Actor) {
   simulation.socialAction(b.id, 'team-accept', a.id);
 }
 
+test('automatic input aims at the nearest enemy while manual input preserves its direction', () => {
+  const { simulation, a, b } = arena();
+  Object.assign(b, { x: 0, y: 180 });
+  const c = simulation.addPlayer(account('carol'), 'warrior');
+  Object.assign(c, { x: -300, y: 0, spawnProtectedUntil: 0 });
+  simulation.enqueueInput(a.id, { seq: 1, dx: 0, dy: 0, aim: Math.PI, cast: 'basic', autoAim: true });
+  simulation.step();
+  assert.equal(a.aim, Math.PI / 2);
+  assert.equal([...simulation.projectiles.values()][0].vx < 1e-8, true);
+  a.cooldowns.basic = 0;
+  simulation.enqueueInput(a.id, { seq: 2, dx: 0, dy: 0, aim: Math.PI, cast: 'basic', autoAim: false });
+  simulation.step();
+  assert.equal(a.aim, Math.PI);
+});
+
+for (const excluded of ['ally', 'dead', 'protected', 'hidden', 'wall'] as const) {
+  test(`automatic aim skips a nearer ${excluded} target`, () => {
+    const { simulation, a, b } = arena();
+    Object.assign(b, { x: 180, y: 0 });
+    const c = simulation.addPlayer(account('carol'), 'warrior');
+    Object.assign(c, { x: 0, y: 300, spawnProtectedUntil: 0 });
+    if (excluded === 'ally') team(simulation, a, b);
+    if (excluded === 'dead') Object.assign(b, { hp: 0, deadUntil: simulation.now + 10000 });
+    if (excluded === 'protected') b.spawnProtectedUntil = simulation.now + 10000;
+    if (excluded === 'hidden') simulation.world.getTile = (tx, ty) => tx === Math.floor(b.x / 48) && ty === 0 ? 'bush' : 'grass';
+    if (excluded === 'wall') simulation.world.getTile = (tx, ty) => tx === 1 && ty === 0 ? 'rock' : 'grass';
+    simulation.enqueueInput(a.id, { seq: 1, dx: 0, dy: 0, aim: 0, cast: 'basic', autoAim: true });
+    simulation.step();
+    assert.equal(a.aim, Math.PI / 2);
+  });
+}
+
+test('automatic aim includes NPCs, revealed bushes and proximity visibility, with fallback when no target exists', () => {
+  const { simulation, a, b } = arena();
+  Object.assign(b, { kind: 'npc', x: 0, y: 180, hidden: true, revealedUntil: simulation.now + 1000 });
+  assert.equal(simulation.cast(a, 'basic', true), true);
+  assert.equal(a.aim, Math.PI / 2);
+  b.revealedUntil = 0; a.cooldowns.basic = 0; a.aim = Math.PI;
+  simulation.cast(a, 'basic', true);
+  assert.equal(a.aim, Math.PI);
+  b.y = 100; a.cooldowns.basic = 0;
+  simulation.cast(a, 'basic', true);
+  assert.equal(a.aim, Math.PI / 2);
+});
+
+test('automatic aim does not reorient self abilities and rejects malformed aim mode', () => {
+  const { simulation, a } = arena();
+  a.aim = Math.PI;
+  simulation.cast(a, 'e', true);
+  assert.equal(a.aim, Math.PI);
+  assert.equal(simulation.enqueueInput(a.id, { seq: 1, dx: 0, dy: 0, aim: 0, autoAim: 'yes' as unknown as boolean }), false);
+});
+
 test('authoritative inputs are finite, sequenced and processed at most once per server tick', () => {
   const { simulation, a } = arena();
   assert.equal(simulation.enqueueInput(a.id, { seq: 1, dx: NaN, dy: 0, aim: 0 }), false);

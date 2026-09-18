@@ -36,28 +36,46 @@ test('remapped keys replace defaults, normalize diagonals and repeat only the ba
   controls.press('Space'); controls.consumeCast();
   assert.equal(controls.sample(origin, 1, worldPoint).cast, 'basic');
   controls.clear(); input = controls.sample(origin, 1, worldPoint);
-  assert.deepEqual(input, { dx: 0, dy: 0, aim: 1, cast: undefined });
+  assert.deepEqual(input, { dx: 0, dy: 0, aim: 1, autoAim: true, cast: undefined });
 });
 test('mouse movement follows cursor, stops near it and stops on release without attacking', () => {
   const settings = defaultControls(); changeMovement(settings, 'mouse');
   const controls = new GameControls(settings);
   controls.setPointer({ x: 100, y: 0 }); controls.press('Mouse2');
-  assert.deepEqual(controls.sample(origin, 1, worldPoint), { dx: 1, dy: 0, aim: 0, cast: undefined });
+  assert.deepEqual(controls.sample(origin, 1, worldPoint), { dx: 1, dy: 0, aim: 1, autoAim: true, cast: undefined });
   controls.setPointer({ x: 0, y: 100 }); controls.press('Space');
-  assert.deepEqual(controls.sample(origin, 0, worldPoint), { dx: 0, dy: 1, aim: Math.PI / 2, cast: 'basic' });
+  assert.deepEqual(controls.sample(origin, 0, worldPoint), { dx: 0, dy: 1, aim: 0, autoAim: true, cast: 'basic' });
   controls.release('Mouse2'); controls.release('Space');
   assert.equal(controls.sample(origin, 0, worldPoint).dy, 0);
   controls.press('Mouse2'); controls.setPointer({ x: 5, y: 0 });
   assert.equal(controls.sample(origin, 0, worldPoint).dx, 0);
 });
-test('touch movement is independent of bindings and keeps swipe aim for subsequent taps', () => {
+test('touch cast captures swipe aim on release and subsequent taps return to automatic aim', () => {
   const settings = defaultControls(); settings.bindings.up = ['KeyI']; changeMovement(settings, 'mouse');
   const controls = new GameControls(settings);
   controls.setPointer({ x: 100, y: 0 }); controls.setTouchAim(Math.PI);
   controls.setTouchMovement({ x: 0, y: 1 }); controls.cast('e');
-  assert.deepEqual(controls.sample(origin, 0, worldPoint), { dx: 0, dy: 1, aim: Math.PI, cast: 'e' });
+  controls.setTouchAim(null);
+  assert.deepEqual(controls.sample(origin, 0, worldPoint), { dx: 0, dy: 1, aim: Math.PI, autoAim: false, cast: 'e' });
   controls.consumeCast(); controls.setTouchMovement({ x: -1, y: 0 }); controls.cast('basic');
-  assert.equal(controls.sample(origin, 0, worldPoint).aim, Math.PI);
+  assert.equal(controls.sample(origin, 0, worldPoint).autoAim, true);
   controls.clear();
-  assert.deepEqual(controls.sample(origin, 0, worldPoint), { dx: 0, dy: 0, aim: 0, cast: undefined });
+  assert.deepEqual(controls.sample(origin, 0, worldPoint), { dx: 0, dy: 0, aim: 0, autoAim: true, cast: undefined });
+});
+
+test('desktop manual aim requires held left button and previews the held ability', () => {
+  const controls = new GameControls(defaultControls());
+  controls.setPointer({ x: 0, y: 100 }); controls.press('Space');
+  assert.equal(controls.sample(origin, 0, worldPoint).autoAim, true);
+  controls.press('Mouse0'); controls.press('KeyQ');
+  assert.equal(controls.previewSlot, 'q');
+  assert.equal(controls.sample(origin, 0, worldPoint).aim, Math.PI / 2);
+  assert.equal(controls.sample(origin, 0, worldPoint).autoAim, false);
+  controls.consumeCast(); controls.release('Space');
+  assert.equal(controls.previewSlot, 'q');
+  controls.release('Mouse0');
+  assert.equal(controls.manualPointerAim, false);
+  assert.equal(controls.sample(origin, 0, worldPoint).autoAim, true);
+  controls.press('Mouse0'); controls.clear();
+  assert.equal(controls.manualPointerAim, false);
 });

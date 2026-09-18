@@ -148,7 +148,7 @@ export class GameUI {
             <div class="entry-note"><span class="save-dot"></span>I tuoi progressi sono protetti dal tuo account personale.</div>
           </form>
 
-          <div class="lobby-controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Muoviti</span><span><kbd>␣</kbd> Attacca</span><span><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd> Abilità</span><span class="mouse-hint">↖ Mouse per mirare</span></div>
+          <div class="lobby-controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Muoviti</span><span><kbd>␣</kbd> Attacca</span><span><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd> Abilità</span><span class="mouse-hint">↖ Tieni il sinistro per mirare</span></div>
         </section></main>
         <footer class="lobby-footer"><div><span class="feature-icon">∞</span><span><b>Nessun confine</b><small>Biomi e incontri generati lungo il cammino</small></span></div><div><span class="feature-icon">${icon('<circle cx="8" cy="8" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>')}</span><span><b>La forza di un’alleanza</b><small>Incontra giocatori, aggiungi amici, crea un team</small></span></div><div><span class="feature-icon">${icon('<path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/>')}</span><span><b>Ogni scelta conta</b><small>Combatti, esplora e padroneggia la tua classe</small></span></div><span class="footer-version">PROTOTIPO GIOCABILE<br>AUTENTICAZIONE SICURA</span></footer>
       </div>
@@ -160,7 +160,7 @@ export class GameUI {
         <section class="target-panel glass" data-ref="target" hidden><div class="target-heading"><span data-ref="target-type">GIOCATORE</span><button data-ref="target-close" aria-label="Deseleziona bersaglio">×</button></div><strong data-ref="target-name"></strong><small data-ref="target-detail"></small><div class="meter hp-meter target-health"><i data-ref="target-fill"></i></div><div class="target-actions" data-ref="target-actions"><button data-ref="target-friend">+ Amico</button><button data-ref="target-team">+ Team</button></div></section>
         <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><div><span class="eyebrow">NON VIAGGIARE DA SOLO</span><h2>I tuoi compagni</h2></div><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
         <div class="minimap-panel glass"><canvas class="minimap" width="168" height="168" aria-label="Mappa locale"></canvas><div><span>LE TERRE DI SOGLIA</span><span>N ↑</span></div></div>
-        <div class="combat-hud"><div class="combat-instruction"><span>WASD / FRECCE <b>muovi</b></span><span>MOUSE <b>mira</b></span><span>CLIC <b>seleziona</b></span></div><div class="ability-bar glass" data-ref="ability-bar"></div><div class="combat-caption"><span data-ref="combat-class"></span><span>·</span><span>SPAZIO / CLIC DESTRO per attaccare</span></div></div>
+        <div class="combat-hud"><div class="combat-instruction"><span>WASD / FRECCE <b>muovi</b></span><span>SINISTRO PREMUTO <b>mira</b></span><span>CLIC <b>seleziona</b></span></div><div class="ability-bar glass" data-ref="ability-bar"></div><div class="combat-caption"><span data-ref="combat-class"></span><span>·</span><span>SPAZIO / CLIC DESTRO per attaccare</span></div></div>
         <div class="world-tip glass"><span>✧</span><span>I cespugli ti nascondono.<br><b>Attaccare rivela la tua posizione.</b></span></div>
         <div class="connection-banner" data-ref="connection-banner" hidden>Riconnessione al mondo…</div>
         <div class="death-overlay" data-ref="death" hidden><span class="eyebrow">IL VIAGGIO NON FINISCE QUI</span><h2>La Soglia ti richiama.</h2><p>Ritorno al punto di partenza tra <b data-ref="death-count">5</b> secondi</p></div>
@@ -274,9 +274,9 @@ export class GameUI {
       ? `${settings.bindings.movePointer.map(bindingLabel).join(' / ')} tenuto: segui il cursore`
       : `${(['up', 'left', 'down', 'right'] as const).map(action => settings.bindings[action].map(bindingLabel).join('/')).join(' · ')}: muovi`;
     this.root.querySelector('.lobby-controls')!.textContent = this.display.touch
-      ? 'Joystick: muovi · Trascina le abilità direzionali per mirare, rilascia per usarle · Tocca le abilità per usarle · Tocca i personaggi per selezionarli'
-      : `${movement} · ${settings.bindings.basic.map(bindingLabel).join(' / ')}: attacca · ${(['q', 'e', 'r'] as const).map(slot => this.keyLabel(slot)).join(' / ')}: abilità · Mouse: mira`;
-    this.root.querySelector('.combat-instruction')!.textContent = `${movement} · Mouse: mira · Clic sinistro: seleziona`;
+      ? 'Joystick: muovi · Trascina le abilità direzionali per mirare, rilascia per usarle · Tocca per mirare al nemico più vicino · Tocca i personaggi per selezionarli'
+      : `${movement} · ${settings.bindings.basic.map(bindingLabel).join(' / ')}: attacca · ${(['q', 'e', 'r'] as const).map(slot => this.keyLabel(slot)).join(' / ')}: abilità · Sinistro premuto: mira manuale · Senza mira: nemico più vicino`;
+    this.root.querySelector('.combat-instruction')!.textContent = `${movement} · Sinistro premuto: mira manuale · Senza mira: nemico più vicino · Clic sinistro: seleziona`;
     this.root.querySelector('.combat-caption > span:last-child')!.textContent = `${settings.bindings.basic.map(bindingLabel).join(' / ')} per attaccare`;
   }
   private ref(name: string): HTMLElement { return this.refs.get(name)!; }

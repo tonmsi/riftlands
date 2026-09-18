@@ -76,6 +76,8 @@ test('configured commands reach the simulation and release on blur and mouse up'
   await page.getByRole('button', { name: 'Opzioni', exact: true }).click();
   await page.getByLabel('Modalità di movimento').selectOption('keyboard');
   await page.locator('[data-binding="right-0"]').click(); await page.keyboard.press('KeyL');
+  await page.locator('[data-binding="basic-1"]').click();
+  await page.locator('[data-binding="basic-1"]').click({ button: 'right' });
   await page.getByRole('button', { name: 'Salva controlli' }).click();
   await page.locator('[data-ref="join"]').click(); await expect(page.locator('.game-hud')).toBeVisible();
   await page.keyboard.down('KeyL'); await expect.poll(() => input?.dx).toBe(1);
@@ -86,4 +88,20 @@ test('configured commands reach the simulation and release on blur and mouse up'
   await expect.poll(() => sent.length - start).toBeGreaterThan(3);
   expect(sent.slice(start).every(command => command.dx === 0)).toBe(true);
   await page.keyboard.up('KeyD');
+  // Both button orders must work: Pointer Events alone miss the second button.
+  await page.mouse.move(900, 480);
+  await page.mouse.down({ button: 'left' });
+  await expect.poll(() => input?.autoAim).toBe(false);
+  await page.mouse.down({ button: 'right' });
+  await expect.poll(() => input?.cast).toBe('basic');
+  await page.mouse.up({ button: 'left' });
+  await expect.poll(() => input?.autoAim).toBe(true);
+  expect(input?.cast).toBe('basic');
+  await page.mouse.down({ button: 'left' });
+  await expect.poll(() => input?.autoAim).toBe(false);
+  await page.mouse.up({ button: 'right' });
+  await expect.poll(() => input?.cast).toBeUndefined();
+  expect(input?.autoAim).toBe(false);
+  await page.mouse.up({ button: 'left' });
+  await expect.poll(() => input?.autoAim).toBe(true);
 });

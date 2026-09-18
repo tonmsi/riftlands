@@ -19,7 +19,7 @@ export function defaultControls(): ControlSettings {
 export function activeActions(settings: ControlSettings): ControlAction[] {
   return [...(settings.movement === 'keyboard' ? directions : ['movePointer'] as ControlAction[]), ...slots];
 }
-// Left click selects actors. Escape cancels binding capture; Tab keeps keyboard navigation usable.
+// Left click selects actors and enables manual aim while held.
 export function isBindable(code: string): boolean {
   return /^(Key[A-Z]|Digit[0-9]|Arrow(Up|Down|Left|Right)|Space|Shift(Left|Right)|Numpad[0-9]|Numpad(Add|Subtract|Multiply|Divide|Decimal)|Backquote|Minus|Equal|BracketLeft|BracketRight|Backslash|Semicolon|Quote|Comma|Period|Slash|Mouse[12])$/.test(code);
 }
@@ -68,8 +68,10 @@ export class GameControls {
   private pointer: Vec2 | null = null;
   private touchAim: number | null = null;
   private pendingCast: AbilitySlot | undefined;
+  private pendingTouchAim: number | null = null;
   constructor(public settings: ControlSettings) {}
   press(code: string): boolean {
+    if (code === 'Mouse0') { this.pressed.add(code); return true; }
     const action = activeActions(this.settings).find(action => this.settings.bindings[action].includes(code));
     if (!action) return false;
     if (!this.pressed.has(code) && slots.includes(action as AbilitySlot) && action !== 'basic') this.cast(action as AbilitySlot);
@@ -79,11 +81,13 @@ export class GameControls {
   release(code: string): void { this.pressed.delete(code); }
   setPointer(position: Vec2): void { this.pointer = position; this.touchAim = null; }
   setTouchMovement(movement: Vec2): void { this.touchMovement = movement; this.pointer = null; }
-  setTouchAim(angle: number): void { if (Number.isFinite(angle)) { this.touchAim = angle; this.pointer = null; } }
-  cast(slot: AbilitySlot): void { this.pendingCast = slot; }
-  consumeCast(): void { this.pendingCast = undefined; }
-  clear(): void { this.pressed.clear(); this.touchMovement = { x: 0, y: 0 }; this.pointer = null; this.touchAim = null; this.pendingCast = undefined; }
-  sample(position: Vec2, previousAim: number, screenToWorld: (x: number, y: number) => Vec2): { dx: number; dy: number; aim: number; cast?: AbilitySlot } {
+  setTouchAim(angle: number | null): void { if (angle === null || Number.isFinite(angle)) { this.touchAim = angle; this.pointer = null; } }
+  cast(slot: AbilitySlot): void { this.pendingCast = slot; this.pendingTouchAim = this.touchAim; }
+  consumeCast(): void { this.pendingCast = undefined; this.pendingTouchAim = null; }
+  get manualPointerAim(): boolean { return this.pressed.has('Mouse0') && this.pointer !== null; }
+  get previewSlot(): AbilitySlot { return this.pendingCast ?? (['q', 'e', 'r', 'basic'] as const).find(slot => this.settings.bindings[slot].some(code => this.pressed.has(code))) ?? 'basic'; }
+  clear(): void { this.pressed.clear(); this.touchMovement = { x: 0, y: 0 }; this.pointer = null; this.touchAim = null; this.consumeCast(); }
+  sample(position: Vec2, previousAim: number, screenToWorld: (x: number, y: number) => Vec2): { dx: number; dy: number; aim: number; cast?: AbilitySlot; autoAim: boolean } {
     const held = (action: ControlAction): boolean => this.settings.bindings[action].some(code => this.pressed.has(code));
     const target = this.pointer ? screenToWorld(this.pointer.x, this.pointer.y) : null;
     let dx = this.touchMovement.x, dy = this.touchMovement.y;
@@ -95,8 +99,9 @@ export class GameControls {
     }
     const length = Math.hypot(dx, dy);
     if (length > 1) { dx /= length; dy /= length; }
-    const aim = target && Math.hypot(target.x - position.x, target.y - position.y) > 1
-      ? Math.atan2(target.y - position.y, target.x - position.x) : this.touchAim ?? previousAim;
-    return { dx, dy, aim, cast: this.pendingCast ?? (held('basic') ? 'basic' : undefined) };
+    const touchAngle = this.pendingTouchAim ?? this.touchAim;
+    const aim = this.manualPointerAim && target && Math.hypot(target.x - position.x, target.y - position.y) > 1
+      ? Math.atan2(target.y - position.y, target.x - position.x) : touchAngle ?? previousAim;
+    return { dx, dy, aim, autoAim: !this.manualPointerAim && touchAngle === null, cast: this.pendingCast ?? (held('basic') ? 'basic' : undefined) };
   }
 }
