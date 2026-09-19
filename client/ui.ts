@@ -284,6 +284,17 @@ export class GameUI {
     });
     this.ref('social-toggle').addEventListener('click', () => this.toggleSocial());
     this.ref('social-close').addEventListener('click', () => this.toggleSocial(false));
+    const targetSummary = document.createElement('button');
+    targetSummary.type = 'button';
+    targetSummary.className = 'target-summary';
+    targetSummary.setAttribute('aria-expanded', 'false');
+    targetSummary.innerHTML = '<strong></strong><span class="target-summary-meter target-summary-hp"><i></i><span></span></span><span class="target-summary-meter target-summary-resource"><i></i><span></span></span>';
+    this.ref('target').prepend(targetSummary);
+    targetSummary.addEventListener('click', () => {
+      const expanded = this.ref('target').classList.toggle('is-expanded');
+      targetSummary.setAttribute('aria-expanded', String(expanded));
+      this.actions.releaseControls?.();
+    });
     this.ref('target-close').addEventListener('click', () => this.actions.select(null));
     this.ref('target-friend').addEventListener('click', () => { if (this.selected) this.actions.social('friend-request', this.selected.id); });
     this.ref('target-team').addEventListener('click', () => { if (this.selected) this.sendSocial('team-invite', this.selected.id); });
@@ -639,12 +650,28 @@ export class GameUI {
 
   setSelected(actor: Actor | null): void {
     if (actor?.id === this.latest?.self.id) actor = null;
+    const summary = this.ref('target').querySelector<HTMLButtonElement>('.target-summary')!;
+    if (actor?.id !== this.selected?.id) {
+      this.ref('target').classList.remove('is-expanded');
+      summary.setAttribute('aria-expanded', 'false');
+    }
     this.selected = actor;
     for (const row of this.ref('team-roster').querySelectorAll<HTMLElement>('.team-member')) {
       row.setAttribute('aria-pressed', String(row.dataset.memberId === actor?.id));
     }
     this.ref('target').hidden = !actor;
     if (!actor) return;
+    summary.querySelector('strong')!.textContent = actor.name;
+    const resourceName = CLASSES[actor.classId].resource === 'rage' ? 'Rage' : 'Mana';
+    const updateSummaryMeter = (selector: string, value: number, max: number, label: string) => {
+      const meter = summary.querySelector<HTMLElement>(selector)!;
+      meter.querySelector('span')!.textContent = `${label} ${Math.ceil(value)} / ${max}`;
+      meter.querySelector('i')!.style.width = `${max > 0 ? Math.max(0, Math.min(100, value / max * 100)) : 0}%`;
+    };
+    updateSummaryMeter('.target-summary-hp', actor.hp, actor.maxHp, 'PV');
+    updateSummaryMeter('.target-summary-resource', actor.resource, actor.maxResource, resourceName);
+    summary.querySelector<HTMLElement>('.target-summary-resource')!.hidden = actor.maxResource <= 0;
+    summary.style.setProperty('--target-resource-color', CLASSES[actor.classId].resource === 'rage' ? '#ac6043' : '#65549d');
     this.write('target-type', actor.kind === 'npc' ? 'CREATURA DEL MONDO' : 'VIAGGIATORE');
     this.write('target-name', actor.name);
     this.write('target-detail', `${CLASSES[actor.classId].name} · Livello ${actor.level} · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV`);
