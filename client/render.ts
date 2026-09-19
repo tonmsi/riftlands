@@ -8,6 +8,7 @@ import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonApproachNormal, dungeon
 import type { DungeonDefinition } from '../shared/dungeons';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
+import { EnvironmentArt } from './environment-art';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -104,7 +105,7 @@ const PICKUP_COLORS: Record<Pickup['kind'], string> = {
   heal: '#b6e5aa', haste: '#a5dbe2', power: '#e5cc81', weakness: '#bb99cb',
 };
 const TERRAIN: Record<TileKind, string> = {
-  grass: '#737d57', path: '#a59970', water: '#465f63', rock: '#68716a', bush: '#546846', mud: '#77725b',
+  grass: '#8caa64', path: '#d2b47d', water: '#439fae', rock: '#899bb4', bush: '#4c984d', mud: '#9d9b73',
 };
 
 function noise(x: number, y: number, offset = 0): number {
@@ -145,6 +146,7 @@ export class Renderer {
   private readonly classSprites = new Map<ClassId, RasterSpriteSheet>();
   private readonly npcSprites = new Map<string, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
+  private readonly environmentArt = new EnvironmentArt();
   readonly spritesReady: Promise<void>;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -412,6 +414,7 @@ export class Renderer {
   private drawTerrain(time: number): Vec2[] {
     const { ctx } = this;
     const bushes: Vec2[] = [];
+    const transform = ctx.getTransform();
     // Cache just the visible chunks; sampling terrain then avoids regenerating tile noise every frame.
     for (let cy = Math.floor(this.bounds.top / CHUNK_SIZE); cy <= Math.floor(this.bounds.bottom / CHUNK_SIZE); cy++) {
       for (let cx = Math.floor(this.bounds.left / CHUNK_SIZE); cx <= Math.floor(this.bounds.right / CHUNK_SIZE); cx++) {
@@ -434,46 +437,26 @@ export class Renderer {
         }
         const variation = noise(tx, ty);
         const biome = this.world.getBiome(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
-        ctx.fillStyle = dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor : dungeon && tile === 'rock' ? dungeon.theme.wall : tile === 'grass'
-          ? (biome === 'forest' ? '#677654' : biome === 'marsh' ? '#727861' : TERRAIN.grass)
+        const naturalGround = tile === 'grass' || tile === 'bush' || tile === 'rock';
+        ctx.fillStyle = dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor : dungeon && tile === 'rock' ? dungeon.theme.wall : naturalGround
+          ? (biome === 'forest' ? '#7e9f5d' : biome === 'marsh' ? '#88a172' : TERRAIN.grass)
           : TERRAIN[tile];
-        ctx.fillRect(x, y, TILE_SIZE + 0.4, TILE_SIZE + 0.4);
-        ctx.fillStyle = variation > 0.5 ? `rgba(226,219,159,${(variation - 0.5) * 0.055})` : `rgba(23,43,28,${variation * 0.09})`;
-        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        // Opaque, pixel-aligned coverage avoids hairline seams at fractional camera zoom.
+        const left = Math.floor(x * transform.a + transform.e);
+        const top = Math.floor(y * transform.d + transform.f);
+        const right = Math.ceil((x + TILE_SIZE) * transform.a + transform.e);
+        const bottom = Math.ceil((y + TILE_SIZE) * transform.d + transform.f);
+        ctx.fillRect((left - transform.e) / transform.a, (top - transform.f) / transform.d,
+          (right - left) / transform.a, (bottom - top) / transform.d);
         if (tile === 'water') {
           this.drawWater(tx, ty, x, y, time);
         } else if (tile === 'rock') {
           this.drawRock(x, y, variation, dungeon);
         } else if (tile === 'bush') {
           bushes.push({ x, y });
-          this.drawBushBase(x, y);
-        } else if (tile === 'grass') {
-          ctx.strokeStyle = 'rgba(47,65,40,0.24)';
-          ctx.lineWidth = 1;
-          for (let i = 0; i < 3; i++) {
-            const px = x + 7 + noise(tx, ty, i + 1) * 33;
-            const py = y + 8 + noise(tx, ty, i + 5) * 31;
-            ctx.beginPath();
-            ctx.moveTo(px - 2, py - 3);
-            ctx.lineTo(px, py);
-            ctx.lineTo(px + 2, py - 4);
-            ctx.stroke();
-          }
-          if (variation > 0.975) {
-            ctx.fillStyle = '#b8af77';
-            ctx.fillRect(x + 17, y + 24, 2, 2);
-            ctx.fillRect(x + 22, y + 27, 2, 2);
-          }
-        } else if (tile === 'path') {
-          ctx.fillStyle = 'rgba(72,65,42,0.18)';
-          ctx.fillRect(x + 8 + variation * 25, y + 9, 3, 2);
-          ctx.fillRect(x + 34 - variation * 15, y + 31, 2, 1);
-        } else if (tile === 'mud') {
-          ctx.strokeStyle = 'rgba(47,48,37,0.22)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.ellipse(x + 23, y + 24, 13 + variation * 6, 4, -0.2, 0, TAU);
-          ctx.stroke();
+          this.environmentArt.draw(ctx, 'bush', x, y, variation);
+        } else {
+          this.environmentArt.draw(ctx, tile, x, y, variation);
         }
       }
     }
@@ -482,29 +465,41 @@ export class Renderer {
 
   private drawWater(tx: number, ty: number, x: number, y: number, time: number): void {
     const { ctx } = this;
-    const edges: [number, number, number, number, number, number][] = [
-      [0, -1, x, y + 1, x + TILE_SIZE, y + 1],
-      [0, 1, x, y + TILE_SIZE - 1, x + TILE_SIZE, y + TILE_SIZE - 1],
-      [-1, 0, x + 1, y, x + 1, y + TILE_SIZE],
-      [1, 0, x + TILE_SIZE - 1, y, x + TILE_SIZE - 1, y + TILE_SIZE],
-    ];
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = '#829389';
-    for (const [dx, dy, x1, y1, x2, y2] of edges) {
-      if (this.world.getTile(tx + dx, ty + dy) === 'water') continue;
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    const shore = (this.world.getTile(tx, ty - 1) !== 'water' ? 1 : 0)
+      | (this.world.getTile(tx + 1, ty) !== 'water' ? 2 : 0)
+      | (this.world.getTile(tx, ty + 1) !== 'water' ? 4 : 0)
+      | (this.world.getTile(tx - 1, ty) !== 'water' ? 8 : 0);
+    this.environmentArt.draw(ctx, 'water', x, y, noise(tx, ty), shore);
+    // Offset cycles prevent synchronized rows; each crest travels then fades before wrapping.
+    const cycle = (time * .00024 + noise(tx, ty, 9)) % 1;
+    const visibility = Math.sin(cycle * Math.PI) ** 2;
+    const px = x + 11 + noise(tx, ty, 3) * 12 + cycle * 10;
+    const py = y + 17 + noise(tx, ty, 7) * 13 - cycle * 5;
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.strokeStyle = `rgba(210,249,239,${visibility * .58})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(px - 7, py);
+    ctx.quadraticCurveTo(px - 3, py + 3, px, py + 1);
+    ctx.quadraticCurveTo(px + 4, py - 1, px + 8, py); ctx.stroke();
+    ctx.strokeStyle = `rgba(34,116,144,${visibility * .35})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px - 5, py + 4); ctx.quadraticCurveTo(px, py + 6, px + 6, py + 3); ctx.stroke();
+    if (noise(tx, ty, 11) > .72) {
+      const gleam = Math.max(0, Math.sin(time * .0018 + noise(tx, ty, 5) * TAU)) ** 6;
+      ctx.strokeStyle = `rgba(240,255,229,${gleam * .8})`;
+      ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(x + 33, y + 9); ctx.lineTo(x + 33, y + 15);
+      ctx.moveTo(x + 30, y + 12); ctx.lineTo(x + 36, y + 12); ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(173,198,190,0.16)';
-    ctx.lineWidth = 1;
-    const sway = Math.sin(time * 0.0012 + tx * 2 + ty) * 3;
-    ctx.beginPath();
-    ctx.moveTo(x + 9 + sway, y + 17); ctx.lineTo(x + 21 + sway, y + 17);
-    ctx.moveTo(x + 27 - sway, y + 34); ctx.lineTo(x + 37 - sway, y + 34);
-    ctx.stroke();
+    ctx.restore();
   }
 
   private drawRock(x: number, y: number, variation: number, dungeon?: DungeonDefinition): void {
     const { ctx } = this;
+    if (!dungeon) {
+      this.environmentArt.draw(ctx, 'rock', x, y, variation);
+      return;
+    }
     ctx.fillStyle = dungeon?.theme.wall ?? '#50594f';
     ctx.fillRect(x + 1, y + 6, TILE_SIZE - 2, TILE_SIZE - 6);
     polygon(ctx, [x + 2, y + 9, x + 12, y + 2, x + 37, y + 3, x + 46, y + 12, x + 45, y + 37, x + 34, y + 43, x + 8, y + 41, x + 2, y + 31]);
@@ -519,27 +514,15 @@ export class Renderer {
     ctx.fillRect(x + 5, y + 33, 10, 5);
   }
 
-  private drawBushBase(x: number, y: number): void {
-    const { ctx } = this;
-    ctx.fillStyle = 'rgba(26,45,31,0.21)';
-    ctx.beginPath(); ctx.ellipse(x + 24, y + 28, 23, 18, 0, 0, TAU); ctx.fill();
-    for (let i = 0; i < 5; i++) {
-      const px = x + 8 + (i % 3) * 15, py = y + 12 + Math.floor(i / 3) * 18;
-      circle(ctx, px, py, 12);
-      ctx.fillStyle = i % 2 ? '#60794e' : '#5a704a'; ctx.fill();
-      ctx.strokeStyle = 'rgba(37,56,32,0.22)'; ctx.lineWidth = 1; ctx.stroke();
-    }
-  }
-
   private drawBushTop(x: number, y: number, time: number): void {
     const { ctx } = this;
     ctx.save();
-    ctx.globalAlpha = 0.27;
-    ctx.strokeStyle = '#b2bd86'; ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.32;
+    ctx.fillStyle = '#cbe888';
     const sway = Math.sin(time * 0.001 + x * 0.01) * 1.3;
     for (let i = 0; i < 4; i++) {
       const px = x + 8 + i * 10, py = y + 19 + (i % 2) * 11;
-      ctx.beginPath(); ctx.moveTo(px - 3 + sway, py - 3); ctx.lineTo(px, py); ctx.lineTo(px + 4 + sway, py - 4); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(px + sway, py - 3, 2.8, 1.1, -.6, 0, TAU); ctx.fill();
     }
     ctx.restore();
   }
