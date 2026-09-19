@@ -9,6 +9,7 @@ import type { DungeonDefinition } from '../shared/dungeons';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
 import { EnvironmentArt } from './environment-art';
+import { TERRAIN, groundColor, shorelineMask } from './terrain-style';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -103,9 +104,6 @@ export interface RenderFrame {
 const TAU = Math.PI * 2;
 const PICKUP_COLORS: Record<Pickup['kind'], string> = {
   heal: '#b6e5aa', haste: '#a5dbe2', power: '#e5cc81', weakness: '#bb99cb',
-};
-const TERRAIN: Record<TileKind, string> = {
-  grass: '#8caa64', path: '#d2b47d', water: '#439fae', rock: '#899bb4', bush: '#4c984d', mud: '#9d9b73',
 };
 
 function noise(x: number, y: number, offset = 0): number {
@@ -436,10 +434,10 @@ export class Renderer {
           continue;
         }
         const variation = noise(tx, ty);
-        const biome = this.world.getBiome(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
-        const naturalGround = tile === 'grass' || tile === 'bush' || tile === 'rock';
+        const moisture = this.world.getMoisture(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+        const naturalGround = tile === 'grass' || tile === 'bush' || tile === 'rock' || tile === 'water';
         ctx.fillStyle = dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor : dungeon && tile === 'rock' ? dungeon.theme.wall : naturalGround
-          ? (biome === 'forest' ? '#7e9f5d' : biome === 'marsh' ? '#88a172' : TERRAIN.grass)
+          ? groundColor(moisture)
           : TERRAIN[tile];
         // Opaque, pixel-aligned coverage avoids hairline seams at fractional camera zoom.
         const left = Math.floor(x * transform.a + transform.e);
@@ -465,18 +463,17 @@ export class Renderer {
 
   private drawWater(tx: number, ty: number, x: number, y: number, time: number): void {
     const { ctx } = this;
-    const shore = (this.world.getTile(tx, ty - 1) !== 'water' ? 1 : 0)
-      | (this.world.getTile(tx + 1, ty) !== 'water' ? 2 : 0)
-      | (this.world.getTile(tx, ty + 1) !== 'water' ? 4 : 0)
-      | (this.world.getTile(tx - 1, ty) !== 'water' ? 8 : 0);
+    const shore = shorelineMask((nx, ny) => this.world.getTile(nx, ny), tx, ty);
     this.environmentArt.draw(ctx, 'water', x, y, noise(tx, ty), shore);
+    // Shoreline tiles stay still: ripples cannot cross the curved banks.
+    if (shore || noise(tx, ty, 13) < .65) return;
     // Offset cycles prevent synchronized rows; each crest travels then fades before wrapping.
     const cycle = (time * .00024 + noise(tx, ty, 9)) % 1;
     const visibility = Math.sin(cycle * Math.PI) ** 2;
     const px = x + 11 + noise(tx, ty, 3) * 12 + cycle * 10;
     const py = y + 17 + noise(tx, ty, 7) * 13 - cycle * 5;
     ctx.save(); ctx.lineCap = 'round';
-    ctx.strokeStyle = `rgba(210,249,239,${visibility * .58})`;
+    ctx.strokeStyle = `rgba(191,216,209,${visibility * .24})`;
     ctx.lineWidth = 1.6;
     ctx.beginPath(); ctx.moveTo(px - 7, py);
     ctx.quadraticCurveTo(px - 3, py + 3, px, py + 1);
@@ -484,9 +481,9 @@ export class Renderer {
     ctx.strokeStyle = `rgba(34,116,144,${visibility * .35})`;
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(px - 5, py + 4); ctx.quadraticCurveTo(px, py + 6, px + 6, py + 3); ctx.stroke();
-    if (noise(tx, ty, 11) > .72) {
+    if (noise(tx, ty, 11) > .97) {
       const gleam = Math.max(0, Math.sin(time * .0018 + noise(tx, ty, 5) * TAU)) ** 6;
-      ctx.strokeStyle = `rgba(240,255,229,${gleam * .8})`;
+      ctx.strokeStyle = `rgba(210,230,213,${gleam * .25})`;
       ctx.lineWidth = 1.3;
       ctx.beginPath(); ctx.moveTo(x + 33, y + 9); ctx.lineTo(x + 33, y + 15);
       ctx.moveTo(x + 30, y + 12); ctx.lineTo(x + 36, y + 12); ctx.stroke();

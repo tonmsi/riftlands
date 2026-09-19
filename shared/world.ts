@@ -36,8 +36,12 @@ export class World {
 
   getBiome(x: number, y: number): Biome {
     if (this.mode !== 'world') return 'meadow';
-    const moisture = noise(x / 1250, y / 1250, this.seed + 411);
+    const moisture = this.getMoisture(x, y);
     return moisture > 0.63 ? 'marsh' : moisture > 0.39 ? 'forest' : 'meadow';
+  }
+
+  getMoisture(x: number, y: number): number {
+    return this.mode === 'world' ? noise(x / 1250, y / 1250, this.seed + 411) : 0;
   }
 
   getTile(tx: number, ty: number): TileKind {
@@ -69,12 +73,17 @@ export class World {
     // An uninterrupted road network guarantees routes through terrain in every direction.
     const mod = (n: number): number => ((n % 48) + 48) % 48;
     if ((!curatedDungeonApproach && (mod(tx) === 0 || mod(tx) === 47)) || mod(ty) === 0 || mod(ty) === 47) return 'path';
-    const elevation = noise(tx * 0.085, ty * 0.085, this.seed);
+    // Broad landforms with gentle domain warping replace the small, busy pools.
+    // Coordinate-only sampling preserves identical authority/prediction worlds.
+    const warpX = (noise(tx * 0.025, ty * 0.025, this.seed + 701) - 0.5) * 5;
+    const warpY = (noise(tx * 0.025, ty * 0.025, this.seed + 709) - 0.5) * 5;
+    const elevation = noise((tx + warpX) * 0.065, (ty + warpY) * 0.065, this.seed);
     const detail = coordinateHash(tx, ty, this.seed + 31);
     const moisture = noise(tx * 0.12, ty * 0.12, this.seed + 491);
     if (elevation < 0.29) return 'water';
-    if (elevation > 0.77 || detail < 0.024) return 'rock';
-    if ((moisture > 0.58 && detail < 0.52) || detail > 0.947) return 'bush';
+    if (elevation > 0.79 || (elevation > 0.64 && detail < 0.045)) return 'rock';
+    // Foliage gathers into groves, leaving calm, readable spaces between them.
+    if (moisture > 0.60 && detail < 0.38) return 'bush';
     if (moisture > 0.72) return 'mud';
     return 'grass';
   }
