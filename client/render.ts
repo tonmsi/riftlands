@@ -9,7 +9,7 @@ import type { DungeonDefinition } from '../shared/dungeons';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
 import { EnvironmentArt } from './environment-art';
-import { TERRAIN, groundColor, shorelineMask } from './terrain-style';
+import { TERRAIN, groundColor, shorelineMask, sceneryGroups, mapTerrainColor } from './terrain-style';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -244,7 +244,7 @@ export class Renderer {
     ctx.translate(this.width / 2, this.height / 2);
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.camera.x, -this.camera.y);
-    const bushes = this.drawTerrain(frame.time);
+    this.drawTerrain(frame.time);
     if (this.world.mode === 'world') {
       this.drawCrossroads();
       this.drawArenaGate(frame.time, frame.arenaGate);
@@ -319,7 +319,7 @@ export class Renderer {
     }
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);
-    for (const bush of bushes) this.drawBushTop(bush.x, bush.y, frame.time);
+
     for (const event of events) this.drawFloatingEvent(event, frame.time);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawTeamIndicators(frame);
@@ -409,9 +409,9 @@ export class Renderer {
     }
   }
 
-  private drawTerrain(time: number): Vec2[] {
+  private drawTerrain(time: number): void {
     const { ctx } = this;
-    const bushes: Vec2[] = [];
+    const waterPlants: { x: number; y: number; variation: number; shore: number }[] = [];
     const transform = ctx.getTransform();
     // Cache just the visible chunks; sampling terrain then avoids regenerating tile noise every frame.
     for (let cy = Math.floor(this.bounds.top / CHUNK_SIZE); cy <= Math.floor(this.bounds.bottom / CHUNK_SIZE); cy++) {
@@ -436,9 +436,9 @@ export class Renderer {
         const variation = noise(tx, ty);
         const moisture = this.world.getMoisture(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
         const naturalGround = tile === 'grass' || tile === 'bush' || tile === 'rock' || tile === 'water';
-        ctx.fillStyle = dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor : dungeon && tile === 'rock' ? dungeon.theme.wall : naturalGround
-          ? groundColor(moisture)
-          : TERRAIN[tile];
+        ctx.fillStyle = tile === 'water' ? this.shoreBackingColor(tx, ty)
+          : dungeon && (tile === dungeon.layout.floor || tile === 'rock' || tile === 'bush') ? dungeon.theme.floor
+          : naturalGround ? groundColor(moisture) : TERRAIN[tile];
         // Opaque, pixel-aligned coverage avoids hairline seams at fractional camera zoom.
         const left = Math.floor(x * transform.a + transform.e);
         const top = Math.floor(y * transform.d + transform.f);
@@ -447,81 +447,113 @@ export class Renderer {
         ctx.fillRect((left - transform.e) / transform.a, (top - transform.f) / transform.d,
           (right - left) / transform.a, (bottom - top) / transform.d);
         if (tile === 'water') {
-          this.drawWater(tx, ty, x, y, time);
-        } else if (tile === 'rock') {
-          this.drawRock(x, y, variation, dungeon);
-        } else if (tile === 'bush') {
-          bushes.push({ x, y });
-          this.environmentArt.draw(ctx, 'bush', x, y, variation);
+          const shore = this.drawWater(tx, ty, x, y, time);
+          if (shore) waterPlants.push({ x, y, variation: noise(tx, ty, 17), shore });
+        } else if (tile === 'rock' || tile === 'bush') {
+          // All scenery, including dungeon obstacles, uses the shared 1x1/2x2 pass below.
         } else {
           this.environmentArt.draw(ctx, tile, x, y, variation);
         }
       }
     }
-    return bushes;
+    // Paint only after opaque coverage, so neighbouring cells cannot erase brush edges.
+    for (let ty = Math.floor(this.bounds.top / TILE_SIZE); ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty++) {
+      for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
+        if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) continue;
+        if (this.world.mode === 'world' && outpostHutAt(tx * TILE_SIZE, ty * TILE_SIZE)) continue;
+        const dungeon = this.world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
+        const tile = this.world.getTile(tx, ty);
+        if (tile !== 'water' && (!dungeon || (tile !== 'rock' && tile !== 'bush')))
+          this.environmentArt.paintGround(ctx, tile, tx * TILE_SIZE, ty * TILE_SIZE, Boolean(dungeon));
+      }
+    }
+    type SurfaceKind = 'grass' | 'path' | 'mud' | 'water';
+    const surfaces = new Map<string, SurfaceKind | null>();
+    const surfaceAt = (tx: number, ty: number): SurfaceKind | null => {
+      const key = `${tx},${ty}`;
+      if (surfaces.has(key)) return surfaces.get(key)!;
+      let surface: SurfaceKind | null;
+      if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) surface = null;
+      else if (this.world.mode === 'world' && (dungeonAtTile(tx, ty) || outpostHutAt(tx * TILE_SIZE, ty * TILE_SIZE))) surface = null;
+      else {
+        const tile = this.world.getTile(tx, ty);
+        surface = tile === 'path' || tile === 'mud' || tile === 'water' ? tile : 'grass';
+      }
+      surfaces.set(key, surface);
+      return surface;
+    };
+    const surfaceColor = (surface: Exclude<SurfaceKind, 'water'>, tx: number, ty: number) => surface === 'grass'
+      ? groundColor(this.world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE))
+      : TERRAIN[surface];
+    const cornerNeighbours = [
+      [[0, -1], [-1, 0], [-1, -1]], [[0, -1], [1, 0], [1, -1]],
+      [[0, 1], [1, 0], [1, 1]], [[0, 1], [-1, 0], [-1, 1]],
+    ] as const;
+    for (let ty = Math.floor(this.bounds.top / TILE_SIZE); ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty++) {
+      for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
+        const current = surfaceAt(tx, ty);
+        if (!current || current === 'water') continue;
+        for (let corner = 0; corner < 4; corner++) {
+          const [aOffset, bOffset, diagonalOffset] = cornerNeighbours[corner];
+          const a = surfaceAt(tx + aOffset[0], ty + aOffset[1]);
+          const b = surfaceAt(tx + bOffset[0], ty + bOffset[1]);
+          const diagonal = surfaceAt(tx + diagonalOffset[0], ty + diagonalOffset[1]);
+          const other = a === b && a !== current ? a
+            : a === current && b === current && diagonal !== current ? diagonal : null;
+          if (!other || other === 'water') continue;
+          this.environmentArt.roundTerrainCorner(ctx, tx * TILE_SIZE, ty * TILE_SIZE, corner,
+            surfaceColor(other, tx + diagonalOffset[0], ty + diagonalOffset[1]));
+        }
+      }
+    }
+    this.environmentArt.paintWater(ctx, this.bounds, this.world);
+    for (const plant of waterPlants) {
+      this.environmentArt.drawWaterPlants(ctx, plant.x, plant.y, plant.variation, plant.shore);
+    }
+    // Draw complete scenery after every ground tile, including groups anchored offscreen.
+    const getScenery = (tx: number, ty: number): TileKind => {
+      if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return 'grass';
+      if (this.world.mode === 'world' && outpostHutAt(tx * TILE_SIZE, ty * TILE_SIZE)) return 'grass';
+      return this.world.getTile(tx, ty);
+    };
+    for (let ty = Math.floor(this.bounds.top / TILE_SIZE / 2) * 2; ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty += 2) {
+      for (let tx = Math.floor(this.bounds.left / TILE_SIZE / 2) * 2; tx <= Math.floor(this.bounds.right / TILE_SIZE); tx += 2) {
+        for (const group of sceneryGroups(getScenery, tx, ty)) {
+          const groupDungeon = this.world.mode === 'world'
+            ? dungeonAtTile(group.x, group.y) ?? dungeonAtTile(group.x + group.width - 1, group.y + group.height - 1)
+            : undefined;
+          if (group.tile === 'bush' && groupDungeon) {
+            const gx = group.x * TILE_SIZE, gy = group.y * TILE_SIZE;
+            const width = group.width * TILE_SIZE, height = group.height * TILE_SIZE;
+            ctx.beginPath(); ctx.roundRect(gx + 2, gy + 2, width - 4, height - 4, 16);
+            ctx.fillStyle = groundColor(this.world.getMoisture(gx + width / 2, gy + height / 2)); ctx.fill();
+          }
+          this.environmentArt.draw(ctx, group.tile, group.x * TILE_SIZE, group.y * TILE_SIZE,
+            noise(group.x, group.y), 0, group.width, group.height);
+        }
+      }
+    }
   }
 
-  private drawWater(tx: number, ty: number, x: number, y: number, time: number): void {
+  private shoreBackingColor(tx: number, ty: number): string {
+    let fallback = groundColor(this.world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE));
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]) {
+      const nx = tx + dx, ny = ty + dy, tile = this.world.getTile(nx, ny);
+      if (tile === 'water') continue;
+      const dungeon = this.world.mode === 'world' ? dungeonAtTile(nx, ny) : undefined;
+      if (dungeon && tile !== 'bush') return dungeon.theme.floor;
+      if (tile === 'path' || tile === 'mud') return TERRAIN[tile];
+      fallback = groundColor(this.world.getMoisture((nx + .5) * TILE_SIZE, (ny + .5) * TILE_SIZE));
+    }
+    return fallback;
+  }
+
+
+  private drawWater(tx: number, ty: number, x: number, y: number, _time: number): number {
     const { ctx } = this;
     const shore = shorelineMask((nx, ny) => this.world.getTile(nx, ny), tx, ty);
     this.environmentArt.draw(ctx, 'water', x, y, noise(tx, ty), shore);
-    // Shoreline tiles stay still: ripples cannot cross the curved banks.
-    if (shore || noise(tx, ty, 13) < .65) return;
-    // Offset cycles prevent synchronized rows; each crest travels then fades before wrapping.
-    const cycle = (time * .00024 + noise(tx, ty, 9)) % 1;
-    const visibility = Math.sin(cycle * Math.PI) ** 2;
-    const px = x + 11 + noise(tx, ty, 3) * 12 + cycle * 10;
-    const py = y + 17 + noise(tx, ty, 7) * 13 - cycle * 5;
-    ctx.save(); ctx.lineCap = 'round';
-    ctx.strokeStyle = `rgba(191,216,209,${visibility * .24})`;
-    ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.moveTo(px - 7, py);
-    ctx.quadraticCurveTo(px - 3, py + 3, px, py + 1);
-    ctx.quadraticCurveTo(px + 4, py - 1, px + 8, py); ctx.stroke();
-    ctx.strokeStyle = `rgba(34,116,144,${visibility * .35})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(px - 5, py + 4); ctx.quadraticCurveTo(px, py + 6, px + 6, py + 3); ctx.stroke();
-    if (noise(tx, ty, 11) > .97) {
-      const gleam = Math.max(0, Math.sin(time * .0018 + noise(tx, ty, 5) * TAU)) ** 6;
-      ctx.strokeStyle = `rgba(210,230,213,${gleam * .25})`;
-      ctx.lineWidth = 1.3;
-      ctx.beginPath(); ctx.moveTo(x + 33, y + 9); ctx.lineTo(x + 33, y + 15);
-      ctx.moveTo(x + 30, y + 12); ctx.lineTo(x + 36, y + 12); ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  private drawRock(x: number, y: number, variation: number, dungeon?: DungeonDefinition): void {
-    const { ctx } = this;
-    if (!dungeon) {
-      this.environmentArt.draw(ctx, 'rock', x, y, variation);
-      return;
-    }
-    ctx.fillStyle = dungeon?.theme.wall ?? '#50594f';
-    ctx.fillRect(x + 1, y + 6, TILE_SIZE - 2, TILE_SIZE - 6);
-    polygon(ctx, [x + 2, y + 9, x + 12, y + 2, x + 37, y + 3, x + 46, y + 12, x + 45, y + 37, x + 34, y + 43, x + 8, y + 41, x + 2, y + 31]);
-    ctx.fillStyle = dungeon?.theme.wallTop ?? (variation > 0.5 ? '#8a9080' : '#828b7b');
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(32,43,34,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
-    polygon(ctx, [x + 12, y + 3, x + 37, y + 4, x + 44, y + 13, x + 29, y + 20, x + 11, y + 14]);
-    ctx.fillStyle = 'rgba(214,218,189,0.17)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(51,61,47,0.3)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x + 29, y + 20); ctx.lineTo(x + 34, y + 32); ctx.lineTo(x + 27, y + 41); ctx.stroke();
-    ctx.fillStyle = '#6e805c';
-    ctx.fillRect(x + 5, y + 33, 10, 5);
-  }
-
-  private drawBushTop(x: number, y: number, time: number): void {
-    const { ctx } = this;
-    ctx.save();
-    ctx.globalAlpha = 0.32;
-    ctx.fillStyle = '#cbe888';
-    const sway = Math.sin(time * 0.001 + x * 0.01) * 1.3;
-    for (let i = 0; i < 4; i++) {
-      const px = x + 8 + i * 10, py = y + 19 + (i % 2) * 11;
-      ctx.beginPath(); ctx.ellipse(px + sway, py - 3, 2.8, 1.1, -.6, 0, TAU); ctx.fill();
-    }
-    ctx.restore();
+    return shore;
   }
 
   private drawArenaGate(time: number, state?: ArenaGateState): void {
@@ -1026,8 +1058,10 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   for (let ty = Math.floor(top / TILE_SIZE); ty <= Math.ceil((top + height / scale) / TILE_SIZE); ty++) {
     for (let tx = Math.floor(left / TILE_SIZE); tx <= Math.ceil((left + width / scale) / TILE_SIZE); tx++) {
       const tile = world.getTile(tx, ty);
-      if (tile === 'grass') continue;
-      ctx.fillStyle = tile === 'rock' ? '#969a84' : TERRAIN[tile];
+      const dungeon = world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
+      ctx.fillStyle = dungeon && tile === 'rock' ? dungeon.theme.wallTop
+        : dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor
+        : mapTerrainColor(tile, world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE), noise(tx, ty));
       ctx.fillRect((tx * TILE_SIZE - left) * scale, (ty * TILE_SIZE - top) * scale, TILE_SIZE * scale + 0.5, TILE_SIZE * scale + 0.5);
     }
   }

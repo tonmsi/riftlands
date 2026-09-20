@@ -1,30 +1,48 @@
 # Direzione visiva del mondo
 
-Lo scenario usa verdi salvia, acqua blu ardesia e terra sabbia desaturata.
-Luci, saturazione e dettagli più evidenti restano disponibili per personaggi,
-pickup e combattimento. Le rocce mantengono una silhouette distinta perché sono
-ostacoli; vegetazione e acqua hanno un trattamento più quieto.
+Palette derivata da e6bd6186, leggermente desaturata, e sponde arrotondate con
+acqua bassa. Macchie pittoriche piatte e ampie, con contrasto moderato.
+Il suolo usa quattro texture ripetibili da 1536 pixel, generate una sola volta,
+ancorate alle coordinate del mondo e ritagliate per materiale: erba, sentiero, fango e pavimento dungeon neutro.
+Ogni texture contiene 68 macchie, contro le 152 della revisione precedente. Le pennellate
+vengono applicate dopo il fondo opaco con copertura allineata ai pixel.
 
-Le coste raccordano i quattro lati e i quattro vicini diagonali, anche oltre i
-chunk: curve convesse sulle punte e concave nelle rientranze. La fascia sabbiosa
-rimane all'interno delle celle d'acqua non attraversabili: è parte della sponda,
-non un nuovo percorso. Collisioni e linea di vista conservano la griglia condivisa.
-I riflessi compaiono solo in una minoranza delle celle d'acqua interne.
+Rocce e cespugli sono esclusivamente 1x1 o 2x2. Ogni blocco globale di 2x2
+celle viene campionato quattro volte: si unisce solo se tutte e quattro le
+celle contengono lo stesso oggetto; altrimenti si disegnano singoli 1x1.
+Non ci sono ricerche di componenti connesse, forme allungate o gruppi verticali.
+I 2x2 usano la stessa silhouette naturale scalata uniformemente.
 
-Il generatore usa bacini più ampi leggermente deformati e raggruppa rocce e
-cespugli, riducendo gli ostacoli isolati. Strade e accessi curati restano prioritari.
-Il seed è invariato ma il terreno naturale generato cambia: eventuali posizioni
-salvate lontano dagli accessi possono trovarsi in un terreno diverso. Il controllo
-già presente al login riporta allo spawn chi si trova dentro un ostacolo.
+L'acqua condivide una variante per maschera, senza pennellate per singola cella.
+Le macchie ampie sono ancorate al mondo su una griglia da 192 unita: vengono
+disegnate soltanto se tutta la loro superficie, con 16 unita di margine, rimane
+nell'acqua. La validazione viene memorizzata in una cache da 512 candidati.
+La minimappa usa i colori effettivi del terreno, le variazioni di umidita
+dell'erba, tre verdi condivisi con i cespugli e i temi dei dungeon. Cache degli sprite limitata a 384 elementi
+e 8 milioni di pixel. Nessuna cache di gruppi da svuotare e ricostruire.
 
-## Fondamento e limiti
+Generazione procedurale, seed, collisioni, materiali e dungeon sono invariati.
+Il test browser controlla anche che a vista ferma gli sprite non vengano
+rigenerati e misura il solo tempo CPU di disegno del terreno (non gli FPS totali).
 
-- [Chuquichambi et al., 2022](https://pubmed.ncbi.nlm.nih.gov/36285721/):
-  la meta-analisi rileva una preferenza media per le curve, con variabilità tra
-  contesti. Motiva i raccordi, non una regola universale per tutti gli oggetti.
-- [Reber, Schwarz e Winkielman, 2004](https://psy2.ucsd.edu/~pwinkiel/reber-schwarz-winkielman-beauty-PSPR-2004.pdf):
-  la processing fluency è una cornice teorica per leggibilità e risposta estetica.
+L'acqua ospita piccoli gruppi di ninfee deterministici soltanto nelle celle di
+sponda. Gli angoli riparati hanno una probabilita maggiore e possono mostrare
+due o tre foglie, talvolta con un fiore; l'acqua aperta resta libera. Sull'erba
+compaiono radi ciuffi a tre fili e piccole pietre chiare e sfaccettate, prive di
+contorno scuro. I sentieri hanno qualche pietra in piu, ma nessun dettaglio viene
+aggiunto ai bordi dell'acqua o sopra gli ostacoli.
 
-Palette, densità e spessori sono scelte progettuali ispirate a questi principi,
-non valori validati sperimentalmente per Riftlands. Nessuna promessa di aumento
-della retention: servirebbe un confronto controllato con giocatori.
+Le macchie nell'acqua sono piu frequenti e diffuse delle macchie terrestri, ma
+usano colori molto trasparenti. Non contengono linee o onde e rimangono stabili
+al passare del tempo. Gli angoli tra erba,
+sentiero e fango vengono raccordati con curve da 13 unita, senza modificare le
+celle usate da collisioni o navigazione.
+
+I cespugli sono leggermente piu grandi e hanno un contorno continuo sottile per
+separarsi dall'erba. Le rocce usano un contorno dello stesso peso visivo. Lo
+spessore viene compensato rispetto alla scala, quindi resta identico sugli
+oggetti 1x1 e 2x2. Una variante di cespuglio su quattro porta tre piccoli gruppi
+di bacche con una luce pittorica. Le rocce dei dungeon passano dallo stesso
+atlante e dallo stesso raggruppamento grafico delle rocce esterne.
+La palette condivisa con la minimappa torna leggermente piu vivace, restando meno
+satura della versione originale e6bd6186.
