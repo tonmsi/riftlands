@@ -127,6 +127,23 @@ function polygon(ctx: CanvasRenderingContext2D, points: number[]): void {
   ctx.closePath();
 }
 
+function coverTileBleed(ctx: CanvasRenderingContext2D, vx: number, vy: number, corner: number, radius: number, color: string, scale: number): void {
+  ctx.fillStyle = color;
+  const e = Math.max(1, 1.5 / scale);
+  const cx = vx * TILE_SIZE, cy = vy * TILE_SIZE;
+  const signX = (corner === 0 || corner === 3) ? 1 : -1;
+  const signY = (corner === 0 || corner === 1) ? 1 : -1;
+
+  // Cover pixel-aligned base tile bleed outside the tile, preserving the curve.
+  const rx1 = signX === 1 ? cx - e : cx;
+  const ry1 = signY === 1 ? cy - e : cy - radius;
+  ctx.fillRect(rx1, ry1, e, radius + e);
+
+  const rx2 = signX === 1 ? cx - e : cx - radius;
+  const ry2 = signY === 1 ? cy - e : cy;
+  ctx.fillRect(rx2, ry2, radius + e, e);
+}
+
 /** All artwork is deliberately procedural geometry. Assets can replace these passes independently. */
 export class Renderer {
   world = new World(WORLD_SEED);
@@ -540,9 +557,12 @@ export class Renderer {
             const dungeonJunction = diagonal === 'stone' || waterBacking!.surface === 'stone';
             const walkwayJunction = (diagonal === 'path' && waterBacking!.surface === 'grass')
               || (diagonal === 'grass' && waterBacking!.surface === 'path');
-            this.environmentArt.roundTerrainCorner(ctx, x, y, corner,
-              surfaceColor(diagonal, tx + diagonalOffset[0], ty + diagonalOffset[1]),
-              dungeonJunction ? 19 : walkwayJunction ? 17 : 13);
+            const radius = dungeonJunction ? 19 : walkwayJunction ? 17 : 13;
+            const color = surfaceColor(diagonal, tx + diagonalOffset[0], ty + diagonalOffset[1]);
+            this.environmentArt.roundTerrainCorner(ctx, x, y, corner, color, radius);
+
+            coverTileBleed(ctx, tx + (corner === 1 || corner === 2 ? 1 : 0),
+              ty + (corner === 2 || corner === 3 ? 1 : 0), corner, radius, color, transform.a);
           }
           const shore = this.drawWater(tx, ty, x, y, time);
           if (shore) waterPlants.push({ x, y, variation: noise(tx, ty, 17), shore });
@@ -574,21 +594,57 @@ export class Renderer {
         const counts = new Map<SurfaceKind, number>();
         for (const quadrant of quadrants) counts.set(quadrant.surface!, (counts.get(quadrant.surface!) ?? 0) + 1);
         if (counts.size !== 2) continue;
+
         const unique = quadrants.find(quadrant => counts.get(quadrant.surface!) === 1);
         const majority = quadrants.find(quadrant => counts.get(quadrant.surface!) === 3);
-        if (!unique || !majority) continue;
-        const current = unique.surface!, other = majority.surface!;
-        if (current === 'water' || other === 'water') continue;
-        const dungeonJunction = current === 'stone' || other === 'stone';
-        const walkwayJunction = (current === 'path' && other === 'grass')
-          || (current === 'grass' && other === 'path');
-        this.environmentArt.roundTerrainCorner(ctx, unique.tx * TILE_SIZE, unique.ty * TILE_SIZE, unique.corner,
-          surfaceColor(other, majority.tx, majority.ty), dungeonJunction ? 19 : walkwayJunction ? 17 : 13);
-        if (dungeonJunction) {
-          const cornerX = vx * TILE_SIZE, cornerY = vy * TILE_SIZE, key = `${cornerX},${cornerY}`;
-          seamAccents.set(key, {
-            x: cornerX, y: cornerY, variation: noise(cornerX / TILE_SIZE, cornerY / TILE_SIZE, 29),
-          });
+
+        const cornersToRound: typeof quadrants = [];
+        let overlaySurface: SurfaceKind;
+        let overlayTx: number, overlayTy: number;
+
+        if (unique && majority) {
+          cornersToRound.push(unique);
+          overlaySurface = majority.surface!;
+          overlayTx = majority.tx;
+          overlayTy = majority.ty;
+        } else if (!unique && !majority && quadrants[0].surface === quadrants[2].surface
+          && quadrants[1].surface === quadrants[3].surface) {
+          // Caso scacchiera diagonale: eseguiamo l'arrotondamento per stabilire continuità
+          const surfaceA = quadrants[0].surface!;
+          const surfaceB = quadrants[1].surface!;
+          const priority = (s: SurfaceKind) => s === 'stone' ? 4 : s === 'path' ? 3 : s === 'mud' ? 2 : 1;
+          const aAbove = priority(surfaceA) > priority(surfaceB);
+          overlaySurface = aAbove ? surfaceA : surfaceB;
+          const underSurface = aAbove ? surfaceB : surfaceA;
+          for (const q of quadrants) if (q.surface === underSurface) cornersToRound.push(q);
+          const overlayQ = quadrants.find(q => q.surface === overlaySurface)!;
+          overlayTx = overlayQ.tx;
+          overlayTy = overlayQ.ty;
+        } else {
+          continue;
+        }
+
+        for (const q of cornersToRound) {
+          const current = q.surface!, other = overlaySurface;
+          if (current === 'water' || other === 'water') continue;
+
+          const dungeonJunction = current === 'stone' || other === 'stone';
+          const walkwayJunction = (current === 'path' && other === 'grass')
+            || (current === 'grass' && other === 'path');
+          const radius = dungeonJunction ? 19 : walkwayJunction ? 17 : 13;
+          const color = surfaceColor(other, overlayTx, overlayTy);
+          const ux = q.tx * TILE_SIZE, uy = q.ty * TILE_SIZE;
+
+          this.environmentArt.roundTerrainCorner(ctx, ux, uy, q.corner, color, radius);
+
+          coverTileBleed(ctx, vx, vy, q.corner, radius, color, transform.a);
+
+          if (dungeonJunction) {
+            const cornerX = vx * TILE_SIZE, cornerY = vy * TILE_SIZE, key = `${cornerX},${cornerY}`;
+            seamAccents.set(key, {
+              x: cornerX, y: cornerY, variation: noise(cornerX / TILE_SIZE, cornerY / TILE_SIZE, 29),
+            });
+          }
         }
       }
     }
