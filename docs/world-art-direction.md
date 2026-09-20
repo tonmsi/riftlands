@@ -11,12 +11,20 @@ Rocce e cespugli sono esclusivamente 1x1 o 2x2. Ogni blocco globale di 2x2
 celle viene campionato quattro volte: si unisce solo se tutte e quattro le
 celle contengono lo stesso oggetto; altrimenti si disegnano singoli 1x1.
 Non ci sono ricerche di componenti connesse, forme allungate o gruppi verticali.
-I 2x2 usano la stessa silhouette naturale scalata uniformemente.
+I 2x2 usano la stessa silhouette naturale scalata uniformemente. Rocce e
+cespugli sono uno strato grafico trasparente: il fondo viene ereditato dal
+materiale libero piu vicino, quindi possono stare su erba, sentiero, fango o
+pavimento dungeon senza introdurre una propria toppa colorata. Questo mantiene
+compatibili anche i dungeon esistenti, che non registrano un fondo separato per
+le celle ostacolo.
 
 L'acqua condivide una variante per maschera, senza pennellate per singola cella.
 Le macchie ampie sono ancorate al mondo su una griglia da 192 unita: vengono
 disegnate soltanto se tutta la loro superficie, con 16 unita di margine, rimane
 nell'acqua. La validazione viene memorizzata in una cache da 512 candidati.
+Quando una cella di sponda tocca materiali diversi, il fondo visibile sotto
+l'acqua viene scelto per maggioranza e raccordato per angolo: un canale tra
+sentiero ed erba non espone piu un rettangolo pieno del colore del sentiero.
 La minimappa usa i colori effettivi del terreno, le variazioni di umidita
 dell'erba, tre verdi condivisi con i cespugli e i temi dei dungeon. Cache degli sprite limitata a 384 elementi
 e 8 milioni di pixel. Nessuna cache di gruppi da svuotare e ricostruire.
@@ -35,8 +43,14 @@ aggiunto ai bordi dell'acqua o sopra gli ostacoli.
 Le macchie nell'acqua sono piu frequenti e diffuse delle macchie terrestri, ma
 usano colori molto trasparenti. Non contengono linee o onde e rimangono stabili
 al passare del tempo. Gli angoli tra erba,
-sentiero e fango vengono raccordati con curve da 13 unita, senza modificare le
-celle usate da collisioni o navigazione.
+sentiero e fango vengono raccordati con curve da 13 unita; il contatto diretto
+tra camminatoio ed erba usa curve da 17 unita, senza modificare le
+celle usate da collisioni o navigazione. Il pavimento dungeon partecipa allo
+stesso passaggio con curve da 19 unita: vengono smussati sia gli angoli esterni
+sia le rientranze. Una curva viene applicata soltanto quando tre dei quattro
+quadranti condividono lo stesso materiale; incroci diagonali e raccordi ambigui
+restano netti, evitando punte e stelle colorate. Alcune giunzioni
+ospitano due o tre piccole pietre disegnate e, piu raramente, un ciuffo d'erba.
 
 I cespugli sono leggermente piu grandi e hanno un contorno continuo sottile per
 separarsi dall'erba. Le rocce usano un contorno dello stesso peso visivo. Lo

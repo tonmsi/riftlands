@@ -10,7 +10,7 @@ export const INTEREST_RADIUS = 1250;
 export const PLAYER_RADIUS = 15;
 export const WORLD_SEED = 734291;
 export const CLASSES: Record<ClassId, ClassDef> = {
- mage: { id: 'mage', name: 'Mago', subtitle: 'Il potere dell’arcano', description: 'Controlla il campo da lontano. Dardi arcani, gelo e una nova per chi si avvicina troppo.', color: '#b3a0ed', resource: 'mana', maxHp: 110, maxResource: 120, speed: 500, armor: 0.04,
+ mage: { id: 'mage', name: 'Mago', subtitle: 'Il potere dell’arcano', description: 'Controlla il campo da lontano. Dardi arcani, gelo e una nova per chi si avvicina troppo.', color: '#b3a0ed', resource: 'mana', maxHp: 110, maxResource: 120, speed: 195, armor: 0.04,
  abilities: {
  basic: { name: 'Dardo arcano', description: 'Proiettile magico direzionale.', cost: 0, cooldown: 0.5, range: 540, damage: 16, kind: 'projectile', targeting: 'directional', speed: 480, radius: 6, color: '#c5afff' },
  q: { name: 'Lancia di gelo', description: 'Un proiettile che rallenta il bersaglio per 2 secondi.', cost: 24, cooldown: 3.5, range: 620, damage: 28, kind: 'projectile', targeting: 'directional', speed: 440, radius: 10, color: '#91ddf4' },
@@ -34,7 +34,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
 hunter: { 
     id: 'hunter', name: 'Cacciatore', subtitle: 'Letale e silenzioso', 
     description: 'Padroneggia l’arco e le trappole naturali. Controlla il territorio e scatena raffiche a 360°.', 
-    color: '#7bc876', resource: 'mana', maxHp: 130, maxResource: 100, speed: 210, armor: 0.08,
+    color: '#7bc876', resource: 'mana', maxHp: 1300, maxResource: 100, speed: 610, armor: 0.08,
     abilities: {
       basic: { name: 'Freccia rapida', description: 'Dardo veloce a lunga gittata.', cost: 0, cooldown: 0.45, range: 600, damage: 19, kind: 'projectile', targeting: 'directional', speed: 560, radius: 5, color: '#b9f0b4' },
       q: { name: 'Trappola silvana', description: 'Piazza a terra una grande trappola che scatta al passaggio nemico, infliggendo danni e bloccandolo sul posto per 2.5s.', cost: 25, cooldown: 6, range: 80, damage: 28, kind: 'trap', targeting: 'directional', radius: 52, duration: 30, color: '#559c47' },

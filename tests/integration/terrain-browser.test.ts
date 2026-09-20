@@ -32,12 +32,16 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       const cornerCtx = cornerCanvas.getContext('2d')!;
       cornerCtx.fillStyle = '#224466'; cornerCtx.fillRect(0, 0, 48, 48);
       art.roundTerrainCorner(cornerCtx, 0, 0, 0, '#aaccee');
+      const roundedCorner = [...cornerCtx.getImageData(0, 0, 1, 1).data];
+      const roundedCenter = [...cornerCtx.getImageData(24, 24, 1, 1).data];
+      const quietSeam = art.drawTerrainSeam(cornerCtx, 24, 24, .2);
+      const decoratedSeam = art.drawTerrainSeam(cornerCtx, 24, 24, .9);
       return {
         openCorner: [...ctx.getImageData(8, 8, 1, 1).data],
         isolatedCorner: [...ctx.getImageData(15 * 56 + 8, 15 * 56 + 8, 1, 1).data],
         isolatedCenter: [...ctx.getImageData(15 * 56 + 32, 15 * 56 + 32, 1, 1).data],
-        roundedCorner: [...cornerCtx.getImageData(0, 0, 1, 1).data],
-        roundedCenter: [...cornerCtx.getImageData(24, 24, 1, 1).data],
+        roundedCorner, roundedCenter,
+        quietSeam, decoratedSeam,
       };
     });
     assert.equal(result.isolatedCenter[3], 255, 'water interiors remain opaque');
@@ -45,6 +49,9 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       'painted interiors retain the water palette without bank or foam leaking into the center');
     assert.notDeepEqual(result.isolatedCorner, result.isolatedCenter, 'exposed corners are cut into curved banks');
     assert.notDeepEqual(result.roundedCorner, result.roundedCenter, 'terrain transitions replace only the rounded corner');
+    assert.equal(result.quietSeam, 0, 'most dungeon seams remain visually quiet');
+    assert.ok(result.decoratedSeam >= 2 && result.decoratedSeam <= 3,
+      'selected dungeon seams receive two or three small hand-drawn stones');
     mkdirSync('artifacts', { recursive: true });
     await page.screenshot({ path: 'artifacts/shoreline-masks.png' });
     const performance = await page.evaluate(async () => {
@@ -143,6 +150,45 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     assert.ok(dungeon.stoneWash, 'dungeon floors receive the neutral painterly wash');
     assert.ok(dungeon.sharedRock, 'dungeon rocks use the shared procedural scenery atlas');
     await page.screenshot({ path: 'artifacts/dungeon-terrain.png' });
+    await page.evaluate(async () => {
+      const { Renderer } = await import('/client/render.ts' as string);
+      const { DUNGEON_DEFINITIONS } = await import('/shared/dungeons.ts' as string);
+      const canvas = document.querySelector('canvas')!, renderer = new Renderer(canvas);
+      await renderer.spritesReady; renderer.destroy();
+      const area = DUNGEON_DEFINITIONS[0].area;
+      const entranceY = area.y + 500;
+      renderer.ctx.setTransform(1, 0, 0, 1, 600 - area.x, 450 - entranceY);
+      renderer.bounds = { left: area.x - 600, top: entranceY - 450, right: area.x + 600, bottom: entranceY + 450 };
+      renderer.drawTerrain(1200);
+    });
+    await page.screenshot({ path: 'artifacts/dungeon-entrance.png', clip: { x: 450, y: 90, width: 300, height: 760 } });
+    await page.evaluate(async () => {
+      const { Renderer } = await import('/client/render.ts' as string);
+      const { DUNGEON_DEFINITIONS } = await import('/shared/dungeons.ts' as string);
+      const canvas = document.querySelector('canvas')!, renderer = new Renderer(canvas);
+      await renderer.spritesReady; renderer.destroy();
+      const area = DUNGEON_DEFINITIONS.at(-1)!.area;
+      renderer.ctx.setTransform(1, 0, 0, 1, 600 - area.x, 450 - area.y);
+      renderer.bounds = { left: area.x - 600, top: area.y - 450, right: area.x + 600, bottom: area.y + 450 };
+      renderer.drawTerrain(1200);
+    });
+    await page.screenshot({ path: 'artifacts/dungeon-scenery-underlay.png' });
+    const outpost = await page.evaluate(async () => {
+      const { Renderer } = await import('/client/render.ts' as string);
+      const canvas = document.querySelector('canvas')!, renderer = new Renderer(canvas);
+      await renderer.spritesReady; renderer.destroy();
+      const centerY = -220;
+      renderer.ctx.setTransform(1, 0, 0, 1, 600, 450 - centerY);
+      renderer.bounds = { left: -600, top: centerY - 450, right: 600, bottom: centerY + 450 };
+      renderer.drawTerrain(1200);
+      return {
+        grassBank: [...renderer.ctx.getImageData(409, 141, 1, 1).data],
+        pathBank: [...renderer.ctx.getImageData(451, 141, 1, 1).data],
+      };
+    });
+    assert.ok(outpost.grassBank[0] + 30 < outpost.pathBank[0],
+      'a mixed shoreline keeps grass and path backing in separate rounded corners');
+    await page.screenshot({ path: 'artifacts/outpost-terrain.png' });
     assert.deepEqual(errors, []);
   } finally {
     await browser?.close();

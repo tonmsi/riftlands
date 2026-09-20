@@ -73,14 +73,36 @@ export class EnvironmentArt {
   }
 
   /** Replace square material corners with a compact curved cutout. */
-  roundTerrainCorner(ctx: CanvasRenderingContext2D, x: number, y: number, corner: number, color: string): void {
-    const radius = 13;
+  roundTerrainCorner(ctx: CanvasRenderingContext2D, x: number, y: number, corner: number, color: string, radius = 13): void {
     ctx.save(); ctx.translate(x + (corner === 1 || corner === 2 ? TILE_SIZE : 0),
       y + (corner >= 2 ? TILE_SIZE : 0));
     ctx.scale(corner === 1 || corner === 2 ? -1 : 1, corner >= 2 ? -1 : 1);
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(radius, 0);
     ctx.quadraticCurveTo(0, 0, 0, radius); ctx.closePath();
     ctx.fillStyle = color; ctx.fill(); ctx.restore();
+  }
+
+  /** Sparse hand-drawn details soften the remaining junction at dungeon corners. */
+  drawTerrainSeam(ctx: CanvasRenderingContext2D, x: number, y: number, variation: number): number {
+    if (variation < .62) return 0;
+    const rng = random(49157 + Math.floor(variation * 1_000_003));
+    const stones = 2 + (rng() > .7 ? 1 : 0);
+    for (let i = 0; i < stones; i++) {
+      const angle = rng() * TAU, distance = 3 + rng() * 6;
+      const px = x + Math.cos(angle) * distance, py = y + Math.sin(angle) * distance;
+      const radius = 1.7 + rng() * 1.25;
+      oval(ctx, px, py + .45, radius, radius * .68, '#717b7148', angle);
+      oval(ctx, px - .3, py, radius * .82, radius * .55, i % 2 ? '#aeb09a' : '#b9b49a', angle);
+    }
+    if (rng() > .45) {
+      const px = x + (rng() - .5) * 10, py = y + 3 + rng() * 5;
+      ctx.beginPath(); ctx.moveTo(px, py);
+      ctx.quadraticCurveTo(px - 1, py - 4, px - 3, py - 6);
+      ctx.moveTo(px, py); ctx.quadraticCurveTo(px, py - 5, px + 1, py - 7);
+      ctx.moveTo(px + 1, py); ctx.quadraticCurveTo(px + 3, py - 3, px + 4, py - 5);
+      ctx.strokeStyle = '#627c5190'; ctx.lineWidth = 1.05; ctx.stroke();
+    }
+    return stones;
   }
 
   /** Lily pads sit on calm water just inside banks, especially in sheltered corners. */

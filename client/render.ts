@@ -18,7 +18,8 @@ const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
 };
 const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = {
   wisp: new URL('../assets/wisp.svg', import.meta.url).href,
-  slime: new URL('../assets/slime.svg', import.meta.url).href
+  slime: new URL('../assets/slime.svg', import.meta.url).href,
+  sentinel: new URL('../assets/sentinel.svg', import.meta.url).href
 };
 const BOSS_SPRITE_URLS: Record<string, string> = {
   'stone-warden': new URL('../assets/boss_warden.svg', import.meta.url).href,
@@ -413,6 +414,86 @@ export class Renderer {
     const { ctx } = this;
     const waterPlants: { x: number; y: number; variation: number; shore: number }[] = [];
     const transform = ctx.getTransform();
+    type SurfaceKind = 'grass' | 'path' | 'mud' | 'stone' | 'water';
+    const scenery = (tile: TileKind) => tile === 'rock' || tile === 'bush';
+    const rawSurfaceAt = (tx: number, ty: number): SurfaceKind | null => {
+      if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return null;
+      if (this.world.mode === 'world' && outpostHutAt(tx * TILE_SIZE, ty * TILE_SIZE)) return null;
+      const tile = this.world.getTile(tx, ty);
+      if (scenery(tile)) return null;
+      const dungeon = this.world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
+      if (dungeon && tile === dungeon.layout.floor) return 'stone';
+      return tile === 'path' || tile === 'mud' || tile === 'water' ? tile : 'grass';
+    };
+    const inferredScenerySurface = (tx: number, ty: number): SurfaceKind => {
+      // Obstacles are a transparent visual layer. Existing dungeon files do not
+      // store an underlay, so inherit the nearest visible material instead of
+      // assigning rocks to dungeon floor and bushes to grass.
+      for (let radius = 1; radius <= 4; radius++) {
+        const scores = new Map<SurfaceKind, number>();
+        const offsets: [number, number][] = radius === 1
+          ? [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [1, 1], [-1, 1]]
+          : [];
+        if (radius > 1) for (let offset = -radius; offset <= radius; offset++) {
+          offsets.push([-radius, offset], [radius, offset]);
+          if (Math.abs(offset) !== radius) offsets.push([offset, -radius], [offset, radius]);
+        }
+        for (const [dx, dy] of offsets) {
+          const candidate = rawSurfaceAt(tx + dx, ty + dy);
+          if (!candidate || candidate === 'water') continue;
+          const weight = dx === 0 || dy === 0 ? 2 : 1;
+          scores.set(candidate, (scores.get(candidate) ?? 0) + weight);
+        }
+        if (scores.size) {
+          let best: SurfaceKind = scores.keys().next().value!;
+          for (const [candidate, score] of scores)
+            if (score > scores.get(best)!) best = candidate;
+          return best;
+        }
+      }
+      return dungeonAtTile(tx, ty) ? 'stone' : 'grass';
+    };
+    const surfaces = new Map<string, SurfaceKind | null>();
+    const surfaceAt = (tx: number, ty: number): SurfaceKind | null => {
+      const key = `${tx},${ty}`;
+      if (surfaces.has(key)) return surfaces.get(key)!;
+      const raw = rawSurfaceAt(tx, ty);
+      const surface = raw ?? (scenery(this.world.getTile(tx, ty)) ? inferredScenerySurface(tx, ty) : null);
+      surfaces.set(key, surface);
+      return surface;
+    };
+    const surfaceColor = (surface: Exclude<SurfaceKind, 'water'>, tx: number, ty: number) => {
+      if (surface === 'grass')
+        return groundColor(this.world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE));
+      if (surface === 'stone') return dungeonAtTile(tx, ty)?.theme.floor ?? TERRAIN.path;
+      return TERRAIN[surface];
+    };
+    const cornerNeighbours = [
+      [[0, -1], [-1, 0], [-1, -1]], [[0, -1], [1, 0], [1, -1]],
+      [[0, 1], [1, 0], [1, 1]], [[0, 1], [-1, 0], [-1, 1]],
+    ] as const;
+    type ShoreBacking = { surface: Exclude<SurfaceKind, 'water'>; sourceX: number; sourceY: number };
+    const shoreBackings = new Map<string, ShoreBacking>();
+    const shoreBackingAt = (tx: number, ty: number): ShoreBacking => {
+      const key = `${tx},${ty}`, cached = shoreBackings.get(key);
+      if (cached) return cached;
+      const candidates = new Map<Exclude<SurfaceKind, 'water'>, ShoreBacking & { score: number }>();
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]] as const) {
+        const surface = surfaceAt(tx + dx, ty + dy);
+        if (!surface || surface === 'water') continue;
+        const existing = candidates.get(surface);
+        const score = (existing?.score ?? 0) + (dx === 0 || dy === 0 ? 2 : 1);
+        candidates.set(surface, { surface, sourceX: existing?.sourceX ?? tx + dx,
+          sourceY: existing?.sourceY ?? ty + dy, score });
+      }
+      let best: (ShoreBacking & { score: number }) | undefined;
+      for (const candidate of candidates.values()) if (!best || candidate.score > best.score) best = candidate;
+      const backing: ShoreBacking = best
+        ? { surface: best.surface, sourceX: best.sourceX, sourceY: best.sourceY }
+        : { surface: 'grass', sourceX: tx, sourceY: ty };
+      shoreBackings.set(key, backing);
+      return backing;
+    };
     // Cache just the visible chunks; sampling terrain then avoids regenerating tile noise every frame.
     for (let cy = Math.floor(this.bounds.top / CHUNK_SIZE); cy <= Math.floor(this.bounds.bottom / CHUNK_SIZE); cy++) {
       for (let cx = Math.floor(this.bounds.left / CHUNK_SIZE); cx <= Math.floor(this.bounds.right / CHUNK_SIZE); cx++) {
@@ -434,11 +515,11 @@ export class Renderer {
           continue;
         }
         const variation = noise(tx, ty);
-        const moisture = this.world.getMoisture(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
-        const naturalGround = tile === 'grass' || tile === 'bush' || tile === 'rock' || tile === 'water';
-        ctx.fillStyle = tile === 'water' ? this.shoreBackingColor(tx, ty)
-          : dungeon && (tile === dungeon.layout.floor || tile === 'rock' || tile === 'bush') ? dungeon.theme.floor
-          : naturalGround ? groundColor(moisture) : TERRAIN[tile];
+        const surface = surfaceAt(tx, ty);
+        const waterBacking = tile === 'water' ? shoreBackingAt(tx, ty) : undefined;
+        ctx.fillStyle = waterBacking ? surfaceColor(waterBacking.surface, waterBacking.sourceX, waterBacking.sourceY)
+          : surface && surface !== 'water' ? surfaceColor(surface, tx, ty)
+          : dungeon ? dungeon.theme.floor : TERRAIN.grass;
         // Opaque, pixel-aligned coverage avoids hairline seams at fractional camera zoom.
         const left = Math.floor(x * transform.a + transform.e);
         const top = Math.floor(y * transform.d + transform.f);
@@ -447,6 +528,22 @@ export class Renderer {
         ctx.fillRect((left - transform.e) / transform.a, (top - transform.f) / transform.d,
           (right - left) / transform.a, (bottom - top) / transform.d);
         if (tile === 'water') {
+          // The water atlas exposes its backing around curved banks. Blend that
+          // backing at mixed grass/path ends before placing the transparent sprite.
+          for (let corner = 0; corner < 4; corner++) {
+            const [aOffset, bOffset, diagonalOffset] = cornerNeighbours[corner];
+            const a = surfaceAt(tx + aOffset[0], ty + aOffset[1]);
+            const b = surfaceAt(tx + bOffset[0], ty + bOffset[1]);
+            const diagonal = surfaceAt(tx + diagonalOffset[0], ty + diagonalOffset[1]);
+            if (!diagonal || diagonal === 'water' || diagonal === waterBacking!.surface
+              || (a !== diagonal && b !== diagonal)) continue;
+            const dungeonJunction = diagonal === 'stone' || waterBacking!.surface === 'stone';
+            const walkwayJunction = (diagonal === 'path' && waterBacking!.surface === 'grass')
+              || (diagonal === 'grass' && waterBacking!.surface === 'path');
+            this.environmentArt.roundTerrainCorner(ctx, x, y, corner,
+              surfaceColor(diagonal, tx + diagonalOffset[0], ty + diagonalOffset[1]),
+              dungeonJunction ? 19 : walkwayJunction ? 17 : 13);
+          }
           const shore = this.drawWater(tx, ty, x, y, time);
           if (shore) waterPlants.push({ x, y, variation: noise(tx, ty, 17), shore });
         } else if (tile === 'rock' || tile === 'bush') {
@@ -461,51 +558,42 @@ export class Renderer {
       for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
         if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) continue;
         if (this.world.mode === 'world' && outpostHutAt(tx * TILE_SIZE, ty * TILE_SIZE)) continue;
-        const dungeon = this.world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
-        const tile = this.world.getTile(tx, ty);
-        if (tile !== 'water' && (!dungeon || (tile !== 'rock' && tile !== 'bush')))
-          this.environmentArt.paintGround(ctx, tile, tx * TILE_SIZE, ty * TILE_SIZE, Boolean(dungeon));
+        const surface = surfaceAt(tx, ty);
+        if (surface && surface !== 'water') this.environmentArt.paintGround(ctx,
+          surface === 'stone' ? 'path' : surface, tx * TILE_SIZE, ty * TILE_SIZE, surface === 'stone');
       }
     }
-    type SurfaceKind = 'grass' | 'path' | 'mud' | 'water';
-    const surfaces = new Map<string, SurfaceKind | null>();
-    const surfaceAt = (tx: number, ty: number): SurfaceKind | null => {
-      const key = `${tx},${ty}`;
-      if (surfaces.has(key)) return surfaces.get(key)!;
-      let surface: SurfaceKind | null;
-      if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) surface = null;
-      else if (this.world.mode === 'world' && (dungeonAtTile(tx, ty) || outpostHutAt(tx * TILE_SIZE, ty * TILE_SIZE))) surface = null;
-      else {
-        const tile = this.world.getTile(tx, ty);
-        surface = tile === 'path' || tile === 'mud' || tile === 'water' ? tile : 'grass';
-      }
-      surfaces.set(key, surface);
-      return surface;
-    };
-    const surfaceColor = (surface: Exclude<SurfaceKind, 'water'>, tx: number, ty: number) => surface === 'grass'
-      ? groundColor(this.world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE))
-      : TERRAIN[surface];
-    const cornerNeighbours = [
-      [[0, -1], [-1, 0], [-1, -1]], [[0, -1], [1, 0], [1, -1]],
-      [[0, 1], [1, 0], [1, 1]], [[0, 1], [-1, 0], [-1, 1]],
-    ] as const;
-    for (let ty = Math.floor(this.bounds.top / TILE_SIZE); ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty++) {
-      for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
-        const current = surfaceAt(tx, ty);
-        if (!current || current === 'water') continue;
-        for (let corner = 0; corner < 4; corner++) {
-          const [aOffset, bOffset, diagonalOffset] = cornerNeighbours[corner];
-          const a = surfaceAt(tx + aOffset[0], ty + aOffset[1]);
-          const b = surfaceAt(tx + bOffset[0], ty + bOffset[1]);
-          const diagonal = surfaceAt(tx + diagonalOffset[0], ty + diagonalOffset[1]);
-          const other = a === b && a !== current ? a
-            : a === current && b === current && diagonal !== current ? diagonal : null;
-          if (!other || other === 'water') continue;
-          this.environmentArt.roundTerrainCorner(ctx, tx * TILE_SIZE, ty * TILE_SIZE, corner,
-            surfaceColor(other, tx + diagonalOffset[0], ty + diagonalOffset[1]));
+    const seamAccents = new Map<string, { x: number; y: number; variation: number }>();
+    const vertexQuadrants = [[-1, -1, 2], [0, -1, 3], [0, 0, 0], [-1, 0, 1]] as const;
+    for (let vy = Math.floor(this.bounds.top / TILE_SIZE); vy <= Math.floor(this.bounds.bottom / TILE_SIZE) + 1; vy++) {
+      for (let vx = Math.floor(this.bounds.left / TILE_SIZE); vx <= Math.floor(this.bounds.right / TILE_SIZE) + 1; vx++) {
+        const quadrants = vertexQuadrants.map(([dx, dy, corner]) => ({
+          tx: vx + dx, ty: vy + dy, corner, surface: surfaceAt(vx + dx, vy + dy),
+        }));
+        if (quadrants.some(quadrant => !quadrant.surface || quadrant.surface === 'water')) continue;
+        const counts = new Map<SurfaceKind, number>();
+        for (const quadrant of quadrants) counts.set(quadrant.surface!, (counts.get(quadrant.surface!) ?? 0) + 1);
+        if (counts.size !== 2) continue;
+        const unique = quadrants.find(quadrant => counts.get(quadrant.surface!) === 1);
+        const majority = quadrants.find(quadrant => counts.get(quadrant.surface!) === 3);
+        if (!unique || !majority) continue;
+        const current = unique.surface!, other = majority.surface!;
+        if (current === 'water' || other === 'water') continue;
+        const dungeonJunction = current === 'stone' || other === 'stone';
+        const walkwayJunction = (current === 'path' && other === 'grass')
+          || (current === 'grass' && other === 'path');
+        this.environmentArt.roundTerrainCorner(ctx, unique.tx * TILE_SIZE, unique.ty * TILE_SIZE, unique.corner,
+          surfaceColor(other, majority.tx, majority.ty), dungeonJunction ? 19 : walkwayJunction ? 17 : 13);
+        if (dungeonJunction) {
+          const cornerX = vx * TILE_SIZE, cornerY = vy * TILE_SIZE, key = `${cornerX},${cornerY}`;
+          seamAccents.set(key, {
+            x: cornerX, y: cornerY, variation: noise(cornerX / TILE_SIZE, cornerY / TILE_SIZE, 29),
+          });
         }
       }
     }
+    for (const accent of seamAccents.values())
+      this.environmentArt.drawTerrainSeam(ctx, accent.x, accent.y, accent.variation);
     this.environmentArt.paintWater(ctx, this.bounds, this.world);
     for (const plant of waterPlants) {
       this.environmentArt.drawWaterPlants(ctx, plant.x, plant.y, plant.variation, plant.shore);
@@ -519,35 +607,12 @@ export class Renderer {
     for (let ty = Math.floor(this.bounds.top / TILE_SIZE / 2) * 2; ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty += 2) {
       for (let tx = Math.floor(this.bounds.left / TILE_SIZE / 2) * 2; tx <= Math.floor(this.bounds.right / TILE_SIZE); tx += 2) {
         for (const group of sceneryGroups(getScenery, tx, ty)) {
-          const groupDungeon = this.world.mode === 'world'
-            ? dungeonAtTile(group.x, group.y) ?? dungeonAtTile(group.x + group.width - 1, group.y + group.height - 1)
-            : undefined;
-          if (group.tile === 'bush' && groupDungeon) {
-            const gx = group.x * TILE_SIZE, gy = group.y * TILE_SIZE;
-            const width = group.width * TILE_SIZE, height = group.height * TILE_SIZE;
-            ctx.beginPath(); ctx.roundRect(gx + 2, gy + 2, width - 4, height - 4, 16);
-            ctx.fillStyle = groundColor(this.world.getMoisture(gx + width / 2, gy + height / 2)); ctx.fill();
-          }
           this.environmentArt.draw(ctx, group.tile, group.x * TILE_SIZE, group.y * TILE_SIZE,
             noise(group.x, group.y), 0, group.width, group.height);
         }
       }
     }
   }
-
-  private shoreBackingColor(tx: number, ty: number): string {
-    let fallback = groundColor(this.world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE));
-    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]) {
-      const nx = tx + dx, ny = ty + dy, tile = this.world.getTile(nx, ny);
-      if (tile === 'water') continue;
-      const dungeon = this.world.mode === 'world' ? dungeonAtTile(nx, ny) : undefined;
-      if (dungeon && tile !== 'bush') return dungeon.theme.floor;
-      if (tile === 'path' || tile === 'mud') return TERRAIN[tile];
-      fallback = groundColor(this.world.getMoisture((nx + .5) * TILE_SIZE, (ny + .5) * TILE_SIZE));
-    }
-    return fallback;
-  }
-
 
   private drawWater(tx: number, ty: number, x: number, y: number, _time: number): number {
     const { ctx } = this;
