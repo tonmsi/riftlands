@@ -1,6 +1,6 @@
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, WORLD_SEED } from './config';
 import { ARENA_GATE, arenaTileIsWall } from './arena';
-import { OUTPOST, outpostHutAt } from './outpost';
+import { OUTPOST } from './outpost';
 import { DUNGEON_DEFINITIONS, configuredDungeonTile, inDungeonApproachCorridor, insideDungeon, isClosedDungeonTile, onDungeonApproach } from './dungeons';
 import type { Biome, Pickup, TileKind, RoomMode } from './types';
 
@@ -63,7 +63,6 @@ export class World {
     const x = (tx + 0.5) * TILE_SIZE, y = (ty + 0.5) * TILE_SIZE;
     const curatedTile = configuredDungeonTile(tx, ty);
     if (curatedTile) return curatedTile;
-    if (outpostHutAt(x, y)) return 'rock';
     if (Math.hypot(x, y) < OUTPOST.clearingRadius) return Math.abs(x) < 65 || Math.abs(y - 72) < 38 || Math.hypot(x, y) < 85 ? 'path' : 'grass';
     if (Math.hypot(x - ARENA_GATE.x, y - ARENA_GATE.y) < ARENA_GATE.radius + 55 || (Math.abs(x) < 75 && y < -120 && y > ARENA_GATE.y)) return 'path';
     const curatedDungeonApproach = DUNGEON_DEFINITIONS.some(definition => inDungeonApproachCorridor(definition, { x, y }));

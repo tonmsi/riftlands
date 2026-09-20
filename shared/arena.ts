@@ -1,6 +1,6 @@
 import type { Vec2 } from './types';
 
-export const ARENA_GATE = { x: 0, y: -115, radius: 60, countdownMs: 1000 } as const;
+export const ARENA_GATE = { x: 0, y: -115, radius: 70, countdownMs: 3000 } as const;
 export const ARENA_DURATION_SECONDS = 180;
 export function insideArenaGate(position: Vec2): boolean {
   return Math.hypot(position.x - ARENA_GATE.x, position.y - ARENA_GATE.y) <= ARENA_GATE.radius;

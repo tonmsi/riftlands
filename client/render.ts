@@ -2,7 +2,7 @@ import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../sh
 import type { AbilitySlot, Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec2, RoomMode } from '../shared/types';
 import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
-import { OUTPOST, OUTPOST_HUTS, outpostHutAt } from '../shared/outpost';
+import { OUTPOST } from '../shared/outpost';
 import type { ArenaGateState } from '../shared/types';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames, inwardFlameAngle } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
@@ -264,7 +264,7 @@ export class Renderer {
     ctx.translate(-this.camera.x, -this.camera.y);
     this.drawTerrain(frame.time);
     if (this.world.mode === 'world') {
-      this.drawCrossroads();
+      this.drawCrossroads(frame.time); //posso togliere frame time se è statico e non voglio animazioni
       this.drawArenaGate(frame.time, frame.arenaGate);
       this.drawDungeons();
     }
@@ -341,6 +341,10 @@ export class Renderer {
     for (const event of events) this.drawFloatingEvent(event, frame.time);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawTeamIndicators(frame);
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    // <-- AGGIUNGI QUESTA RIGA:
+    this.drawRain(frame.time);
     const vignette = ctx.createRadialGradient(this.width / 2, this.height / 2, this.width * 0.2, this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.68);
     vignette.addColorStop(0, 'rgba(19,29,24,0)');
     vignette.addColorStop(1, 'rgba(19,29,24,0.18)');
@@ -435,7 +439,6 @@ export class Renderer {
     const scenery = (tile: TileKind) => tile === 'rock' || tile === 'bush';
     const rawSurfaceAt = (tx: number, ty: number): SurfaceKind | null => {
       if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return null;
-      if (this.world.mode === 'world' && outpostHutAt(tx * TILE_SIZE, ty * TILE_SIZE)) return null;
       const tile = this.world.getTile(tx, ty);
       if (scenery(tile)) return null;
       const dungeon = this.world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
@@ -527,10 +530,6 @@ export class Renderer {
         const tile = this.world.getTile(tx, ty);
         const x = tx * TILE_SIZE, y = ty * TILE_SIZE;
         const dungeon = this.world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
-        if (this.world.mode === 'world' && outpostHutAt(x, y)) {
-          ctx.fillStyle = '#8b8263'; ctx.fillRect(x, y, TILE_SIZE + 0.5, TILE_SIZE + 0.5);
-          continue;
-        }
         const variation = noise(tx, ty);
         const surface = surfaceAt(tx, ty);
         const waterBacking = tile === 'water' ? shoreBackingAt(tx, ty) : undefined;
@@ -577,7 +576,6 @@ export class Renderer {
     for (let ty = Math.floor(this.bounds.top / TILE_SIZE); ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty++) {
       for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
         if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) continue;
-        if (this.world.mode === 'world' && outpostHutAt(tx * TILE_SIZE, ty * TILE_SIZE)) continue;
         const surface = surfaceAt(tx, ty);
         if (surface && surface !== 'water') this.environmentArt.paintGround(ctx,
           surface === 'stone' ? 'path' : surface, tx * TILE_SIZE, ty * TILE_SIZE, surface === 'stone');
@@ -657,7 +655,6 @@ export class Renderer {
     // Draw complete scenery after every ground tile, including groups anchored offscreen.
     const getScenery = (tx: number, ty: number): TileKind => {
       if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return 'grass';
-      if (this.world.mode === 'world' && outpostHutAt(tx * TILE_SIZE, ty * TILE_SIZE)) return 'grass';
       return this.world.getTile(tx, ty);
     };
     for (let ty = Math.floor(this.bounds.top / TILE_SIZE / 2) * 2; ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty += 2) {
@@ -682,7 +679,7 @@ export class Renderer {
     const { ctx } = this;
     const { x, y, radius } = ARENA_GATE;
     ctx.save();
-    ctx.fillStyle = 'rgba(28,42,56,0.62)';
+    ctx.fillStyle = 'rgba(80, 88, 95, 0.26)';
     circle(ctx, x, y, radius); ctx.fill();
     ctx.strokeStyle = state?.phase === 'countdown' ? '#ffe3a0' : '#a5d9e8';
     ctx.lineWidth = 3;
@@ -694,10 +691,99 @@ export class Renderer {
       ctx.strokeStyle = '#ffe3a0'; ctx.lineWidth = 7;
       ctx.beginPath(); ctx.arc(x, y, radius + 7, -Math.PI / 2, -Math.PI / 2 + progress * TAU); ctx.stroke();
     }
-    ctx.textAlign = 'center'; ctx.fillStyle = '#e5f2f4';
+    ctx.textAlign = 'center'; ctx.fillStyle = '#e5f2f475';
     ctx.font = '700 15px system-ui'; ctx.fillText('ARENA 1 VS 1', x, y - radius - 22);
     ctx.font = '12px system-ui'; ctx.fillText('Entra nel cerchio', x, y + radius + 24);
     ctx.font = '700 28px system-ui'; ctx.fillText('⚔', x, y + 9);
+    ctx.restore();
+  }
+
+  // Puoi impostare questo booleano a true/false per accendere o spegnere il meteo
+ // Puoi impostare questo booleano a true/false per accendere o spegnere il meteo
+  isRaining = true;
+
+  private drawRain(time: number): void {
+    if (!this.isRaining) return;
+    const { ctx, width, height } = this;
+    ctx.save();
+
+    // -------------------------------------------------------------
+    // 1. FILTRO ATMOSFERICO TEMPORALESCO
+    // -------------------------------------------------------------
+    ctx.fillStyle = 'rgba(18, 32, 44, 0.22)';
+    ctx.fillRect(0, 0, width, height);
+
+    // -------------------------------------------------------------
+    // 2. GOCCE DI PIOGGIA NELL'ARIA (Densità dinamica proporzionale allo zoom)
+    // -------------------------------------------------------------
+    const wind = 0.22;
+    // Calcola le gocce in base all'area reale: la fittezza della pioggia non cambia mai!
+    const dropCount = Math.round((width * height) / 4600);
+
+    ctx.strokeStyle = 'rgba(215, 238, 255, 0.42)';
+    ctx.lineWidth = 0.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+
+    const camOffsetX = this.camera.x * this.zoom * 0.4;
+    const camOffsetY = this.camera.y * this.zoom * 0.4;
+
+    for (let i = 0; i < dropCount; i++) {
+      const seed = i * 7919;
+      const speed = 1.1 + (i % 4) * 0.25;
+      const len = 14 + (i % 3) * 6;
+
+      const x = (Math.sin(seed) * 10000 + time * (speed * wind * 1.5) - camOffsetX) % width;
+      const y = (Math.cos(seed) * 10000 + time * (speed * 1.4) - camOffsetY) % height;
+
+      const px = x < 0 ? x + width : x;
+      const py = y < 0 ? y + height : y;
+
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + len * wind, py + len);
+    }
+    ctx.stroke();
+
+    // -------------------------------------------------------------
+    // 3. SCHIZZI CHE TOCCANO IL TERRENO (Densità costante e ancorati 1:1)
+    // -------------------------------------------------------------
+    // La griglia nel mondo si adatta allo zoom così la frequenza degli schizzi a video resta uniforme
+    const CELL = 110 / this.zoom;
+    const viewW = width / this.zoom;
+    const viewH = height / this.zoom;
+
+    const startGX = Math.floor((this.camera.x - viewW / 2 - CELL) / CELL);
+    const endGX = Math.ceil((this.camera.x + viewW / 2 + CELL) / CELL);
+    const startGY = Math.floor((this.camera.y - viewH / 2 - CELL) / CELL);
+    const endGY = Math.ceil((this.camera.y + viewH / 2 + CELL) / CELL);
+
+    ctx.lineWidth = 1;
+
+    for (let gy = startGY; gy <= endGY; gy++) {
+      for (let gx = startGX; gx <= endGX; gx++) {
+        const seed = noise(gx, gy, 31);
+        if (seed < 0.65) continue; // Mantiene la percentuale di schizzi bilanciata
+
+        const cycle = (time * 0.0028 + seed * 10) % 1;
+
+        // Coordinate fisse del terreno nel mondo
+        const worldX = gx * CELL + noise(gx, gy, 1) * CELL;
+        const worldY = gy * CELL + noise(gx, gy, 2) * CELL;
+
+        // Proiezione a schermo bloccata sul terreno (nessun slittamento)
+        const posX = (worldX - this.camera.x) * this.zoom + width / 2;
+        const posY = (worldY - this.camera.y) * this.zoom + height / 2;
+
+        const r = cycle * 6.5;
+        const alpha = Math.sin((1 - cycle) * Math.PI * 0.5) * 0.45;
+
+        ctx.strokeStyle = `rgba(220, 245, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.ellipse(posX, posY, r, r * 0.38, 0, 0, TAU);
+        ctx.stroke();
+      }
+    }
+
     ctx.restore();
   }
 
@@ -766,32 +852,284 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawCrossroads(): void {
+  private drawCrossroads(time: number): void {
+    // -------------------------------------------------------------
+    // OTTIMIZZAZIONE (CULLING): Se è fuori schermo, esci subito!
+    // -------------------------------------------------------------
+    const margin = OUTPOST.radius + 70; // Raggio + margine per fumi e bagliori
+    if (
+      this.bounds.right < OUTPOST.x - margin ||
+      this.bounds.left > OUTPOST.x + margin ||
+      this.bounds.bottom < OUTPOST.y - margin ||
+      this.bounds.top > OUTPOST.y + margin
+    ) {
+      return;
+    }
+
     const { ctx } = this;
     ctx.save();
-    ctx.fillStyle = 'rgba(140,196,170,0.055)'; circle(ctx, 0, 0, OUTPOST.radius); ctx.fill();
-    ctx.strokeStyle = '#b6d9b0'; ctx.lineWidth = 3; circle(ctx, 0, 0, OUTPOST.radius); ctx.stroke();
-    ctx.strokeStyle = '#d8bf86'; ctx.lineWidth = 1; ctx.setLineDash([6, 10]); circle(ctx, 0, 0, OUTPOST.radius + 7); ctx.stroke(); ctx.setLineDash([]);
-    for (const hut of OUTPOST_HUTS) {
-      const { x, y, width: w, height: h } = hut;
-      ctx.fillStyle = 'rgba(18,30,24,0.35)'; ctx.fillRect(x + 7, y + 8, w, h);
-      ctx.fillStyle = '#655444'; ctx.fillRect(x, y, w, h);
-      ctx.fillStyle = '#b6a47d'; polygon(ctx, [x, y + h, x + w / 2, y, x + w, y + h]); ctx.fill();
-      ctx.fillStyle = '#8d795a'; polygon(ctx, [x + w / 2, y, x + w, y, x + w, y + h]); ctx.fill();
-      ctx.strokeStyle = '#d0bc91'; ctx.lineWidth = 2; ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
-      ctx.fillStyle = '#343d31'; ctx.fillRect(x + w / 2 - 12, y + h - 26, 24, 26);
+
+    // -------------------------------------------------------------
+    // FUNZIONE DI SUPPORTO PER FIAMME REALISTICHE E FLUIDE
+    // -------------------------------------------------------------
+    const drawRealisticFlame = (x: number, y: number, w: number, h: number, seed: number) => {
+      // Tempo rallentato + oscillazione armonica asincrona (3 frequenze)
+      const t = time * 0.0042;
+      const sway1 = Math.sin(t + seed) * 0.5 + Math.sin(t * 2.1 + seed * 1.7) * 0.3 + Math.sin(t * 4.3 + seed * 3.1) * 0.2;
+      const sway2 = Math.cos(t * 0.85 + seed * 2.2) * 0.5 + Math.sin(t * 1.9 + seed * 0.9) * 0.35 + Math.cos(t * 3.7) * 0.15;
+      const breathe = Math.sin(t * 1.3 + seed * 1.5) * 0.12 + 0.88;
+
+      const curH = h * (0.85 + breathe * 0.25);
+      const tipX = sway1 * (w * 0.7);
+      const tipY = -curH;
+
+      // 1. Bagliore caldo e morbido sul terreno/aria
+      const glowR = Math.max(w * 3.2, curH * 1.55);
+      const g = ctx.createRadialGradient(x, y - curH * 0.3, 2, x, y - curH * 0.3, glowR);
+      g.addColorStop(0, 'rgba(255, 175, 45, 0.42)');
+      g.addColorStop(0.45, 'rgba(225, 75, 20, 0.12)');
+      g.addColorStop(1, 'rgba(200, 40, 10, 0)');
+      ctx.fillStyle = g;
+      circle(ctx, x, y - curH * 0.3, glowR);
+      ctx.fill();
+
+      // 2. Lingua esterna (Rosso cremisi e arancio scuro fluido)
+      ctx.fillStyle = '#db4716';
+      ctx.beginPath();
+      ctx.moveTo(x - w, y);
+      ctx.bezierCurveTo(
+        x - w * 1.1 + sway2 * 4, y - curH * 0.35,
+        x - w * 0.4 + sway1 * 5, y - curH * 0.75,
+        x + tipX, y + tipY
+      );
+      ctx.bezierCurveTo(
+        x + w * 0.45 + sway2 * 5, y - curH * 0.7,
+        x + w * 1.05 - sway1 * 3, y - curH * 0.35,
+        x + w, y
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // 3. Lingua intermedia (Arancio vivo)
+      ctx.fillStyle = '#f0841f';
+      const midW = w * 0.68;
+      const midH = curH * 0.78;
+      const midTipX = sway2 * (midW * 0.6);
+      ctx.beginPath();
+      ctx.moveTo(x - midW, y);
+      ctx.bezierCurveTo(
+        x - midW * 0.9, y - midH * 0.4,
+        x - midW * 0.3 + sway1 * 3, y - midH * 0.75,
+        x + midTipX, y - midH
+      );
+      ctx.bezierCurveTo(
+        x + midW * 0.3 + sway2 * 3, y - midH * 0.7,
+        x + midW * 0.9, y - midH * 0.4,
+        x + midW, y
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // 4. Cuore interno candido (Giallo zafferano/bianco incandescente)
+      ctx.fillStyle = '#fff194';
+      const coreW = w * 0.36;
+      const coreH = curH * 0.48;
+      const coreTipX = (sway1 + sway2) * 0.5 * (coreW * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(x - coreW, y);
+      ctx.bezierCurveTo(
+        x - coreW * 0.8, y - coreH * 0.4,
+        x - coreW * 0.2, y - coreH * 0.8,
+        x + coreTipX, y - coreH
+      );
+      ctx.bezierCurveTo(
+        x + coreW * 0.2, y - coreH * 0.8,
+        x + coreW * 0.8, y - coreH * 0.4,
+        x + coreW, y
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // 5. Faville e scintille organiche (salgono fluide con dissolvenza a seno)
+      const sparkCount = w > 12 ? 5 : 3;
+      for (let s = 0; s < sparkCount; s++) {
+        const sparkSpeed = 0.0016 + (s % 3) * 0.0005;
+        const phase = (time * sparkSpeed + s * 0.35 + seed * 0.22) % 1;
+        const drift = Math.sin(time * 0.0025 + s * 2.1 + seed) * (w * 0.75);
+        const sx = x + tipX * 0.4 + drift * phase;
+        const sy = y - curH * 0.4 - phase * (curH * 1.5);
+        const alpha = Math.sin(phase * Math.PI) * 0.85;
+        const size = (1 - phase * 0.45) * (w > 12 ? 1.7 : 1.2);
+
+        ctx.fillStyle = s % 2 === 0 ? `rgba(255, 235, 140, ${alpha})` : `rgba(255, 140, 50, ${alpha})`;
+        circle(ctx, sx, sy, size);
+        ctx.fill();
+      }
+    };
+
+    // -------------------------------------------------------------
+    // 1. TERRENO: Bagliore e Pavimentazione a Ciottoli
+    // -------------------------------------------------------------
+    const campGlow = ctx.createRadialGradient(OUTPOST.x, OUTPOST.y, 10, OUTPOST.x, OUTPOST.y, OUTPOST.radius);
+    campGlow.addColorStop(0, 'rgba(224, 166, 85, 0.08)');
+    campGlow.addColorStop(0.7, 'rgba(110, 160, 120, 0.04)');
+    campGlow.addColorStop(1, 'rgba(40, 50, 40, 0)');
+    ctx.fillStyle = campGlow;
+    circle(ctx, OUTPOST.x, OUTPOST.y, OUTPOST.radius);
+    ctx.fill();
+
+    const stoneOffsets = [
+      [-50, -20], [-30, -60], [40, -45], [60, 20], [-45, 55], [35, 75],
+      [-110, 5], [120, -10], [10, -120], [-15, 130], [-80, -70], [75, -80]
+    ];
+    ctx.fillStyle = 'rgba(75, 80, 70, 0.35)';
+    for (let i = 0; i < stoneOffsets.length; i++) {
+      const [sx, sy] = stoneOffsets[i];
+      const s = 7 + (i % 5) * 2;
+      polygon(ctx, [sx - s, sy - s * 0.6, sx + s * 0.8, sy - s * 0.5, sx + s, sy + s * 0.7, sx - s * 0.7, sy + s * 0.6]);
+      ctx.fill();
     }
-    // Spawn marker and banners are visual; the tents use shared tile collisions.
-    ctx.fillStyle = '#8d8b70'; circle(ctx, 0, 40, 22); ctx.fill();
-    ctx.strokeStyle = '#d9cb9b'; ctx.lineWidth = 2; polygon(ctx, [0, 23, 12, 40, 0, 57, -12, 40]); ctx.stroke();
-    for (const x of [-70, 70]) {
-      ctx.strokeStyle = '#564b38'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x, 80); ctx.lineTo(x, 135); ctx.stroke();
-      ctx.fillStyle = '#557f78'; polygon(ctx, [x + 2, 80, x + 29, 80, x + 23, 109, x + 2, 105]); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(60, 50, 40, 0.4)';
+    ctx.lineWidth = 6;
+    ctx.setLineDash([20, 35, 10, 25]);
+    circle(ctx, OUTPOST.x, OUTPOST.y, OUTPOST.radius);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // -------------------------------------------------------------
+    // 2. CONFINE: Rocce e Menhir Irregolari
+    // -------------------------------------------------------------
+    const numMonoliths = 22;
+    for (let i = 0; i < numMonoliths; i++) {
+      const baseAngle = (i * TAU) / numMonoliths;
+      if (baseAngle > 1.3 && baseAngle < 1.84) continue; // Varco PvP aperto
+
+      const angle = baseAngle + Math.sin(i * 12.3) * 0.04;
+      const r = OUTPOST.radius + Math.cos(i * 7.1) * 7;
+      const x = OUTPOST.x + Math.cos(angle) * r;
+      const y = OUTPOST.y + Math.sin(angle) * r;
+
+      const rockH = 12 + (i % 4) * 4;
+      const rockW = 8 + (i % 3) * 3;
+      const lean = Math.sin(i * 4.2) * 0.3;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle + Math.PI / 2 + lean);
+
+      ctx.fillStyle = 'rgba(20, 25, 20, 0.3)';
+      polygon(ctx, [-rockW, 2, rockW, 2, rockW + 4, 8, -rockW - 4, 8]);
+      ctx.fill();
+
+      ctx.fillStyle = i % 2 === 0 ? '#4c5248' : '#57564d';
+      polygon(ctx, [-rockW, 2, -rockW * 0.7, -rockH, rockW * 0.5, -rockH * 0.9, rockW, 2]);
+      ctx.fill();
+
+      ctx.fillStyle = '#686f62';
+      polygon(ctx, [-rockW * 0.7, -rockH, 0, -rockH * 0.95, rockW * 0.2, 0, -rockW * 0.5, 0]);
+      ctx.fill();
+
+      if (i % 3 === 0) {
+        ctx.strokeStyle = '#93b584';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, -rockH * 0.6);
+        ctx.lineTo(0, -2);
+        ctx.moveTo(-3, -rockH * 0.4);
+        ctx.lineTo(3, -rockH * 0.3);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#f2e6bf';
-    ctx.fillText('AVAMPOSTO DEL CROCEVIA', 0, 160);
-    ctx.font = '10px system-ui'; ctx.fillStyle = '#d1e7c3'; ctx.fillText('ZONA SICURA', 0, 181);
-    ctx.fillStyle = '#f1c29e'; ctx.fillText('↓ PVP LIBERO', 0, OUTPOST.radius + 28);
+
+    // -------------------------------------------------------------
+    // 3. BRACIERI PERIMETRALI (Con Fiamme Fluide e Lente)
+    // -------------------------------------------------------------
+    const brazierAngles = [
+      -Math.PI * 0.75, -Math.PI * 0.5, -Math.PI * 0.25, 0,
+      Math.PI * 0.25, Math.PI * 0.42, Math.PI * 0.58, Math.PI * 0.75, Math.PI
+    ];
+
+    for (let b = 0; b < brazierAngles.length; b++) {
+      const bAngle = brazierAngles[b];
+      const bx = OUTPOST.x + Math.cos(bAngle) * OUTPOST.radius;
+      const by = OUTPOST.y + Math.sin(bAngle) * OUTPOST.radius;
+
+      ctx.save();
+      ctx.translate(bx, by);
+
+      // Treppiede / braciere in ferro battuto
+      ctx.fillStyle = '#222520';
+      ctx.fillRect(-7, 2, 14, 4);
+      polygon(ctx, [-6, 3, -10, 11, -7, 11, -4, 3]); ctx.fill();
+      polygon(ctx, [6, 3, 10, 11, 7, 11, 4, 3]); ctx.fill();
+      polygon(ctx, [-9, 2, 9, 2, 6, -3, -6, -3]); ctx.fill();
+
+      // Brace scura
+      ctx.fillStyle = '#7a2512';
+      circle(ctx, 0, -1, 5);
+      ctx.fill();
+
+      // Disegna la fiamma fluida per il braciere
+      drawRealisticFlame(0, -2, 6.5, 17, b * 4.3);
+
+      ctx.restore();
+    }
+
+    // -------------------------------------------------------------
+    // 4. FALÒ CENTRALE DELL'ACCAMPAMENTO
+    // -------------------------------------------------------------
+    const fireX = OUTPOST.x, fireY = OUTPOST.y + 38;
+    ctx.save();
+    ctx.translate(fireX, fireY);
+
+    // Cerchio di sassi attorno al fuoco
+    for (let r = 0; r < 8; r++) {
+      const rockAng = (r * TAU) / 8;
+      ctx.fillStyle = '#545248';
+      circle(ctx, Math.cos(rockAng) * 22, Math.sin(rockAng) * 16, 5);
+      ctx.fill();
+    }
+
+    // Ceppi di legna incrociati
+    ctx.strokeStyle = '#3d2516';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(-14, -8); ctx.lineTo(14, 8);
+    ctx.moveTo(-14, 8); ctx.lineTo(14, -8);
+    ctx.stroke();
+
+    // Brace viva
+    ctx.fillStyle = '#b33112';
+    circle(ctx, 0, 0, 11);
+    ctx.fill();
+
+    // Grande fiamma centrale fluida e calda
+    drawRealisticFlame(0, 0, 12, 30, 99.1);
+
+    ctx.restore();
+
+    // -------------------------------------------------------------
+    // 5. TESTI E INDICAZIONI
+    // -------------------------------------------------------------
+    ctx.font = '700 11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f5e8c4';
+    ctx.shadowColor = 'rgba(20, 25, 18, 0.8)';
+    ctx.shadowBlur = 4;
+    ctx.fillText('AVAMPOSTO DEL CROCEVIA', OUTPOST.x, OUTPOST.y + 120);
+
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.fillStyle = '#c5e2b8';
+    ctx.fillText('ZONA SICURA', OUTPOST.x, OUTPOST.y + 137);
+
+    ctx.fillStyle = '#f59a78';
+    ctx.shadowColor = 'rgba(80, 20, 10, 0.7)';
+    ctx.shadowBlur = 6;
+    ctx.fillText('↓ PVP LIBERO', OUTPOST.x, OUTPOST.y + OUTPOST.radius + 32);
+
+    ctx.shadowBlur = 0;
     ctx.restore();
   }
 

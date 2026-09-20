@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WorldSimulation } from '../server/simulation';
 import type { Account } from '../server/store';
-import { OUTPOST, inOutpost, OUTPOST_HUTS } from '../shared/outpost';
+import { OUTPOST, inOutpost } from '../shared/outpost';
 import { ARENA_GATE, insideArenaGate } from '../shared/arena';
 import { World } from '../shared/world';
 import { collidesWorld } from '../shared/physics';
@@ -18,13 +18,12 @@ function combat() {
   return { sim, a, b, aa, bb };
 }
 
-test('compact sanctuary contains spawn, huts and arena; the first point outside is PvP', () => {
+test('compact sanctuary contains spawn and arena; the first point outside is PvP', () => {
   assert.ok(OUTPOST.radius <= 220);
   assert.equal(inOutpost({ x: 0, y: 220 }), true);
   assert.equal(inOutpost({ x: 0, y: 220.01 }), false);
   assert.ok(Math.hypot(ARENA_GATE.x, ARENA_GATE.y) + ARENA_GATE.radius < OUTPOST.radius);
   const world = new World();
-  for (const hut of OUTPOST_HUTS) assert.equal(collidesWorld(hut.x + 24, hut.y + 24, 15, world), true);
   for (const point of [{ x: 0, y: 221 }, { x: 221, y: 24 }, { x: -221, y: 24 }, { x: 0, y: -221 }]) assert.equal(collidesWorld(point.x, point.y, 15, world), false);
   const sim = new WorldSimulation();
   for (let i = 0; i < 20; i++) {
