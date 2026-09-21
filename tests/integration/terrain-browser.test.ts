@@ -11,6 +11,8 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     await server.listen();
     browser = await chromium.launch({ channel: 'chrome', headless: true });
     const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+    // tsx preserves names of callbacks serialized into page.evaluate.
+    await page.addInitScript('window.__name = (value) => value');
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     // A blank same-origin document loads just the production drawing modules.
@@ -83,6 +85,48 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     assert.ok(performance.still, 'water brush strokes remain static as time advances');
     assert.ok(performance.maxMs < 250, `terrain render stalled: ${performance.maxMs} ms`);
     console.log('Terrain CPU render timings (headless Chrome):', performance);
+    const cachedTerrain = await page.evaluate(async () => {
+      const { Renderer } = await import('/client/render.ts' as string);
+      const canvas = document.querySelector('canvas')!;
+      const renderer = new Renderer(canvas);
+      await renderer.spritesReady;
+      // Let the initial ResizeObserver delivery complete before measuring reuse.
+      await new Promise(requestAnimationFrame);
+      let builds = 0;
+      const original = renderer.drawTerrain.bind(renderer);
+      renderer.drawTerrain = (...args: unknown[]) => { builds++; original(...args); };
+      const draw = () => {
+        renderer.ctx.setTransform(renderer.dpr * renderer.zoom, 0, 0,
+          renderer.dpr * renderer.zoom, 600 - renderer.camera.x * renderer.zoom,
+          450 - renderer.camera.y * renderer.zoom);
+        renderer.drawCachedTerrain(1200);
+      };
+      draw();
+      const start = window.performance.now();
+      for (let i = 0; i < 60; i++) { renderer.camera.x += 1; draw(); }
+      const meanMs = (window.performance.now() - start) / 60;
+      const warmBuilds = builds;
+      renderer.camera.x += 2000; draw();
+      const movedBuilds = builds;
+      renderer.setSeed(42, 'arena'); draw();
+      const seededBuilds = builds;
+      renderer.resize(); draw();
+      const resizedBuilds = builds;
+      const pixels = renderer.ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let transparent = 0;
+      for (let i = 3; i < pixels.length; i += 4) if (pixels[i] !== 255) transparent++;
+      renderer.destroy();
+      return { warmBuilds, movedBuilds, seededBuilds, resizedBuilds, transparent, meanMs,
+        released: renderer.terrainCache === undefined, dpr: renderer.dpr };
+    });
+    assert.equal(cachedTerrain.warmBuilds, 1, 'small camera movements reuse the terrain bitmap');
+    assert.equal(cachedTerrain.movedBuilds, 2, 'leaving cached bounds rebuilds terrain');
+    assert.equal(cachedTerrain.seededBuilds, 3, 'changing world and mode invalidates terrain');
+    assert.equal(cachedTerrain.resizedBuilds, 4, 'resizing invalidates terrain');
+    assert.equal(cachedTerrain.transparent, 0);
+    assert.ok(cachedTerrain.released);
+    assert.ok(cachedTerrain.dpr <= 1);
+    console.log('Cached terrain CPU render timings (headless Chrome):', cachedTerrain);
     await page.screenshot({ path: 'artifacts/world-terrain.png' });
     const water = await page.evaluate(async () => {
       const { EnvironmentArt } = await import('/client/environment-art.ts' as string);

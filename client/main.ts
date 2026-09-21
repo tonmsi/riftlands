@@ -15,6 +15,7 @@ import { dungeonAt } from '../shared/dungeons';
 import { CONTROLS_STORAGE_KEY, defaultControls, GameControls, parseControls } from './controls';
 import { MobileControls } from './mobile-controls';
 import { GameAudio } from './audio';
+import { FrameBudget } from './frame-budget';
 
 let playing = false;
 let latest: Snapshot | null = null;
@@ -259,9 +260,12 @@ mobileControls = new MobileControls(document.querySelector<HTMLElement>('.rift-a
 });
 
 let lastFrame = performance.now();
+const frameBudget = new FrameBudget();
 function frame(now: number): void {
+  requestAnimationFrame(frame);
+  if (document.hidden) { frameBudget.reset(); lastFrame = now; return; }
+  if (!frameBudget.ready(now, playing ? 60 : 30)) return;
   const delta = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
-  if (document.hidden) { requestAnimationFrame(frame); return; }
   advanceInputs(now);
   const time = connection.serverTime();
   const remoteFrame = snapshotBuffer.sample(performance.now());
@@ -302,7 +306,6 @@ function frame(now: number): void {
   if (self && playing && ui.minimapVisible && now - lastMinimap > 250) {
     drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? []); lastMinimap = now;
   }
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 

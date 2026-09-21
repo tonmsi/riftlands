@@ -9,6 +9,7 @@ import type { DungeonDefinition } from '../shared/dungeons';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
 import { EnvironmentArt } from './environment-art';
+import { renderDpr } from './frame-budget';
 import { TERRAIN, groundColor, shorelineMask, sceneryGroups, mapTerrainColor } from './terrain-style';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
@@ -31,7 +32,7 @@ const NPC_DRAW_SIZE = 48;
 const BOSS_DRAW_SIZE = 84;
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;
-const MAX_RENDER_DPR = 2;
+const SPRITE_RASTER_DPR = 2;
 const MAX_LOGICAL_VIEWPORT = { width: 2200, height: 1400 };
 
 interface RasterSpriteSheet {
@@ -63,9 +64,8 @@ async function rasterizeSpriteSheet(url: string, frameSize: number, drawSize: nu
   atlasContext.imageSmoothingQuality = 'high';
   atlasContext.drawImage(image, 0, 0);
 
-  // The game canvas caps its DPR at two. Cached frames at the same density keep
-  // smooth vector edges while using much less memory than full raster atlases.
-  const cachedSize = Math.ceil(drawSize * MAX_RENDER_DPR);
+  // Keep small sprite sources sharp when scaled, independently of the canvas budget.
+  const cachedSize = Math.ceil(drawSize * SPRITE_RASTER_DPR);
   const frames: HTMLCanvasElement[] = [];
   for (let row = 0; row < SPRITE_ROWS; row++) {
     for (let column = 0; column < SPRITE_COLUMNS; column++) {
@@ -163,6 +163,8 @@ export class Renderer {
   private readonly npcSprites = new Map<string, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
   private readonly environmentArt = new EnvironmentArt();
+  private terrainCache?: { canvas: HTMLCanvasElement; world: World; scale: number;
+    left: number; top: number; right: number; bottom: number };
   readonly spritesReady: Promise<void>;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -177,6 +179,7 @@ export class Renderer {
 
   setSeed(seed: number, mode: RoomMode = 'world'): void {
     this.world = new World(seed, 160, mode);
+    this.terrainCache = undefined;
     this.hasCamera = false;
     this.classMotion.clear();
     this.resize();
@@ -190,7 +193,7 @@ export class Renderer {
     };
   }
 
-  destroy(): void { this.resizeObserver.disconnect(); }
+  destroy(): void { this.resizeObserver.disconnect(); this.terrainCache = undefined; }
 
   private async prepareSprites(): Promise<void> {
     const jobs: Promise<void>[] = [];
@@ -216,7 +219,8 @@ export class Renderer {
     const rect = this.canvas.getBoundingClientRect();
     this.width = Math.max(1, rect.width);
     this.height = Math.max(1, rect.height);
-    this.dpr = Math.min(window.devicePixelRatio || 1, MAX_RENDER_DPR);
+    this.dpr = renderDpr(window.devicePixelRatio, this.width, this.height);
+    this.terrainCache = undefined;
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);
     const baseZoom = (this.width < 680 ? 0.8 : 0.95) * (this.touchQuery.matches ? 0.8 : 1);
@@ -235,7 +239,7 @@ export class Renderer {
     const now = performance.now();
     const delta = this.lastTime ? Math.max(0, Math.min(80, now - this.lastTime)) : 16;
     this.lastTime = now;
-    if (this.dpr !== Math.min(window.devicePixelRatio || 1, MAX_RENDER_DPR)) this.resize();
+    if (this.dpr !== renderDpr(window.devicePixelRatio, this.width, this.height)) this.resize();
     const target = this.world.mode === 'arena' && frame.playing && !this.touchQuery.matches ? { x: 0, y: 0 } : frame.self && frame.playing ? frame.self : {
       x: 25 + Math.sin(frame.time * 0.000025) * 18,
       y: 12 + Math.cos(frame.time * 0.000019) * 12,
@@ -262,7 +266,7 @@ export class Renderer {
     ctx.translate(this.width / 2, this.height / 2);
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.camera.x, -this.camera.y);
-    this.drawTerrain(frame.time);
+    this.drawCachedTerrain(frame.time);
     if (this.world.mode === 'world') {
       this.drawCrossroads(frame.time); //posso togliere frame time se è statico e non voglio animazioni
       this.drawArenaGate(frame.time, frame.arenaGate);
@@ -431,8 +435,36 @@ export class Renderer {
     }
   }
 
-  private drawTerrain(time: number): void {
-    const { ctx } = this;
+  private drawCachedTerrain(time: number): void {
+    const scale = this.dpr * this.zoom;
+    const left = this.camera.x - this.width / (2 * this.zoom);
+    const top = this.camera.y - this.height / (2 * this.zoom);
+    const right = left + this.width / this.zoom, bottom = top + this.height / this.zoom;
+    let cache = this.terrainCache;
+    if (!cache || cache.world !== this.world || cache.scale !== scale ||
+      left < cache.left || top < cache.top || right > cache.right || bottom > cache.bottom) {
+      // One bounded bitmap, with room for camera movement. No growing world atlas.
+      const margin = 192;
+      const x = Math.floor((left - margin) * scale) / scale;
+      const y = Math.floor((top - margin) * scale) / scale;
+      const canvas = cache?.canvas ?? document.createElement('canvas');
+      canvas.width = Math.ceil((right + margin - x) * scale);
+      canvas.height = Math.ceil((bottom + margin - y) * scale);
+      const ctx = canvas.getContext('2d', { alpha: false })!;
+      ctx.fillStyle = TERRAIN.grass; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(scale, 0, 0, scale, -x * scale, -y * scale);
+      cache = { canvas, world: this.world, scale, left: x, top: y,
+        right: x + canvas.width / scale, bottom: y + canvas.height / scale };
+      // Include off-bitmap neighbours so foliage and shore details are not clipped at their anchors.
+      this.drawTerrain(time, ctx, { left: x - 100, top: y - 100,
+        right: cache.right + 100, bottom: cache.bottom + 100 });
+      this.terrainCache = cache;
+    }
+    this.ctx.drawImage(cache.canvas, cache.left, cache.top,
+      cache.canvas.width / scale, cache.canvas.height / scale);
+  }
+
+  private drawTerrain(time: number, ctx = this.ctx, bounds = this.bounds): void {
     const waterPlants: { x: number; y: number; variation: number; shore: number }[] = [];
     const transform = ctx.getTransform();
     type SurfaceKind = 'grass' | 'path' | 'mud' | 'stone' | 'water';
@@ -515,13 +547,13 @@ export class Renderer {
       return backing;
     };
     // Cache just the visible chunks; sampling terrain then avoids regenerating tile noise every frame.
-    for (let cy = Math.floor(this.bounds.top / CHUNK_SIZE); cy <= Math.floor(this.bounds.bottom / CHUNK_SIZE); cy++) {
-      for (let cx = Math.floor(this.bounds.left / CHUNK_SIZE); cx <= Math.floor(this.bounds.right / CHUNK_SIZE); cx++) {
+    for (let cy = Math.floor(bounds.top / CHUNK_SIZE); cy <= Math.floor(bounds.bottom / CHUNK_SIZE); cy++) {
+      for (let cx = Math.floor(bounds.left / CHUNK_SIZE); cx <= Math.floor(bounds.right / CHUNK_SIZE); cx++) {
         this.world.getChunk(cx, cy);
       }
     }
-    for (let ty = Math.floor(this.bounds.top / TILE_SIZE); ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty++) {
-      for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
+    for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
+      for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
         if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) {
           ctx.fillStyle = '#202b29';
           ctx.fillRect(tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE + 0.4, TILE_SIZE + 0.4);
@@ -563,7 +595,7 @@ export class Renderer {
             coverTileBleed(ctx, tx + (corner === 1 || corner === 2 ? 1 : 0),
               ty + (corner === 2 || corner === 3 ? 1 : 0), corner, radius, color, transform.a);
           }
-          const shore = this.drawWater(tx, ty, x, y, time);
+          const shore = this.drawWater(tx, ty, x, y, time, ctx);
           if (shore) waterPlants.push({ x, y, variation: noise(tx, ty, 17), shore });
         } else if (tile === 'rock' || tile === 'bush') {
           // All scenery, including dungeon obstacles, uses the shared 1x1/2x2 pass below.
@@ -573,8 +605,8 @@ export class Renderer {
       }
     }
     // Paint only after opaque coverage, so neighbouring cells cannot erase brush edges.
-    for (let ty = Math.floor(this.bounds.top / TILE_SIZE); ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty++) {
-      for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
+    for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
+      for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
         if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) continue;
         const surface = surfaceAt(tx, ty);
         if (surface && surface !== 'water') this.environmentArt.paintGround(ctx,
@@ -583,8 +615,8 @@ export class Renderer {
     }
     const seamAccents = new Map<string, { x: number; y: number; variation: number }>();
     const vertexQuadrants = [[-1, -1, 2], [0, -1, 3], [0, 0, 0], [-1, 0, 1]] as const;
-    for (let vy = Math.floor(this.bounds.top / TILE_SIZE); vy <= Math.floor(this.bounds.bottom / TILE_SIZE) + 1; vy++) {
-      for (let vx = Math.floor(this.bounds.left / TILE_SIZE); vx <= Math.floor(this.bounds.right / TILE_SIZE) + 1; vx++) {
+    for (let vy = Math.floor(bounds.top / TILE_SIZE); vy <= Math.floor(bounds.bottom / TILE_SIZE) + 1; vy++) {
+      for (let vx = Math.floor(bounds.left / TILE_SIZE); vx <= Math.floor(bounds.right / TILE_SIZE) + 1; vx++) {
         const quadrants = vertexQuadrants.map(([dx, dy, corner]) => ({
           tx: vx + dx, ty: vy + dy, corner, surface: surfaceAt(vx + dx, vy + dy),
         }));
@@ -648,7 +680,7 @@ export class Renderer {
     }
     for (const accent of seamAccents.values())
       this.environmentArt.drawTerrainSeam(ctx, accent.x, accent.y, accent.variation);
-    this.environmentArt.paintWater(ctx, this.bounds, this.world);
+    this.environmentArt.paintWater(ctx, bounds, this.world);
     for (const plant of waterPlants) {
       this.environmentArt.drawWaterPlants(ctx, plant.x, plant.y, plant.variation, plant.shore);
     }
@@ -657,8 +689,8 @@ export class Renderer {
       if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return 'grass';
       return this.world.getTile(tx, ty);
     };
-    for (let ty = Math.floor(this.bounds.top / TILE_SIZE / 2) * 2; ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty += 2) {
-      for (let tx = Math.floor(this.bounds.left / TILE_SIZE / 2) * 2; tx <= Math.floor(this.bounds.right / TILE_SIZE); tx += 2) {
+    for (let ty = Math.floor(bounds.top / TILE_SIZE / 2) * 2; ty <= Math.floor(bounds.bottom / TILE_SIZE); ty += 2) {
+      for (let tx = Math.floor(bounds.left / TILE_SIZE / 2) * 2; tx <= Math.floor(bounds.right / TILE_SIZE); tx += 2) {
         for (const group of sceneryGroups(getScenery, tx, ty)) {
           this.environmentArt.draw(ctx, group.tile, group.x * TILE_SIZE, group.y * TILE_SIZE,
             noise(group.x, group.y), 0, group.width, group.height);
@@ -667,8 +699,7 @@ export class Renderer {
     }
   }
 
-  private drawWater(tx: number, ty: number, x: number, y: number, _time: number): number {
-    const { ctx } = this;
+  private drawWater(tx: number, ty: number, x: number, y: number, _time: number, ctx = this.ctx): number {
     const shore = shorelineMask((nx, ny) => this.world.getTile(nx, ny), tx, ty);
     this.environmentArt.draw(ctx, 'water', x, y, noise(tx, ty), shore);
     return shore;
@@ -1503,7 +1534,7 @@ export class Renderer {
 export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = []): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const rect = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, MAX_RENDER_DPR);
+  const rect = canvas.getBoundingClientRect(), dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
   const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
     canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
