@@ -286,6 +286,7 @@ function frame(now: number): void {
     goldDrops: latest?.goldDrops,
     bossWindups: latest?.bossWindups,
     bossLocks: latest?.bossLocks,
+    bossPreparations: latest?.bossPreparations,
     time,
     self,
     actors,

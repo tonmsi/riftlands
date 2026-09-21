@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { BOSS_BY_ID } from '../shared/bosses';
 import { DUNGEON_DEFINITIONS, dungeonEncounters, dungeonAt, dungeonAtTile, dungeonTile, dungeonFlames, dungeonStoneTiles, isClosedDungeonTile, assertValidDungeonDefinition, flameBarrierFromTiles, inwardFlameAngle } from '../shared/dungeons';
 import { World } from '../shared/world';
+import { insideDungeonRegion } from '../shared/dungeons';
+import { DungeonPlaytestWorld } from '../client/dungeon-playtest';
+import { moveWithCollisions } from '../shared/physics';
 import { WorldSimulation } from '../server/simulation';
 import { engineBundle, registerEngineBundle } from './fixtures/dungeon-engine';
 
@@ -11,6 +14,35 @@ function setup() {
     bundle.definition.passages = bundle.definition.passages.map(p => p.fightState === 'open' ? { ...p, fightState: 'stone' as const } : p);
     return { bundle, definition: bundle.definition, cleanup: registerEngineBundle(bundle) };
 }
+
+test('room stones seal only walkable exits and stop movement before the death zone', () => {
+    const d = engineBundle().definition, b = d.layout.bounds;
+    const room = (left: number, right: number) => ({ kind: 'polygon' as const, points: [
+        {x:(b.minTx+left)*48,y:(b.minTy+3)*48}, {x:(b.minTx+right)*48,y:(b.minTy+3)*48},
+        {x:(b.minTx+right)*48,y:(b.minTy+14)*48}, {x:(b.minTx+left)*48,y:(b.minTy+14)*48},
+    ] });
+    d.encounter.regions.combat = room(4,11);
+    d.layout.tiles = d.layout.tiles!.map(t => ({...t, kind: t.x === b.minTx+3 ? 'water' as const
+        : t.x === b.minTx+10 && t.y === b.minTy+8 ? 'rock' as const : 'path' as const}));
+    d.additionalEncounters = [{bossId:'second-room',encounterGroupId:'second',spawnPoints:d.spawnPoints,
+        passages:d.passages,encounter:{...d.encounter,regions:{...d.encounter.regions,combat:room(14,21)}}}];
+    const stones = dungeonStoneTiles(d), world = new DungeonPlaytestWorld(d);
+    assert.ok(stones.length > 0);
+    assert.ok(stones.every(t => dungeonTile(d,t.x,t.y) === 'path'));
+    assert.ok(stones.every(t => insideDungeonRegion(d.encounter.regions.combat,{x:(t.x+.5)*48,y:(t.y+.5)*48})));
+    assert.ok(!stones.some(t=>t.x===b.minTx+4 && t.y===b.minTy+8), 'water already blocks this exit');
+    const exit = {x:b.minTx+10,y:b.minTy+7}, other = {x:b.minTx+20,y:b.minTy+7};
+    world.setBossLocked(d.bossId,true);
+    assert.equal(world.getTile(exit.x,exit.y),'rock');
+    assert.equal(world.getTile(other.x,other.y),'path','the next room stays open');
+    assert.equal(world.getTile(b.minTx+3,b.minTy+8),'water');
+    const stopped = moveWithCollisions({x:(b.minTx+9.5)*48,y:(b.minTy+7.5)*48,radius:15},1,0,500,world);
+    assert.ok(insideDungeonRegion(d.encounter.regions.combat,stopped,-48), 'a safe margin remains before death');
+    world.setBossLocked('second-room',true);
+    world.setBossLocked(d.bossId,false);
+    assert.equal(world.getTile(exit.x,exit.y),'path');
+    assert.equal(world.getTile(other.x,other.y),'rock');
+});
 
 test('authored dungeon catalog has unique IDs and matching bosses', t => {
     const f = setup(); t.after(f.cleanup);

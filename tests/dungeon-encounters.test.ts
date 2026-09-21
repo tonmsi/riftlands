@@ -7,6 +7,7 @@ import { STONE_WARDEN, MAZE_STALKER } from '../shared/boss-templates';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonFlames, insideDungeonRegion, insideDungeonVisitorArea, type DungeonDefinition } from '../shared/dungeons';
 import { WorldSimulation } from '../server/simulation';
 import type { Actor } from '../shared/types';
+import { collidesWorld } from '../shared/physics';
 function ready(separate = false) {
     const draft = newDungeonDraft(32, 20);
     draft.id = 'test-encounters';
@@ -42,6 +43,7 @@ function fixture(separate = false, team = false, enterOnFlame = false) {
     if (team) player.teamId = 'test-party';
     if (enterOnFlame) Object.assign(player, dungeonFlames(bundle.definition)[0]);
     sim.step();
+    if (!team && !enterOnFlame) for (let i = 0; i < 10; i++) sim.step(.1);
     const encounters = bundle.bosses.map(b => sim.bosses.get(b.id)!);
     const kill = (target: Actor) => (sim as unknown as {
         damage(t: Actor, a: Actor, n: number): boolean;
@@ -61,6 +63,8 @@ test('activation is separate from spawns and flames, and does not wake distant b
         e.dungeon.encounter.regions.bossAggro = {kind:'circle',center:{...e.boss},radius:100};
         f.sim.step(); assert.equal(e.ownerId, undefined, 'a spawn is not a trigger');
         Object.assign(f.player, e.dungeon.encounter.activationPoints![0]); f.sim.step();
+        assert.ok(e.preparationFor(f.player), 'solo entry is telegraphed before relocation');
+        for (let i = 0; i < 9; i++) f.sim.step(.1);
         assert.equal(e.ownerId, f.player.id);
         assert.equal(e.preparationFor(f.player), undefined);
         assert.deepEqual({ x:f.player.x,y:f.player.y },e.dungeon.spawnPoints.party[0]);
@@ -85,13 +89,59 @@ test('aggro of any linked boss starts the encounter, but never from outside comb
         Object.assign(f.player,{x:b.boss.x,y:b.dungeon.layout.bounds.minTy*48-30});
         f.sim.step(); assert.equal(a.ownerId,undefined);
         Object.assign(f.player,{x:b.boss.x+80,y:b.boss.y}); f.sim.step();
+        assert.ok(a.preparationFor(f.player));
+        Object.assign(f.player, a.dungeon.spawnPoints.party[0]);
+        for (let i = 0; i < 9; i++) f.sim.step(.1);
         assert.equal(a.ownerId,f.player.id);
         assert.equal(b.targetId,f.player.id);
         assert.equal(a.targetId,undefined,'another boss in the same encounter remains dormant');
     } finally {f.cleanup();}
 });
 
-test('only a group receives five seconds; leaving during preparation cancels the encounter', () => {
+test('solo entry announces relocation, pauses the boss on arrival, and can be cancelled', () => {
+    const f = fixture(false, false, true);
+    try {
+        const e = f.encounters[0], trigger = e.dungeon.encounter.activationPoints![0];
+        Object.assign(f.player, trigger); f.sim.step();
+        assert.equal(e.preparationFor(f.player)?.endsAt, f.sim.now + 900);
+        assert.equal(e.lockState().locked, false);
+        for (let i = 0; i < 8; i++) f.sim.step(.1);
+        assert.deepEqual({x:f.player.x,y:f.player.y},trigger);
+        f.sim.step(.1);
+        assert.equal(e.lockState(f.player).startedAt, f.sim.now);
+        assert.deepEqual({x:f.player.x,y:f.player.y},e.dungeon.spawnPoints.party[0]);
+        const bossPosition = {x:e.boss.x,y:e.boss.y};
+        e.recordDamage(f.player.id, 1);
+        for (let i = 0; i < 10; i++) f.sim.step(.1);
+        assert.deepEqual({x:e.boss.x,y:e.boss.y},bossPosition);
+        assert.equal(e.windup, undefined);
+    } finally {f.cleanup();}
+    const g = fixture(false, false, true);
+    try {
+        const e = g.encounters[0];
+        Object.assign(g.player,e.dungeon.encounter.activationPoints![0]); g.sim.step();
+        Object.assign(g.player,e.dungeon.encounter.ejectTo); g.sim.step();
+        assert.equal(e.preparationFor(g.player),undefined);
+        assert.equal(e.lockState().locked,false);
+    } finally {g.cleanup();}
+});
+
+test('authored spawns on a room edge move inside the new stones safely', () => {
+    const f = fixture(true, false, true);
+    try {
+        const e = f.encounters[0], region = e.dungeon.encounter.regions.combat;
+        assert.equal(region.kind,'polygon');
+        if (region.kind !== 'polygon') return;
+        e.dungeon.spawnPoints.party = [{x:region.points[1].x-24,y:e.dungeon.spawnPoints.party[0].y}];
+        Object.assign(f.player,e.dungeon.encounter.activationPoints![0]); f.sim.step();
+        for(let i=0;i<9;i++) f.sim.step(.1);
+        assert.equal(e.ownerId,f.player.id);
+        assert.equal(collidesWorld(f.player.x,f.player.y,f.player.radius,f.sim.world),false);
+        assert.ok(insideDungeonRegion(region,f.player,-48));
+    } finally {f.cleanup();}
+});
+
+test('a group receives five seconds; leaving during preparation cancels the encounter', () => {
     const f = fixture(false, true);
     try {
         const e = f.encounters[0];
@@ -239,6 +289,7 @@ test('independent encounters activate and finish independently in the same physi
         assert.equal(b.boss.hp, b.boss.maxHp);
         Object.assign(f.player, b.dungeon.encounter.activationPoints![0]);
         f.sim.step();
+        for (let i = 0; i < 9; i++) f.sim.step(.1);
 
         assert.equal(b.lockState().locked, true);
         assert.equal(a.lockState().locked, false);

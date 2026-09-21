@@ -8,19 +8,19 @@ import { WorldSimulation } from '../server/simulation';
 
 /** Isolated authored map: no procedural terrain, population, accounts or network. */
 export class DungeonPlaytestWorld extends World {
-  private readonly stones: Set<string>;
+  private readonly stones: Map<string, Set<string>>;
   private readonly encounters: DungeonDefinition[];
   constructor(readonly dungeon: DungeonDefinition) {
     super();
     this.encounters = dungeonEncounters(dungeon);
-    this.stones = new Set(this.encounters.flatMap(dungeonStoneTiles).map(t => `${t.x},${t.y}`));
+    this.stones = new Map(this.encounters.map(e => [e.bossId, new Set(dungeonStoneTiles(e).map(t => `${t.x},${t.y}`))]));
   }
   override getBiome() { return 'meadow' as const; }
   override getMoisture() { return 0; }
   override getTile(tx: number, ty: number): TileKind {
     const b = this.dungeon.layout.bounds;
     if (tx < b.minTx - 2 || tx > b.maxTx + 2 || ty < b.minTy - 2 || ty > b.maxTy + 2) return 'rock';
-    if (this.encounters.some(e => this.isBossLocked(e.bossId)) && this.stones.has(`${tx},${ty}`)) return 'rock';
+    if (this.encounters.some(e => this.isBossLocked(e.bossId) && this.stones.get(e.bossId)!.has(`${tx},${ty}`))) return 'rock';
     return dungeonTile(this.dungeon, tx, ty) ?? 'grass';
   }
   override getChunk(cx: number, cy: number): Chunk {

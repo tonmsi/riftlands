@@ -52,8 +52,10 @@ export interface BossWindup extends Vec2 {
   targetY?: number;
   innerRadius?: number;
 }
-export interface BossLockState { bossId: string; locked: boolean; ownerId?: string; relation?: 'participant' | 'eliminated' | 'outsider'; }
-export interface BossPreparationState { bossId: string; name: string; endsAt: number; entrants: number; }
+export const DUNGEON_ENTRY_MS = 900;
+export const DUNGEON_ARRIVAL_MS = 1200;
+export interface BossLockState { bossId: string; locked: boolean; startedAt?: number; ownerId?: string; relation?: 'participant' | 'eliminated' | 'outsider'; }
+export interface BossPreparationState { bossId: string; name: string; startedAt: number; endsAt: number; entrants: number; team: boolean; }
 
 export const BOSS_DEFINITIONS: readonly BossDefinition[] =
   (customDungeons as { bosses: BossDefinition[] }[]).flatMap(entry => entry.bosses);

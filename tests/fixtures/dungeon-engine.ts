@@ -39,5 +39,6 @@ export function engineFixture(store?: AccountStore, templateIndex = 0) {
     const player = sim.addPlayer(account, 'warrior'), encounter = sim.bosses.get(bundle.definition.bossId)!;
     Object.assign(player, bundle.definition.encounter.activationPoints![0], { spawnProtectedUntil: 0 });
     sim.step();
+    for (let i = 0; i < 10; i++) sim.step(.1);
     return { bundle, cleanup, sim, account, player, encounter, boss: encounter.boss };
 }

@@ -6,7 +6,7 @@ import { OUTPOST } from '../shared/outpost';
 import type { ArenaGateState } from '../shared/types';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames, inwardFlameAngle } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
-import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
+import { DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossDrop, type BossLockState, type BossPreparationState, type BossWindup } from '../shared/bosses';
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
 import { EnvironmentArt } from './environment-art';
 import { renderDpr } from './frame-budget';
@@ -87,6 +87,7 @@ export interface RenderFrame {
   goldDrops?: BossDrop[];
   bossWindups?: BossWindup[];
   bossLocks?: BossLockState[];
+  bossPreparations?: BossPreparationState[];
   arenaGate?: ArenaGateState;
   time: number;
   self: Actor | null;
@@ -275,6 +276,7 @@ export class Renderer {
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.camera.x, -this.camera.y);
     this.drawCachedTerrain(frame.time);
+    this.drawDungeonEntry(frame, false);
     if (this.world.mode === 'world') {
       if (!this.localDungeons) { this.drawCrossroads(frame.time); this.drawArenaGate(frame.time, frame.arenaGate); }
       this.drawDungeons();
@@ -355,12 +357,58 @@ export class Renderer {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     // <-- AGGIUNGI QUESTA RIGA:
-    this.drawRain(frame.time);
+    //this.drawRain(frame.time);
     const vignette = ctx.createRadialGradient(this.width / 2, this.height / 2, this.width * 0.2, this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.68);
     vignette.addColorStop(0, 'rgba(19,29,24,0)');
     vignette.addColorStop(1, 'rgba(19,29,24,0.18)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, this.width, this.height);
+    this.drawDungeonEntry(frame, true);
+  }
+
+  private drawDungeonEntry(frame: RenderFrame, overlay: boolean): void {
+    if (!frame.playing || !frame.self || frame.self.hp <= 0 || this.world.mode !== 'world') return;
+    const preparation = frame.bossPreparations?.[0];
+    const lock = frame.bossLocks?.find(lock => lock.locked && lock.relation === 'participant' && lock.startedAt !== undefined
+      && frame.time >= lock.startedAt && frame.time - lock.startedAt < 2600);
+    if (!preparation && !lock) return;
+    const remaining = preparation ? Math.max(0, preparation.endsAt - frame.time) : 0;
+    const arrival = lock ? frame.time - lock.startedAt! : 0;
+    const progress = preparation ? 1 - Math.min(1, remaining / DUNGEON_ENTRY_MS) : Math.min(1, arrival / DUNGEON_ARRIVAL_MS);
+    const opacity = preparation ? 1 : Math.min(1, (2600 - arrival) / 600);
+    const { ctx } = this;
+    ctx.save();
+    if (!overlay) {
+      ctx.translate(frame.self.x, frame.self.y);
+      ctx.globalAlpha = opacity * (preparation ? .75 : 1 - progress);
+      ctx.strokeStyle = '#efcf87'; ctx.fillStyle = '#efcf871c'; ctx.lineWidth = 2;
+      const radius = preparation ? 54 - progress * 18 : 36 + progress * 100;
+      circle(ctx, 0, 0, radius); ctx.fill(); ctx.stroke();
+      circle(ctx, 0, 0, radius + 7); ctx.stroke();
+      for (let i = 0; i < 8; i++) {
+        const angle = i * TAU / 8 + frame.time * .001;
+        ctx.save(); ctx.rotate(angle); ctx.translate(radius + 14, 0);
+        polygon(ctx, [-4, 0, 0, -7, 4, 0, 0, 7]); ctx.fill(); ctx.stroke(); ctx.restore();
+      }
+    } else {
+      // Darken before relocation, then reveal the new spawn under the same veil.
+      const veil = preparation ? progress * .82 : .82 * Math.max(0, 1 - arrival / 550);
+      ctx.fillStyle = `rgba(12,18,18,${veil})`; ctx.fillRect(0, 0, this.width, this.height);
+      ctx.globalAlpha = opacity;
+      const y = Math.max(100, this.height * .22), width = Math.min(520, this.width - 32);
+      const gradient = ctx.createLinearGradient(this.width / 2 - width / 2, 0, this.width / 2 + width / 2, 0);
+      gradient.addColorStop(0, '#101b1b00'); gradient.addColorStop(.2, '#101b1be8'); gradient.addColorStop(.8, '#101b1be8'); gradient.addColorStop(1, '#101b1b00');
+      ctx.fillStyle = gradient; ctx.fillRect(this.width / 2 - width / 2, y - 34, width, 100);
+      ctx.textAlign = 'center'; ctx.fillStyle = '#efcf87'; ctx.font = '600 13px system-ui';
+      ctx.fillText(preparation ? 'IL DUNGEON SI RISVEGLIA' : 'DUNGEON INIZIATO', this.width / 2, y, width - 24);
+      ctx.fillStyle = '#fff3d5'; ctx.font = '600 23px Georgia';
+      const dungeon = this.localDungeons?.flatMap(dungeonEncounters).find(d => d.bossId === (preparation?.bossId ?? lock?.bossId))
+        ?? DUNGEON_BY_BOSS_ID.get((preparation?.bossId ?? lock?.bossId)!);
+      ctx.fillText(dungeon?.name ?? preparation?.name ?? 'La sfida ha inizio', this.width / 2, y + 29, width - 24);
+      ctx.font = '13px system-ui'; ctx.fillStyle = '#c5c7b8';
+      ctx.fillText(preparation ? `Preparati · ${(remaining / 1000).toFixed(1)} s` : 'I passaggi della stanza sono chiusi', this.width / 2, y + 53, width - 24);
+    }
+    ctx.restore();
   }
 
   private drawTrap(trap: Trap, time: number): void {

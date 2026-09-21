@@ -192,14 +192,30 @@ export function clampToDungeonRegion(region: DungeonRegion, from: Vec2, target: 
 }
 
 const stoneTileCache = new WeakMap<DungeonDefinition, readonly Vec2[]>();
+const stoneKeyCache = new WeakMap<DungeonDefinition, ReadonlySet<string>>();
 export function dungeonStoneTiles(definition: DungeonDefinition): readonly Vec2[] {
   const cached = stoneTileCache.get(definition);
   if (cached) return cached;
-  const tiles = new Map(definition.passages.filter(p => p.fightState === 'stone').flatMap(p => p.tiles).map(t => [tileKey(t), t]));
+  const tiles = new Map<string, Vec2>();
   const b = definition.layout.bounds;
-  for (let x = b.minTx; x <= b.maxTx; x++) for (const y of [b.minTy, b.maxTy]) tiles.set(`${x},${y}`, { x, y });
-  for (let y = b.minTy + 1; y < b.maxTy; y++) for (const x of [b.minTx, b.maxTx]) tiles.set(`${x},${y}`, { x, y });
-  const result = [...tiles.values()]; stoneTileCache.set(definition, result); return result;
+  const region = definition.encounter.regions.combat;
+  const walkable = (x: number, y: number) => { const kind = dungeonTile(definition, x, y); return kind !== 'rock' && kind !== 'water'; };
+  // Close the inner edge of this room, leaving a tile of stone before the lethal
+  // boundary. Diagonal neighbours also seal corner exits on curved regions.
+  const inside = (x: number, y: number) => insideDungeonRegion(region, dungeonTileCenter({ x, y }), -TILE_SIZE / 2 + .01);
+  const neighbours = [-1, 0, 1].flatMap(x => [-1, 0, 1].filter(y => x || y).map(y => ({ x, y })));
+  for (let y = b.minTy; y <= b.maxTy; y++) for (let x = b.minTx; x <= b.maxTx; x++) {
+    if (walkable(x, y) && inside(x, y) && neighbours.some(n => !inside(x + n.x, y + n.y) && walkable(x + n.x, y + n.y))) {
+      tiles.set(`${x},${y}`, { x, y });
+    }
+  }
+  // Keep authored internal stone gates, but ignore old map-wide boundary gates
+  // belonging to another room and never replace solid terrain.
+  for (const passage of definition.passages) if (passage.fightState === 'stone') for (const tile of passage.tiles) {
+    if (!onDungeonBoundary(b, tile) && walkable(tile.x, tile.y) && inside(tile.x, tile.y)) tiles.set(tileKey(tile), tile);
+  }
+  const result = [...tiles.values()];
+  stoneTileCache.set(definition, result); stoneKeyCache.set(definition, new Set(tiles.keys())); return result;
 }
 
 export function onDungeonBoundary(bounds: DungeonTileRect, tile: Vec2): boolean {
@@ -284,9 +300,12 @@ export function inDungeonApproachCorridor(definition: DungeonDefinition, positio
 }
 
 export function isClosedDungeonTile(tx: number, ty: number, lockedBosses: ReadonlySet<string>): boolean {
-  for (const definition of DUNGEON_BY_BOSS_ID.values()) if (lockedBosses.has(definition.bossId)
-    && ((insideRect(tx, ty, definition.layout.bounds) && onDungeonBoundary(definition.layout.bounds, { x: tx, y: ty }))
-      || definition.passages.some(p => p.fightState === 'stone' && p.tiles.some(tile => tile.x === tx && tile.y === ty)))) return true;
+  for (const id of lockedBosses) {
+    const definition = DUNGEON_BY_BOSS_ID.get(id);
+    if (!definition) continue;
+    dungeonStoneTiles(definition);
+    if (stoneKeyCache.get(definition)!.has(`${tx},${ty}`)) return true;
+  }
   return false;
 }
 

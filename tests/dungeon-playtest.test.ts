@@ -70,7 +70,9 @@ test('first participant death immediately reopens a team encounter and surviving
 test('flames are dormant before activation, lethal during combat, and reopen the dungeon on death', () => {
   const p = createDungeonPlaytest(ready()), sim = p.simulation, e = [...sim.bosses.values()][0], flame = dungeonFlames(p.definition)[0];
   Object.assign(p.player, flame); sim.step(); assert.equal(p.player.hp, p.player.maxHp);
-  Object.assign(p.player, p.definition.encounter.activationPoints![0]); sim.step(); assert.ok(e.ownerId);
+  Object.assign(p.player, p.definition.encounter.activationPoints![0]); sim.step();
+  for (let i = 0; i < 9; i++) sim.step(.1);
+  assert.ok(e.ownerId);
   Object.assign(p.player, flame); sim.step(); assert.equal(p.player.hp, 0); assert.equal(e.ownerId, undefined);
   for (let i = 0; i < 160; i++) sim.step();
   assert.equal(p.player.hp, p.player.maxHp); assert.equal(e.ownerId, undefined);
