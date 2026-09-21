@@ -2,7 +2,7 @@ import { BOSS_BY_ID } from './bosses';
 import { TILE_SIZE } from './config';
 import { assertValidDungeonDefinition, dungeonEncounters, flameBarrierFromTiles, dungeonTile, DEFAULT_DUNGEON_THEME, type DungeonDefinition, type DungeonRegion } from './dungeons';
 import { NPC_CATALOG, type NpcKind } from './npcs';
-import type { TileKind, Vec2 } from './types';
+import type { PickupKind, TileKind, Vec2 } from './types';
 import { World, isSolid } from './world';
 import { collidesWorld } from './physics';
 
@@ -11,8 +11,12 @@ export const TERRAIN_CATALOG: Record<TileKind, { name: string; color: string }> 
   rock: { name: 'Muro', color: '#353f43' }, water: { name: 'Acqua', color: '#376b83' },
   bush: { name: 'Cespuglio', color: '#2c5039' }, mud: { name: 'Fango', color: '#675444' },
 };
+export const PICKUP_CATALOG: Record<PickupKind, { name: string; color: string }> = {
+  heal: { name: 'Cura +35 HP', color: '#b6e5aa' }, haste: { name: 'Velocità · 10 s', color: '#a5dbe2' },
+  power: { name: 'Potenza +30% · 10 s', color: '#e5cc81' }, weakness: { name: 'Debolezza −30% · 7 s', color: '#bb99cb' },
+};
 export interface DraftEntity extends Vec2 {
-  id: string; kind: 'npc' | 'boss' | 'party' | 'activation' | 'flame'; encounterId?: string; span?: number; vertical?: boolean; aggroRadius?: number; template: string; label: string; level: number; radius: number;
+  id: string; kind: 'npc' | 'boss' | 'party' | 'activation' | 'flame' | 'pickup'; encounterId?: string; span?: number; vertical?: boolean; aggroRadius?: number; template: string; label: string; level: number; radius: number;
 }
 export const DEFAULT_BOSS_AGGRO_RADIUS = 288;
 export interface DraftEncounter { id: string; name: string; x: number; y: number; width: number; height: number; visitorTiles?: Vec2[]; }
@@ -58,19 +62,20 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
   const ids = new Set<string>();
   const entities = value.entities.map(entity => {
     if (!entity || typeof entity.id !== 'string' || !/^[a-zA-Z0-9:-]{1,100}$/.test(entity.id) || ids.has(entity.id)
-      || !['npc', 'boss', 'party', 'activation', 'flame'].includes(entity.kind) || typeof entity.template !== 'string' || entity.template.length > 100
+      || !['npc', 'boss', 'party', 'activation', 'flame', 'pickup'].includes(entity.kind) || typeof entity.template !== 'string' || entity.template.length > 100
       || typeof entity.label !== 'string' || entity.label.length > 80
       || !Number.isInteger(entity.x) || !Number.isInteger(entity.y) || entity.x < 0 || entity.y < 0 || entity.x >= value.width || entity.y >= value.height
       || !Number.isInteger(entity.level) || entity.level < 1 || entity.level > 25
       || !Number.isFinite(entity.radius) || entity.radius < 1 || entity.radius > 96
-      || (entity.kind === 'npc' && !Object.hasOwn(NPC_CATALOG, entity.template))) fail();
+      || (entity.kind === 'npc' && !Object.hasOwn(NPC_CATALOG, entity.template))
+      || (entity.kind === 'pickup' && !Object.hasOwn(PICKUP_CATALOG, entity.template))) fail();
     if (entity.encounterId !== undefined && !groupIds.has(entity.encounterId)) fail();
     if (entity.aggroRadius !== undefined && (entity.kind !== 'boss' || !Number.isFinite(entity.aggroRadius) || entity.aggroRadius <= 0 || entity.aggroRadius > 10000)) fail();
     if (entity.kind === 'flame' && ((!Number.isInteger(entity.span ?? 1) || (entity.span ?? 1) < 1 || (entity.span ?? 1) > 96)
       || (entity.vertical !== undefined && typeof entity.vertical !== 'boolean'))) fail();
     ids.add(entity.id);
     return { ...(entity.aggroRadius !== undefined ? { aggroRadius: entity.aggroRadius } : {}), ...(entity.encounterId !== undefined ? { encounterId: entity.encounterId } : {}), ...(entity.kind === 'flame' ? { span: entity.span ?? 1, vertical: entity.vertical ?? false } : {}), id: entity.id, kind: entity.kind, template: entity.template, label: entity.label, x: entity.x, y: entity.y, level: entity.level,
-      radius: entity.kind === 'npc' ? NPC_CATALOG[entity.template as NpcKind].radius : entity.kind === 'party' ? 15 : entity.radius };
+      radius: entity.kind === 'npc' ? NPC_CATALOG[entity.template as NpcKind].radius : entity.kind === 'pickup' ? 12 : entity.kind === 'party' ? 15 : entity.radius };
   });
   return { ...draft, id: value.id, name: value.name, origin: { x: value.origin.x, y: value.origin.y }, tiles: [...value.tiles], entities };
 }
@@ -86,6 +91,22 @@ export function draftEntityPosition(entity: Vec2): Vec2 { return { x: (entity.x 
 export function draftFlameTiles(entity: DraftEntity): Vec2[] {
   return Array.from({ length: entity.span ?? 1 }, (_, i) => ({ x: entity.x + (entity.vertical ? 0 : i), y: entity.y + (entity.vertical ? i : 0) }));
 }
+export function reachableDraftTiles(draft: DungeonDraft, from: Vec2): Set<string> {
+  const world = new DraftWorld(draft), reached = new Set<string>(), visited = new Set<string>(), queue = [from];
+  for (let i = 0; i < queue.length; i++) {
+    const point = queue[i], key = `${point.x},${point.y}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    const center = draftEntityPosition(point);
+    if (collidesWorld(center.x, center.y, 15, world)) continue;
+    reached.add(key);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const x = point.x + dx, y = point.y + dy;
+      if (x >= 0 && y >= 0 && x < draft.width && y < draft.height && !visited.has(`${x},${y}`)) queue.push({ x, y });
+    }
+  }
+  return reached;
+}
 export function validateDungeonDraft(draft: DungeonDraft): string[] {
   const issues: string[] = [];
   const bosses = draft.entities.filter(e => e.kind === 'boss'), party = draft.entities.filter(e => e.kind === 'party');
@@ -98,7 +119,7 @@ export function validateDungeonDraft(draft: DungeonDraft): string[] {
     if (!bosses.some(belongs)) issues.push(`${group.name}: manca un boss.`);
     const count = party.filter(belongs).length;
     if (count < 1 || count > 5) issues.push(`${group.name}: posiziona da 1 a 5 spawn gruppo.`);
-    for (const e of draft.entities.filter(e => e.kind !== 'npc' && belongs(e))) {
+    for (const e of draft.entities.filter(e => e.kind !== 'npc' && e.kind !== 'pickup' && belongs(e))) {
       if (e.x < group.x || e.y < group.y || e.x >= group.x + group.width || e.y >= group.y + group.height) issues.push(`${e.label}: fuori dalla regione del suo incontro.`);
       if (e.kind === 'flame' && draftFlameTiles(e).some(t => t.x < group.x || t.y < group.y || t.x >= group.x + group.width || t.y >= group.y + group.height)) issues.push(`${e.label}: la barriera oltrepassa la regione del suo incontro.`);
       const clearance = e.kind === 'boss' ? e.radius + 14 : e.radius;
@@ -112,10 +133,12 @@ export function validateDungeonDraft(draft: DungeonDraft): string[] {
   const world = new DraftWorld(draft);
   for (const entity of draft.entities) {
     if (entity.kind === 'flame') {
+      if (draftFlameTiles(entity).some(t => t.x === 0 || t.y === 0 || t.x === draft.width - 1 || t.y === draft.height - 1)) issues.push(`${entity.label}: fiamma sul bordo; spostala all’interno, il bordo si chiude con i massi.`);
       for (const tile of draftFlameTiles(entity)) if (isSolid(world.getTile(tile.x, tile.y))) issues.push(`${entity.label}: fiamma su terreno solido o fuori mappa.`);
       continue;
     }
     const point = draftEntityPosition(entity);
+    if (entity.kind !== 'activation' && (entity.x === 0 || entity.y === 0 || entity.x === draft.width - 1 || entity.y === draft.height - 1)) issues.push(`${entity.label}: sul bordo che verrà chiuso dai massi; sposta l’entità all’interno.`);
     if (collidesWorld(point.x, point.y, entity.radius, world)) issues.push(`${entity.label}: ingombro su terreno solido o fuori mappa.`);
   }
   for (let i = 0; i < draft.entities.length; i++) for (let j = i + 1; j < draft.entities.length; j++) {
@@ -132,18 +155,7 @@ export function validateDungeonDraft(draft: DungeonDraft): string[] {
   }
   if (party.length) {
     // Reachability uses player-sized clearance, including narrow corridors and diagonals.
-    const reached = new Set<string>(), queue = [{ x: party[0].x, y: party[0].y }];
-    for (let index = 0; index < queue.length; index++) {
-      const point = queue[index], key = `${point.x},${point.y}`;
-      if (reached.has(key)) continue;
-      const center = draftEntityPosition(point);
-      if (collidesWorld(center.x, center.y, 15, world)) continue;
-      reached.add(key);
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const x = point.x + dx, y = point.y + dy;
-        if (x >= 0 && y >= 0 && x < draft.width && y < draft.height && !reached.has(`${x},${y}`)) queue.push({ x, y });
-      }
-    }
+    const reached = reachableDraftTiles(draft, party[0]);
     for (const entity of draft.entities) if (!reached.has(`${entity.x},${entity.y}`)) issues.push(`${entity.label}: non raggiungibile dal primo ingresso.`);
   }
   return [...new Set(issues)];
@@ -180,6 +192,7 @@ export function draftFromDungeon(definition: DungeonDefinition, bossRadius = 36)
     draft.entities.push({id:`boss-${index}`,kind:'boss',template:template?.templateId??encounter.bossId,label:template?.name??'Boss',level:1,radius:template?.radius??bossRadius,aggroRadius:aggro.kind === 'circle' ? aggro.radius : Math.hypot(width,height)*TILE_SIZE,encounterId:groupId,...position(encounter.spawnPoints.boss)});
   }
   draft.entities.push(...(definition.npcSpawns??[]).map((p):DraftEntity=>({id:p.id,kind:'npc',template:p.npcKind,label:NPC_CATALOG[p.npcKind].name,level:p.level,radius:NPC_CATALOG[p.npcKind].radius,...position(p)})));
+  draft.entities.push(...(definition.pickupSpawns??[]).map((p):DraftEntity=>({id:p.id,kind:'pickup',template:p.kind,label:PICKUP_CATALOG[p.kind].name,level:1,radius:12,...position(p)})));
   return draft;
 }
 
@@ -198,14 +211,15 @@ export function compileDungeonDraft(input: DungeonDraft) {
     layout: { bounds, floor: 'path', obstacles: [], obstacleTiles: [], tiles: draft.tiles.map((kind, i) => ({ x: bounds.minTx + i % draft.width, y: bounds.minTy + Math.floor(i / draft.width), kind })) },
     passages: [], spawnPoints: { boss: position(boss), party: draft.entities.filter(e => e.kind === 'party').map(position) },
     npcSpawns: draft.entities.filter(e => e.kind === 'npc').map(e => ({ ...position(e), id: e.id, npcKind: e.template as NpcKind, level: e.level })),
+    pickupSpawns: draft.entities.filter(e => e.kind === 'pickup').map(e => ({ ...position(e), id: e.id, kind: e.template as PickupKind, radius: 12 })),
     encounter: { preparationMs: 5000, regions: { trigger: region, admission: region, combat: region, ejectIntruders: region, bossAggro: region, bossLeash: region }, ejectTo: { x: left - 96, y: bottom + 96 } },
     spawnExclusionMargin: 96,
     approach: { from: { x: left - 480, y: bottom + 96 }, to: { x: left - 96, y: bottom + 96 }, halfWidth: 48, corridorHalfWidth: 96, waves: [], markers: [] },
     theme: { ...DEFAULT_DUNGEON_THEME },
   };
-  // Open boundary tiles become explicit named passages. Fight barriers are authored separately.
+  // Every walkable boundary opening closes automatically, preserving its original terrain.
   for (const tile of definition.layout.tiles!) if (!isSolid(tile.kind) && (tile.x === bounds.minTx || tile.x === bounds.maxTx || tile.y === bounds.minTy || tile.y === bounds.maxTy)) {
-    definition.passages = [...definition.passages, { id: `opening-${tile.x}-${tile.y}`, position: { x: (tile.x + .5) * TILE_SIZE, y: (tile.y + .5) * TILE_SIZE }, tiles: [{ x: tile.x, y: tile.y }], fightState: 'open' }];
+    definition.passages = [...definition.passages, { id: `opening-${tile.x}-${tile.y}`, position: { x: (tile.x + .5) * TILE_SIZE, y: (tile.y + .5) * TILE_SIZE }, tiles: [{ x: tile.x, y: tile.y }], fightState: 'stone' }];
   }
   const placements = bosses.map((entity, index) => {
     const group = draft.encounters.find(g => g.id === (entity.encounterId ?? draft.encounters[0].id))!;

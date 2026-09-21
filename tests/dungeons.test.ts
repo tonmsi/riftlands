@@ -37,7 +37,7 @@ test('authored layout and locked passages use a shared geometry', t => {
 test('validation rejects overlapping passages and undeclared boundary openings', () => {
     const d = engineBundle().definition, flame = d.passages.find(p => p.fightState === 'flame')!;
     assert.throws(() => assertValidDungeonDefinition({ ...d, passages: [...d.passages, { ...flame, id: 'conflict', fightState: 'stone' }] }), /condividono|sovrappongono/);
-    assert.throws(() => assertValidDungeonDefinition({ ...d, passages: d.passages.filter(p => p.fightState !== 'open') }), /apertura|bordo/);
+    assert.throws(() => assertValidDungeonDefinition({ ...d, passages: d.passages.filter(p => !p.id.startsWith('opening-')) }), /apertura|bordo/);
     assert.equal(dungeonFlames(d).length, 1);
 });
 

@@ -4,7 +4,7 @@ import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
 import { OUTPOST } from '../shared/outpost';
 import type { ArenaGateState } from '../shared/types';
-import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames, inwardFlameAngle } from '../shared/dungeons';
+import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames, inwardFlameAngle } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
 import type { BossDrop, BossLockState, BossWindup } from '../shared/bosses';
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
@@ -166,8 +166,15 @@ export class Renderer {
   private terrainCache?: { canvas: HTMLCanvasElement; world: World; scale: number;
     left: number; top: number; right: number; bottom: number };
   readonly spritesReady: Promise<void>;
+  private terrainLockRevision = -1;
+  private outsideLocalMap(tx: number, ty: number): boolean {
+    return !!this.localDungeons && !this.localDungeons.some(d => { const b = d.layout.bounds; return tx >= b.minTx - 2 && tx <= b.maxTx + 2 && ty >= b.minTy - 2 && ty <= b.maxTy + 2; });
+  }
+  private dungeonAt(tx: number, ty: number): DungeonDefinition | undefined {
+    return this.localDungeons ? this.localDungeons.find(d => { const b = d.layout.bounds; return tx >= b.minTx && tx <= b.maxTx && ty >= b.minTy && ty <= b.maxTy; }) : dungeonAtTile(tx, ty);
+  }
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(private readonly canvas: HTMLCanvasElement, private readonly localDungeons?: readonly DungeonDefinition[]) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D non disponibile in questo browser.');
     this.ctx = ctx;
@@ -235,6 +242,7 @@ export class Renderer {
   }
 
   render(frame: RenderFrame): void {
+    if (this.terrainLockRevision !== this.world.lockRevision) { this.terrainCache = undefined; this.terrainLockRevision = this.world.lockRevision; }
     const ctx = this.ctx;
     const now = performance.now();
     const delta = this.lastTime ? Math.max(0, Math.min(80, now - this.lastTime)) : 16;
@@ -268,8 +276,7 @@ export class Renderer {
     ctx.translate(-this.camera.x, -this.camera.y);
     this.drawCachedTerrain(frame.time);
     if (this.world.mode === 'world') {
-      this.drawCrossroads(frame.time); //posso togliere frame time se è statico e non voglio animazioni
-      this.drawArenaGate(frame.time, frame.arenaGate);
+      if (!this.localDungeons) { this.drawCrossroads(frame.time); this.drawArenaGate(frame.time, frame.arenaGate); }
       this.drawDungeons();
     }
     for (const w of frame.bossWindups ?? []) {
@@ -470,10 +477,11 @@ export class Renderer {
     type SurfaceKind = 'grass' | 'path' | 'mud' | 'stone' | 'water';
     const scenery = (tile: TileKind) => tile === 'rock' || tile === 'bush';
     const rawSurfaceAt = (tx: number, ty: number): SurfaceKind | null => {
+      if (this.outsideLocalMap(tx, ty)) return null;
       if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return null;
       const tile = this.world.getTile(tx, ty);
       if (scenery(tile)) return null;
-      const dungeon = this.world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
+      const dungeon = this.world.mode === 'world' ? this.dungeonAt(tx, ty) : undefined;
       if (dungeon && tile === dungeon.layout.floor) return 'stone';
       return tile === 'path' || tile === 'mud' || tile === 'water' ? tile : 'grass';
     };
@@ -503,10 +511,11 @@ export class Renderer {
           return best;
         }
       }
-      return dungeonAtTile(tx, ty) ? 'stone' : 'grass';
+      return this.dungeonAt(tx, ty) ? 'stone' : 'grass';
     };
     const surfaces = new Map<string, SurfaceKind | null>();
     const surfaceAt = (tx: number, ty: number): SurfaceKind | null => {
+      if (this.outsideLocalMap(tx, ty)) return null;
       const key = `${tx},${ty}`;
       if (surfaces.has(key)) return surfaces.get(key)!;
       const raw = rawSurfaceAt(tx, ty);
@@ -517,7 +526,7 @@ export class Renderer {
     const surfaceColor = (surface: Exclude<SurfaceKind, 'water'>, tx: number, ty: number) => {
       if (surface === 'grass')
         return groundColor(this.world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE));
-      if (surface === 'stone') return dungeonAtTile(tx, ty)?.theme.floor ?? TERRAIN.path;
+      if (surface === 'stone') return this.dungeonAt(tx, ty)?.theme.floor ?? TERRAIN.path;
       return TERRAIN[surface];
     };
     const cornerNeighbours = [
@@ -554,14 +563,14 @@ export class Renderer {
     }
     for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
       for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
-        if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) {
+        if (this.outsideLocalMap(tx, ty) || (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7))) {
           ctx.fillStyle = '#202b29';
           ctx.fillRect(tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE + 0.4, TILE_SIZE + 0.4);
           continue;
         }
         const tile = this.world.getTile(tx, ty);
         const x = tx * TILE_SIZE, y = ty * TILE_SIZE;
-        const dungeon = this.world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
+        const dungeon = this.world.mode === 'world' ? this.dungeonAt(tx, ty) : undefined;
         const variation = noise(tx, ty);
         const surface = surfaceAt(tx, ty);
         const waterBacking = tile === 'water' ? shoreBackingAt(tx, ty) : undefined;
@@ -686,6 +695,7 @@ export class Renderer {
     }
     // Draw complete scenery after every ground tile, including groups anchored offscreen.
     const getScenery = (tx: number, ty: number): TileKind => {
+      if (this.outsideLocalMap(tx, ty)) return 'grass';
       if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return 'grass';
       return this.world.getTile(tx, ty);
     };
@@ -823,7 +833,7 @@ export class Renderer {
     const drawn = new Set<string>();
     for (const lock of locks) {
       if (!lock.locked) continue;
-      const dungeon = DUNGEON_BY_BOSS_ID.get(lock.bossId);
+      const dungeon = this.localDungeons ? this.localDungeons.flatMap(dungeonEncounters).find(d => d.bossId === lock.bossId) : DUNGEON_BY_BOSS_ID.get(lock.bossId);
       if (!dungeon) continue;
       const group = `${dungeon.id}:${dungeon.encounterGroupId ?? dungeon.bossId}`;
       if (drawn.has(group)) continue;
@@ -863,7 +873,7 @@ export class Renderer {
   }
 
   private drawDungeons(): void {
-    for (const definition of DUNGEON_DEFINITIONS) this.drawDungeon(definition);
+    for (const definition of this.localDungeons ?? DUNGEON_DEFINITIONS) this.drawDungeon(definition);
   }
 
   private drawDungeon(definition: DungeonDefinition): void {

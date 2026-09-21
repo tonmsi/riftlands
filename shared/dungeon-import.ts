@@ -1,6 +1,6 @@
 import { TILE_SIZE } from './config';
 import { compileDungeonDraft, draftFromDungeon, newDungeonDraft, parseDungeonDraft, type DungeonDraft } from './dungeon-draft';
-import { assertValidDungeonDefinition, dungeonEncounters, type DungeonDefinition } from './dungeons';
+import { assertValidDungeonDefinition, dungeonEncounters, onDungeonBoundary, type DungeonDefinition } from './dungeons';
 /** Accept both files emitted by the editor, never treating imported JSON as executable behavior. */
 export function parseDungeonFile(raw: string): {
     draft: DungeonDraft;
@@ -33,7 +33,7 @@ export function parseDungeonFile(raw: string): {
             const region = encounter.encounter.regions.combat;
             if (region.kind !== 'polygon' || region.points.length !== 4 || encounter.encounter.preparationMs !== 5000
                 || Object.entries(encounter.encounter.regions).some(([key,r]) => key !== 'bossAggro' && JSON.stringify(r) !== JSON.stringify(region))
-                || encounter.passages.some(p => p.fightState === 'stone'))
+                || encounter.passages.some(p => p.fightState === 'stone' && p.tiles.some(t => !onDungeonBoundary(bounds, t))))
                 throw new Error('Regole personalizzate non rappresentabili nella bozza: usa il file bozza originale.');
             const aggro = encounter.encounter.regions.bossAggro;
             if (aggro.kind === 'circle' ? aggro.center.x !== encounter.spawnPoints.boss.x || aggro.center.y !== encounter.spawnPoints.boss.y
@@ -42,7 +42,7 @@ export function parseDungeonFile(raw: string): {
             if (xs.length !== 2 || ys.length !== 2 || [...xs, ...ys].some(n => n % TILE_SIZE !== 0)
                 || xs[0] < bounds.minTx * TILE_SIZE || xs[1] > (bounds.maxTx + 1) * TILE_SIZE || ys[0] < bounds.minTy * TILE_SIZE || ys[1] > (bounds.maxTy + 1) * TILE_SIZE)
                 throw new Error('Regione non rettangolare o fuori dai limiti della mappa.');
-            for (const point of [encounter.spawnPoints.boss, ...encounter.spawnPoints.party, ...(encounter.encounter.activationPoints ?? []), ...(encounter.npcSpawns ?? [])]) {
+            for (const point of [encounter.spawnPoints.boss, ...encounter.spawnPoints.party, ...(encounter.encounter.activationPoints ?? []), ...(encounter.npcSpawns ?? []), ...(encounter.pickupSpawns ?? [])]) {
                 if ((point.x - TILE_SIZE / 2) % TILE_SIZE || (point.y - TILE_SIZE / 2) % TILE_SIZE)
                     throw new Error('Spawn non allineati alla griglia: usa la bozza originale.');
             }

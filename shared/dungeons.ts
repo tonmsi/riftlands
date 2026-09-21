@@ -1,5 +1,5 @@
 import { TILE_SIZE } from './config';
-import type { TileKind, Vec2 } from './types';
+import type { Pickup, TileKind, Vec2 } from './types';
 import { NPC_CATALOG, type NpcKind } from './npcs';
 import customDungeons from './custom-dungeons.json';
 
@@ -84,6 +84,7 @@ export interface DungeonDefinition {
   /** Players are placed at these positions when the encounter starts. */
   spawnPoints: { boss: Vec2; party: readonly Vec2[] };
   npcSpawns?: readonly (Vec2 & { id: string; npcKind: NpcKind; level: number })[];
+  pickupSpawns?: readonly Pickup[];
   encounter: DungeonEncounterDefinition;
   spawnExclusionMargin: number;
   approach: DungeonApproach;
@@ -190,12 +191,24 @@ export function clampToDungeonRegion(region: DungeonRegion, from: Vec2, target: 
   return { x: from.x + (target.x - from.x) * low, y: from.y + (target.y - from.y) * low };
 }
 
+const stoneTileCache = new WeakMap<DungeonDefinition, readonly Vec2[]>();
 export function dungeonStoneTiles(definition: DungeonDefinition): readonly Vec2[] {
-  return definition.passages.filter(passage => passage.fightState === 'stone').flatMap(passage => [...passage.tiles]);
+  const cached = stoneTileCache.get(definition);
+  if (cached) return cached;
+  const tiles = new Map(definition.passages.filter(p => p.fightState === 'stone').flatMap(p => p.tiles).map(t => [tileKey(t), t]));
+  const b = definition.layout.bounds;
+  for (let x = b.minTx; x <= b.maxTx; x++) for (const y of [b.minTy, b.maxTy]) tiles.set(`${x},${y}`, { x, y });
+  for (let y = b.minTy + 1; y < b.maxTy; y++) for (const x of [b.minTx, b.maxTx]) tiles.set(`${x},${y}`, { x, y });
+  const result = [...tiles.values()]; stoneTileCache.set(definition, result); return result;
+}
+
+export function onDungeonBoundary(bounds: DungeonTileRect, tile: Vec2): boolean {
+  return tile.x === bounds.minTx || tile.x === bounds.maxTx || tile.y === bounds.minTy || tile.y === bounds.maxTy;
 }
 
 export function dungeonFlames(definition: DungeonDefinition): readonly DungeonFlameBarrier[] {
   return definition.passages.filter((passage): passage is DungeonPassage & { fightState: 'flame' } => passage.fightState === 'flame')
+    .filter(passage => !passage.tiles.some(tile => onDungeonBoundary(definition.layout.bounds, tile)))
     .map(passage => passage.flame);
 }
 
@@ -272,7 +285,8 @@ export function inDungeonApproachCorridor(definition: DungeonDefinition, positio
 
 export function isClosedDungeonTile(tx: number, ty: number, lockedBosses: ReadonlySet<string>): boolean {
   for (const definition of DUNGEON_BY_BOSS_ID.values()) if (lockedBosses.has(definition.bossId)
-    && dungeonStoneTiles(definition).some(tile => tile.x === tx && tile.y === ty)) return true;
+    && ((insideRect(tx, ty, definition.layout.bounds) && onDungeonBoundary(definition.layout.bounds, { x: tx, y: ty }))
+      || definition.passages.some(p => p.fightState === 'stone' && p.tiles.some(tile => tile.x === tx && tile.y === ty)))) return true;
   return false;
 }
 
@@ -332,6 +346,14 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
     paintedKeys.add(key);
   }
   const npcIds = new Set<string>();
+  const pickupIds = new Set<string>();
+  if (definition.pickupSpawns !== undefined && (!Array.isArray(definition.pickupSpawns) || definition.pickupSpawns.length > 500)) fail('elenco bonus non valido.');
+  for (const pickup of definition.pickupSpawns ?? []) {
+    if (!pickup || !pickup.id || pickupIds.has(pickup.id) || !finitePoint(pickup)
+      || !['heal', 'haste', 'power', 'weakness'].includes(pickup.kind) || pickup.radius !== 12
+      || !walkable(dungeonTile(definition, Math.floor(pickup.x / TILE_SIZE), Math.floor(pickup.y / TILE_SIZE)))) fail('bonus non valido o su terreno solido.');
+    pickupIds.add(pickup.id);
+  }
   for (const npc of definition.npcSpawns ?? []) {
     if (!npc.id || npcIds.has(npc.id) || !Object.hasOwn(NPC_CATALOG, npc.npcKind) || !finitePoint(npc)
       || !Number.isInteger(npc.level) || npc.level < 1 || npc.level > 25

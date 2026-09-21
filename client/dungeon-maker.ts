@@ -5,9 +5,11 @@ import { parseDungeonFile } from '../shared/dungeon-import';
 import { BOSS_TEMPLATES as BOSS_DEFINITIONS } from '../shared/boss-templates';
 import { DUNGEON_DEFINITIONS, flameBarrierFromTiles, inwardFlameAngle } from '../shared/dungeons';
 import { NPC_CATALOG, type NpcKind } from '../shared/npcs';
-import { moveWithCollisions } from '../shared/physics';
-import { DEFAULT_BOSS_AGGRO_RADIUS, compileDungeonDraft, draftEntityPosition, draftFlameTiles, draftFromDungeon, DraftWorld, newDungeonDraft, parseDungeonDraft, TERRAIN_CATALOG, validateDungeonDraft, type DraftEntity, type DungeonDraft } from '../shared/dungeon-draft';
-import type { TileKind, Vec2 } from '../shared/types';
+import { CLASSES } from '../shared/config';
+import { createDungeonPlaytest, type DungeonPlaytest } from './dungeon-playtest';
+import { Renderer } from './render';
+import { DEFAULT_BOSS_AGGRO_RADIUS, PICKUP_CATALOG, compileDungeonDraft, draftFlameTiles, draftFromDungeon, newDungeonDraft, parseDungeonDraft, TERRAIN_CATALOG, validateDungeonDraft, type DraftEntity, type DungeonDraft } from '../shared/dungeon-draft';
+import type { AbilitySlot, ClassId, PickupKind, TileKind, Vec2 } from '../shared/types';
 const root = document.querySelector<HTMLDivElement>('#maker')!;
 const field = (id: string, label: string, type = 'text') => `<label>${label}<input id="${id}" type="${type}"></label>`;
 root.innerHTML = `
@@ -23,15 +25,25 @@ const input = (id: string) => el<HTMLInputElement>(id);
 const value = (id: string) => input(id).value;
 const button = (id: string, action: () => void) => el(id).addEventListener('click', action);
 const status = (message: string) => { el('status').textContent = message; };
+el('npcs').insertAdjacentHTML('afterend', '<h3>Powerup e powerdown</h3><div id="pickups" class="tool-list"></div>');
+el('issues').insertAdjacentHTML('afterend', '<p id="issue-detail" class="hint" role="status" hidden></p>');
+el('preview').textContent = 'Prova gioco locale';
+el('preview').insertAdjacentHTML('beforebegin', `<label class="preview-class">Classe<select id="preview-class">${Object.values(CLASSES).map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></label>`);
+input('preview-class').value = 'warrior';
+root.insertAdjacentHTML('beforeend', '<dialog id="playtest-dialog" class="playtest-dialog"><div class="playtest-toolbar"><strong>Prova locale</strong><button id="playtest-restart">Ricomincia</button><button id="playtest-close">Torna al maker</button></div><p>WASD / frecce: movimento · Mouse: mira · Click / spazio: attacco · Q E R: abilità · Esc: esci</p><div class="playtest-viewport"><canvas id="playtest-canvas" tabindex="0" aria-label="Prova locale del dungeon"></canvas></div><div id="playtest-status" role="status"></div><div id="playtest-abilities" class="playtest-abilities"></div></dialog>');
+const playtestDialog = el<HTMLDialogElement>('playtest-dialog');
+const playtestCanvas = el<HTMLCanvasElement>('playtest-canvas');
+root.querySelector('[data-tool="flame"]')!.insertAdjacentHTML('afterend', '<button id="random-flame">Fiamma in un punto casuale</button>');
+const rules = el('issues').parentElement!.querySelector<HTMLParagraphElement>(':scope > p.hint:last-child')!;
+rules.textContent = 'Gli ingressi, anche in erba, si chiudono automaticamente con massi durante lo scontro. Il terreno originale ritorna alla vittoria o alla morte di un partecipante. In solo l’avvio è immediato; in gruppo ci sono 5 secondi per entrare. Gli spawn gruppo determinano la posizione iniziale dei partecipanti. I boss lontani attendono il proprio aggro. Le fiamme sono letali e compaiono solo durante lo scontro: puoi disporle liberamente all’interno o usare il posizionamento casuale. Clicca un errore per vedere i punti coinvolti e come correggerlo. La prova locale usa il combattimento del gioco e non salva progressi.';
 // The retired drafts referenced removed map instances rather than reusable boss models.
 localStorage.removeItem('riftlands.dungeon-draft.v1');
 const KEY = 'riftlands.dungeon-draft.v2';
 let draft = newDungeonDraft(), selected: string | null = null, activeEncounter = 'main', tool = 'tile:path';
 let past: DungeonDraft[] = [], future: DungeonDraft[] = [];
 let stroke: DungeonDraft | null = null, lastTile: Vec2 | null = null, pointer: number | null = null, pan: Vec2 | null = null;
-let preview: (Vec2 & {
-    radius: number;
-}) | null = null;
+let preview: DungeonPlaytest | null = null, previewRenderer: Renderer | null = null;
+let aim = 0, attacking = false, highlighted: Vec2[] = [], queuedCast: AbilitySlot | undefined;
 const keys = new Set<string>();
 let view = { x: 0, y: 0, scale: 26 };
 const canvas = el<HTMLCanvasElement>('map'), ctx = canvas.getContext('2d')!;
@@ -44,7 +56,6 @@ try {
 catch {
     storageError = 'Salvataggio locale non leggibile. Importa una bozza JSON.';
 }
-let world = new DraftWorld(draft);
 function palette(container: string, label: string, tool: string, color: string): void {
     const b = document.createElement('button');
     b.dataset.tool = tool;
@@ -58,6 +69,8 @@ for (const [id, item] of Object.entries(TERRAIN_CATALOG))
     palette('terrain', item.name, `tile:${id}`, item.color);
 for (const [id, item] of Object.entries(NPC_CATALOG))
     palette('npcs', item.name, `npc:${id}`, item.color);
+for (const [id, item] of Object.entries(PICKUP_CATALOG))
+    palette('pickups', item.name, `pickup:${id}`, item.color);
 for (const boss of BOSS_DEFINITIONS) {
     palette('bosses', boss.name, `boss:${boss.id}`, '#df946f');
     el<HTMLSelectElement>('entity-template').add(new Option(boss.name, boss.id));
@@ -72,7 +85,7 @@ catch {
     status('Salvataggio locale non disponibile: esporta la bozza.');
 } }
 function commit(before: DungeonDraft): void { if (JSON.stringify(before) === JSON.stringify(draft))
-    return; past.push(before); if (past.length > 50)
+    return; highlighted = []; el('issue-detail').hidden = true; past.push(before); if (past.length > 50)
     past.shift(); future = []; refresh(); save(); }
 function change(action: () => void): void { const before = structuredClone(draft); try {
     stopPreview();
@@ -89,7 +102,6 @@ function setTool(next: string): void { stopPreview(); tool = next; root.querySel
     el('tool-name').textContent = b.textContent; }); }
 root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool!)));
 function refresh(): void {
-    world = new DraftWorld(draft);
     if (!draft.encounters.some(g => g.id === activeEncounter))
         activeEncounter = draft.encounters[0].id;
     for (const id of ['encounter', 'entity-encounter'])
@@ -117,14 +129,37 @@ function refresh(): void {
         input('entity-vertical').value = String(e.vertical ?? false);
         el('level-label').hidden = e.kind !== 'npc';
         el('template-label').hidden = el('radius-label').hidden = e.kind !== 'boss';
-        el('entity-encounter-label').hidden = e.kind === 'npc';
+        el('entity-encounter-label').hidden = e.kind === 'npc' || e.kind === 'pickup';
         el('flame-properties').hidden = e.kind !== 'flame';
     }
     const issues = validateDungeonDraft(draft);
-    el('issues').replaceChildren(...(issues.length ? issues.slice(0, 10) : ['Terreno e posizioni validi.']).map(message => { const li = document.createElement('li'); li.textContent = message; return li; }));
+    el('issues').replaceChildren(...(issues.length ? issues : ['Terreno e posizioni validi.']).map(message => {
+        const li = document.createElement('li');
+        if (!issues.length) li.textContent = message;
+        else { const action = document.createElement('button'); action.textContent = message; action.addEventListener('click', () => explainIssue(message)); li.append(action); }
+        return li;
+    }));
     el('issues').classList.toggle('valid', !issues.length);
     el<HTMLButtonElement>('compile').disabled = issues.length > 0;
     draw();
+}
+function explainIssue(message: string): void {
+    stopPreview();
+    const involved = draft.entities.filter(e => message.startsWith(`${e.label}:`) || message.startsWith(`${e.label} e `) || message.includes(` e ${e.label}:`));
+    highlighted = involved.flatMap(e => e.kind === 'flame' ? draftFlameTiles(e) : [{ x: e.x, y: e.y }]);
+    const group = draft.encounters.find(g => message.startsWith(`${g.name}:`) || message.startsWith(`${g.name} e `));
+    if (group) { activeEncounter = group.id; if (!highlighted.length) highlighted = [{ x: group.x, y: group.y }]; }
+    selected = involved[0]?.id ?? null;
+    const advice = message.includes('non raggiungibile') ? 'Apri un percorso continuo largo almeno una casella tra gli spawn e i punti evidenziati; controlla muri e acqua.'
+        : message.includes('sovrappost') ? 'Separa le entità o le regioni coinvolte; considera anche il raggio dei boss e la lunghezza delle fiamme.'
+        : message.includes('bordo') ? 'Sposta i punti evidenziati all’interno della mappa e della regione. Le caselle esterne diventano massi durante lo scontro.'
+        : message.includes('solido') || message.includes('ingombro') ? 'Sposta l’entità o dipingi terreno percorribile attorno al suo intero ingombro: il centro libero da solo non basta.'
+        : message.includes('regione') ? 'Seleziona l’incontro corretto e correggi posizione, dimensioni o assegnazione delle entità.'
+        : message.includes('boss') ? 'Scegli un boss dalla palette e posizionalo nella regione del suo incontro.'
+        : 'Posiziona da uno a cinque spawn gruppo liberi e distinti nella regione dell’incontro.';
+    el('issue-detail').hidden = false;
+    el('issue-detail').textContent = `${message} ${advice}${highlighted.length ? ` Caselle (colonna, riga): ${highlighted.map(p => `(${p.x}, ${p.y})`).join(', ')}.` : ''}`;
+    refresh(); fit();
 }
 function fit(): void { const r = canvas.getBoundingClientRect(); view.scale = Math.max(4, Math.min(46, (r.width - 60) / draft.width, (r.height - 60) / draft.height)); view.x = (r.width - draft.width * view.scale) / 2; view.y = (r.height - draft.height * view.scale) / 2; draw(); }
 function draw(): void {
@@ -180,21 +215,17 @@ function draw(): void {
         }
         ctx.beginPath();
         ctx.arc(x, y, Math.max(5, e.radius / 48 * s), 0, Math.PI * 2);
-        ctx.fillStyle = e.kind === 'boss' ? '#df946f' : e.kind === 'party' ? '#7fe0d3' : e.kind === 'activation' ? '#d4b5ff' : NPC_CATALOG[e.template as NpcKind].color;
+        ctx.fillStyle = e.kind === 'boss' ? '#df946f' : e.kind === 'party' ? '#7fe0d3' : e.kind === 'activation' ? '#d4b5ff' : e.kind === 'pickup' ? PICKUP_CATALOG[e.template as PickupKind].color : NPC_CATALOG[e.template as NpcKind].color;
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#102023';
         ctx.font = `bold ${Math.max(9, s * .35)}px system-ui`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(e.kind === 'boss' ? 'B' : e.kind === 'party' ? 'P' : e.kind === 'activation' ? 'A' : e.template[0].toUpperCase(), x, y);
+        ctx.fillText(e.kind === 'boss' ? 'B' : e.kind === 'party' ? 'P' : e.kind === 'activation' ? 'A' : e.kind === 'pickup' ? (e.template === 'weakness' ? '−' : '+') : e.template[0].toUpperCase(), x, y);
     }
-    if (preview) {
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(preview.x / 48 * s, preview.y / 48 * s, 15 / 48 * s, 0, Math.PI * 2);
-        ctx.fill();
-    }
+    ctx.strokeStyle = '#ffdf7e'; ctx.lineWidth = 3;
+    for (const p of highlighted) ctx.strokeRect(p.x * s + 1, p.y * s + 1, s - 2, s - 2);
 }
 function tileAt(event: PointerEvent): Vec2 { const r = canvas.getBoundingClientRect(); return { x: Math.floor((event.clientX - r.left - view.x) / view.scale), y: Math.floor((event.clientY - r.top - view.y) / view.scale) }; }
 function paint(p: Vec2): void {
@@ -242,11 +273,13 @@ function paint(p: Vec2): void {
     else if (!lastTile && !existing) {
         if (draft.entities.length >= 500)
             return;
-        const kind = tool.startsWith('npc:') ? 'npc' : tool.startsWith('boss:') ? 'boss' : tool as 'boss' | 'party' | 'activation' | 'flame';
-        const template = kind === 'npc' ? tool.slice(4) : tool.startsWith('boss:') ? tool.slice(5) : '';
+        const kind = tool.startsWith('pickup:') ? 'pickup' : tool.startsWith('npc:') ? 'npc' : tool.startsWith('boss:') ? 'boss' : tool as 'boss' | 'party' | 'activation' | 'flame';
+        if (kind === 'flame' && (p.x === 0 || p.y === 0 || p.x === draft.width - 1 || p.y === draft.height - 1)) { status('Il bordo si chiude con i massi: posiziona le fiamme all’interno.'); return; }
+        const template = kind === 'pickup' ? tool.slice(7) : kind === 'npc' ? tool.slice(4) : tool.startsWith('boss:') ? tool.slice(5) : '';
         const npc = kind === 'npc' ? NPC_CATALOG[template as NpcKind] : undefined, boss = BOSS_DEFINITIONS.find(b => b.id === template);
         const e: DraftEntity = { id: crypto.randomUUID(), kind, template, label: npc?.name ?? boss?.name ?? (kind === 'boss' ? 'Boss da creare' : kind === 'flame' ? 'Fiamme' : kind === 'activation' ? 'Punto di attivazione' : 'Spawn gruppo'), ...p, level: 1, radius: npc?.radius ?? boss?.radius ?? (kind === 'boss' ? 36 : 15), ...(kind !== 'npc' ? { encounterId: activeEncounter } : {}), ...(kind === 'boss' ? { aggroRadius: DEFAULT_BOSS_AGGRO_RADIUS } : {}), ...(kind === 'flame' ? { span: 1, vertical: false } : {}) };
         draft.entities.push(e);
+        if (kind === 'pickup') { e.label = PICKUP_CATALOG[template as PickupKind].name; e.radius = 12; delete e.encounterId; }
         selected = e.id;
     }
     lastTile = p;
@@ -345,36 +378,76 @@ input('file').addEventListener('change', async () => { const file = input('file'
 catch (e) {
     status(e instanceof Error ? e.message : String(e));
 } input('file').value = ''; });
-function stopPreview(): void { preview = null; keys.clear(); el('preview-label').hidden = true; el('preview').textContent = 'Prova movimento'; draw(); }
-button('preview', () => { if (preview) {
+function stopPreview(): void { preview = null; previewRenderer?.destroy(); previewRenderer = null; keys.clear(); attacking = false; queuedCast = undefined; aim = 0; if (playtestDialog.open) playtestDialog.close(); el('preview').textContent = 'Prova gioco locale'; draw(); }
+function startPreview(): void {
     stopPreview();
-    return;
-} if (validateDungeonDraft(draft).length) {
-    status('Correggi il controllo mappa prima dell’anteprima.');
-    return;
-} preview = { ...draftEntityPosition(draft.entities.find(e => e.kind === 'party')!), radius: 15 }; world = new DraftWorld(draft); el('preview-label').hidden = false; el('preview').textContent = 'Termina prova'; canvas.focus(); draw(); });
+    try {
+        preview = createDungeonPlaytest(draft, value('preview-class') as ClassId);
+        playtestDialog.showModal();
+        previewRenderer = new Renderer(playtestCanvas, [preview.definition]);
+        previewRenderer.world = preview.world;
+        el('preview').textContent = 'Termina prova';
+        playtestCanvas.focus();
+        el('playtest-abilities').replaceChildren(...Object.entries(CLASSES[preview.player.classId].abilities).map(([slot, ability]) => {
+            const b = document.createElement('button'); b.dataset.slot = slot; b.title = ability.description;
+            b.addEventListener('pointerdown', () => { queuedCast = slot as AbilitySlot; keys.add(slot === 'basic' ? 'Space' : `Key${slot.toUpperCase()}`); });
+            const release = () => keys.delete(slot === 'basic' ? 'Space' : `Key${slot.toUpperCase()}`);
+            b.addEventListener('pointerup', release); b.addEventListener('pointerleave', release); b.addEventListener('pointercancel', release);
+            return b;
+        }));
+    } catch (error) { stopPreview(); status(error instanceof Error ? error.message : String(error)); }
+}
+button('preview', () => preview ? stopPreview() : startPreview());
+button('playtest-close', stopPreview);
+button('playtest-restart', startPreview);
+playtestDialog.addEventListener('cancel', e => { e.preventDefault(); stopPreview(); });
+playtestCanvas.addEventListener('pointermove', e => { if (preview && previewRenderer) { const p = previewRenderer.screenToWorld(e.clientX, e.clientY); aim = Math.atan2(p.y - preview.player.y, p.x - preview.player.x); } });
+playtestCanvas.addEventListener('pointerdown', e => { if (e.button !== 0 || !preview || !previewRenderer) return; const p = previewRenderer.screenToWorld(e.clientX, e.clientY); aim = Math.atan2(p.y - preview.player.y, p.x - preview.player.x); attacking = true; queuedCast = 'basic'; playtestCanvas.setPointerCapture(e.pointerId); playtestCanvas.focus(); });
+playtestCanvas.addEventListener('pointerup', () => { attacking = false; });
+playtestCanvas.addEventListener('pointercancel', () => { attacking = false; });
+button('random-flame', () => change(() => {
+    const group = draft.encounters.find(g => g.id === activeEncounter)!;
+    const candidates: DraftEntity[] = [];
+    for (let y = Math.max(1, group.y); y < Math.min(draft.height - 1, group.y + group.height); y++)
+        for (let x = Math.max(1, group.x); x < Math.min(draft.width - 1, group.x + group.width); x++) {
+            if (['rock', 'water'].includes(draft.tiles[y * draft.width + x]) || draft.entities.some(e => (e.kind === 'flame' ? draftFlameTiles(e) : [e]).some(p => p.x === x && p.y === y))) continue;
+            candidates.push({ id: crypto.randomUUID(), kind: 'flame', template: '', label: 'Fiamma casuale', x, y, radius: 15, level: 1, span: 1, vertical: false, encounterId: activeEncounter });
+        }
+    if (!candidates.length) throw new Error('Nessuna casella interna libera per le fiamme.');
+    const e = candidates[Math.floor(Math.random() * candidates.length)]; draft.entities.push(e); selected = e.id;
+}));
 window.addEventListener('keydown', e => { if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement)
     return; if (e.key === 'Escape')
     stopPreview(); if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
     e.preventDefault();
     history(!e.shiftKey);
 } if (e.code === 'Delete' && selected && !preview)
-    remove(); if (preview && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'].includes(e.code)) {
+    remove(); if (preview && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight', 'Space', 'KeyQ', 'KeyE', 'KeyR'].includes(e.code)) {
     e.preventDefault();
     keys.add(e.code);
+    if (e.code === 'Space') queuedCast = 'basic';
+    else if (['KeyQ', 'KeyE', 'KeyR'].includes(e.code)) queuedCast = e.code.slice(3).toLowerCase() as AbilitySlot;
 } });
 window.addEventListener('keyup', e => keys.delete(e.code));
-window.addEventListener('blur', () => { keys.clear(); if (pointer !== null)
+window.addEventListener('blur', () => { keys.clear(); attacking = false; queuedCast = undefined; if (pointer !== null)
     finishStroke(true); });
 document.addEventListener('visibilitychange', () => { if (document.hidden)
-    keys.clear(); });
+    { keys.clear(); attacking = false; queuedCast = undefined; } });
 let previous = performance.now();
-function frame(now: number): void { const dt = Math.min(.05, (now - previous) / 1000); previous = now; if (preview) {
+function frame(now: number): void { const dt = Math.min(.05, (now - previous) / 1000); previous = now; if (preview && previewRenderer && !document.hidden) {
     const held = (...codes: string[]) => Number(codes.some(c => keys.has(c)));
     const dx = held('KeyD', 'ArrowRight') - held('KeyA', 'ArrowLeft'), dy = held('KeyS', 'ArrowDown') - held('KeyW', 'ArrowUp');
-    const speed = world.getTile(Math.floor(preview.x / 48), Math.floor(preview.y / 48)) === 'mud' ? .65 : 1;
-    Object.assign(preview, moveWithCollisions(preview, dx, dy, 190 * dt * speed, world));
-    draw();
+    const cast: AbilitySlot | undefined = queuedCast ?? (keys.has('KeyQ') ? 'q' : keys.has('KeyE') ? 'e' : keys.has('KeyR') ? 'r' : attacking || keys.has('Space') ? 'basic' : undefined);
+    if (preview.step(dt, { dx, dy, aim, ...(cast ? { cast } : {}) })) queuedCast = undefined;
+    const sim = preview.simulation, player = preview.player, encounters = [...sim.bosses.values()];
+    previewRenderer.render({ time: sim.now, self: player, actors: [...sim.players.values(), ...sim.npcs.values()], projectiles: [...sim.projectiles.values()], pickups: [...sim.pickups.values()], traps: [...sim.traps.values()], events: sim.events,
+        bossLocks: encounters.map(e => e.lockState(player)), bossWindups: encounters.flatMap(e => e.windup ? [e.windup] : []), goldDrops: encounters.flatMap(e => e.state.drops), selectedId: null, previewClass: player.classId, playing: true });
+    const state = player.hp <= 0 ? 'Sei morto · ingressi riaperti · rinascita tra pochi secondi' : encounters.some(e => e.ownerId) ? 'Dungeon attivo · ingressi chiusi' : encounters.every(e => e.boss.hp <= 0) ? 'Dungeon completato · ingressi riaperti' : 'Entra e raggiungi un punto di attivazione o il raggio aggro di un boss';
+    el('playtest-status').textContent = `${state} | HP ${Math.ceil(player.hp)}/${player.maxHp} · ${CLASSES[player.classId].resource} ${Math.floor(player.resource)}/${player.maxResource}${player.effects.length ? ` · ${player.effects.map(e => e.kind).join(', ')}` : ''}`;
+    for (const b of el('playtest-abilities').querySelectorAll<HTMLButtonElement>('button')) {
+        const slot = b.dataset.slot as AbilitySlot, ability = CLASSES[player.classId].abilities[slot], remaining = Math.max(0, (player.cooldowns[slot] - sim.now) / 1000);
+        b.textContent = `${slot === 'basic' ? 'Spazio' : slot.toUpperCase()} · ${ability.name}${remaining ? ` · ${remaining.toFixed(1)}s` : ''} · costo ${ability.cost}`;
+    }
 } requestAnimationFrame(frame); }
 new ResizeObserver(() => { const r = canvas.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1); canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr); fit(); }).observe(canvas);
 refresh();

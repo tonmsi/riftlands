@@ -1,6 +1,6 @@
 import { sweptWorldHit } from '../shared/projectiles';
 export { sweptWorldHit } from '../shared/projectiles';
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from '../shared/id';
 import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, levelFromXp } from '../shared/config';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
 import { playerSpriteDirectionRow } from '../shared/sprite-direction';
@@ -8,8 +8,8 @@ import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputComman
 import { World, chunkCoords, chunkKey } from '../shared/world';
 import { OUTPOST, inOutpost } from '../shared/outpost';
 import { insideArenaGate } from '../shared/arena';
-import { BOSS_BY_ID } from '../shared/bosses';
-import { DUNGEON_BY_BOSS_ID } from '../shared/dungeons';
+import { BOSS_BY_ID, type BossDefinition } from '../shared/bosses';
+import { DUNGEON_BY_BOSS_ID, type DungeonDefinition } from '../shared/dungeons';
 import { NPC_CATALOG } from '../shared/npcs';
 import { BossEncounter } from './boss-encounter';
 import type { Account, AccountStore } from './store';
@@ -22,6 +22,12 @@ type NpcMeta = { home: Vec2; chunk: string; nextAttack: number };
 type ActiveChunk = { key: string; lastUsed: number; npcIds: string[]; pickupIds: string[] };
 type Team = { id: string; leaderId: string; members: Set<string> };
 type Invite = { fromId: string; teamId: string; expiresAt: number };
+export interface SimulationEnvironment {
+  world: World;
+  dungeons: readonly DungeonDefinition[];
+  bosses: ReadonlyMap<string, BossDefinition>;
+  spawn: Vec2;
+}
 export type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
 
 /** Single authoritative simulation. Time fields are milliseconds; step delta is seconds. */
@@ -64,17 +70,17 @@ export class WorldSimulation {
   tick = 0;
   now: number;
 
-  constructor(seed = WORLD_SEED, now = Date.now(), store?: AccountStore, readonly mode: RoomMode = 'world') {
+  constructor(seed = WORLD_SEED, now = Date.now(), store?: AccountStore, readonly mode: RoomMode = 'world', private readonly environment?: SimulationEnvironment) {
     this.seed = seed;
-    this.world = new World(seed, 160, mode);
+    this.world = environment?.world ?? new World(seed, 160, mode);
     this.now = now;
     this.store = store;
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
     if (mode === 'world') {
-      for (const dungeon of DUNGEON_BY_BOSS_ID.values()) {
-        const definition = BOSS_BY_ID.get(dungeon.bossId);
+      for (const dungeon of environment?.dungeons ?? DUNGEON_BY_BOSS_ID.values()) {
+        const definition = (environment?.bosses ?? BOSS_BY_ID).get(dungeon.bossId);
         if (!definition || definition.dungeonId !== dungeon.id) throw new Error(`Configurazione dungeon non valida: ${dungeon.id}`);
-        const encounter = new BossEncounter(definition, now, store?.bossStates[definition.id], store);
+        const encounter = new BossEncounter(definition, now, store?.bossStates[definition.id], store, dungeon);
         this.bosses.set(definition.id, encounter);
         this.npcs.set(encounter.boss.id, encounter.boss);
         if (store) store.bossStates[definition.id] = encounter.state;
@@ -252,6 +258,7 @@ export class WorldSimulation {
   private readonly pendingCasts = new Map<string, InputCommand>();
 
   private safeSpawn(id: string): Vec2 {
+    if (this.environment) return { ...this.environment.spawn };
     if (this.mode !== 'world') {
       const teamId = this.players.get(id)?.teamId;
       const side = teamId?.endsWith(':1') ? 1 : -1;
@@ -567,7 +574,7 @@ export class WorldSimulation {
     }
     this.emit({ kind: 'hit', x: target.x, y: target.y, actorId: attacker?.id, targetId: target.id, amount: applied, radius: 26, duration: 500, color: '#ffb8a2' });
     if (target.hp > 0) return true;
-    if (target.kind === 'player') for (const boss of this.bosses.values()) boss.eliminate(target.id);
+    if (target.kind === 'player') for (const boss of this.bosses.values()) boss.participantDied(target.id, this.world);
     target.deaths++;
     target.deadUntil = this.now + (target.kind === 'npc' ? 35_000 : 5000);
     target.effects = [];

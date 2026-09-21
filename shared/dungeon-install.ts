@@ -33,15 +33,19 @@ export function buildDungeonBundle(draft: DungeonDraft, existing: readonly Dunge
     definition.encounter.ejectTo = outside;
     for (const encounter of definition.additionalEncounters ?? [])
         encounter.encounter.ejectTo = { ...outside };
-    const bosses = compiled.bosses.map(placement => {
+    const bosses = resolveDungeonBosses(compiled);
+    return { definition, bosses, draft: structuredClone(draft) };
+}
+
+export function resolveDungeonBosses(compiled: ReturnType<typeof compileDungeonDraft>): BossDefinition[] {
+    return compiled.bosses.map(placement => {
         const template = BOSS_TEMPLATE_BY_ID.get(placement.template);
         if (!template)
             throw new Error(`${placement.name}: segnaposto senza comportamento. Seleziona un boss disponibile prima di installare.`);
-        const boss: BossDefinition = { ...structuredClone(template), id: placement.id, dungeonId: definition.id,
+        const boss: BossDefinition = { ...structuredClone(template), id: placement.id, dungeonId: compiled.definition.id,
             templateId: template.templateId ?? template.id, name: placement.name, radius: placement.radius };
         if (boss.behavior.unstuck)
             boss.behavior.unstuck.probeDistance = Math.max(boss.behavior.unstuck.probeDistance, boss.radius + 16);
         return boss;
     });
-    return { definition, bosses, draft: structuredClone(draft) };
 }

@@ -28,10 +28,11 @@ function noise(x: number, y: number, seed: number): number {
 export class World {
   private cache = new Map<string, Chunk>();
   private readonly lockedBosses = new Set<string>();
+  lockRevision = 0;
   constructor(public readonly seed = WORLD_SEED, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world') {}
   get cacheSize(): number { return this.cache.size; }
-  setBossLocked(id: string, locked: boolean): void { if (locked) this.lockedBosses.add(id); else this.lockedBosses.delete(id); }
-  setBossLocks(ids: Iterable<string>): void { this.lockedBosses.clear(); for (const id of ids) this.lockedBosses.add(id); }
+  setBossLocked(id: string, locked: boolean): void { if (this.lockedBosses.has(id) !== locked) this.lockRevision++; if (locked) this.lockedBosses.add(id); else this.lockedBosses.delete(id); }
+  setBossLocks(ids: Iterable<string>): void { const next = new Set(ids); for (const id of this.lockedBosses) if (!next.has(id)) this.setBossLocked(id, false); for (const id of next) this.setBossLocked(id, true); }
   isBossLocked(id: string): boolean { return this.lockedBosses.has(id); }
 
   getBiome(x: number, y: number): Biome {
@@ -115,6 +116,10 @@ export class World {
     if (this.mode === 'world') for (const dungeon of DUNGEON_DEFINITIONS) for (const npc of dungeon.npcSpawns ?? []) {
       const position = chunkCoords(npc.x, npc.y);
       if (position.cx === cx && position.cy === cy) chunk.npcs.push({ ...npc, id: `dungeon:${dungeon.id}:${npc.id}` });
+    }
+    if (this.mode === 'world') for (const dungeon of DUNGEON_DEFINITIONS) for (const pickup of dungeon.pickupSpawns ?? []) {
+      const position = chunkCoords(pickup.x, pickup.y);
+      if (position.cx === cx && position.cy === cy) chunk.pickups.push({ ...pickup, id: `dungeon:${dungeon.id}:${pickup.id}` });
     }
     this.cache.set(key, chunk);
     while (this.cache.size > Math.max(1, this.cacheLimit)) this.cache.delete(this.cache.keys().next().value!);
