@@ -32,6 +32,20 @@ test('removal cleans every encounter boss, preserves accounts/other dungeons and
     assert.equal((await readdir(f.directory)).some(name => name.endsWith('.tmp')), false);
 });
 
+test('removal edits only dungeon.json after migration', async t => {
+    const f = await fixture(t), dungeonPath = join(f.directory, 'dungeon.json');
+    const accountText = JSON.stringify({ version: 2, accounts: f.data.accounts });
+    await writeFile(f.dataPath, accountText);
+    await writeFile(dungeonPath, JSON.stringify({ version: 1, bosses: f.data.bosses }));
+    const result = await removeDungeon(f);
+    assert.equal(result.removedStates, 2);
+    assert.equal(await readFile(f.dataPath, 'utf8'), accountText);
+    assert.deepEqual(JSON.parse(await readFile(dungeonPath, 'utf8')), { version: 1, bosses: { 'boss:keep': f.data.bosses['boss:keep'] } });
+    assert.equal(result.backups.length, 2);
+    assert.ok(result.backups.some(path => path.startsWith(dungeonPath)));
+    assert.equal(result.backups.some(path => path.startsWith(f.dataPath)), false);
+});
+
 test('check previews cleanup without writing files or backups', async t => {
     const f = await fixture(t), result = await removeDungeon({ ...f, check: true });
     assert.equal(result.removedStates, 2);

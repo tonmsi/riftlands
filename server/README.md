@@ -8,7 +8,7 @@ Le istanze arena/BG e il routing delle sessioni sono descritti in [ROOMS.md](ROO
 
 - `npm run dev`: HTTP + `/ws` + Vite sullo stesso server, porta 3000.
 - `npm run build` poi `npm start`: serve il bundle `dist/` e il server autorevole.
-- `PORT`, `HOST` e `DATA_FILE` sono configurabili tramite ambiente. `HOST` predefinito è `0.0.0.0`; dati predefiniti in `data/accounts.json`.
+- `PORT`, `HOST` e `DATA_FILE` sono configurabili tramite ambiente. `HOST` predefinito è `0.0.0.0`; gli account sono in `data/accounts.json` per impostazione predefinita e lo stato dei boss in `dungeon.json` nella stessa cartella.
 - `GET /health` espone stato, numero utenti, tick, NPC, chunk attivi e costo dell'ultimo ciclo.
 
 Per l'accesso pubblico usare un proxy HTTPS/WSS, con `/ws` inoltrato allo stesso servizio. Il server verifica l'origine delle connessioni browser rispetto all'host richiesto. Non legge intestazioni IP inoltrate; configurare esplicitamente l'eventuale infrastruttura davanti al servizio prima di introdurre fiducia nel proxy.

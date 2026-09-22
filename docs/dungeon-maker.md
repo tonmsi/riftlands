@@ -30,15 +30,15 @@ Scegli un modello dal catalogo **Boss disponibili**: il riferimento resta valido
 Installa, Aggiorna ed Elimina salvano una copia **precedente alla modifica** dei file, prima di sostituirli. Dipingere nel maker, salvare la bozza nel browser o scaricare un JSON non crea questi backup.
 
 - `shared/custom-dungeons.json.<data-ora-UTC>-<id>--dungeon-<dungeon-id>.bak`: tutto il catalogo, comprese le bozze installate e i parametri dei boss.
-- `data/accounts.json.<data-ora-UTC>-<id>--dungeon-<dungeon-id>.bak`: il salvataggio completo, con account, progressi e stati dei boss. Se usi `DATA_FILE`, la copia viene creata accanto a quel file. Se il salvataggio non esiste, viene copiato solo il catalogo.
+- `data/dungeon.json.<data-ora-UTC>-<id>--dungeon-<dungeon-id>.bak`: gli stati dei boss, se il file esiste. Prima della migrazione al formato separato, la copia riguarda invece `accounts.json`. Se il salvataggio non esiste, viene copiato solo il catalogo.
 
 Le due copie hanno lo stesso suffisso e i percorsi compaiono nel messaggio dello Studio. Servono per annullare un aggiornamento errato o recuperare da una scrittura interrotta. Il gioco ignora i `.bak`: non duplica dungeon e non li carica in memoria. Occupano spazio su disco, restano locali e non vengono eliminati automaticamente. Puoi cancellare le copie che non ti servono dopo aver verificato la nuova versione, direttamente nello Studio.
 
 Nel pannello **Backup locali** scegli il dungeon (anche se già eliminato), verifica numero, dimensione ed elenco dei file e premi **Elimina backup selezionati**. Puoi scegliere anche **Tutti i backup**. La conferma elimina definitivamente le copie selezionate, senza modificare catalogo e account attuali e senza generare altri backup.
 
-L'associazione identifica il dungeon che ha causato l'operazione: ogni copia contiene comunque il catalogo o il salvataggio **completo**, quindi cancellarla elimina anche quella possibilità di recupero per gli altri contenuti presenti nella copia. I vecchi file senza associazione compaiono come **Storici / condivisi**; non vengono attribuiti a un dungeon per supposizione. Le operazioni sull'intero catalogo usano il suffisso `--catalog` e un gruppo dedicato. Il pannello cerca solo i `.bak` accanto ai due file configurati, non cancella esportazioni o bozze in altre cartelle.
+L'associazione identifica il dungeon che ha causato l'operazione: ogni copia contiene comunque il catalogo o gli stati di **tutti** i boss, quindi cancellarla elimina anche quella possibilità di recupero per gli altri contenuti presenti nella copia. I vecchi file senza associazione compaiono come **Storici / condivisi**; non vengono attribuiti a un dungeon per supposizione. Le operazioni sull'intero catalogo usano il suffisso `--catalog` e un gruppo dedicato. Il pannello cerca solo i `.bak` accanto al catalogo, al file account e al file dungeon, non cancella esportazioni o bozze in altre cartelle.
 
-Per ripristinare tutto: ferma gioco e Studio, copia i due file con lo stesso suffisso sui rispettivi originali (senza `.bak`), poi ricompila e riavvia. Ripristinare `accounts.json` riporta **anche i progressi dei giocatori** alla data della copia. Per recuperare soltanto una mappa, estrai la sua bozza dal vecchio catalogo e importala/aggiornala nello Studio, senza sostituire il salvataggio degli account.
+Per ripristinare tutto: ferma gioco e Studio, copia i due file con lo stesso suffisso sui rispettivi originali (senza `.bak`), poi ricompila e riavvia. I backup creati dopo la migrazione non modificano i progressi dei giocatori; i vecchi backup di `accounts.json` sì. Per recuperare soltanto una mappa, estrai la sua bozza dal vecchio catalogo e importala/aggiornala nello Studio.
 
 ## Authoring
 
@@ -133,9 +133,9 @@ Eliminare il file in `content/dungeons/` rimuove soltanto la bozza: il mondo car
 
 4. Esegui `npm run build` e riavvia. Per un server remoto, esegui la pulizia sul suo salvataggio effettivo e distribuisci catalogo, client e server aggiornati insieme. Verifica la zona rimossa: il terreno torna procedurale e le posizioni salvate dei giocatori non vengono spostate automaticamente.
 
-Per ripristinare, a server fermo copia entrambi i backup sui rispettivi originali e ricostruisci il client. La sostituzione di ciascun file avviene tramite rinomina, ma i due file non costituiscono una transazione unica: se il processo si interrompe dopo la pulizia del salvataggio, ripeti la rimozione oppure ripristina entrambi i backup prima di avviare. I backup contengono anche i dati degli account: conservali con le stesse restrizioni del salvataggio.
+Per ripristinare, a server fermo copia entrambi i backup sui rispettivi originali e ricostruisci il client. La sostituzione di ciascun file avviene tramite rinomina, ma i due file non costituiscono una transazione unica: se il processo si interrompe dopo la pulizia del salvataggio, ripeti la rimozione oppure ripristina entrambi i backup prima di avviare. I backup precedenti alla migrazione possono contenere dati degli account: conservali con le stesse restrizioni del salvataggio.
 
-**Perché pulire anche `bosses`:** il caricamento del salvataggio verifica ogni ID contro il catalogo dei boss attuali. Uno stato rimasto per un boss eliminato impedisce l'avvio con `Stato boss non valido`. Non aggirare questo controllo cancellando gli account.
+**Perché pulire anche `bosses`:** il caricamento verifica ogni ID contro il catalogo dei boss attuali. Dopo un aggiornamento incompatibile, `dungeon.json` viene comunque azzerato automaticamente e il vecchio contenuto resta in un backup `.invalid-…bak`. Gli account non vanno cancellati.
 
 Per azzerare tutto il catalogo, compresi tutti gli stati persistenti dei boss (anche residui di vecchie mappe), usa `npm run dungeon:remove -- --all`. Aggiungi `--check` per l'anteprima. Account e file sorgenti delle bozze restano conservati. I vecchi dungeon integrati non vengono più caricati.
 

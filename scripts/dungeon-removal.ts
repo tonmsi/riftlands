@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { copyFile, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { DungeonBundle } from '../shared/dungeon-install';
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -30,15 +31,22 @@ export async function removeDungeon(options: { id: string; catalogPath: string; 
 export async function changeCatalog(options: { id: string; catalogPath: string; dataPath: string; check?: boolean },
     catalogText: string, next: DungeonBundle[], bossIds: string[]) {
     const { id, catalogPath, dataPath, check } = options;
+    const dungeonPath = join(dirname(dataPath), 'dungeon.json');
+    // During the transition, an unmigrated save still has boss states in accounts.json.
+    const savePath = await readFile(dungeonPath, 'utf8').then(() => dungeonPath, error => {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return dataPath;
+        throw error;
+    });
     let dataText: string | undefined;
-    try { dataText = await readFile(dataPath, 'utf8'); }
+    try { dataText = await readFile(savePath, 'utf8'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     let data: Record<string, unknown> | undefined, removedStates = 0;
     if (dataText !== undefined) {
         const value = parse(dataText);
-        if (!object(value) || value.version !== 2 || !Array.isArray(value.accounts)
-            || ('bosses' in value && !object(value.bosses)))
-            throw new Error('Salvataggio non supportato: servono version: 2, accounts e un eventuale oggetto bosses. Nessun file modificato.');
+        if (!object(value) || (savePath === dungeonPath
+            ? value.version !== 1 || !object(value.bosses)
+            : value.version !== 2 || !Array.isArray(value.accounts) || ('bosses' in value && !object(value.bosses))))
+            throw new Error('Salvataggio dungeon non supportato. Nessun file modificato.');
         data = value;
         if (id === '--all') {
             bossIds = [...new Set([...bossIds, ...Object.keys(object(data.bosses) ? data.bosses : {})])];
@@ -56,8 +64,8 @@ export async function changeCatalog(options: { id: string; catalogPath: string; 
         after: JSON.stringify(next, null, 2) + '\n' }];
     // Save cleanup first: if interrupted, the old catalog can still load the cleaned save.
     if (dataText !== undefined && (removedStates > 0 || id === '--all'))
-        files.unshift({ path: dataPath, before: dataText, after: JSON.stringify(data, null, 2) + '\n' });
-    const backups = dataText === undefined ? [catalogPath] : [catalogPath, dataPath];
+        files.unshift({ path: savePath, before: dataText, after: JSON.stringify(data, null, 2) + '\n' });
+    const backups = dataText === undefined ? [catalogPath] : [catalogPath, savePath];
     const staged: string[] = [];
     let saveWritten = false;
     try {
@@ -77,7 +85,7 @@ export async function changeCatalog(options: { id: string; catalogPath: string; 
                 throw new Error('Un file è cambiato durante la rimozione. Ferma il server e riprova.');
         for (let i = 0; i < files.length; i++) {
             await rename(staged[i], files[i].path);
-            if (files[i].path === dataPath) saveWritten = true;
+            if (files[i].path === savePath) saveWritten = true;
         }
     } catch (error) {
         const recovery = saveWritten ? ' Il salvataggio dei boss è già stato pulito; ripristina entrambi i backup prima di riavviare oppure ripeti la rimozione.' : '';

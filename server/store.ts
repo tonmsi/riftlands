@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, randomUUID, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import type { Actor, PublicAccount } from '../shared/types';
 import { CLASSES } from '../shared/config';
 import { validBossStates, type BossState } from '../shared/bosses';
@@ -70,14 +70,15 @@ export class AccountStore {
   private readonly accountsByName = new Map<string, string>(); // nameLower -> account.id
   private dirty = false;
   readonly path: string;
+  readonly dungeonPath: string;
   private readonly jwtSecret: string;
 
   constructor(path = resolve('data/accounts.json')) {
     this.path = path;
+    this.dungeonPath = join(dirname(path), 'dungeon.json');
     this.jwtSecret = getJwtSecret(dirname(path));
 
-    if (!existsSync(path)) return;
-    try {
+    if (existsSync(path)) try {
       const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
       if (!parsed || typeof parsed !== 'object' || !('version' in parsed) || parsed.version !== 2 || !('accounts' in parsed) || !Array.isArray(parsed.accounts)) {
         // Se è versione 1 o formato precedente, consideriamo gli account azzerati come da specifica
@@ -89,10 +90,6 @@ export class AccountStore {
         throw new Error('Formato account non supportato.');
       }
 
-      if ('bosses' in parsed && parsed.bosses !== undefined) {
-        if (!validBossStates(parsed.bosses)) throw new Error('Stato boss non valido.');
-        this.bossStates = parsed.bosses;
-      }
       for (const entry of parsed.accounts) {
         if (!entry || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.nameLower !== 'string' || typeof entry.salt !== 'string' || typeof entry.passwordHash !== 'string' || !Array.isArray(entry.friends) || !Array.isArray(entry.requests) || ![entry.xp, entry.kills, entry.deaths, entry.lastSeen].every(Number.isFinite)) {
           throw new Error('Account danneggiato.');
@@ -110,9 +107,29 @@ export class AccountStore {
         this.accounts.set(account.id, account);
         this.accountsByName.set(account.nameLower, account.id);
       }
+      // Migrazione: il vecchio file può contenere boss rimossi dal nuovo catalogo.
+      // Il salvataggio account viene riscritto solo dopo avere creato dungeon.json.
+      if ('bosses' in parsed) {
+        if (!existsSync(this.dungeonPath) && validBossStates(parsed.bosses)) this.bossStates = parsed.bosses;
+        this.dirty = true;
+      }
     } catch (error) {
       throw new Error(`Impossibile caricare ${path}. Ripristina o azzera il file prima di riavviare. ${String(error)}`);
     }
+    if (existsSync(this.dungeonPath)) {
+      try {
+        const parsed: unknown = JSON.parse(readFileSync(this.dungeonPath, 'utf8'));
+        if (!parsed || typeof parsed !== 'object' || !('version' in parsed) || parsed.version !== 1
+          || !('bosses' in parsed) || !validBossStates(parsed.bosses)) throw new Error('Stato dungeon non valido.');
+        this.bossStates = parsed.bosses;
+      } catch (error) {
+        const backup = `${this.dungeonPath}.invalid-${randomUUID()}.bak`;
+        renameSync(this.dungeonPath, backup);
+        console.warn(`Stato dungeon incompatibile o danneggiato: ${String(error)}. Backup: ${backup}. Boss azzerati.`);
+        this.flushBosses();
+      }
+    } else this.flushBosses();
+    this.flush();
   }
 
   private hashPassword(password: string, salt: string): string {
@@ -268,8 +285,15 @@ export class AccountStore {
     if (!this.dirty) return;
     mkdirSync(dirname(this.path), { recursive: true });
     const next = `${this.path}.tmp`;
-    writeFileSync(next, JSON.stringify({ version: 2, accounts: [...this.accounts.values()], bosses: this.bossStates }), { mode: 0o600 });
+    writeFileSync(next, JSON.stringify({ version: 2, accounts: [...this.accounts.values()] }), { mode: 0o600 });
     renameSync(next, this.path);
     this.dirty = false;
+  }
+
+  flushBosses(): void {
+    mkdirSync(dirname(this.dungeonPath), { recursive: true });
+    const next = `${this.dungeonPath}.tmp`;
+    writeFileSync(next, JSON.stringify({ version: 1, bosses: this.bossStates }), { mode: 0o600 });
+    renameSync(next, this.dungeonPath);
   }
 }

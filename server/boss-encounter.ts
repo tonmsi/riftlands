@@ -134,6 +134,8 @@ export class BossEncounter {
     const ids = new Set(collectible.map(drop => drop.id));
     account.gold = gold;
     this.state.drops = this.state.drops.filter(drop => !ids.has(drop.id));
+    this.store?.touch();
+    this.store?.flush();
     this.save();
   }
 
@@ -427,7 +429,7 @@ export class BossEncounter {
   }
   private resetPath(): void { this.path = []; this.pathTargetId = undefined; this.pathRefreshAt = 0; }
   private resetStallTimer(): void { this.stalledSince = undefined; this.unstuckUntil = 0; }
-  private save(): void { this.store?.touch(); this.store?.flush(); }
+  private save(): void { this.store?.flushBosses(); }
 }
 
 /** Bounded A* constrained by the map-authored boss leash region. */

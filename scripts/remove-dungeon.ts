@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     try { result = await removeDungeon({ id, catalogPath, dataPath, check }); }
     finally { release(); }
     console.log(`${check ? 'Da rimuovere' : 'Rimosso'}: ${id}, ${result.bossIds.length} boss, ${result.removedStates} stati salvati.`);
-    if (!result.dataExists) console.log('Salvataggio non presente: nessun file account creato.');
+    if (!result.dataExists) console.log('Salvataggio non presente: nessun file dati creato.');
     if (check) console.log('Nessun file modificato.');
     else {
         for (const path of result.backups) console.log(`Backup: ${path}`);

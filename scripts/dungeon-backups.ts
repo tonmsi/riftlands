@@ -7,7 +7,7 @@ type Paths = { catalogPath: string; dataPath: string };
 /** Scan only siblings of the configured originals. Never accept paths from the browser. */
 async function backupFiles(options: Paths) {
     const files: { path: string; scope: string; bytes: number }[] = [];
-    for (const original of new Set([resolve(options.catalogPath), resolve(options.dataPath)])) {
+    for (const original of new Set([resolve(options.catalogPath), resolve(options.dataPath), resolve(dirname(options.dataPath), 'dungeon.json')])) {
         const directory = dirname(original), prefix = `${basename(original)}.`;
         const entries = await readdir(directory, { withFileTypes: true }).catch(error => {
             if (error.code === 'ENOENT') return [];
