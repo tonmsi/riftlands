@@ -26,9 +26,10 @@ test('pacing handles stalls, background reset and lobby rate changes', () => {
 });
 
 test('pixel budget is identical across devices and bounded on large displays', () => {
-  assert.equal(renderDpr(3, 390, 844), 1);
-  assert.equal(renderDpr(2, 1440, 900), 1);
+  assert.equal(renderDpr(3, 390, 844), 1.5);
+  assert.equal(renderDpr(2, 1440, 900), 1.5);
+  assert.equal(renderDpr(1, 1440, 900), 1);
   assert.equal(renderDpr(.8, 1440, 900), .8);
   const dpr = renderDpr(2, 3840, 2160);
-  assert.ok(3840 * 2160 * dpr * dpr <= 2_000_001);
+  assert.ok(3840 * 2160 * dpr * dpr <= 3_000_001);
 });

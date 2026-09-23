@@ -260,6 +260,40 @@ test('multi-boss completion keeps both barriers locked and defers gold and XP un
         f.cleanup();
     }
 });
+for (const outcome of ['victory', 'wipe'] as const) test(`linked bosses preserve team progress after a death until ${outcome}`, () => {
+    const f = fixture(false, true);
+    try {
+        const teammate = f.sim.addPlayer({ ...f.sim.accounts.get(f.player.id)!, id: 'teammate', name: 'Compagno' }, 'warrior');
+        Object.assign(teammate, f.player);
+        teammate.id = 'teammate';
+        for (let i = 0; i < 50; i++) f.sim.step(.1);
+        const [a, b] = f.encounters;
+        assert.equal(a.participantIds.size, 2);
+        f.kill(a.boss);
+        // Exercise the lifecycle sweep as well as the immediate damage callback.
+        teammate.hp = 0;
+        teammate.deadUntil = f.sim.now + 5000;
+        f.sim.step();
+        f.sim.step();
+        for (const e of f.encounters) {
+            assert.equal(e.lockState(teammate).relation, 'eliminated');
+            assert.equal(f.sim.world.isBossLocked(e.boss.id), true);
+        }
+        assert.equal(a.boss.hp, 0, 'the defeated boss stays defeated');
+        if (outcome === 'victory') f.kill(b.boss);
+        else {
+            f.player.hp = 0;
+            f.player.deadUntil = f.sim.now + 5000;
+            f.sim.step();
+        }
+        for (const e of f.encounters) {
+            assert.equal(e.lockState().locked, false);
+            assert.equal(e.isEliminated(teammate.id), false);
+            assert.equal(e.boss.hp, outcome === 'victory' ? 0 : e.boss.maxHp);
+        }
+    } finally { f.cleanup(); }
+});
+
 test('wipe after a partial kill resets every linked boss with no repeatable reward', () => {
     const f = fixture();
     try {

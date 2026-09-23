@@ -122,12 +122,74 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     assert.equal(cachedTerrain.warmBuilds, 1, 'small camera movements reuse the terrain bitmap');
     assert.equal(cachedTerrain.movedBuilds, 2, 'leaving cached bounds rebuilds terrain');
     assert.equal(cachedTerrain.seededBuilds, 3, 'changing world and mode invalidates terrain');
-    assert.equal(cachedTerrain.resizedBuilds, 4, 'resizing invalidates terrain');
+    assert.equal(cachedTerrain.resizedBuilds, 3, 'unchanged resize notifications preserve terrain');
     assert.equal(cachedTerrain.transparent, 0);
     assert.ok(cachedTerrain.released);
-    assert.ok(cachedTerrain.dpr <= 1);
+    assert.ok(cachedTerrain.dpr <= 1.5);
     console.log('Cached terrain CPU render timings (headless Chrome):', cachedTerrain);
     await page.screenshot({ path: 'artifacts/world-terrain.png' });
+    const scrolling = await page.evaluate(async () => {
+      const { Renderer } = await import('/client/render.ts' as string);
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 3 });
+      const canvas = document.querySelector('canvas')!;
+      const renderer = new Renderer(canvas);
+      await renderer.spritesReady;
+      await new Promise(requestAnimationFrame);
+      renderer.drawCachedTerrain(1200);
+      const results = [];
+      for (const [dx, dy] of [[230, 0], [0, 230], [-230, -230], [230, -230], [2400, 0]]) {
+        renderer.camera.x += dx; renderer.camera.y += dy;
+        const started = window.performance.now();
+        renderer.drawCachedTerrain(1200);
+        const scrollMs = window.performance.now() - started;
+        const cache = renderer.terrainCache.canvas;
+        const actual = cache.getContext('2d').getImageData(0, 0, cache.width, cache.height).data;
+        renderer.terrainCache = undefined;
+        const fullStarted = window.performance.now();
+        renderer.drawCachedTerrain(1200);
+        const fullMs = window.performance.now() - fullStarted;
+        const rebuilt = renderer.terrainCache.canvas;
+        const expected = rebuilt.getContext('2d').getImageData(0, 0, rebuilt.width, rebuilt.height).data;
+        let differences = 0;
+        for (let i = 0; i < actual.length; i++) if (Math.abs(actual[i] - expected[i]) > 2) differences++;
+        results.push({ dx, dy, differences, channels: actual.length, scrollMs, fullMs });
+      }
+      const dpr = renderer.dpr;
+      canvas.dispatchEvent(new Event('contextrestored'));
+      const restored = renderer.terrainCache === undefined;
+      const viewports = [];
+      for (const [width, height] of [[390, 844], [1920, 1080], [3840, 2160]]) {
+        canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
+        renderer.resize();
+        const frame = { time: 1200, self: null, actors: [], projectiles: [], pickups: [], traps: [],
+          events: [], selectedId: null, previewClass: 'mage', playing: false };
+        renderer.render(frame);
+        const clean = canvas.toDataURL();
+        renderer.ctx.globalAlpha = .4;
+        renderer.ctx.globalCompositeOperation = 'screen';
+        renderer.ctx.filter = 'sepia(1)';
+        renderer.render(frame);
+        const rect = canvas.getBoundingClientRect();
+        const center = renderer.screenToWorld(rect.left + width / 2, rect.top + height / 2);
+        viewports.push({ width, height, pixels: canvas.width * canvas.height, dpr: renderer.dpr,
+          sameColors: clean === canvas.toDataURL(), centerAligned: center.x === renderer.camera.x && center.y === renderer.camera.y });
+      }
+      renderer.destroy();
+      canvas.style.width = '1200px'; canvas.style.height = '900px';
+      delete (window as any).devicePixelRatio;
+      return { dpr, restored, results, viewports };
+    });
+    assert.equal(scrolling.dpr, 1.5);
+    assert.ok(scrolling.restored, 'context recovery invalidates stale terrain');
+    for (const result of scrolling.results) assert.ok(result.differences / result.channels < .001,
+      `scrolling must preserve terrain colors and detail: ${JSON.stringify(result)}`);
+    console.log('Terrain scrolling vs full rebuild:', scrolling.results);
+    for (const viewport of scrolling.viewports) {
+      assert.ok(viewport.pixels <= 3_004_000, 'large screens keep a bounded pixel budget including rounding');
+      assert.ok(viewport.sameColors, 'frame colors do not inherit stale canvas blending or filters');
+      assert.ok(viewport.centerAligned, 'DPR changes preserve pointer coordinates');
+    }
+    assert.equal(scrolling.viewports[0].dpr, 1.5);
     const water = await page.evaluate(async () => {
       const { EnvironmentArt } = await import('/client/environment-art.ts' as string);
       const { TERRAIN, shorelineMask } = await import('/client/terrain-style.ts' as string);

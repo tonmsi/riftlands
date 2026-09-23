@@ -53,7 +53,7 @@ test('walking through an activation closes grass entrances on every side until v
   for (const t of gates) assert.equal(p.world.getTile(t.x, t.y), 'grass');
 });
 
-test('first participant death immediately reopens a team encounter and surviving participants can leave', () => {
+for (const diesFirst of ['leader', 'teammate'] as const) test(`team encounter survives ${diesFirst} death and blocks reentry until completion`, () => {
   const p = createDungeonPlaytest(ready()), sim = p.simulation, e = [...sim.bosses.values()][0];
   const teammate = sim.addPlayer({ ...sim.accounts.get(p.player.id)!, id: 'teammate', name: 'Compagno' }, 'mage');
   p.player.teamId = teammate.teamId = 'local-team';
@@ -61,10 +61,27 @@ test('first participant death immediately reopens a team encounter and surviving
   Object.assign(teammate, p.definition.spawnPoints.party[0]);
   for (let i = 0; i < 155; i++) sim.step();
   assert.equal(e.participantIds.size, 2);
-  damage(p, teammate, 100000, e.boss);
-  assert.equal(e.ownerId, undefined); assert.equal(p.world.isBossLocked(e.boss.id), false);
-  sim.step(); assert.equal(e.ownerId, undefined, 'survivors do not immediately lock themselves back in');
-  assert.equal(p.player.hp > 0, true);
+  const eliminated = diesFirst === 'leader' ? p.player : teammate;
+  const survivor = diesFirst === 'leader' ? teammate : p.player;
+  damage(p, e.boss, 10);
+  const bossHp = e.boss.hp;
+  damage(p, eliminated, 100000, e.boss);
+  assert.equal(e.ownerId, p.player.id); assert.equal(p.world.isBossLocked(e.boss.id), true);
+  assert.equal(e.lockState(eliminated).relation, 'eliminated');
+  for (let i = 0; i < 3; i++) sim.step();
+  assert.equal(e.boss.hp, bossHp, 'a dead participant does not reset the boss');
+  assert.equal(e.isActiveParticipant(survivor.id), true);
+  eliminated.deadUntil = sim.now;
+  sim.step();
+  assert.ok(eliminated.hp > 0);
+  Object.assign(eliminated, { x: survivor.x, y: survivor.y });
+  assert.equal(e.canDamage(eliminated), false);
+  sim.step();
+  assert.deepEqual({ x: eliminated.x, y: eliminated.y }, e.dungeon.encounter.ejectTo);
+  assert.equal(e.lockState().locked, true);
+  damage(p, e.boss, 100000, survivor);
+  assert.equal(e.lockState().locked, false);
+  assert.equal(e.isEliminated(eliminated.id), false);
 });
 
 test('flames are dormant before activation, lethal during combat, and reopen the dungeon on death', () => {

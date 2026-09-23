@@ -168,6 +168,7 @@ export class Renderer {
     left: number; top: number; right: number; bottom: number };
   readonly spritesReady: Promise<void>;
   private terrainLockRevision = -1;
+  private readonly restoreContext = (): void => { this.terrainCache = undefined; };
   private outsideLocalMap(tx: number, ty: number): boolean {
     return !!this.localDungeons && !this.localDungeons.some(d => { const b = d.layout.bounds; return tx >= b.minTx - 2 && tx <= b.maxTx + 2 && ty >= b.minTy - 2 && ty <= b.maxTy + 2; });
   }
@@ -179,6 +180,7 @@ export class Renderer {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D non disponibile in questo browser.');
     this.ctx = ctx;
+    canvas.addEventListener('contextrestored', this.restoreContext);
     this.spritesReady = this.prepareSprites();
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -201,7 +203,11 @@ export class Renderer {
     };
   }
 
-  destroy(): void { this.resizeObserver.disconnect(); this.terrainCache = undefined; }
+  destroy(): void {
+    this.resizeObserver.disconnect();
+    this.canvas.removeEventListener('contextrestored', this.restoreContext);
+    this.terrainCache = undefined;
+  }
 
   private async prepareSprites(): Promise<void> {
     const jobs: Promise<void>[] = [];
@@ -225,12 +231,16 @@ export class Renderer {
 
   private resize(): void {
     const rect = this.canvas.getBoundingClientRect();
+    const dpr = renderDpr(window.devicePixelRatio, Math.max(1, rect.width), Math.max(1, rect.height));
+    const unchanged = this.width === Math.max(1, rect.width) && this.height === Math.max(1, rect.height) && this.dpr === dpr;
     this.width = Math.max(1, rect.width);
     this.height = Math.max(1, rect.height);
-    this.dpr = renderDpr(window.devicePixelRatio, this.width, this.height);
-    this.terrainCache = undefined;
-    this.canvas.width = Math.round(this.width * this.dpr);
-    this.canvas.height = Math.round(this.height * this.dpr);
+    this.dpr = dpr;
+    if (!unchanged) {
+      this.terrainCache = undefined;
+      this.canvas.width = Math.round(this.width * this.dpr);
+      this.canvas.height = Math.round(this.height * this.dpr);
+    }
     const baseZoom = (this.width < 680 ? 0.8 : 0.95) * (this.touchQuery.matches ? 0.8 : 1);
     // A browser zoom-out enlarges the CSS viewport without enlarging the actual
     // screen. Keep the logical world viewport bounded so it cannot generate a
@@ -270,6 +280,10 @@ export class Renderer {
       bottom: this.camera.y + this.height / (2 * this.zoom) + 100,
     };
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.filter = 'none';
+    ctx.shadowBlur = 0;
     ctx.fillStyle = TERRAIN.grass;
     ctx.fillRect(0, 0, this.width, this.height);
     ctx.translate(this.width / 2, this.height / 2);
@@ -503,16 +517,41 @@ export class Renderer {
       const x = Math.floor((left - margin) * scale) / scale;
       const y = Math.floor((top - margin) * scale) / scale;
       const canvas = cache?.canvas ?? document.createElement('canvas');
-      canvas.width = Math.ceil((right + margin - x) * scale);
-      canvas.height = Math.ceil((bottom + margin - y) * scale);
+      const width = Math.ceil((this.width / this.zoom + margin * 2) * scale) + 1;
+      const height = Math.ceil((this.height / this.zoom + margin * 2) * scale) + 1;
+      const dx = cache ? Math.round((cache.left - x) * scale) : 0;
+      const dy = cache ? Math.round((cache.top - y) * scale) : 0;
+      const reuse = cache?.world === this.world && cache.scale === scale &&
+        canvas.width === width && canvas.height === height && Math.abs(dx) < width && Math.abs(dy) < height;
+      if (!cache) canvas.addEventListener('contextrestored', () => {
+        if (this.terrainCache?.canvas === canvas) this.terrainCache = undefined;
+      });
+      if (!reuse) { canvas.width = width; canvas.height = height; }
       const ctx = canvas.getContext('2d', { alpha: false })!;
-      ctx.fillStyle = TERRAIN.grass; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.setTransform(scale, 0, 0, scale, -x * scale, -y * scale);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // Canvas self-copies preserve overlapping pixels. Scroll on integer pixels
+      // and repaint only exposed strips, without allocating a second full bitmap.
+      const dirty: { left: number; top: number; right: number; bottom: number }[] = [];
+      if (reuse) {
+        ctx.drawImage(canvas, dx, dy);
+        if (dx) dirty.push({ left: dx > 0 ? 0 : width + dx, top: 0,
+          right: dx > 0 ? dx : width, bottom: height });
+        if (dy) dirty.push({ left: Math.max(0, dx), top: dy > 0 ? 0 : height + dy,
+          right: Math.min(width, width + dx), bottom: dy > 0 ? dy : height });
+      } else dirty.push({ left: 0, top: 0, right: width, bottom: height });
       cache = { canvas, world: this.world, scale, left: x, top: y,
         right: x + canvas.width / scale, bottom: y + canvas.height / scale };
-      // Include off-bitmap neighbours so foliage and shore details are not clipped at their anchors.
-      this.drawTerrain(time, ctx, { left: x - 100, top: y - 100,
-        right: cache.right + 100, bottom: cache.bottom + 100 });
+      for (const strip of dirty) {
+        ctx.save();
+        ctx.beginPath(); ctx.rect(strip.left, strip.top, strip.right - strip.left, strip.bottom - strip.top); ctx.clip();
+        ctx.fillStyle = TERRAIN.grass;
+        ctx.fillRect(strip.left, strip.top, strip.right - strip.left, strip.bottom - strip.top);
+        ctx.setTransform(scale, 0, 0, scale, -x * scale, -y * scale);
+        // Include neighbours so scenery, shores and washes keep their original edges.
+        this.drawTerrain(time, ctx, { left: x + strip.left / scale - 100, top: y + strip.top / scale - 100,
+          right: x + strip.right / scale + 100, bottom: y + strip.bottom / scale + 100 });
+        ctx.restore();
+      }
       this.terrainCache = cache;
     }
     this.ctx.drawImage(cache.canvas, cache.left, cache.top,

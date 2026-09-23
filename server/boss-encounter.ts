@@ -85,7 +85,9 @@ export class BossEncounter {
   isEliminated(id: string): boolean { return this.eliminatedIds.has(id); }
   eliminate(id: string): void { if (this.participantIds.has(id)) this.eliminatedIds.add(id); }
   participantDied(id: string, world: World): void {
-    if (!this.participantIds.has(id)) return;
+    if (!this.isActiveParticipant(id)) return;
+    this.eliminate(id);
+    if ([...this.participantIds].some(participant => this.isActiveParticipant(participant))) return;
     for (const member of this.group) for (const participant of this.participantIds) member.reentryBlocked.add(participant);
     this.fail(world);
   }
@@ -195,7 +197,8 @@ export class BossEncounter {
           return;
         }
       }
-      for (const player of players) if (this.participantIds.has(player.id) && player.hp <= 0) { this.participantDied(player.id, world); return; }
+      for (const player of players) if (this.isActiveParticipant(player.id) && player.hp <= 0) this.participantDied(player.id, world);
+      if (!this.ownerId) return;
       for (const player of players) if (this.hasParticipant(player.id) && player.hp > 0
         && touchesDungeonFlame(this.dungeon, player, player.radius)) damage(player, Number.MAX_SAFE_INTEGER);
       if (!this.ownerId) return;
