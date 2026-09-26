@@ -27,7 +27,6 @@ function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, r
   ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rotation, 0, TAU); ctx.fillStyle = color; ctx.fill();
 }
 
-/** Small, bounded atlas: expensive foliage and mineral detail never runs per frame. */
 export class EnvironmentArt {
   private readonly cache = new Map<string, HTMLCanvasElement>();
   private cachedPixels = 0;
@@ -35,7 +34,6 @@ export class EnvironmentArt {
   private waterSource?: object;
   private readonly waterPaint = new Map<string, { path: Path2D; color: string } | null>();
 
-  /** Sparse multi-cell strokes, admitted only when their entire footprint is open water. */
   paintWater(ctx: CanvasRenderingContext2D, bounds: { left: number; top: number; right: number; bottom: number },
     world: { getTile(x: number, y: number): TileKind }): void {
     if (this.waterSource !== world) { this.waterPaint.clear(); this.waterSource = world; }
@@ -72,7 +70,6 @@ export class EnvironmentArt {
     }
   }
 
-  /** Replace square material corners with a compact curved cutout. */
   roundTerrainCorner(ctx: CanvasRenderingContext2D, x: number, y: number, corner: number, color: string, radius = 13): void {
     ctx.save(); ctx.translate(x + (corner === 1 || corner === 2 ? TILE_SIZE : 0),
       y + (corner >= 2 ? TILE_SIZE : 0));
@@ -82,7 +79,6 @@ export class EnvironmentArt {
     ctx.fillStyle = color; ctx.fill(); ctx.restore();
   }
 
-  /** Sparse hand-drawn details soften the remaining junction at dungeon corners. */
   drawTerrainSeam(ctx: CanvasRenderingContext2D, x: number, y: number, variation: number): number {
     if (variation < .62) return 0;
     const rng = random(49157 + Math.floor(variation * 1_000_003));
@@ -105,7 +101,6 @@ export class EnvironmentArt {
     return stones;
   }
 
-  /** Lily pads sit on calm water just inside banks, especially in sheltered corners. */
   drawWaterPlants(ctx: CanvasRenderingContext2D, x: number, y: number, variation: number, shore: number): number {
     const cardinal = shore & 15;
     const edgeCount = [1, 2, 4, 8].reduce((count, bit) => count + (cardinal & bit ? 1 : 0), 0);
@@ -120,7 +115,7 @@ export class EnvironmentArt {
     if (!cardinal) {
       if (shore & 16) { dx -= 7; dy += 7; }
       if (shore & 32) { dx -= 7; dy -= 7; }
-      if (shore & 64) { dx += 7; dy -= 7; }
+      if (shore & 64) { dx += 7; dy += 7; }
       if (shore & 128) { dx += 7; dy += 7; }
     }
 
@@ -151,9 +146,9 @@ export class EnvironmentArt {
     return count;
   }
 
-  draw(ctx: CanvasRenderingContext2D, tile: TileKind, x: number, y: number, variation: number, shore = 0, width = 1, height = 1): void {
+  draw(ctx: CanvasRenderingContext2D, tile: TileKind, x: number, y: number, variation: number, shore = 0, width = 1, height = 1, isSnowy = false): void {
     const variant = tile === 'water' ? 0 : Math.min(VARIANTS - 1, Math.floor(variation * VARIANTS));
-    const key = `${tile}:${variant}:${shore}:${width}:${height}`;
+    const key = `${tile}:${variant}:${shore}:${width}:${height}:${isSnowy ? 1 : 0}`;
     let sprite = this.cache.get(key);
     if (!sprite) {
       sprite = document.createElement('canvas');
@@ -164,14 +159,22 @@ export class EnvironmentArt {
       art.lineJoin = 'round';
       art.lineCap = 'round';
       const rng = random(7919 + variant * 104729);
+
       if (tile === 'rock' || tile === 'bush') {
         art.scale(width, height);
         const renderScale = Math.max(width, height);
         if (tile === 'rock') this.rock(art, rng, renderScale);
-        else this.bush(art, rng, variant, renderScale);
+        else this.bush(art, rng, variant, renderScale, isSnowy);
+      } else if (tile === 'water') {
+        this.water(art, rng, shore, variant);
+      } else if (tile === 'snow') {
+        this.snow(art, rng, variant);
+      } else if (tile === 'ice') {
+        this.ice(art, rng, variant);
+      } else {
+        this.ground(art, rng, tile);
       }
-      else if (tile === 'water') this.water(art, rng, shore, variant);
-      else this.ground(art, rng, tile);
+
       const pixels = sprite.width * sprite.height;
       while (this.cache.size && (this.cache.size >= CACHE_LIMIT || this.cachedPixels + pixels > 8_388_608)) {
         const oldest = this.cache.keys().next().value!;
@@ -182,9 +185,8 @@ export class EnvironmentArt {
       this.cache.set(key, sprite);
       this.cachedPixels += pixels;
     }
+
     if (tile === 'water') {
-      // Align the opaque water atlas with terrain coverage at fractional zoom.
-      // Otherwise the ground beneath leaks through between adjacent sprites.
       const transform = ctx.getTransform();
       const left = Math.floor(x * transform.a + transform.e);
       const top = Math.floor(y * transform.d + transform.f);
@@ -192,9 +194,39 @@ export class EnvironmentArt {
       const bottom = Math.ceil((y + TILE_SIZE) * transform.d + transform.f);
       ctx.drawImage(sprite, (left - transform.e) / transform.a, (top - transform.f) / transform.d,
         (right - left) / transform.a, (bottom - top) / transform.d);
-    } else ctx.drawImage(sprite, x, y, TILE_SIZE * width, TILE_SIZE * height);
+    } else {
+      ctx.drawImage(sprite, x, y, TILE_SIZE * width, TILE_SIZE * height);
+    }
   }
 
+  private snow(ctx: CanvasRenderingContext2D, rng: () => number, _variant: number): void {
+    const mounds = 1 + (rng() > 0.45 ? 1 : 0);
+    for (let i = 0; i < mounds; i++) {
+      const mx = 10 + rng() * 28;
+      const my = 12 + rng() * 24;
+      const rx = 9 + rng() * 11;
+      const ry = 2.4 + rng() * 2.2;
+      const rot = (rng() - 0.5) * 0.35;
+      oval(ctx, mx, my + 1, rx, ry, '#bad8ea45', rot);
+      oval(ctx, mx - 0.4, my, rx * 0.9, ry * 0.75, '#ffffff95', rot);
+    }
+
+    if (rng() > 0.3) {
+      const px = 6 + rng() * 36;
+      const py = 6 + rng() * 36;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px, py - 1.5, 1, 3);
+      ctx.fillRect(px - 1.5, py, 3, 1);
+    }
+
+    if (rng() > 0.65) {
+      const px = 8 + rng() * 32, py = 8 + rng() * 32;
+      oval(ctx, px, py, 2.2, 1.2, '#bad8ea50', -0.2);
+      oval(ctx, px + 0.3, py - 0.3, 1.8, 0.9, '#ffffffa0', -0.2);
+    }
+  }
+
+  
   private rock(ctx: CanvasRenderingContext2D, rng: () => number, renderScale: number): void {
     const width = .82 + rng() * .18, height = .76 + rng() * .24;
     ctx.save(); ctx.translate(24, 26); ctx.scale(width, height); ctx.translate(-24, -26);
@@ -220,10 +252,12 @@ export class EnvironmentArt {
     ctx.restore();
   }
 
-  private bush(ctx: CanvasRenderingContext2D, rng: () => number, _variant: number, renderScale: number): void {
+ /** Cespuglio con calotte di neve morbide e soffici invece di poligoni spigolosi */
+  private bush(ctx: CanvasRenderingContext2D, rng: () => number, _variant: number, renderScale: number, isSnowy = false): void {
     const scaleX = .87 + rng() * .16, scaleY = .86 + rng() * .16;
     ctx.save(); ctx.translate(24, 25); ctx.scale(scaleX, scaleY);
-    oval(ctx, 2, 15, 22, 6, '#202d2840');
+    oval(ctx, 2, 15, 22, 6, isSnowy ? '#1b2d2b40' : '#202d2840');
+    
     const points: number[] = [];
     for (let i = 0; i < 16; i++) {
       const angle = i / 16 * TAU, radius = 18 + rng() * 6;
@@ -231,33 +265,140 @@ export class EnvironmentArt {
     }
     ctx.beginPath(); ctx.moveTo(points[0], points[1]);
     for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
-    ctx.closePath(); ctx.fillStyle = bushColor(_variant / VARIANTS); ctx.fill();
+    ctx.closePath();
+    ctx.fillStyle = isSnowy ? '#22483d' : bushColor(_variant / VARIANTS);
+    ctx.fill();
+
     ctx.save(); ctx.clip();
-    shape(ctx, [-27,-17, 4,-25, 20,-13, 9,0, -6,7, -25,0], '#a8ca72');
-    shape(ctx, [9,0, 20,-13, 29,2, 15,20, -2,25, -6,7], '#70a15d');
-    for (let i = 0; i < 5; i++) {
-      const x = rng() * 48 - 24, y = rng() * 42 - 21, w = 3 + rng() ** 2 * 22;
-      shape(ctx, [x-w,y, x-w*.3,y-4, x+w*.5,y-6, x+w,y+1, x+1,y+5],
-        i % 3 === 0 ? '#c0cc8848' : '#244e3b40');
-    }
-    if (_variant % 4 === 0) {
-      for (const [x, y] of [[-10, 3], [4, -7], [12, 8]] as const) {
-        oval(ctx, x, y, 2.2, 2, '#713f58');
-        oval(ctx, x - .5, y - .7, .75, .65, '#d99aaa');
+    if (isSnowy) {
+      // Fogliame pino scuro interno
+      shape(ctx, [-27,-17, 4,-25, 20,-13, 9,0, -6,7, -25,0], '#2e5b4e');
+      shape(ctx, [9,0, 20,-13, 29,2, 15,20, -2,25, -6,7], '#16362d');
+
+      // 1. Cupola di neve morbida principale sulla cima
+      ctx.fillStyle = '#bad4e2';
+      ctx.beginPath();
+      ctx.ellipse(0, -14, 18, 11, -0.05, 0, TAU);
+      ctx.ellipse(-8, -9, 10, 8, 0.2, 0, TAU);
+      ctx.ellipse(9, -8, 11, 8, -0.2, 0, TAU);
+      ctx.fill();
+
+      // Luce bianca candida sulla neve
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(-1, -16, 16, 9, -0.05, 0, TAU);
+      ctx.ellipse(-8, -11, 8, 6, 0.2, 0, TAU);
+      ctx.ellipse(8, -10, 9, 6, -0.2, 0, TAU);
+      ctx.fill();
+
+      // 2. Soffice banco di neve sul lobo inferiore destro
+      ctx.fillStyle = '#bad4e2';
+      ctx.beginPath(); ctx.ellipse(14, 4, 9, 6, 0.3, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.ellipse(13, 3, 7, 4.5, 0.3, 0, TAU); ctx.fill();
+
+      // 3. Bacche invernali rosse sotto la coltre bianca
+      if (_variant % 2 === 0) {
+        for (const [bx, by] of [[-10, 6], [1, 10], [12, -1]] as const) {
+          oval(ctx, bx, by, 2.2, 2.2, '#aa2233');
+          oval(ctx, bx - 0.5, by - 0.6, 0.8, 0.8, '#ffffff');
+        }
+      }
+    } else {
+      shape(ctx, [-27,-17, 4,-25, 20,-13, 9,0, -6,7, -25,0], '#a8ca72');
+      shape(ctx, [9,0, 20,-13, 29,2, 15,20, -2,25, -6,7], '#70a15d');
+      for (let i = 0; i < 5; i++) {
+        const x = rng() * 48 - 24, y = rng() * 42 - 21, w = 3 + rng() ** 2 * 22;
+        shape(ctx, [x-w,y, x-w*.3,y-4, x+w*.5,y-6, x+w,y+1, x+1,y+5],
+          i % 3 === 0 ? '#c0cc8848' : '#244e3b40');
+      }
+      if (_variant % 4 === 0) {
+        for (const [x, y] of [[-10, 3], [4, -7], [12, 8]] as const) {
+          oval(ctx, x, y, 2.2, 2, '#713f58');
+          oval(ctx, x - .5, y - .7, .75, .65, '#d99aaa');
+        }
       }
     }
     ctx.restore(); ctx.restore();
+
     ctx.save(); ctx.translate(24, 25); ctx.scale(scaleX, scaleY);
-    // A broad outline keeps foliage readable over similarly coloured grass.
     ctx.beginPath(); ctx.moveTo(points[0], points[1]);
     for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
-    ctx.closePath(); ctx.strokeStyle = '#315b40'; ctx.lineWidth = 1.75 / renderScale; ctx.stroke();
+    ctx.closePath();
+    ctx.strokeStyle = isSnowy ? '#17362f' : '#315b40';
+    ctx.lineWidth = 1.75 / renderScale;
+    ctx.stroke();
     ctx.restore();
   }
 
+  /** Ghiaccio naturale: crepe rare e con angolazioni casuali, niente righe ripetute */
+  private ice(ctx: CanvasRenderingContext2D, rng: () => number, _variant: number): void {
+    // 1. Chiazze morbide di brina/gelo superficiale
+    if (rng() > 0.3) {
+      const fx = 10 + rng() * 28, fy = 10 + rng() * 28;
+      const frx = 8 + rng() * 14, fry = 4 + rng() * 8;
+      const frot = rng() * Math.PI;
+      oval(ctx, fx, fy, frx, fry, '#e3f6fd30', frot);
+      oval(ctx, fx, fy, frx * 0.6, fry * 0.5, '#ffffff35', frot);
+    }
+
+    // 2. Bolle d'aria intrappolate nel ghiaccio
+    const bubbles = Math.floor(rng() * 4);
+    for (let i = 0; i < bubbles; i++) {
+      const bx = 6 + rng() * 36, by = 6 + rng() * 36;
+      const br = 0.8 + rng() * 1.5;
+      oval(ctx, bx, by + 0.5, br, br, '#1e5f7845');
+      oval(ctx, bx, by, br * 0.8, br * 0.8, '#eaf8ffc0');
+    }
+
+    // 3. Crepe strutturali: SOLO nel 35% delle caselle (non in tutte!)
+    if (rng() > 0.65) {
+      ctx.save();
+      ctx.translate(24, 24);
+      // Rotazione completamente casuale (0°, 90°, 180°, 270° o angoli intermedi)
+      ctx.rotate(rng() * Math.PI * 2);
+
+      const len = 12 + rng() * 14;
+      const bend = (rng() - 0.5) * 8;
+
+      // Rifrazione ciano
+      ctx.strokeStyle = '#4ea5c450';
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(-len, -bend);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(len, bend);
+      ctx.stroke();
+
+      // Ombra di profondità
+      ctx.strokeStyle = '#184f6670';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-len + 0.5, -bend + 0.8);
+      ctx.lineTo(0.5, 0.8);
+      ctx.lineTo(len + 0.5, bend + 0.8);
+      ctx.stroke();
+
+      // Crepa bianca cristallina
+      ctx.strokeStyle = '#ffffffea';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(-len, -bend);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(len, bend);
+
+      // Ramo a stella o fessura laterale
+      if (rng() > 0.4) {
+        ctx.moveTo(0, 0);
+        ctx.lineTo((rng() - 0.5) * 12, 8 + rng() * 6);
+      }
+      ctx.stroke();
+
+      ctx.restore();
+    }
+  }
+
   private water(ctx: CanvasRenderingContext2D, _rng: () => number, shore: number, _variant: number): void {
-    // Each quarter joins the next at the same tangent. Diagonal neighbours round
-    // inward bays as well as outward corners; no contour crosses a solid tile.
     const half = TILE_SIZE / 2, inset = 4, radius = 17;
     ctx.fillStyle = TERRAIN.water; ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
     for (let corner = 0; corner < 4; corner++) {
@@ -288,7 +429,6 @@ export class EnvironmentArt {
         sx = 0; sy = inset; ex = inset; ey = 0;
         edge.moveTo(sx, sy); edge.arc(0, 0, inset, Math.PI / 2, 0, true);
       }
-      // Broad shallow water, a restrained contour, then the dry bank.
       ctx.lineCap = 'butt';
       ctx.strokeStyle = '#79b7b2'; ctx.lineWidth = 14; ctx.stroke(edge);
       ctx.strokeStyle = '#d3e7d4'; ctx.lineWidth = 5; ctx.stroke(edge);
@@ -310,9 +450,14 @@ export class EnvironmentArt {
       ctx.restore();
     }
   }
-  /** Prepainted world-anchored washes: one fill per tile, no brush generation per frame. */
+
   paintGround(ctx: CanvasRenderingContext2D, tile: TileKind, x: number, y: number, dungeonFloor = false): void {
-    const material = dungeonFloor ? 'stone' : tile === 'path' || tile === 'mud' ? tile : 'grass';
+    const material = dungeonFloor
+      ? 'stone'
+      : (tile === 'path' || tile === 'mud' || tile === 'snow' || tile === 'ice')
+        ? tile
+        : 'grass';
+
     let pattern = this.washes.get(material);
     if (!pattern) {
       const size = 1536, canvas = document.createElement('canvas');
@@ -321,10 +466,13 @@ export class EnvironmentArt {
       for (let i = 0; i < 68; i++) {
         const px = rng() * size, py = rng() * size;
         const w = 16 + rng() ** 2 * 115, h = 9 + rng() ** 2 * 60;
-        const color = material === 'stone' ? (i % 2 ? '#d1c8af25' : '#313f3925') : material === 'path' ? (i % 2 ? '#ead19e2e' : '#82674829')
+        const color = material === 'stone' ? (i % 2 ? '#d1c8af25' : '#313f3925')
+          : material === 'path' ? (i % 2 ? '#ead19e2e' : '#82674829')
           : material === 'mud' ? (i % 2 ? '#c4ba8a2c' : '#3e634f28')
+          : material === 'snow' ? (i % 2 ? '#ffffff40' : '#bad8ea30')
+          : material === 'ice' ? (i % 2 ? '#d7f6ff2c' : '#367c9622')
           : (i % 2 ? '#c5cb942e' : '#41684329');
-        // Wrap whole marks at pattern boundaries so there are no texture seams.
+
         for (const dx of [-size, 0, size]) for (const dy of [-size, 0, size]) {
           const cx = px + dx, cy = py + dy;
           shape(art, [cx-w,cy, cx-w*.6,cy-h, cx+w*.3,cy-h*.8,
@@ -334,6 +482,7 @@ export class EnvironmentArt {
       pattern = ctx.createPattern(canvas, 'repeat')!;
       this.washes.set(material, pattern);
     }
+
     const t = ctx.getTransform();
     const left = Math.round(x * t.a + t.e), top = Math.round(y * t.d + t.f);
     const right = Math.round((x + TILE_SIZE) * t.a + t.e), bottom = Math.round((y + TILE_SIZE) * t.d + t.f);
@@ -356,7 +505,6 @@ export class EnvironmentArt {
     if (rng() > (tile === 'path' ? .78 : .92)) {
       const x = 8 + rng() * 32, y = 10 + rng() * 29;
       const w = 2.8 + rng() * 2.3, h = 1.8 + rng() * 1.5;
-      // Tiny angular stones use warm midtones and a lit face, never dark round pebbles.
       shape(ctx, [x-w,y, x-w*.45,y-h, x+w*.45,y-h*.8, x+w,y, x+w*.35,y+h, x-w*.65,y+h*.6], '#8e9788');
       shape(ctx, [x-w*.45,y-h, x+w*.45,y-h*.8, x+w*.15,y, x-w*.55,y+.2], '#b7b69f');
     }

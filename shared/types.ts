@@ -6,7 +6,7 @@ export type RoomMode = 'world' | 'arena' | 'battleground';
 export interface Actor { pvpUntil?: number; }
 export interface RoomState { id: string; epoch: number; mode: RoomMode; seed: number; }
 export interface ArenaGateState { phase: 'waiting' | 'countdown' | 'combat' | 'reenter' | 'full'; players: number; startsAt?: number; }
-export type TileKind = 'grass' | 'path' | 'water' | 'rock' | 'bush' | 'mud';
+export type TileKind = 'grass' | 'path' | 'water' | 'rock' | 'bush' | 'mud' | 'snow' | 'ice';
 export type Biome = 'meadow' | 'forest' | 'marsh';
 export type PickupKind = 'heal' | 'haste' | 'power' | 'weakness';
 export interface AbilityDef { targeting: 'directional' | 'self'; name: string; description: string; cost: number; cooldown: number; range: number; damage: number; kind: 'projectile' | 'melee' | 'area' | 'heal' | 'shield' | 'dash' | 'trap'; radius: number; color: string; duration?: number; speed?: number; slow?: number; }

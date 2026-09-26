@@ -561,7 +561,7 @@ export class Renderer {
   private drawTerrain(time: number, ctx = this.ctx, bounds = this.bounds): void {
     const waterPlants: { x: number; y: number; variation: number; shore: number }[] = [];
     const transform = ctx.getTransform();
-    type SurfaceKind = 'grass' | 'path' | 'mud' | 'stone' | 'water';
+    type SurfaceKind = 'grass' | 'path' | 'mud' | 'stone' | 'water'| 'snow' | 'ice';
     const scenery = (tile: TileKind) => tile === 'rock' || tile === 'bush';
     const rawSurfaceAt = (tx: number, ty: number): SurfaceKind | null => {
       if (this.outsideLocalMap(tx, ty)) return null;
@@ -570,7 +570,9 @@ export class Renderer {
       if (scenery(tile)) return null;
       const dungeon = this.world.mode === 'world' ? this.dungeonAt(tx, ty) : undefined;
       if (dungeon && tile === dungeon.layout.floor) return 'stone';
-      return tile === 'path' || tile === 'mud' || tile === 'water' ? tile : 'grass';
+      return tile === 'path' || tile === 'mud' || tile === 'water' || tile === 'snow' || tile === 'ice'
+        ? tile 
+        : 'grass';
     };
     const inferredScenerySurface = (tx: number, ty: number): SurfaceKind => {
       // Obstacles are a transparent visual layer. Existing dungeon files do not
@@ -738,7 +740,16 @@ export class Renderer {
           // Caso scacchiera diagonale: eseguiamo l'arrotondamento per stabilire continuità
           const surfaceA = quadrants[0].surface!;
           const surfaceB = quadrants[1].surface!;
-          const priority = (s: SurfaceKind) => s === 'stone' ? 4 : s === 'path' ? 3 : s === 'mud' ? 2 : 1;
+          const priority = (s: SurfaceKind) => {
+            switch (s) {
+              case 'stone': return 6;
+              case 'path': return 5;
+              case 'mud': return 4;
+              case 'ice': return 3;
+              case 'snow': return 2;
+              default: return 1;
+            }
+          };
           const aAbove = priority(surfaceA) > priority(surfaceB);
           overlaySurface = aAbove ? surfaceA : surfaceB;
           const underSurface = aAbove ? surfaceB : surfaceA;
@@ -786,11 +797,15 @@ export class Renderer {
       if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return 'grass';
       return this.world.getTile(tx, ty);
     };
+    // Trova il ciclo dei gruppi di scenery in drawTerrain:
     for (let ty = Math.floor(bounds.top / TILE_SIZE / 2) * 2; ty <= Math.floor(bounds.bottom / TILE_SIZE); ty += 2) {
       for (let tx = Math.floor(bounds.left / TILE_SIZE / 2) * 2; tx <= Math.floor(bounds.right / TILE_SIZE); tx += 2) {
         for (const group of sceneryGroups(getScenery, tx, ty)) {
+          // CONTROLLA SE LA SCENOGRAFIA POGGIA SULLA NEVE O SUL GHIACCIO:
+          const isSnowy = surfaceAt(group.x, group.y) === 'snow' || surfaceAt(group.x, group.y) === 'ice';
+
           this.environmentArt.draw(ctx, group.tile, group.x * TILE_SIZE, group.y * TILE_SIZE,
-            noise(group.x, group.y), 0, group.width, group.height);
+            noise(group.x, group.y), 0, group.width, group.height, isSnowy);
         }
       }
     }

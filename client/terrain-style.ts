@@ -2,8 +2,14 @@ import type { TileKind } from '../shared/types';
 
 /** Quiet scenery leaves the brightest colours to actors, pickups and spells. */
 export const TERRAIN: Record<TileKind, string> = {
-  grass: '#91ad69', path: '#cfb47e', water: '#45a0ad',
-  rock: '#8fa2ba', bush: '#559b55', mud: '#a09c72',
+  grass: '#91ad69',
+  path: '#cfb47e',
+  water: '#45a0ad',
+  rock: '#8fa2ba',
+  bush: '#559b55',
+  mud: '#a09c72',
+  snow: '#eaf4f8',  // Bianco freddo con velatura azzurrognola
+  ice: '#8fcee5',   // Azzurro ghiaccio cristallino
 };
 
 export function groundColor(moisture: number): string {
@@ -40,5 +46,7 @@ export function bushColor(variation: number): string {
 }
 
 export function mapTerrainColor(tile: TileKind, moisture: number, variation: number): string {
-  return tile === 'grass' ? groundColor(moisture) : tile === 'bush' ? bushColor(variation) : TERRAIN[tile];
+  if (tile === 'grass') return groundColor(moisture);
+  if (tile === 'bush') return bushColor(variation);
+  return TERRAIN[tile];
 }

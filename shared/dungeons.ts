@@ -361,7 +361,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   for (const tile of definition.layout.tiles ?? []) {
     const key = tileKey(tile);
     if (!Number.isInteger(tile.x) || !Number.isInteger(tile.y) || !insideRect(tile.x, tile.y, bounds)
-      || !['grass', 'path', 'mud', 'bush', 'water', 'rock'].includes(tile.kind) || paintedKeys.has(key)) fail('tile dipinta non valida o duplicata.');
+      || !['grass', 'path', 'mud', 'bush', 'water', 'rock', 'snow','ice'].includes(tile.kind) || paintedKeys.has(key)) fail('tile dipinta non valida o duplicata.');
     paintedKeys.add(key);
   }
   const npcIds = new Set<string>();

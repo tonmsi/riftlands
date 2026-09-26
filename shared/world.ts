@@ -75,14 +75,32 @@ export class World {
     if ((!curatedDungeonApproach && (mod(tx) === 0 || mod(tx) === 47)) || mod(ty) === 0 || mod(ty) === 47) return 'path';
     // Broad landforms with gentle domain warping replace the small, busy pools.
     // Coordinate-only sampling preserves identical authority/prediction worlds.
+    // In generateTile(tx, ty), all'incirca dopo il calcolo di moisture:
     const warpX = (noise(tx * 0.025, ty * 0.025, this.seed + 701) - 0.5) * 5;
     const warpY = (noise(tx * 0.025, ty * 0.025, this.seed + 709) - 0.5) * 5;
     const elevation = noise((tx + warpX) * 0.065, (ty + warpY) * 0.065, this.seed);
     const detail = coordinateHash(tx, ty, this.seed + 31);
     const moisture = noise(tx * 0.12, ty * 0.12, this.seed + 491);
+
+    // AGGIUNGI QUI IL RUMORE DI TEMPERATURA:
+    const temperature = noise((tx + warpY) * 0.035, (ty - warpX) * 0.035, this.seed + 805);
+
+    // GESTIONE REGIONE FREDDA (Tundra / Picchi innevati)
+    if (temperature < 0.28) {
+      // L'acqua alle basse temperature diventa ghiaccio solido calpestabile
+      if (elevation < 0.29) return 'ice';
+      // Le altitudini elevate diventano vette rocciose
+      if (elevation > 0.79 || (elevation > 0.64 && detail < 0.045)) return 'rock';
+      // Conca fredda o depressione del terreno: lastra di ghiaccio
+      if (elevation < 0.35 && detail < 0.25) return 'ice';
+      // Cespugli resistenti o pini innevati
+      if (moisture > 0.65 && detail < 0.35) return 'bush';
+      return 'snow';
+    }
+
+    // Continua con la logica normale del resto del mondo...
     if (elevation < 0.29) return 'water';
     if (elevation > 0.79 || (elevation > 0.64 && detail < 0.045)) return 'rock';
-    // Foliage gathers into groves, leaving calm, readable spaces between them.
     if (moisture > 0.60 && detail < 0.38) return 'bush';
     if (moisture > 0.72) return 'mud';
     return 'grass';
