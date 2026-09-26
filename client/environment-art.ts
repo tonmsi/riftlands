@@ -172,7 +172,7 @@ export class EnvironmentArt {
       } else if (tile === 'ice') {
         this.ice(art, rng, variant);
       } else {
-        this.ground(art, rng, tile);
+        this.ground(art, rng, tile, isSnowy);
       }
 
       const pixels = sprite.width * sprite.height;
@@ -252,87 +252,10 @@ export class EnvironmentArt {
     ctx.restore();
   }
 
- /** Cespuglio con calotte di neve morbide e soffici invece di poligoni spigolosi */
-  private bush(ctx: CanvasRenderingContext2D, rng: () => number, _variant: number, renderScale: number, isSnowy = false): void {
-    const scaleX = .87 + rng() * .16, scaleY = .86 + rng() * .16;
-    ctx.save(); ctx.translate(24, 25); ctx.scale(scaleX, scaleY);
-    oval(ctx, 2, 15, 22, 6, isSnowy ? '#1b2d2b40' : '#202d2840');
-    
-    const points: number[] = [];
-    for (let i = 0; i < 16; i++) {
-      const angle = i / 16 * TAU, radius = 18 + rng() * 6;
-      points.push(Math.cos(angle) * radius, Math.sin(angle) * radius * .89);
-    }
-    ctx.beginPath(); ctx.moveTo(points[0], points[1]);
-    for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
-    ctx.closePath();
-    ctx.fillStyle = isSnowy ? '#22483d' : bushColor(_variant / VARIANTS);
-    ctx.fill();
+ 
 
-    ctx.save(); ctx.clip();
-    if (isSnowy) {
-      // Fogliame pino scuro interno
-      shape(ctx, [-27,-17, 4,-25, 20,-13, 9,0, -6,7, -25,0], '#2e5b4e');
-      shape(ctx, [9,0, 20,-13, 29,2, 15,20, -2,25, -6,7], '#16362d');
-
-      // 1. Cupola di neve morbida principale sulla cima
-      ctx.fillStyle = '#bad4e2';
-      ctx.beginPath();
-      ctx.ellipse(0, -14, 18, 11, -0.05, 0, TAU);
-      ctx.ellipse(-8, -9, 10, 8, 0.2, 0, TAU);
-      ctx.ellipse(9, -8, 11, 8, -0.2, 0, TAU);
-      ctx.fill();
-
-      // Luce bianca candida sulla neve
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.ellipse(-1, -16, 16, 9, -0.05, 0, TAU);
-      ctx.ellipse(-8, -11, 8, 6, 0.2, 0, TAU);
-      ctx.ellipse(8, -10, 9, 6, -0.2, 0, TAU);
-      ctx.fill();
-
-      // 2. Soffice banco di neve sul lobo inferiore destro
-      ctx.fillStyle = '#bad4e2';
-      ctx.beginPath(); ctx.ellipse(14, 4, 9, 6, 0.3, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.ellipse(13, 3, 7, 4.5, 0.3, 0, TAU); ctx.fill();
-
-      // 3. Bacche invernali rosse sotto la coltre bianca
-      if (_variant % 2 === 0) {
-        for (const [bx, by] of [[-10, 6], [1, 10], [12, -1]] as const) {
-          oval(ctx, bx, by, 2.2, 2.2, '#aa2233');
-          oval(ctx, bx - 0.5, by - 0.6, 0.8, 0.8, '#ffffff');
-        }
-      }
-    } else {
-      shape(ctx, [-27,-17, 4,-25, 20,-13, 9,0, -6,7, -25,0], '#a8ca72');
-      shape(ctx, [9,0, 20,-13, 29,2, 15,20, -2,25, -6,7], '#70a15d');
-      for (let i = 0; i < 5; i++) {
-        const x = rng() * 48 - 24, y = rng() * 42 - 21, w = 3 + rng() ** 2 * 22;
-        shape(ctx, [x-w,y, x-w*.3,y-4, x+w*.5,y-6, x+w,y+1, x+1,y+5],
-          i % 3 === 0 ? '#c0cc8848' : '#244e3b40');
-      }
-      if (_variant % 4 === 0) {
-        for (const [x, y] of [[-10, 3], [4, -7], [12, 8]] as const) {
-          oval(ctx, x, y, 2.2, 2, '#713f58');
-          oval(ctx, x - .5, y - .7, .75, .65, '#d99aaa');
-        }
-      }
-    }
-    ctx.restore(); ctx.restore();
-
-    ctx.save(); ctx.translate(24, 25); ctx.scale(scaleX, scaleY);
-    ctx.beginPath(); ctx.moveTo(points[0], points[1]);
-    for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
-    ctx.closePath();
-    ctx.strokeStyle = isSnowy ? '#17362f' : '#315b40';
-    ctx.lineWidth = 1.75 / renderScale;
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  /** Ghiaccio naturale: crepe rare e con angolazioni casuali, niente righe ripetute */
-  private ice(ctx: CanvasRenderingContext2D, rng: () => number, _variant: number): void {
+  /** TODO: OCCHIO AD ICE SCEGLI IL PIU BELLO Ghiaccio naturale: crepe rare e con angolazioni casuali, niente righe ripetute */
+  private ice2(ctx: CanvasRenderingContext2D, rng: () => number, _variant: number): void {
     // 1. Chiazze morbide di brina/gelo superficiale
     if (rng() > 0.3) {
       const fx = 10 + rng() * 28, fy = 10 + rng() * 28;
@@ -396,6 +319,301 @@ export class EnvironmentArt {
 
       ctx.restore();
     }
+  }
+/** Ghiaccio denso e profondo: nessuna scacchiera, crepe strutturali a 3 livelli e brina superficiale */
+  private ice(ctx: CanvasRenderingContext2D, rng: () => number, _variant: number): void {
+    // 1. Chiazze organiche di brina / rime ventata (non ripetitive a 48px)
+    const frostCount = 1 + (rng() > 0.4 ? 1 : 0);
+    for (let i = 0; i < frostCount; i++) {
+      const fx = 8 + rng() * 32, fy = 8 + rng() * 32;
+      const frx = 10 + rng() * 12, fry = 5 + rng() * 8;
+      const frot = (rng() - 0.5) * 1.2;
+      oval(ctx, fx, fy, frx, fry, '#e3f6fd35', frot);
+      oval(ctx, fx + 1, fy - 1, frx * 0.6, fry * 0.55, '#ffffff40', frot);
+    }
+
+    // 2. Bolle d'aria intrappolate nella profondità glaciale
+    const bubbles = Math.floor(rng() * 5);
+    for (let i = 0; i < bubbles; i++) {
+      const bx = 6 + rng() * 36, by = 6 + rng() * 36;
+      const br = 1 + rng() * 1.5;
+      oval(ctx, bx, by + 0.6, br, br, '#1e5f7845');
+      oval(ctx, bx, by, br * 0.85, br * 0.85, '#daf6ffb0');
+    }
+
+    // 3. Fratture strutturali marcate (spessore ottico 3D)
+    if (rng() > 0.25) {
+      const sx = 5 + rng() * 16;
+      const sy = 5 + rng() * 14;
+      const mx = sx + 7 + rng() * 12;
+      const my = sy + 9 + rng() * 12;
+      const ex = mx + 7 + rng() * 13;
+      const ey = my + 8 + rng() * 11;
+
+      // Livello 1: alone azzurro di rifrazione interna
+      ctx.strokeStyle = '#4ea5c455';
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(mx, my);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+
+      // Livello 2: ombra profonda della fessura (sensazione di volume e spessore)
+      ctx.strokeStyle = '#184f6670';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(sx + 0.8, sy + 1);
+      ctx.lineTo(mx + 0.8, my + 1);
+      ctx.lineTo(ex + 0.8, ey + 1);
+      ctx.stroke();
+
+      // Livello 3: crepa cristallina bianca pura
+      ctx.strokeStyle = '#ffffffea';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(mx, my);
+      ctx.lineTo(ex, ey);
+
+      // Micro-fratture secondarie che si diramano dalla fessura
+      const branches = 1 + (rng() > 0.4 ? 1 : 0);
+      for (let b = 0; b < branches; b++) {
+        const branchX = mx + (rng() - 0.5) * 16;
+        const branchY = my + 6 + rng() * 10;
+        ctx.moveTo(mx, my);
+        ctx.lineTo(branchX, branchY);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // Aggiungi questo metodo dentro la classe EnvironmentArt:
+  /** Banchi di neve soffici che traboccano oltre il bordo della casella, seppellendo le righe dritte */
+  /** Bordo di neve naturale, compatto e sobrio (elimina l'effetto nuvoletta/festone) */
+    /** Banchi di neve irregolari: compaiono a tratti sui bordi e MAI sugli angoli */
+  drawSnowBanks(ctx: CanvasRenderingContext2D, x: number, y: number, north: boolean, south: boolean, west: boolean, east: boolean, variation: number): void {
+    const rng = random(Math.floor(variation * 99991) + 431);
+    const snowColor = TERRAIN.snow;
+    const shadowColor = 'rgba(175, 210, 230, 0.4)';
+
+    ctx.save();
+
+    // 1. BORDO NORD: solo nella fascia centrale (14px - 34px), mai agli spigoli!
+    if (north && rng() > 0.25) {
+      const cy = y;
+      const count = rng() > 0.5 ? 2 : 1;
+      for (let i = 0; i < count; i++) {
+        const cx = x + 16 + (count === 1 ? 8 : i * 16) + (rng() - 0.5) * 6;
+        const rx = 8 + rng() * 4, ry = 4 + rng() * 2.5;
+        oval(ctx, cx, cy - 1, rx, ry, shadowColor);
+        oval(ctx, cx, cy - 2, rx * 0.95, ry * 0.85, snowColor);
+      }
+    }
+
+    // 2. BORDO SUD: solo nella fascia centrale
+    if (south && rng() > 0.25) {
+      const cy = y + TILE_SIZE;
+      const count = rng() > 0.5 ? 2 : 1;
+      for (let i = 0; i < count; i++) {
+        const cx = x + 16 + (count === 1 ? 8 : i * 16) + (rng() - 0.5) * 6;
+        const rx = 8 + rng() * 4, ry = 4 + rng() * 2.5;
+        oval(ctx, cx, cy + 1, rx, ry, shadowColor);
+        oval(ctx, cx, cy + 2, rx * 0.95, ry * 0.85, snowColor);
+      }
+    }
+
+    // 3. BORDO OVEST: solo nella fascia centrale
+    if (west && rng() > 0.25) {
+      const cx = x;
+      const count = rng() > 0.5 ? 2 : 1;
+      for (let i = 0; i < count; i++) {
+        const cy = y + 16 + (count === 1 ? 8 : i * 16) + (rng() - 0.5) * 6;
+        const rx = 4 + rng() * 2.5, ry = 8 + rng() * 4;
+        oval(ctx, cx - 1, cy, rx, ry, shadowColor);
+        oval(ctx, cx - 2, cy, rx * 0.85, ry * 0.95, snowColor);
+      }
+    }
+
+    // 4. BORDO EST: solo nella fascia centrale
+    if (east && rng() > 0.25) {
+      const cx = x + TILE_SIZE;
+      const count = rng() > 0.5 ? 2 : 1;
+      for (let i = 0; i < count; i++) {
+        const cy = y + 16 + (count === 1 ? 8 : i * 16) + (rng() - 0.5) * 6;
+        const rx = 4 + rng() * 2.5, ry = 8 + rng() * 4;
+        oval(ctx, cx + 1, cy, rx, ry, shadowColor);
+        oval(ctx, cx + 2, cy, rx * 0.85, ry * 0.95, snowColor);
+      }
+    }
+
+    // NESSUN DISEGNO SUGLI ANGOLI:
+    // Lasciamo che la curva nativa del motore (roundTerrainCorner) resti pulita e perfetta!
+    ctx.restore();
+  }
+
+    /** 2. CHIAZZE PROGRESSIVE: diventano sempre più ingombranti e voluminose verso la neve */
+  /** Disegna una chiazza di neve organica, frastagliata e asimmetrica (MAI un'ellisse perfetta) */
+  private drawOrganicBlob(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, rng: () => number, color: string): void {
+    const numPoints = 6 + Math.floor(rng() * 3); // da 6 a 8 vertici casuali
+    const pts: [number, number][] = [];
+
+    for (let i = 0; i < numPoints; i++) {
+      const angle = (i / numPoints) * TAU + (rng() - 0.5) * 0.4;
+      // Il raggio varia dal 60% al 130% su ogni vertice per dare asimmetria reale
+      const rFactor = 0.65 + rng() * 0.65;
+      pts.push([
+        cx + Math.cos(angle) * (rx * rFactor),
+        cy + Math.sin(angle) * (ry * rFactor)
+      ]);
+    }
+
+    // Traccia una curva chiusa morbida che unisce i vertici irregolari
+    ctx.beginPath();
+    ctx.moveTo((pts[0][0] + pts[numPoints - 1][0]) / 2, (pts[0][1] + pts[numPoints - 1][1]) / 2);
+    for (let i = 0; i < numPoints; i++) {
+      const next = pts[(i + 1) % numPoints];
+      ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + next[0]) / 2, (pts[i][1] + next[1]) / 2);
+    }
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  /** 2. CHIAZZE ORGANICHE (FRINGE): Massimo 2, MAI sovrapposte, con raggio che cresce verso la neve */
+  /** CHIAZZE DI NEVE (FRINGE): Organiche, senza griglia e fortemente diradate */
+  drawSnowFringe(ctx: CanvasRenderingContext2D, x: number, y: number, variation: number, level: number): void {
+    const rng = random(Math.floor(variation * 100000) + level * 7919);
+    const shadowColor = 'rgba(165, 205, 225, 0.42)';
+
+    // 1. FORTE DIRADAMENTO (la maggior parte delle caselle deve essere erba pulita!)
+    // Level 1 (lontano): solo il 22% delle caselle ha una chiazza
+    if (level === 1 && rng() > 0.22) return;
+    // Level 2 (medio): solo il 40% delle caselle
+    if (level === 2 && rng() > 0.40) return;
+    // Level 3 (vicino): il 68% delle caselle (un terzo resta comunque erba per spezzare)
+    if (level === 3 && rng() > 0.68) return;
+
+    // 2. NUMERO DI CHIAZZE: prevalentemente 1 sola chiazza, raramente 2
+    const numPatches = (level === 3 && rng() > 0.45) || (level === 2 && rng() > 0.75) ? 2 : 1;
+
+    // 3. POSIZIONE COMPLETAMENTE LIBERA (rompe qualsiasi allineamento diagonale)
+    const p1x = x + 8 + rng() * 32;
+    const p1y = y + 8 + rng() * 32;
+    const spots: [number, number][] = [[p1x, p1y]];
+
+    // Se c'è una seconda chiazza, la scostiamo con un angolo casuale
+    if (numPatches === 2) {
+      const angle = rng() * TAU;
+      const dist = 14 + rng() * 14;
+      const p2x = Math.max(x + 6, Math.min(x + 42, p1x + Math.cos(angle) * dist));
+      const p2y = Math.max(y + 6, Math.min(y + 42, p1y + Math.sin(angle) * dist));
+      spots.push([p2x, p2y]);
+    }
+
+    for (let i = 0; i < spots.length; i++) {
+      const [px, py] = spots[i];
+
+      // 4. FORME ALLUNGATE E PIATTE (sembrano lingue di neve, non sfere o bottoni)
+      const baseR = level === 3 ? (10 + rng() * 6) : level === 2 ? (5 + rng() * 3.5) : (2.5 + rng() * 2);
+      const rx = baseR * (1.15 + rng() * 0.4); // allungata
+      const ry = baseR * (0.42 + rng() * 0.25); // schiacciata a terra
+
+      // Ombra asimmetrica sotto
+      this.drawOrganicBlob(ctx, px, py + 1.2, rx * 1.05, ry * 1.05, rng, shadowColor);
+      // Corpo candido irregolare
+      this.drawOrganicBlob(ctx, px - 0.3, py, rx, ry, rng, '#ffffff');
+    }
+  }
+
+  /** CESPUGLI: la neve varia di forma, spessore e posizione su ogni cespuglio */
+  private bush(ctx: CanvasRenderingContext2D, rng: () => number, _variant: number, renderScale: number, isSnowy = false): void {
+    const scaleX = .87 + rng() * .16, scaleY = .86 + rng() * .16;
+    ctx.save(); ctx.translate(24, 25); ctx.scale(scaleX, scaleY);
+    oval(ctx, 2, 15, 22, 6, isSnowy ? '#1b2d2b40' : '#202d2840');
+    
+    const points: number[] = [];
+    for (let i = 0; i < 16; i++) {
+      const angle = i / 16 * TAU, radius = 18 + rng() * 6;
+      points.push(Math.cos(angle) * radius, Math.sin(angle) * radius * .89);
+    }
+    ctx.beginPath(); ctx.moveTo(points[0], points[1]);
+    for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
+    ctx.closePath();
+    ctx.fillStyle = isSnowy ? '#22483d' : bushColor(_variant / VARIANTS);
+    ctx.fill();
+
+    ctx.save(); ctx.clip();
+    if (isSnowy) {
+      // Fogliame pino scuro interno
+      shape(ctx, [-27,-17, 4,-25, 20,-13, 9,0, -6,7, -25,0], '#2e5b4e');
+      shape(ctx, [9,0, 20,-13, 29,2, 15,20, -2,25, -6,7], '#16362d');
+
+      // -------------------------------------------------------------
+      // NEVE RANDOMICA SUL CESPUGLIO (varia su ognuna delle 12 varianti!)
+      // -------------------------------------------------------------
+      
+      // 1. Calotta principale sulla sommità (dimensione e centro asimmetrici)
+      const topX = -2 + (rng() - 0.5) * 10;
+      const topY = -14 + (rng() - 0.5) * 5;
+      const topRx = 11 + rng() * 7;
+      const topRy = 6 + rng() * 5;
+      const topRot = (rng() - 0.5) * 0.35;
+
+      oval(ctx, topX, topY + 1.5, topRx, topRy, '#bad4e2', topRot);
+      oval(ctx, topX - 0.5, topY, topRx * 0.92, topRy * 0.85, '#ffffff', topRot);
+
+      // 2. Accumulo laterale sinistro (può esserci o no in base a rng)
+      if (rng() > 0.25) {
+        const leftX = -13 + (rng() - 0.5) * 6;
+        const leftY = -3 + (rng() - 0.5) * 6;
+        const leftR = 6 + rng() * 4;
+        oval(ctx, leftX, leftY + 1.2, leftR, leftR * 0.75, '#bad4e2');
+        oval(ctx, leftX, leftY, leftR * 0.9, leftR * 0.7, '#ffffff');
+      }
+
+      // 3. Accumulo laterale destro (variabile)
+      if (rng() > 0.25) {
+        const rightX = 13 + (rng() - 0.5) * 6;
+        const rightY = 1 + (rng() - 0.5) * 6;
+        const rightR = 7 + rng() * 4;
+        oval(ctx, rightX, rightY + 1.2, rightR, rightR * 0.75, '#bad4e2');
+        oval(ctx, rightX, rightY, rightR * 0.9, rightR * 0.7, '#ffffff');
+      }
+
+      // 4. Bacche invernali rosse (numero e posizioni casuali per cespuglio)
+      const berryCount = Math.floor(rng() * 4); // da 0 a 3 bacche
+      for (let b = 0; b < berryCount; b++) {
+        const bx = -14 + rng() * 28;
+        const by = -6 + rng() * 18;
+        oval(ctx, bx, by, 2.1, 2.1, '#aa2233');
+        oval(ctx, bx - 0.5, by - 0.6, 0.7, 0.7, '#ffffff');
+      }
+    } else {
+      shape(ctx, [-27,-17, 4,-25, 20,-13, 9,0, -6,7, -25,0], '#a8ca72');
+      shape(ctx, [9,0, 20,-13, 29,2, 15,20, -2,25, -6,7], '#70a15d');
+      for (let i = 0; i < 5; i++) {
+        const x = rng() * 48 - 24, y = rng() * 42 - 21, w = 3 + rng() ** 2 * 22;
+        shape(ctx, [x-w,y, x-w*.3,y-4, x+w*.5,y-6, x+w,y+1, x+1,y+5],
+          i % 3 === 0 ? '#c0cc8848' : '#244e3b40');
+      }
+      if (_variant % 4 === 0) {
+        for (const [x, y] of [[-10, 3], [4, -7], [12, 8]] as const) {
+          oval(ctx, x, y, 2.2, 2, '#713f58');
+          oval(ctx, x - .5, y - .7, .75, .65, '#d99aaa');
+        }
+      }
+    }
+    ctx.restore(); ctx.restore();
+
+    ctx.save(); ctx.translate(24, 25); ctx.scale(scaleX, scaleY);
+    ctx.beginPath(); ctx.moveTo(points[0], points[1]);
+    for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
+    ctx.closePath();
+    ctx.strokeStyle = isSnowy ? '#17362f' : '#315b40';
+    ctx.lineWidth = 1.75 / renderScale;
+    ctx.stroke();
+    ctx.restore();
   }
 
   private water(ctx: CanvasRenderingContext2D, _rng: () => number, shore: number, _variant: number): void {
@@ -490,7 +708,7 @@ export class EnvironmentArt {
     ctx.fillRect((left - t.e) / t.a, (top - t.f) / t.d, (right - left) / t.a, (bottom - top) / t.d);
   }
 
-  private ground(ctx: CanvasRenderingContext2D, rng: () => number, tile: TileKind): void {
+  private ground(ctx: CanvasRenderingContext2D, rng: () => number, tile: TileKind, isSnowy = false): void {
     if (tile === 'grass' && rng() > .78) {
       const x = 10 + rng() * 28, y = 17 + rng() * 24;
       ctx.strokeStyle = rng() > .5 ? '#526f4890' : '#718752a0';
@@ -502,11 +720,30 @@ export class EnvironmentArt {
       ctx.stroke();
     }
 
-    if (rng() > (tile === 'path' ? .78 : .92)) {
-      const x = 8 + rng() * 32, y = 10 + rng() * 29;
-      const w = 2.8 + rng() * 2.3, h = 1.8 + rng() * 1.5;
-      shape(ctx, [x-w,y, x-w*.45,y-h, x+w*.45,y-h*.8, x+w,y, x+w*.35,y+h, x-w*.65,y+h*.6], '#8e9788');
-      shape(ctx, [x-w*.45,y-h, x+w*.45,y-h*.8, x+w*.15,y, x-w*.55,y+.2], '#b7b69f');
+    if (tile === 'path') {
+      if (rng() > 0.72) {
+        const x = 8 + rng() * 32, y = 10 + rng() * 29;
+
+        if (isSnowy) {
+          // NELLA ZONA FREDDA: Neve calpestata e pietruzze con la calotta bianca
+          if (rng() > 0.42) {
+            // Chiazza/orma di neve compressa lungo la carreggiata
+            const rx = 3 + rng() * 4, ry = 1.5 + rng() * 1.5;
+            oval(ctx, x, y + 0.6, rx, ry, '#bad8ea50', -0.15);
+            oval(ctx, x, y, rx * 0.85, ry * 0.7, '#ffffffa0', -0.15);
+          } else {
+            // Sassolino grigio-ardesia con cappuccio di neve
+            const w = 2.2 + rng() * 1.6, h = 1.4 + rng() * 1.1;
+            shape(ctx, [x-w,y, x-w*.4,y-h, x+w*.4,y-h*.8, x+w,y, x+w*.3,y+h, x-w*.5,y+h*.6], '#627179');
+            shape(ctx, [x-w*.4,y-h, x+w*.4,y-h*.8, x+w*.2,y-h*.2, x-w*.3,y-h*.1], '#ffffff');
+          }
+        } else {
+          // NELLA ZONA NORMALE: I classici sassolini dorati/grigi
+          const w = 2.8 + rng() * 2.3, h = 1.8 + rng() * 1.5;
+          shape(ctx, [x-w,y, x-w*.45,y-h, x+w*.45,y-h*.8, x+w,y, x+w*.35,y+h, x-w*.65,y+h*.6], '#8e9788');
+          shape(ctx, [x-w*.45,y-h, x+w*.45,y-h*.8, x+w*.15,y, x-w*.55,y+.2], '#b7b69f');
+        }
+      }
     }
   }
 }

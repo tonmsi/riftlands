@@ -12,12 +12,39 @@ export const TERRAIN: Record<TileKind, string> = {
   ice: '#8fcee5',   // Azzurro ghiaccio cristallino
 };
 
-export function groundColor(moisture: number): string {
+export function groundColor(moisture: number, temperature = 1): string {
+  // 1. Verde base calcolato con l'umidità
   const from = moisture < .51 ? [145, 173, 105] : [130, 162, 96];
   const to = moisture < .51 ? [130, 162, 96] : [140, 164, 116];
   const t = Math.max(0, Math.min(1, (moisture - (moisture < .51 ? .27 : .51)) / .24));
   const blend = t * t * (3 - 2 * t);
-  return `rgb(${from.map((value, i) => Math.round(value + (to[i] - value) * blend)).join(',')})`;
+  const baseRgb = from.map((value, i) => Math.round(value + (to[i] - value) * blend));
+
+  // 2. Se non fa freddo, resta il verde normale
+  if (temperature >= 0.38) {
+    return `rgb(${baseRgb.join(',')})`;
+  }
+
+  // 3. Sfumatura leggera verso verde salvia alpino (delicata, niente gradini evidenti)
+  const alpineRgb = [142, 162, 132];
+  const coldFactor = Math.max(0, Math.min(1, (0.38 - temperature) / 0.12));
+  const coldBlend = coldFactor * coldFactor * (3 - 2 * coldFactor);
+
+  const finalRgb = baseRgb.map((val, i) => Math.round(val + (alpineRgb[i] - val) * coldBlend));
+  return `rgb(${finalRgb.join(',')})`;
+}
+
+export function pathColor(temperature: number): string {
+  // Oltre 0.34 è la strada estiva classica dorata
+  if (temperature >= 0.34) return TERRAIN.path;
+
+  const warm = [207, 180, 126]; // #cfb47e (terra ocra classica)
+  const cold = [196, 189, 176]; // Terra/ghiaia gelata chiara e fredda
+
+  // Sfumatura fluida tra le due zone
+  const t = Math.max(0, Math.min(1, (0.34 - temperature) / 0.10));
+  const blend = t * t * (3 - 2 * t);
+  return `rgb(${warm.map((v, i) => Math.round(v + (cold[i] - v) * blend)).join(',')})`;
 }
 
 /** N/E/S/W followed by NE/SE/SW/NW; query neighbours across chunk boundaries. */
@@ -45,8 +72,11 @@ export function bushColor(variation: number): string {
   return ['#559b55', '#68984f', '#4a9367'][Math.min(2, Math.floor(variation * 3))];
 }
 
-export function mapTerrainColor(tile: TileKind, moisture: number, variation: number): string {
+export function mapTerrainColor(tile: TileKind, moisture: number, variation: number, temperature = 1): string {
   if (tile === 'grass') return groundColor(moisture);
   if (tile === 'bush') return bushColor(variation);
+  if (tile === 'path') return pathColor(temperature);
   return TERRAIN[tile];
 }
+
+// In terrain-style.ts, aggiungi questa funzione sotto groundColor:

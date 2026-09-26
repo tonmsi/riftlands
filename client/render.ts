@@ -10,7 +10,7 @@ import { DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossDrop, type BossLockState
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
 import { EnvironmentArt } from './environment-art';
 import { renderDpr } from './frame-budget';
-import { TERRAIN, groundColor, shorelineMask, sceneryGroups, mapTerrainColor } from './terrain-style';
+import { TERRAIN, groundColor, shorelineMask, sceneryGroups, mapTerrainColor, pathColor } from './terrain-style';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -23,7 +23,8 @@ const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = 
   sentinel: new URL('../assets/sentinel.svg', import.meta.url).href
 };
 const BOSS_SPRITE_URLS: Record<string, string> = {
-  'stone-warden': new URL('../assets/boss_warden.svg', import.meta.url).href,
+  'stone-warden': new URL('../assets/boss-warden.svg', import.meta.url).href,
+  'maze-stalker': new URL('../assets/maze-stalker.svg', import.meta.url).href,
 };
 const FRAME_SIZE = 256;
 const DRAW_SIZE_SIZE = 48;
@@ -175,6 +176,8 @@ export class Renderer {
   private dungeonAt(tx: number, ty: number): DungeonDefinition | undefined {
     return this.localDungeons ? this.localDungeons.find(d => { const b = d.layout.bounds; return tx >= b.minTx && tx <= b.maxTx && ty >= b.minTy && ty <= b.maxTy; }) : dungeonAtTile(tx, ty);
   }
+
+  weather: 'clear' | 'rain' | 'snow' = 'snow'; // Puoi impostare 'clear', 'rain' o 'snow'
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly localDungeons?: readonly DungeonDefinition[]) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -367,16 +370,20 @@ export class Renderer {
 
     for (const event of events) this.drawFloatingEvent(event, frame.time);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    if (this.weather === 'snow') {
+      this.drawSnow(frame.time);
+    } else if (this.weather === 'rain') {
+      this.drawRain(frame.time);
+    }
+
+    // 2. VIGNETTATURA: sopra il meteo, ma sotto i box dell'interfaccia
+    this.drawVignette();
+
     this.drawTeamIndicators(frame);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-    // <-- AGGIUNGI QUESTA RIGA:
-    //this.drawRain(frame.time);
-    const vignette = ctx.createRadialGradient(this.width / 2, this.height / 2, this.width * 0.2, this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.68);
-    vignette.addColorStop(0, 'rgba(19,29,24,0)');
-    vignette.addColorStop(1, 'rgba(19,29,24,0.18)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, this.width, this.height);
+    
     this.drawDungeonEntry(frame, true);
   }
 
@@ -614,7 +621,13 @@ export class Renderer {
     };
     const surfaceColor = (surface: Exclude<SurfaceKind, 'water'>, tx: number, ty: number) => {
       if (surface === 'grass')
-        return groundColor(this.world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE));
+        return groundColor(
+          this.world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE),
+          this.world.getTemperature(tx, ty)
+        );
+      // AGGIUNGI QUESTA RIGA PER LA STRADA:
+      if (surface === 'path')
+        return pathColor(this.world.getTemperature(tx, ty));
       if (surface === 'stone') return this.dungeonAt(tx, ty)?.theme.floor ?? TERRAIN.path;
       return TERRAIN[surface];
     };
@@ -698,19 +711,70 @@ export class Renderer {
         } else if (tile === 'rock' || tile === 'bush') {
           // All scenery, including dungeon obstacles, uses the shared 1x1/2x2 pass below.
         } else {
-          this.environmentArt.draw(ctx, tile, x, y, variation);
+          const isCold = this.world.getTemperature(tx, ty) < 0.28;
+          this.environmentArt.draw(ctx, tile, x, y, variation, 0, 1, 1, isCold);
         }
       }
     }
     // Paint only after opaque coverage, so neighbouring cells cannot erase brush edges.
-    for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
-      for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
-        if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) continue;
-        const surface = surfaceAt(tx, ty);
-        if (surface && surface !== 'water') this.environmentArt.paintGround(ctx,
-          surface === 'stone' ? 'path' : surface, tx * TILE_SIZE, ty * TILE_SIZE, surface === 'stone');
+    // Nel ciclo di paintGround in drawTerrain (verso riga 430):
+    // Nel ciclo di paintGround in drawTerrain (verso riga 430):
+// Nel ciclo di paintGround in drawTerrain (verso riga 430):
+// In drawTerrain (verso riga 430), all'interno del ciclo dei tile:
+for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
+  for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
+    if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) continue;
+    const surface = surfaceAt(tx, ty);
+    if (surface && surface !== 'water') {
+      this.environmentArt.paintGround(ctx,
+        surface === 'stone' ? 'path' : surface, tx * TILE_SIZE, ty * TILE_SIZE, surface === 'stone');
+
+      // -------------------------------------------------------------
+      // 1. SNOWBANKS CICCIOTTI SUI BORDI DELLA NEVE (MAI VERSO IL GHIACCIO)
+      // -------------------------------------------------------------
+      if (surface === 'snow') {
+        const isGround = (s: SurfaceKind | null) => s === 'grass' || s === 'mud' || s === 'path' || s === 'stone';
+        const north = isGround(surfaceAt(tx, ty - 1));
+        const south = isGround(surfaceAt(tx, ty + 1));
+        const west  = isGround(surfaceAt(tx - 1, ty));
+        const east  = isGround(surfaceAt(tx + 1, ty));
+
+        if (north || south || west || east) {
+          this.environmentArt.drawSnowBanks(
+            ctx,
+            tx * TILE_SIZE,
+            ty * TILE_SIZE,
+            north,
+            south,
+            west,
+            east,
+            noise(tx, ty)
+          );
+        }
+      }
+
+      // -------------------------------------------------------------
+      // 2. CHIAZZE PROGRESSIVE E INGOMBRANTI (SOLO SU TERRA/ERBA, MAI SU GHIACCIO)
+      // -------------------------------------------------------------
+      if (surface === 'grass' || surface === 'mud' || surface === 'stone') {
+        const temp = this.world.getTemperature(tx, ty);
+        if (temp < 0.38) {
+          // Level 3 (temp < 0.30): CHIAZZE ENORMI a ridosso della neve
+          // Level 2 (temp < 0.33): chiazze medie
+          // Level 1 (temp < 0.36): fiocchi e chiazze rade
+          const level = temp < 0.30 ? 3 : temp < 0.34 ? 2 : 1;
+          this.environmentArt.drawSnowFringe(
+            ctx,
+            tx * TILE_SIZE,
+            ty * TILE_SIZE,
+            noise(tx, ty),
+            level
+          );
+        }
       }
     }
+  }
+}
     const seamAccents = new Map<string, { x: number; y: number; variation: number }>();
     const vertexQuadrants = [[-1, -1, 2], [0, -1, 3], [0, 0, 0], [-1, 0, 1]] as const;
     for (let vy = Math.floor(bounds.top / TILE_SIZE); vy <= Math.floor(bounds.bottom / TILE_SIZE) + 1; vy++) {
@@ -743,10 +807,10 @@ export class Renderer {
           const priority = (s: SurfaceKind) => {
             switch (s) {
               case 'stone': return 6;
-              case 'path': return 5;
-              case 'mud': return 4;
-              case 'ice': return 3;
-              case 'snow': return 2;
+              case 'path': return 4;
+              case 'mud': return 3;
+              case 'ice': return 2;
+              case 'snow': return 5;
               default: return 1;
             }
           };
@@ -843,10 +907,10 @@ export class Renderer {
 
   // Puoi impostare questo booleano a true/false per accendere o spegnere il meteo
  // Puoi impostare questo booleano a true/false per accendere o spegnere il meteo
-  isRaining = true;
+  
 
   private drawRain(time: number): void {
-    if (!this.isRaining) return;
+    
     const { ctx, width, height } = this;
     ctx.save();
 
@@ -927,6 +991,90 @@ export class Renderer {
       }
     }
 
+    ctx.restore();
+  }
+  /** Nevicata procedurale atmosferica: 3 livelli di profondità, oscillazione del vento e zero RAM */
+  /** Nevicata lenta, soffice e costante a schermo (non segue i tuoi movimenti) */
+  /** Nevicata ancorata 1:1 al mondo: i fiocchi cadono lenti nel mondo e ci cammini attraverso */
+  private drawSnow(time: number): void {
+    const { ctx, width, height } = this;
+    ctx.save();
+
+    // 1. Leggerissima velatura fredda atmosferica a schermo
+    ctx.fillStyle = 'rgba(215, 235, 250, 0.04)';
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Area del mondo visibile dalla telecamera (con margine per non vedere i fiocchi comparire dal nulla)
+    const margin = 80;
+    const boxW = width / this.zoom + margin * 2;
+    const boxH = height / this.zoom + margin * 2;
+
+    // Densità proporzionata all'area visibile del mondo
+    const flakeCount = Math.round((boxW * boxH) / 6000);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.90)';
+    ctx.beginPath();
+
+    for (let i = 0; i < flakeCount; i++) {
+      const seed = i * 4919;
+      const depth = i % 3;
+
+      // CADUTA LENTA NEL MONDO: da 30 a 55 pixel al secondo in coordinate del mondo
+      const fallSpeed = 0.035 + depth * 0.018;
+      const radius = (1.0 + depth * 0.75) * Math.max(0.85, this.zoom);
+
+      // Posizione base fissa nel mondo
+      const seedX = Math.abs(Math.sin(seed) * 100000) % boxW;
+      const seedY = Math.abs(Math.cos(seed) * 100000) % boxH;
+
+      // Volteggio orizzontale lento e dolce
+      const sway = Math.sin(time * 0.0012 + seed) * 12;
+
+      // Posizione nel mondo a questo istante temporale
+      const worldFallY = time * fallSpeed;
+      const worldDriftX = time * 0.008 + sway;
+
+      // Calcolo relativo alla telecamera: quando ti muovi, i fiocchi RESTANO FERMI NEL MONDO!
+      const dx = ((seedX + worldDriftX - this.camera.x) % boxW + boxW * 1.5) % boxW - boxW / 2;
+      const dy = ((seedY + worldFallY - this.camera.y) % boxH + boxH * 1.5) % boxH - boxH / 2;
+
+      // Conversione finale a coordinate schermo
+      const screenX = dx * this.zoom + width / 2;
+      const screenY = dy * this.zoom + height / 2;
+
+      ctx.moveTo(screenX + radius, screenY);
+      ctx.arc(screenX, screenY, radius, 0, TAU);
+    }
+
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Vignettatura cinematografica morbida: scurisce leggermente i bordi dello schermo */
+  /** Vignettatura marcata e cinematografica */
+  private drawVignette(): void {
+    const { ctx, width, height } = this;
+    ctx.save();
+
+    const maxDim = Math.max(width, height);
+    
+    // Il buio inizia già al 15% dal centro e raggiunge la massima oscurità agli angoli
+    const vignette = ctx.createRadialGradient(
+      width / 2, height / 2, maxDim * 0.15,
+      width / 2, height / 2, maxDim * 0.58
+    );
+    
+    // 0 = Centro perfetto: 100% trasparente (piena visibilità sul personaggio)
+    vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    
+    // 0.5 = Metà schermo: l'ombra inizia a farsi notare chiaramente
+    vignette.addColorStop(0.75, 'rgba(0, 0, 0, 0.45)');
+    
+    // 1 = Bordi e angoli dello schermo: ombra scura e decisa (65% di nero)
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.75)'); 
+
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, width, height);
     ctx.restore();
   }
 

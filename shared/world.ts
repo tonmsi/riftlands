@@ -45,6 +45,14 @@ export class World {
     return this.mode === 'world' ? noise(x / 1250, y / 1250, this.seed + 411) : 0;
   }
 
+  // All'interno della classe World, vicino a getMoisture (verso riga 46):
+  getTemperature(tx: number, ty: number): number {
+    if (this.mode !== 'world') return 1;
+    const warpX = (noise(tx * 0.025, ty * 0.025, this.seed + 701) - 0.5) * 5;
+    const warpY = (noise(tx * 0.025, ty * 0.025, this.seed + 709) - 0.5) * 5;
+    return noise((tx + warpY) * 0.035, (ty - warpX) * 0.035, this.seed + 805);
+  }
+
   getTile(tx: number, ty: number): TileKind {
     if (this.mode === 'world' && isClosedDungeonTile(tx, ty, this.lockedBosses)) return 'rock';
     const cx = Math.floor(tx / CHUNK_TILES), cy = Math.floor(ty / CHUNK_TILES);
@@ -83,7 +91,8 @@ export class World {
     const moisture = noise(tx * 0.12, ty * 0.12, this.seed + 491);
 
     // AGGIUNGI QUI IL RUMORE DI TEMPERATURA:
-    const temperature = noise((tx + warpY) * 0.035, (ty - warpX) * 0.035, this.seed + 805);
+    // Sostituisci il vecchio calcolo di temperature con:
+    const temperature = this.getTemperature(tx, ty);
 
     // GESTIONE REGIONE FREDDA (Tundra / Picchi innevati)
     if (temperature < 0.28) {
