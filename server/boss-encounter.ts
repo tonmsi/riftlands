@@ -494,15 +494,27 @@ export class BossEncounter {
   private save(): void { this.store?.flushBosses(); }
 }
 
-/** Bounded A* su griglia con clearance calcolata. */
+/** Bounded A* su griglia con respingimento dagli ostacoli per curve larghe. */
 export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2, world: World, dungeon = DUNGEON_BY_BOSS_ID.get(definition.id)): Vec2[] {
   if (!dungeon) return [];
   const toTile = (point: Vec2) => ({ tx: Math.floor(point.x / 48), ty: Math.floor(point.y / 48) });
-  const center = (tx: number, ty: number): Vec2 => ({ x: tx * 48 + 24, y: ty * 48 + 24 });
   
-  // Raggio a 16px per non invalidare i tile calpestabili che toccano il bordo di una roccia
+  // Distanzia i waypoint dalle rocce adiacenti per evitare che il raggio (28px) le tocchi
+  const getPaddedCenter = (tx: number, ty: number): Vec2 => {
+    let px = tx * 48 + 24;
+    let py = ty * 48 + 24;
+    const offset = Math.max(6, definition.radius - 20); // Spinta all'esterno (8px per raggio 28)
+
+    if (collidesWorld((tx - 1) * 48 + 24, ty * 48 + 24, 16, world)) px += offset;
+    if (collidesWorld((tx + 1) * 48 + 24, ty * 48 + 24, 16, world)) px -= offset;
+    if (collidesWorld(tx * 48 + 24, (ty - 1) * 48 + 24, 16, world)) py += offset;
+    if (collidesWorld(tx * 48 + 24, (ty + 1) * 48 + 24, 16, world)) py -= offset;
+
+    return { x: px, y: py };
+  };
+
   const valid = (tx: number, ty: number): boolean => {
-    const point = center(tx, ty);
+    const point = { x: tx * 48 + 24, y: ty * 48 + 24 };
     return insideDungeonRegion(dungeon.encounter.regions.bossLeash, point, -8)
       && !collidesWorld(point.x, point.y, 16, world);
   };
@@ -517,7 +529,7 @@ export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
           const tx = base.tx + dx, ty = base.ty + dy;
           if (valid(tx, ty)) {
-            const p = center(tx, ty);
+            const p = { x: tx * 48 + 24, y: ty * 48 + 24 };
             const dist = Math.hypot(p.x - point.x, p.y - point.y);
             if (!best || dist < best.dist) best = { tx, ty, dist };
           }
@@ -540,19 +552,29 @@ export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2
     open.sort((a, b) => a.score - b.score);
     const current = open.shift()!;
     if (current.tx === to.tx && current.ty === to.ty) {
-      const result: Vec2[] = []; let cursor = key(to.tx, to.ty);
-      while (cursor !== key(from.tx, from.ty)) { const node = coords.get(cursor)!; result.unshift(center(node.tx, node.ty)); cursor = came.get(cursor)!; }
+      const result: Vec2[] = []; 
+      let cursor = key(to.tx, to.ty);
+      while (cursor !== key(from.tx, from.ty)) { 
+        const node = coords.get(cursor)!; 
+        result.unshift(getPaddedCenter(node.tx, node.ty)); 
+        cursor = came.get(cursor)!; 
+      }
       return smoothBossPath(definition, dungeon, start, result, world);
     }
     const baseCost = cost.get(key(current.tx, current.ty))!;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       const tx = current.tx + dx, ty = current.ty + dy;
       if (!valid(tx, ty)) continue;
-      // Blocca il passaggio diagonale solo se entrambi i lati sono muri (fessura invalicabile)
       if (dx && dy && (!valid(current.tx + dx, current.ty) && !valid(current.tx, current.ty + dy))) continue;
-      const nextKey = key(tx, ty), nextCost = baseCost + (dx && dy ? Math.SQRT2 : 1);
+      
+      const nextKey = key(tx, ty);
+      const nextCost = baseCost + (dx && dy ? Math.SQRT2 : 1);
       if (nextCost >= (cost.get(nextKey) ?? Infinity)) continue;
-      cost.set(nextKey, nextCost); came.set(nextKey, key(current.tx, current.ty)); coords.set(nextKey, { tx, ty });
+      
+      cost.set(nextKey, nextCost); 
+      came.set(nextKey, key(current.tx, current.ty)); 
+      coords.set(nextKey, { tx, ty });
+      
       const hx = Math.abs(to.tx - tx), hy = Math.abs(to.ty - ty);
       open.push({ tx, ty, score: nextCost + Math.max(hx, hy) + (Math.SQRT2 - 1) * Math.min(hx, hy) });
     }
@@ -560,9 +582,9 @@ export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2
   return [];
 }
 
-/** Accorcia il percorso lasciando almeno 4px di spazio libero tra il corpo del boss e le rocce. */
+/** Accorcia il percorso mantenendo una distanza di sicurezza dai muri. */
 function smoothBossPath(definition: BossDefinition, dungeon: DungeonDefinition, start: Vec2, path: Vec2[], world: World): Vec2[] {
-  const clearanceRadius = definition.radius + 4;
+  const clearanceRadius = definition.radius + 3;
   const smoothed: Vec2[] = [];
   let anchor = start, index = 0;
   while (index < path.length) {

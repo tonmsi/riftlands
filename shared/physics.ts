@@ -17,19 +17,49 @@ export function collidesWorld(x: number, y: number, radius: number, world: World
 }
 
 /** Both peers run this exact fixed-step movement; small substeps prevent tunnelling. */
+/** Movimento a step discreti con scivolamento tangenziale a velocità conservata */
 export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number, dy: number, distance: number, world: World): Vec2 {
   const magnitude = Math.hypot(dx, dy);
   if (!Number.isFinite(magnitude) || !Number.isFinite(distance) || magnitude === 0 || distance <= 0) return { x: actor.x, y: actor.y };
-  const factor = Math.min(1, magnitude), steps = Math.max(1, Math.ceil(distance * factor / 7));
-  const sx = dx / magnitude * distance * factor / steps, sy = dy / magnitude * distance * factor / steps;
+  
+  const factor = Math.min(1, magnitude);
+  const totalDist = distance * factor;
+  const steps = Math.max(1, Math.ceil(totalDist / 7));
+  const stepDist = totalDist / steps;
+  
+  const dirX = dx / magnitude;
+  const dirY = dy / magnitude;
+  
   let x = actor.x, y = actor.y;
   for (let i = 0; i < steps; i++) {
-    if (!collidesWorld(x + sx, y, actor.radius, world)) x += sx;
-    if (!collidesWorld(x, y + sy, actor.radius, world)) y += sy;
+    const targetX = x + dirX * stepDist;
+    const targetY = y + dirY * stepDist;
+    
+    // Prova il movimento diagonale diretto
+    if (!collidesWorld(targetX, targetY, actor.radius, world)) {
+      x = targetX;
+      y = targetY;
+      continue;
+    }
+
+    // Se sbatte, prova a scivolare mantenendo l'intera velocità lungo l'asse libero
+    const canMoveX = !collidesWorld(x + Math.sign(dirX) * stepDist, y, actor.radius, world);
+    const canMoveY = !collidesWorld(x, y + Math.sign(dirY) * stepDist, actor.radius, world);
+
+    if (canMoveX && !canMoveY) {
+      // Parete orizzontale: scivola orizzontalmente a piena velocità
+      x += Math.sign(dirX) * stepDist;
+    } else if (canMoveY && !canMoveX) {
+      // Parete verticale: scivola verticalmente a piena velocità
+      y += Math.sign(dirY) * stepDist;
+    } else {
+      // Tentativo standard a componenti ridotte se entrambi o nessuno sono completamente liberi
+      if (!collidesWorld(x + dirX * stepDist, y, actor.radius, world)) x += dirX * stepDist;
+      if (!collidesWorld(x, y + dirY * stepDist, actor.radius, world)) y += dirY * stepDist;
+    }
   }
   return { x, y };
 }
-
 export function movementSpeed(actor: Actor, time: number): number {
   if (actor.hp <= 0 || actor.deadUntil > time) return 0;
   let speed = actor.speed;
