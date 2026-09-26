@@ -9,6 +9,23 @@ import { DUNGEON_BY_BOSS_ID, clampToDungeonRegion, insideDungeonRegion, insideDu
 import type { DungeonDefinition } from '../shared/dungeons';
 import type { Account, AccountStore } from './store';
 
+/** Verifica se il volume fisico del boss (con margine di sicurezza) può passare in linea retta senza ostacoli. */
+export function canWalkDirectly(from: Vec2, to: Vec2, radius: number, world: World, dungeon: DungeonDefinition): boolean {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance <= 1) return true;
+  const steps = Math.max(1, Math.ceil(distance / 12));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const x = from.x + dx * t;
+    const y = from.y + dy * t;
+    if (!insideDungeonRegion(dungeon.encounter.regions.bossLeash, { x, y }, -radius - 4)) return false;
+    if (collidesWorld(x, y, radius, world)) return false;
+  }
+  return true;
+}
+
 /** Shared runtime for data-defined bosses. Unique mechanics can extend this class later without duplicating its lifecycle. */
 export class BossEncounter {
   readonly dungeon: DungeonDefinition;
@@ -212,7 +229,6 @@ export class BossEncounter {
     const active = players.filter(player => this.isActiveParticipant(player.id) && player.hp > 0);
     if (!active.length) { this.fail(world); return; }
 
-    // Locking the dungeon does not wake distant bosses. Detection/damage starts persistent pursuit.
     if (!this.engaged) this.engaged = active.some(player => this.detects(player));
     if (!this.engaged) return;
     const targets = active.filter(player => insideDungeonRegion(this.dungeon.encounter.regions.combat, player));
@@ -229,9 +245,16 @@ export class BossEncounter {
     if (this.windup) { this.resetStallTimer(); this.resolveWindup(now, active, world, damage); return; }
     const target = this.chooseTarget(targets);
     if (now < (this.lifecycle.startedAt ?? 0) + DUNGEON_ARRIVAL_MS) return;
+
     const distance = Math.hypot(target.x - boss.x, target.y - boss.y);
     const seesTarget = hasLineOfSight(boss, target, world);
-    if (distance > this.definition.behavior.preferredRange && this.chase(target, seesTarget, now, dt, world)) return;
+    // È "diretto" solo se l'intero corpo ha margine fisico libero verso il bersaglio
+    const directClear = seesTarget && canWalkDirectly(boss, target, boss.radius + 4, world, this.dungeon);
+    const inPreferredRange = distance <= this.definition.behavior.preferredRange;
+
+    // Se è fuori range O se non c'è linea di vista fisica sgombra, continua l'inseguimento aggirando l'ostacolo
+    if ((!inPreferredRange || !seesTarget) && this.chase(target, directClear, now, dt, world)) return;
+
     boss.aim = Math.atan2(target.y - boss.y, target.x - boss.x);
     if (now < this.nextAttack || !seesTarget) return;
     const attack = this.chooseAttack(distance);
@@ -283,32 +306,70 @@ export class BossEncounter {
   private chase(target: Actor, direct: boolean, now: number, dt: number, world: World): boolean {
     if (this.moveUnstuck(now, dt, world)) return true;
     if (this.pathTargetId && this.pathTargetId !== target.id) this.stalledSince = undefined;
-    if (direct) this.resetPath();
-    else if (now >= this.pathRefreshAt || this.pathTargetId !== target.id || !this.path.length) {
-      this.path = findBossPath(this.definition, this.boss, target, world, this.dungeon);
-      this.pathTargetId = target.id;
-      this.pathRefreshAt = now + this.definition.behavior.pathRefreshMs;
+
+    if (direct) {
+      this.resetPath();
+    } else {
+      const needsPath = !this.path.length || this.pathTargetId !== target.id || now >= this.pathRefreshAt;
+      if (needsPath) {
+        this.path = findBossPath(this.definition, this.boss, target, world, this.dungeon);
+        this.pathTargetId = target.id;
+        this.pathRefreshAt = now + this.definition.behavior.pathRefreshMs;
+      }
     }
-    while (this.path.length && Math.hypot(this.path[0].x - this.boss.x, this.path[0].y - this.boss.y) < 24) this.path.shift();
-    const waypoint = direct ? target : this.path[0] ?? target;
+
+    // Se non ha linea diretta e non c'è percorso: NON correre contro l'ostacolo attraverso il muro
+    if (!direct && !this.path.length) {
+      const unstuckFallback = this.definition.behavior.unstuck ?? { afterMs: 300, durationMs: 400, probeDistance: 48 };
+      if (this.beginUnstuck(this.boss.aim, now, world, unstuckFallback)) {
+        return this.moveUnstuck(now, dt, world);
+      }
+      return false;
+    }
+
+    // Consuma i waypoint se raggiunti O se il waypoint successivo ha già passaggio libero
+    const waypointRadius = Math.max(28, this.boss.radius + 6);
+    while (this.path.length) {
+      const distToCurrent = Math.hypot(this.path[0].x - this.boss.x, this.path[0].y - this.boss.y);
+      if (distToCurrent < waypointRadius) {
+        this.path.shift();
+        continue;
+      }
+      if (this.path.length > 1 && canWalkDirectly(this.boss, this.path[1], this.boss.radius + 2, world, this.dungeon)) {
+        this.path.shift();
+        continue;
+      }
+      break;
+    }
+
+    const waypoint = direct ? target : (this.path[0] ?? target);
     const angle = Math.atan2(waypoint.y - this.boss.y, waypoint.x - this.boss.x);
     this.boss.aim = angle;
     const speed = this.boss.hp <= this.boss.maxHp * this.definition.enrageAt ? this.definition.enrageSpeed : 1;
-    const before = { x: this.boss.x, y: this.boss.y };
+
+    // Calcoliamo la distanza prima del movimento per misurare il progresso REALE verso il waypoint
+    const distBefore = Math.hypot(waypoint.x - this.boss.x, waypoint.y - this.boss.y);
     this.moveBody(moveWithCollisions(this.boss, Math.cos(angle), Math.sin(angle), movementSpeed(this.boss, now) * speed * dt, world));
-    const moved = Math.hypot(this.boss.x - before.x, this.boss.y - before.y);
-    const unstuck = this.definition.behavior.unstuck;
-    if (!unstuck || moved > Math.max(0.6, movementSpeed(this.boss, now) * dt * 0.2)) {
+    const distAfter = Math.hypot(waypoint.x - this.boss.x, waypoint.y - this.boss.y);
+
+    // Se struscia lateralmente contro una roccia, il progresso verso il waypoint è nullo o negativo!
+    const progress = distBefore - distAfter;
+    const unstuck = this.definition.behavior.unstuck ?? { afterMs: 500, durationMs: 450, probeDistance: 48 };
+    const minExpectedProgress = movementSpeed(this.boss, now) * speed * dt * 0.25;
+
+    if (progress > Math.max(0.4, minExpectedProgress)) {
       this.stalledSince = undefined;
       return false;
     }
+
+    // Se non si avvicina al waypoint, consideralo bloccato e attiva il disincaglio
     this.stalledSince ??= now;
-    if (now - this.stalledSince < unstuck.afterMs || !this.beginUnstuck(angle, now, world)) return false;
+    if (now - this.stalledSince < unstuck.afterMs || !this.beginUnstuck(angle, now, world, unstuck)) return false;
     return this.moveUnstuck(now, dt, world);
   }
 
-  private beginUnstuck(intendedAngle: number, now: number, world: World): boolean {
-    const config = this.definition.behavior.unstuck;
+  private beginUnstuck(intendedAngle: number, now: number, world: World, overrideConfig?: { afterMs: number; durationMs: number; probeDistance: number }): boolean {
+    const config = overrideConfig ?? this.definition.behavior.unstuck;
     if (!config) return false;
     const intendedSector = ((Math.round(intendedAngle / (Math.PI / 4)) % 8) + 8) % 8;
     const sectors = [2, -2, 3, -3, 1, -1, 4, 0]
@@ -383,7 +444,6 @@ export class BossEncounter {
     this.preparedIds.clear();
     this.eliminatedIds.clear();
     for (const entrant of entrants) { this.participantIds.add(entrant.id); this.threat.set(entrant.id, 0); }
-    // Remember detection before moving entrants to their authored starting positions.
     for (const member of this.group) member.engaged = aggroBossIds.includes(member.definition.id) || entrants.some(player => member.detects(player));
     for (const member of this.group) world.setBossLocked(member.definition.id, true);
     const spawns = this.dungeon.spawnPoints.party;
@@ -394,7 +454,6 @@ export class BossEncounter {
     this.group.forEach((member, index) => Object.assign(member.boss, bossSpawns[index]));
     for (const member of this.group) member.nextAttack = Math.max(member.nextAttack, now + DUNGEON_ARRIVAL_MS);
   }
-  /** Old authored spawns can sit on a newly sealed room edge. Move them just inside. */
   private safeSpawn(preferred: Vec2, radius: number, world: World): Vec2 | undefined {
     const safe = (point: Vec2) => insideDungeonRegion(this.dungeon.encounter.regions.combat, point, -radius)
       && !collidesWorld(point.x, point.y, radius, world) && !touchesDungeonFlame(this.dungeon, point, radius);
@@ -435,29 +494,49 @@ export class BossEncounter {
   private save(): void { this.store?.flushBosses(); }
 }
 
-/** Bounded A* constrained by the map-authored boss leash region. */
+/** Bounded A* su griglia con clearance calcolata. */
 export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2, world: World, dungeon = DUNGEON_BY_BOSS_ID.get(definition.id)): Vec2[] {
   if (!dungeon) return [];
   const toTile = (point: Vec2) => ({ tx: Math.floor(point.x / 48), ty: Math.floor(point.y / 48) });
   const center = (tx: number, ty: number): Vec2 => ({ x: tx * 48 + 24, y: ty * 48 + 24 });
+  
+  // Raggio a 16px per non invalidare i tile calpestabili che toccano il bordo di una roccia
   const valid = (tx: number, ty: number): boolean => {
     const point = center(tx, ty);
-    return insideDungeonRegion(dungeon.encounter.regions.bossLeash, point, -definition.radius - 12)
-      && !collidesWorld(point.x, point.y, definition.radius + 2, world);
+    return insideDungeonRegion(dungeon.encounter.regions.bossLeash, point, -8)
+      && !collidesWorld(point.x, point.y, 16, world);
   };
+
   const nearest = (point: Vec2) => {
     const base = toTile(point);
-    for (let radius = 0; radius <= 3; radius++) for (let dx = -radius; dx <= radius; dx++) for (let dy = -radius; dy <= radius; dy++) {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) === radius && valid(base.tx + dx, base.ty + dy)) return { tx: base.tx + dx, ty: base.ty + dy };
+    if (valid(base.tx, base.ty)) return base;
+    for (let radius = 1; radius <= 6; radius++) {
+      let best: { tx: number; ty: number; dist: number } | undefined;
+      for (let dx = -radius; dx <= radius; dx++) {
+        for (let dy = -radius; dy <= radius; dy++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+          const tx = base.tx + dx, ty = base.ty + dy;
+          if (valid(tx, ty)) {
+            const p = center(tx, ty);
+            const dist = Math.hypot(p.x - point.x, p.y - point.y);
+            if (!best || dist < best.dist) best = { tx, ty, dist };
+          }
+        }
+      }
+      if (best) return { tx: best.tx, ty: best.ty };
     }
     return undefined;
   };
+
   const from = nearest(start), to = nearest(goal);
   if (!from || !to) return [];
+  if (from.tx === to.tx && from.ty === to.ty) return [];
+
   const key = (tx: number, ty: number) => `${tx},${ty}`;
   const open = [{ ...from, score: 0 }], came = new Map<string, string>(), cost = new Map([[key(from.tx, from.ty), 0]]);
   const coords = new Map([[key(from.tx, from.ty), from]]);
-  for (let visited = 0; open.length && visited < 500; visited++) {
+
+  for (let visited = 0; open.length && visited < 600; visited++) {
     open.sort((a, b) => a.score - b.score);
     const current = open.shift()!;
     if (current.tx === to.tx && current.ty === to.ty) {
@@ -469,7 +548,8 @@ export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       const tx = current.tx + dx, ty = current.ty + dy;
       if (!valid(tx, ty)) continue;
-      if (dx && dy && (!valid(current.tx + dx, current.ty) || !valid(current.tx, current.ty + dy))) continue;
+      // Blocca il passaggio diagonale solo se entrambi i lati sono muri (fessura invalicabile)
+      if (dx && dy && (!valid(current.tx + dx, current.ty) && !valid(current.tx, current.ty + dy))) continue;
       const nextKey = key(tx, ty), nextCost = baseCost + (dx && dy ? Math.SQRT2 : 1);
       if (nextCost >= (cost.get(nextKey) ?? Infinity)) continue;
       cost.set(nextKey, nextCost); came.set(nextKey, key(current.tx, current.ty)); coords.set(nextKey, { tx, ty });
@@ -480,22 +560,16 @@ export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2
   return [];
 }
 
-/** Removes grid zig-zags only when the boss-sized circle can safely sweep the shortcut. */
+/** Accorcia il percorso lasciando almeno 4px di spazio libero tra il corpo del boss e le rocce. */
 function smoothBossPath(definition: BossDefinition, dungeon: DungeonDefinition, start: Vec2, path: Vec2[], world: World): Vec2[] {
-  const clear = (from: Vec2, to: Vec2): boolean => {
-    const distance = Math.hypot(to.x - from.x, to.y - from.y), steps = Math.max(1, Math.ceil(distance / 12));
-    for (let step = 1; step <= steps; step++) {
-      const ratio = step / steps, x = from.x + (to.x - from.x) * ratio, y = from.y + (to.y - from.y) * ratio;
-      if (!insideDungeonRegion(dungeon.encounter.regions.bossLeash, { x, y }, -definition.radius - 8)
-        || collidesWorld(x, y, definition.radius + 2, world)) return false;
-    }
-    return true;
-  };
+  const clearanceRadius = definition.radius + 4;
   const smoothed: Vec2[] = [];
   let anchor = start, index = 0;
   while (index < path.length) {
     let furthest = index;
-    while (furthest + 1 < path.length && clear(anchor, path[furthest + 1])) furthest++;
+    while (furthest + 1 < path.length && canWalkDirectly(anchor, path[furthest + 1], clearanceRadius, world, dungeon)) {
+      furthest++;
+    }
     smoothed.push(path[furthest]);
     anchor = path[furthest];
     index = furthest + 1;
