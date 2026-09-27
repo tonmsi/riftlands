@@ -10,6 +10,8 @@ export const TERRAIN_CATALOG: Record<TileKind, { name: string; color: string }> 
   grass: { name: 'Erba', color: '#4d6846' }, path: { name: 'Pavimento', color: '#948465' },
   rock: { name: 'Muro', color: '#353f43' }, water: { name: 'Acqua', color: '#376b83' },
   bush: { name: 'Cespuglio', color: '#2c5039' }, mud: { name: 'Fango', color: '#675444' },
+  snow: { name: 'Neve', color: '#eaf4f8' },
+  ice: { name: 'Ghiaccio', color: '#8fcee5' },
 };
 export const PICKUP_CATALOG: Record<PickupKind, { name: string; color: string }> = {
   heal: { name: 'Cura +35 HP', color: '#b6e5aa' }, haste: { name: 'Velocità · 10 s', color: '#a5dbe2' },
