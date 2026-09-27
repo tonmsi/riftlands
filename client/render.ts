@@ -197,7 +197,7 @@ export class Renderer {
   }
 
   weather: 'clear' | 'rain' | 'snow' = 'rain';
-
+  private lastWeatherCheck = 0;
   constructor(private readonly canvas: HTMLCanvasElement, private readonly localDungeons?: readonly DungeonDefinition[]) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D non disponibile in questo browser.');
@@ -490,6 +490,14 @@ export class Renderer {
 
     for (const event of events) this.drawFloatingEvent(event, frame.time);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    if (frame.time - this.lastWeatherCheck > 1000) {
+      this.lastWeatherCheck = frame.time;
+      const px = frame.self?.x ?? this.camera.x, py = frame.self?.y ?? this.camera.y;
+      const isStorm = this.world.mode === 'world' && (frame.time % 600_000) < 180_000;
+      const temp = this.world.getTemperature(Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE));
+      this.weather = !isStorm ? 'clear' : (temp < 0.28 ? 'snow' : 'rain');
+    }
 
     if (this.weather === 'snow') {
       this.drawSnow(frame.time);
