@@ -15,17 +15,19 @@ import { TERRAIN, groundColor, shorelineMask, sceneryGroups, mapTerrainColor, pa
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
   mage: new URL('../assets/mage256.svg', import.meta.url).href,
-  warrior: new URL('../assets/warrior256.svg', import.meta.url).href
+  warrior: new URL('../assets/warrior256.svg', import.meta.url).href,
 };
 const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = {
   wisp: new URL('../assets/wisp.svg', import.meta.url).href,
   slime: new URL('../assets/slime.svg', import.meta.url).href,
-  sentinel: new URL('../assets/sentinel.svg', import.meta.url).href
+  sentinel: new URL('../assets/sentinel.svg', import.meta.url).href,
 };
 const BOSS_SPRITE_URLS: Record<string, string> = {
   'stone-warden': new URL('../assets/boss-warden.svg', import.meta.url).href,
   'maze-stalker': new URL('../assets/maze-stalker.svg', import.meta.url).href,
 };
+const BUSH_SPRITE_URL = new URL('../assets/bush.svg', import.meta.url).href;
+
 const FRAME_SIZE = 256;
 const DRAW_SIZE_SIZE = 48;
 const NPC_FRAME_SIZE = 256;
@@ -45,15 +47,15 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
   image.decoding = 'async';
   const loaded = new Promise<void>((resolve, reject) => {
     image.addEventListener('load', () => resolve(), { once: true });
-    image.addEventListener('error', () => reject(new Error(`Impossibile caricare la sprite ${url}`)), { once: true });
+    image.addEventListener('error', () => reject(new Error(`Impossibile caricare la risorsa ${url}`)), { once: true });
   });
   image.src = url;
   await loaded;
-  try { await image.decode(); } catch { /* onload already verified that the image is usable */ }
+  try { await image.decode(); } catch { /* onload verifica già la validità dell'immagine */ }
   return image;
 }
 
-/** Rasterizes vector artwork once; the animation loop only ever sees small bitmap frames. */
+/** Rasterizza il foglio vettoriale all'avvio: il loop di animazione vede solo bitmap pronte. */
 async function rasterizeSpriteSheet(url: string, frameSize: number, drawSize: number): Promise<RasterSpriteSheet> {
   const image = await loadImage(url);
   const atlas = document.createElement('canvas');
@@ -65,7 +67,6 @@ async function rasterizeSpriteSheet(url: string, frameSize: number, drawSize: nu
   atlasContext.imageSmoothingQuality = 'high';
   atlasContext.drawImage(image, 0, 0);
 
-  // Keep small sprite sources sharp when scaled, independently of the canvas budget.
   const cachedSize = Math.ceil(drawSize * SPRITE_RASTER_DPR);
   const frames: HTMLCanvasElement[] = [];
   for (let row = 0; row < SPRITE_ROWS; row++) {
@@ -100,13 +101,16 @@ export interface RenderFrame {
   selectedId: string | null;
   previewClass: ClassId;
   playing: boolean;
-  /** Direction requested by the local player; null means standing still. */
   moveDirection?: Vec2 | null;
   aimPreview?: { slot: AbilitySlot; angle: number } | null;
 }
+
 const TAU = Math.PI * 2;
 const PICKUP_COLORS: Record<Pickup['kind'], string> = {
-  heal: '#b6e5aa', haste: '#a5dbe2', power: '#e5cc81', weakness: '#bb99cb',
+  heal: '#b6e5aa',
+  haste: '#a5dbe2',
+  power: '#e5cc81',
+  weakness: '#bb99cb',
 };
 
 function noise(x: number, y: number, offset = 0): number {
@@ -136,7 +140,6 @@ function coverTileBleed(ctx: CanvasRenderingContext2D, vx: number, vy: number, c
   const signX = (corner === 0 || corner === 3) ? 1 : -1;
   const signY = (corner === 0 || corner === 1) ? 1 : -1;
 
-  // Cover pixel-aligned base tile bleed outside the tile, preserving the curve.
   const rx1 = signX === 1 ? cx - e : cx;
   const ry1 = signY === 1 ? cy - e : cy - radius;
   ctx.fillRect(rx1, ry1, e, radius + e);
@@ -146,7 +149,6 @@ function coverTileBleed(ctx: CanvasRenderingContext2D, vx: number, vy: number, c
   ctx.fillRect(rx2, ry2, radius + e, e);
 }
 
-/** All artwork is deliberately procedural geometry. Assets can replace these passes independently. */
 export class Renderer {
   world = new World(WORLD_SEED);
   readonly camera: Vec2 = { x: 0, y: 0 };
@@ -165,19 +167,36 @@ export class Renderer {
   private readonly npcSprites = new Map<string, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
   private readonly environmentArt = new EnvironmentArt();
-  private terrainCache?: { canvas: HTMLCanvasElement; world: World; scale: number;
-    left: number; top: number; right: number; bottom: number };
+  private terrainCache?: {
+    canvas: HTMLCanvasElement;
+    world: World;
+    scale: number;
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  };
   readonly spritesReady: Promise<void>;
   private terrainLockRevision = -1;
   private readonly restoreContext = (): void => { this.terrainCache = undefined; };
+
   private outsideLocalMap(tx: number, ty: number): boolean {
-    return !!this.localDungeons && !this.localDungeons.some(d => { const b = d.layout.bounds; return tx >= b.minTx - 2 && tx <= b.maxTx + 2 && ty >= b.minTy - 2 && ty <= b.maxTy + 2; });
-  }
-  private dungeonAt(tx: number, ty: number): DungeonDefinition | undefined {
-    return this.localDungeons ? this.localDungeons.find(d => { const b = d.layout.bounds; return tx >= b.minTx && tx <= b.maxTx && ty >= b.minTy && ty <= b.maxTy; }) : dungeonAtTile(tx, ty);
+    return !!this.localDungeons && !this.localDungeons.some(d => {
+      const b = d.layout.bounds;
+      return tx >= b.minTx - 2 && tx <= b.maxTx + 2 && ty >= b.minTy - 2 && ty <= b.maxTy + 2;
+    });
   }
 
-  weather: 'clear' | 'rain' | 'snow' = 'snow'; // Puoi impostare 'clear', 'rain' o 'snow'
+  private dungeonAt(tx: number, ty: number): DungeonDefinition | undefined {
+    return this.localDungeons
+      ? this.localDungeons.find(d => {
+          const b = d.layout.bounds;
+          return tx >= b.minTx && tx <= b.maxTx && ty >= b.minTy && ty <= b.maxTy;
+        })
+      : dungeonAtTile(tx, ty);
+  }
+
+  weather: 'clear' | 'rain' | 'snow' = 'rain';
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly localDungeons?: readonly DungeonDefinition[]) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -214,6 +233,19 @@ export class Renderer {
 
   private async prepareSprites(): Promise<void> {
     const jobs: Promise<void>[] = [];
+
+    // Caricamento asincrono dell'SVG del cespuglio per EnvironmentArt
+    jobs.push(
+      loadImage(BUSH_SPRITE_URL)
+        .then(img => {
+          this.environmentArt.setBushSvg(img);
+          this.terrainCache = undefined; // invalida la cache per ridisegnare i cespugli con l'SVG
+        })
+        .catch(error => {
+          console.warn('SVG cespuglio non trovato (fallback procedurale):', error);
+        })
+    );
+
     for (const [classId, url] of Object.entries(CLASS_SPRITE_URLS) as [ClassId, string][]) {
       jobs.push(rasterizeSpriteSheet(url, FRAME_SIZE, DRAW_SIZE_SIZE)
         .then(sprite => { this.classSprites.set(classId, sprite); })
@@ -245,27 +277,35 @@ export class Renderer {
       this.canvas.height = Math.round(this.height * this.dpr);
     }
     const baseZoom = (this.width < 680 ? 0.8 : 0.95) * (this.touchQuery.matches ? 0.8 : 1);
-    // A browser zoom-out enlarges the CSS viewport without enlarging the actual
-    // screen. Keep the logical world viewport bounded so it cannot generate a
-    // huge amount of procedural terrain in one frame.
     const viewportScale = Math.max(1, this.width / MAX_LOGICAL_VIEWPORT.width, this.height / MAX_LOGICAL_VIEWPORT.height);
     this.zoom = baseZoom * viewportScale;
-    if (this.world.mode === 'arena') this.zoom = this.touchQuery.matches
-      ? Math.max(0.8, Math.min(this.width / 960, this.height / 768)) * 0.8
-      : Math.max(0.3, Math.min((this.width - 40) / 960, (this.height - 230) / 768));
+    if (this.world.mode === 'arena') {
+      this.zoom = this.touchQuery.matches
+        ? Math.max(0.8, Math.min(this.width / 960, this.height / 768)) * 0.8
+        : Math.max(0.3, Math.min((this.width - 40) / 960, (this.height - 230) / 768));
+    }
   }
 
   render(frame: RenderFrame): void {
-    if (this.terrainLockRevision !== this.world.lockRevision) { this.terrainCache = undefined; this.terrainLockRevision = this.world.lockRevision; }
+    if (this.terrainLockRevision !== this.world.lockRevision) {
+      this.terrainCache = undefined;
+      this.terrainLockRevision = this.world.lockRevision;
+    }
     const ctx = this.ctx;
     const now = performance.now();
     const delta = this.lastTime ? Math.max(0, Math.min(80, now - this.lastTime)) : 16;
     this.lastTime = now;
     if (this.dpr !== renderDpr(window.devicePixelRatio, this.width, this.height)) this.resize();
-    const target = this.world.mode === 'arena' && frame.playing && !this.touchQuery.matches ? { x: 0, y: 0 } : frame.self && frame.playing ? frame.self : {
-      x: 25 + Math.sin(frame.time * 0.000025) * 18,
-      y: 12 + Math.cos(frame.time * 0.000019) * 12,
-    };
+
+    const target = this.world.mode === 'arena' && frame.playing && !this.touchQuery.matches
+      ? { x: 0, y: 0 }
+      : frame.self && frame.playing
+        ? frame.self
+        : {
+            x: 25 + Math.sin(frame.time * 0.000025) * 18,
+            y: 12 + Math.cos(frame.time * 0.000019) * 12,
+          };
+
     if (!this.hasCamera || (frame.playing && !this.wasPlaying)) {
       this.camera.x = target.x;
       this.camera.y = target.y;
@@ -282,6 +322,7 @@ export class Renderer {
       top: this.camera.y - this.height / (2 * this.zoom) - 100,
       bottom: this.camera.y + this.height / (2 * this.zoom) + 100,
     };
+
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
@@ -289,64 +330,132 @@ export class Renderer {
     ctx.shadowBlur = 0;
     ctx.fillStyle = TERRAIN.grass;
     ctx.fillRect(0, 0, this.width, this.height);
+
     ctx.translate(this.width / 2, this.height / 2);
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.camera.x, -this.camera.y);
+
     this.drawCachedTerrain(frame.time);
     this.drawDungeonEntry(frame, false);
+
     if (this.world.mode === 'world') {
-      if (!this.localDungeons) { this.drawCrossroads(frame.time); this.drawArenaGate(frame.time, frame.arenaGate); }
+      if (!this.localDungeons) {
+        this.drawCrossroads(frame.time);
+        this.drawArenaGate(frame.time, frame.arenaGate);
+      }
       this.drawDungeons();
     }
+
     for (const w of frame.bossWindups ?? []) {
       const progress = Math.max(0, Math.min(1, (frame.time - w.startedAt) / Math.max(1, w.resolvesAt - w.startedAt)));
-      ctx.save(); ctx.fillStyle = 'rgba(216,72,45,0.2)'; ctx.strokeStyle = '#ffb184'; ctx.lineWidth = 3;
+      ctx.save();
+      ctx.fillStyle = 'rgba(216,72,45,0.2)';
+      ctx.strokeStyle = '#ffb184';
+      ctx.lineWidth = 3;
       if (w.kind === 'charge' && w.targetX !== undefined && w.targetY !== undefined) {
-        const angle = Math.atan2(w.targetY - w.y, w.targetX - w.x), length = Math.hypot(w.targetX - w.x, w.targetY - w.y);
-        ctx.translate(w.x, w.y); ctx.rotate(angle);
+        const angle = Math.atan2(w.targetY - w.y, w.targetX - w.x);
+        const length = Math.hypot(w.targetX - w.x, w.targetY - w.y);
+        ctx.translate(w.x, w.y);
+        ctx.rotate(angle);
         ctx.fillRect(0, -w.radius, length, w.radius * 2);
-        ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(0, -w.radius); ctx.lineTo(length, -w.radius); ctx.moveTo(0, w.radius); ctx.lineTo(length, w.radius); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle = `rgba(255,177,132,${0.25 + progress * 0.5})`; ctx.fillRect(length * progress - 4, -w.radius, 8, w.radius * 2);
+        ctx.setLineDash([10, 8]);
+        ctx.beginPath();
+        ctx.moveTo(0, -w.radius);
+        ctx.lineTo(length, -w.radius);
+        ctx.moveTo(0, w.radius);
+        ctx.lineTo(length, w.radius);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = `rgba(255,177,132,${0.25 + progress * 0.5})`;
+        ctx.fillRect(length * progress - 4, -w.radius, 8, w.radius * 2);
       } else if (w.kind === 'nova') {
-        ctx.beginPath(); ctx.arc(w.x, w.y, w.radius, 0, TAU); ctx.arc(w.x, w.y, w.innerRadius ?? 0, 0, TAU, true); ctx.fill('evenodd'); ctx.stroke();
-        circle(ctx, w.x, w.y, (w.innerRadius ?? 0) + (w.radius - (w.innerRadius ?? 0)) * progress); ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.radius, 0, TAU);
+        ctx.arc(w.x, w.y, w.innerRadius ?? 0, 0, TAU, true);
+        ctx.fill('evenodd');
+        ctx.stroke();
+        circle(ctx, w.x, w.y, (w.innerRadius ?? 0) + (w.radius - (w.innerRadius ?? 0)) * progress);
+        ctx.stroke();
       } else {
-        circle(ctx, w.x, w.y, w.radius); ctx.fill(); ctx.stroke();
-        circle(ctx, w.x, w.y, w.radius * progress); ctx.stroke();
+        circle(ctx, w.x, w.y, w.radius);
+        ctx.fill();
+        ctx.stroke();
+        circle(ctx, w.x, w.y, w.radius * progress);
+        ctx.stroke();
       }
       ctx.restore();
     }
-    for (const gold of frame.goldDrops ?? []) if (this.visible(gold)) {
-      ctx.save(); ctx.translate(gold.x, gold.y); ctx.fillStyle = 'rgba(241,197,85,0.15)'; circle(ctx, 0, 0, 23); ctx.fill();
-      ctx.fillStyle = '#edc463'; ctx.strokeStyle = '#7d572c'; ctx.lineWidth = 2;
-      for (const [x, y] of [[-7, 4], [6, 3], [0, -5]]) { circle(ctx, x, y, 7); ctx.fill(); ctx.stroke(); }
-      ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff0c5'; ctx.fillText(`${gold.amount} gold`, 0, -23); ctx.restore();
+
+    for (const gold of frame.goldDrops ?? []) {
+      if (this.visible(gold)) {
+        ctx.save();
+        ctx.translate(gold.x, gold.y);
+        ctx.fillStyle = 'rgba(241,197,85,0.15)';
+        circle(ctx, 0, 0, 23);
+        ctx.fill();
+        ctx.fillStyle = '#edc463';
+        ctx.strokeStyle = '#7d572c';
+        ctx.lineWidth = 2;
+        for (const [x, y] of [[-7, 4], [6, 3], [0, -5]]) {
+          circle(ctx, x, y, 7);
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.font = '600 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff0c5';
+        ctx.fillText(`${gold.amount} gold`, 0, -23);
+        ctx.restore();
+      }
     }
+
     const events = frame.events.filter(event => frame.time >= event.at && frame.time - event.at < event.duration);
     if (frame.self && frame.self.hp > 0 && frame.aimPreview != null) {
       const ability = CLASSES[frame.self.classId].abilities[frame.aimPreview.slot];
-      ctx.save(); ctx.translate(frame.self.x, frame.self.y); ctx.rotate(frame.aimPreview.angle);
-      ctx.strokeStyle = '#fff1c470'; ctx.fillStyle = '#fff1c40c'; ctx.lineWidth = 1 / this.zoom;
+      ctx.save();
+      ctx.translate(frame.self.x, frame.self.y);
+      ctx.rotate(frame.aimPreview.angle);
+      ctx.strokeStyle = '#fff1c470';
+      ctx.fillStyle = '#fff1c40c';
+      ctx.lineWidth = 1 / this.zoom;
       if (ability.kind === 'melee') {
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, ability.range, -0.65, 0.65); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, ability.range, -0.65, 0.65);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
       } else if (ability.kind === 'trap') {
-        circle(ctx, Math.min(ability.range || 60, 60), 0, ability.radius); ctx.stroke();
+        circle(ctx, Math.min(ability.range || 60, 60), 0, ability.radius);
+        ctx.stroke();
       } else {
         ctx.setLineDash([5, 9]);
-        ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(ability.range, 0); ctx.stroke(); ctx.setLineDash([]);
-        ctx.beginPath(); ctx.moveTo(ability.range - 7, -4); ctx.lineTo(ability.range, 0); ctx.lineTo(ability.range - 7, 4); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(18, 0);
+        ctx.lineTo(ability.range, 0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(ability.range - 7, -4);
+        ctx.lineTo(ability.range, 0);
+        ctx.lineTo(ability.range - 7, 4);
+        ctx.stroke();
       }
       ctx.restore();
     }
+
     for (const event of events) this.drawGroundEvent(event, frame.time);
+
     const pickups = frame.playing ? frame.pickups : [
-      ...this.world.getChunk(0, 0).pickups, ...this.world.getChunk(-1, 0).pickups,
+      ...this.world.getChunk(0, 0).pickups,
+      ...this.world.getChunk(-1, 0).pickups,
     ];
     for (const pickup of pickups) if (this.visible(pickup)) this.drawPickup(pickup, frame.time);
+
     if (frame.traps) {
       for (const trap of frame.traps) if (this.visible(trap)) this.drawTrap(trap, frame.time);
     }
-    // Cull before sorting; distant teammates still reach the edge indicators.
+
     const actors = frame.playing ? frame.actors.filter(actor => this.visible(actor)) : this.previewActors(frame.previewClass, frame.time);
     if (frame.self && frame.playing) {
       const index = actors.findIndex(actor => actor.id === frame.self!.id);
@@ -355,16 +464,27 @@ export class Renderer {
     }
     const liveMotion = new Set(actors.map(actor => actor.id));
     for (const id of this.classMotion.keys()) if (!liveMotion.has(id)) this.classMotion.delete(id);
+
     const hitTargets = new Set<string>();
     for (const event of events) if (event.kind === 'hit' && event.targetId && frame.time - event.at < 130) hitTargets.add(event.targetId);
+
     actors.sort((a, b) => a.y - b.y);
     for (const actor of actors) {
       if (!this.visible(actor)) continue;
       const self = actor.id === frame.self?.id || (!frame.playing && actor.id === 'preview');
       const allied = !!frame.self?.teamId && actor.teamId === frame.self.teamId;
-      this.drawActor(actor, frame.time, self, allied, actor.id === frame.selectedId, hitTargets,
-        self ? frame.moveDirection : undefined, actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss');
+      this.drawActor(
+        actor,
+        frame.time,
+        self,
+        allied,
+        actor.id === frame.selectedId,
+        hitTargets,
+        self ? frame.moveDirection : undefined,
+        actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss'
+      );
     }
+
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);
 
@@ -377,13 +497,10 @@ export class Renderer {
       this.drawRain(frame.time);
     }
 
-    // 2. VIGNETTATURA: sopra il meteo, ma sotto i box dell'interfaccia
-    this.drawVignette();
-
+   // this.drawVignette();
     this.drawTeamIndicators(frame);
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-    
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawDungeonEntry(frame, true);
   }
 
@@ -393,6 +510,7 @@ export class Renderer {
     const lock = frame.bossLocks?.find(lock => lock.locked && lock.relation === 'participant' && lock.startedAt !== undefined
       && frame.time >= lock.startedAt && frame.time - lock.startedAt < 2600);
     if (!preparation && !lock) return;
+
     const remaining = preparation ? Math.max(0, preparation.endsAt - frame.time) : 0;
     const arrival = lock ? frame.time - lock.startedAt! : 0;
     const progress = preparation ? 1 - Math.min(1, remaining / DUNGEON_ENTRY_MS) : Math.min(1, arrival / DUNGEON_ARRIVAL_MS);
@@ -401,32 +519,51 @@ export class Renderer {
     ctx.save();
     if (!overlay) {
       ctx.translate(frame.self.x, frame.self.y);
-      ctx.globalAlpha = opacity * (preparation ? .75 : 1 - progress);
-      ctx.strokeStyle = '#efcf87'; ctx.fillStyle = '#efcf871c'; ctx.lineWidth = 2;
+      ctx.globalAlpha = opacity * (preparation ? 0.75 : 1 - progress);
+      ctx.strokeStyle = '#efcf87';
+      ctx.fillStyle = '#efcf871c';
+      ctx.lineWidth = 2;
       const radius = preparation ? 54 - progress * 18 : 36 + progress * 100;
-      circle(ctx, 0, 0, radius); ctx.fill(); ctx.stroke();
-      circle(ctx, 0, 0, radius + 7); ctx.stroke();
+      circle(ctx, 0, 0, radius);
+      ctx.fill();
+      ctx.stroke();
+      circle(ctx, 0, 0, radius + 7);
+      ctx.stroke();
       for (let i = 0; i < 8; i++) {
-        const angle = i * TAU / 8 + frame.time * .001;
-        ctx.save(); ctx.rotate(angle); ctx.translate(radius + 14, 0);
-        polygon(ctx, [-4, 0, 0, -7, 4, 0, 0, 7]); ctx.fill(); ctx.stroke(); ctx.restore();
+        const angle = (i * TAU) / 8 + frame.time * 0.001;
+        ctx.save();
+        ctx.rotate(angle);
+        ctx.translate(radius + 14, 0);
+        polygon(ctx, [-4, 0, 0, -7, 4, 0, 0, 7]);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
       }
     } else {
-      // Darken before relocation, then reveal the new spawn under the same veil.
-      const veil = preparation ? progress * .82 : .82 * Math.max(0, 1 - arrival / 550);
-      ctx.fillStyle = `rgba(12,18,18,${veil})`; ctx.fillRect(0, 0, this.width, this.height);
+      const veil = preparation ? progress * 0.82 : 0.82 * Math.max(0, 1 - arrival / 550);
+      ctx.fillStyle = `rgba(12,18,18,${veil})`;
+      ctx.fillRect(0, 0, this.width, this.height);
       ctx.globalAlpha = opacity;
-      const y = Math.max(100, this.height * .22), width = Math.min(520, this.width - 32);
+      const y = Math.max(100, this.height * 0.22);
+      const width = Math.min(520, this.width - 32);
       const gradient = ctx.createLinearGradient(this.width / 2 - width / 2, 0, this.width / 2 + width / 2, 0);
-      gradient.addColorStop(0, '#101b1b00'); gradient.addColorStop(.2, '#101b1be8'); gradient.addColorStop(.8, '#101b1be8'); gradient.addColorStop(1, '#101b1b00');
-      ctx.fillStyle = gradient; ctx.fillRect(this.width / 2 - width / 2, y - 34, width, 100);
-      ctx.textAlign = 'center'; ctx.fillStyle = '#efcf87'; ctx.font = '600 13px system-ui';
+      gradient.addColorStop(0, '#101b1b00');
+      gradient.addColorStop(0.2, '#101b1be8');
+      gradient.addColorStop(0.8, '#101b1be8');
+      gradient.addColorStop(1, '#101b1b00');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(this.width / 2 - width / 2, y - 34, width, 100);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#efcf87';
+      ctx.font = '600 13px system-ui';
       ctx.fillText(preparation ? 'IL DUNGEON SI RISVEGLIA' : 'DUNGEON INIZIATO', this.width / 2, y, width - 24);
-      ctx.fillStyle = '#fff3d5'; ctx.font = '600 23px Georgia';
+      ctx.fillStyle = '#fff3d5';
+      ctx.font = '600 23px Georgia';
       const dungeon = this.localDungeons?.flatMap(dungeonEncounters).find(d => d.bossId === (preparation?.bossId ?? lock?.bossId))
         ?? DUNGEON_BY_BOSS_ID.get((preparation?.bossId ?? lock?.bossId)!);
       ctx.fillText(dungeon?.name ?? preparation?.name ?? 'La sfida ha inizio', this.width / 2, y + 29, width - 24);
-      ctx.font = '13px system-ui'; ctx.fillStyle = '#c5c7b8';
+      ctx.font = '13px system-ui';
+      ctx.fillStyle = '#c5c7b8';
       ctx.fillText(preparation ? `Preparati · ${(remaining / 1000).toFixed(1)} s` : 'I passaggi della stanza sono chiusi', this.width / 2, y + 53, width - 24);
     }
     ctx.restore();
@@ -436,8 +573,7 @@ export class Renderer {
     const { ctx } = this;
     ctx.save();
     ctx.translate(trap.x, trap.y);
-    
-    // Area di innesco visibile delicata
+
     ctx.strokeStyle = `${trap.color}44`;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 6]);
@@ -445,7 +581,6 @@ export class Renderer {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Denti / ganasce della trappola meccanica
     ctx.fillStyle = '#2f382a';
     circle(ctx, 0, 0, 16);
     ctx.fill();
@@ -454,7 +589,6 @@ export class Renderer {
     circle(ctx, 0, 0, 16);
     ctx.stroke();
 
-    // Denti metallici
     ctx.fillStyle = '#b7cfad';
     for (let i = 0; i < 8; i++) {
       const angle = (i * Math.PI) / 4;
@@ -464,7 +598,6 @@ export class Renderer {
       ctx.fill();
     }
 
-    // Piatto di pressione centrale
     circle(ctx, 0, 0, 5 + Math.sin(time * 0.005) * 1);
     ctx.fillStyle = '#9bd48c';
     ctx.fill();
@@ -519,7 +652,6 @@ export class Renderer {
     let cache = this.terrainCache;
     if (!cache || cache.world !== this.world || cache.scale !== scale ||
       left < cache.left || top < cache.top || right > cache.right || bottom > cache.bottom) {
-      // One bounded bitmap, with room for camera movement. No growing world atlas.
       const margin = 192;
       const x = Math.floor((left - margin) * scale) / scale;
       const y = Math.floor((top - margin) * scale) / scale;
@@ -536,40 +668,42 @@ export class Renderer {
       if (!reuse) { canvas.width = width; canvas.height = height; }
       const ctx = canvas.getContext('2d', { alpha: false })!;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      // Canvas self-copies preserve overlapping pixels. Scroll on integer pixels
-      // and repaint only exposed strips, without allocating a second full bitmap.
+
       const dirty: { left: number; top: number; right: number; bottom: number }[] = [];
       if (reuse) {
         ctx.drawImage(canvas, dx, dy);
-        if (dx) dirty.push({ left: dx > 0 ? 0 : width + dx, top: 0,
-          right: dx > 0 ? dx : width, bottom: height });
-        if (dy) dirty.push({ left: Math.max(0, dx), top: dy > 0 ? 0 : height + dy,
-          right: Math.min(width, width + dx), bottom: dy > 0 ? dy : height });
+        if (dx) dirty.push({ left: dx > 0 ? 0 : width + dx, top: 0, right: dx > 0 ? dx : width, bottom: height });
+        if (dy) dirty.push({ left: Math.max(0, dx), top: dy > 0 ? 0 : height + dy, right: Math.min(width, width + dx), bottom: dy > 0 ? dy : height });
       } else dirty.push({ left: 0, top: 0, right: width, bottom: height });
-      cache = { canvas, world: this.world, scale, left: x, top: y,
-        right: x + canvas.width / scale, bottom: y + canvas.height / scale };
+
+      cache = { canvas, world: this.world, scale, left: x, top: y, right: x + canvas.width / scale, bottom: y + canvas.height / scale };
       for (const strip of dirty) {
         ctx.save();
-        ctx.beginPath(); ctx.rect(strip.left, strip.top, strip.right - strip.left, strip.bottom - strip.top); ctx.clip();
+        ctx.beginPath();
+        ctx.rect(strip.left, strip.top, strip.right - strip.left, strip.bottom - strip.top);
+        ctx.clip();
         ctx.fillStyle = TERRAIN.grass;
         ctx.fillRect(strip.left, strip.top, strip.right - strip.left, strip.bottom - strip.top);
         ctx.setTransform(scale, 0, 0, scale, -x * scale, -y * scale);
-        // Include neighbours so scenery, shores and washes keep their original edges.
-        this.drawTerrain(time, ctx, { left: x + strip.left / scale - 100, top: y + strip.top / scale - 100,
-          right: x + strip.right / scale + 100, bottom: y + strip.bottom / scale + 100 });
+        this.drawTerrain(time, ctx, {
+          left: x + strip.left / scale - 100,
+          top: y + strip.top / scale - 100,
+          right: x + strip.right / scale + 100,
+          bottom: y + strip.bottom / scale + 100,
+        });
         ctx.restore();
       }
       this.terrainCache = cache;
     }
-    this.ctx.drawImage(cache.canvas, cache.left, cache.top,
-      cache.canvas.width / scale, cache.canvas.height / scale);
+    this.ctx.drawImage(cache.canvas, cache.left, cache.top, cache.canvas.width / scale, cache.canvas.height / scale);
   }
 
   private drawTerrain(time: number, ctx = this.ctx, bounds = this.bounds): void {
     const waterPlants: { x: number; y: number; variation: number; shore: number }[] = [];
     const transform = ctx.getTransform();
-    type SurfaceKind = 'grass' | 'path' | 'mud' | 'stone' | 'water'| 'snow' | 'ice';
+    type SurfaceKind = 'grass' | 'path' | 'mud' | 'stone' | 'water' | 'snow' | 'ice';
     const scenery = (tile: TileKind) => tile === 'rock' || tile === 'bush';
+
     const rawSurfaceAt = (tx: number, ty: number): SurfaceKind | null => {
       if (this.outsideLocalMap(tx, ty)) return null;
       if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return null;
@@ -578,21 +712,21 @@ export class Renderer {
       const dungeon = this.world.mode === 'world' ? this.dungeonAt(tx, ty) : undefined;
       if (dungeon && tile === dungeon.layout.floor) return 'stone';
       return tile === 'path' || tile === 'mud' || tile === 'water' || tile === 'snow' || tile === 'ice'
-        ? tile 
+        ? tile
         : 'grass';
     };
+
     const inferredScenerySurface = (tx: number, ty: number): SurfaceKind => {
-      // Obstacles are a transparent visual layer. Existing dungeon files do not
-      // store an underlay, so inherit the nearest visible material instead of
-      // assigning rocks to dungeon floor and bushes to grass.
       for (let radius = 1; radius <= 4; radius++) {
         const scores = new Map<SurfaceKind, number>();
         const offsets: [number, number][] = radius === 1
           ? [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [1, 1], [-1, 1]]
           : [];
-        if (radius > 1) for (let offset = -radius; offset <= radius; offset++) {
-          offsets.push([-radius, offset], [radius, offset]);
-          if (Math.abs(offset) !== radius) offsets.push([offset, -radius], [offset, radius]);
+        if (radius > 1) {
+          for (let offset = -radius; offset <= radius; offset++) {
+            offsets.push([-radius, offset], [radius, offset]);
+            if (Math.abs(offset) !== radius) offsets.push([offset, -radius], [offset, radius]);
+          }
         }
         for (const [dx, dy] of offsets) {
           const candidate = rawSurfaceAt(tx + dx, ty + dy);
@@ -602,13 +736,15 @@ export class Renderer {
         }
         if (scores.size) {
           let best: SurfaceKind = scores.keys().next().value!;
-          for (const [candidate, score] of scores)
+          for (const [candidate, score] of scores) {
             if (score > scores.get(best)!) best = candidate;
+          }
           return best;
         }
       }
       return this.dungeonAt(tx, ty) ? 'stone' : 'grass';
     };
+
     const surfaces = new Map<string, SurfaceKind | null>();
     const surfaceAt = (tx: number, ty: number): SurfaceKind | null => {
       if (this.outsideLocalMap(tx, ty)) return null;
@@ -619,22 +755,26 @@ export class Renderer {
       surfaces.set(key, surface);
       return surface;
     };
+
     const surfaceColor = (surface: Exclude<SurfaceKind, 'water'>, tx: number, ty: number) => {
-      if (surface === 'grass')
+      if (surface === 'grass') {
         return groundColor(
-          this.world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE),
+          this.world.getMoisture((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE),
           this.world.getTemperature(tx, ty)
         );
-      // AGGIUNGI QUESTA RIGA PER LA STRADA:
-      if (surface === 'path')
-        return pathColor(this.world.getTemperature(tx, ty));
+      }
+      if (surface === 'path') return pathColor(this.world.getTemperature(tx, ty));
       if (surface === 'stone') return this.dungeonAt(tx, ty)?.theme.floor ?? TERRAIN.path;
       return TERRAIN[surface];
     };
+
     const cornerNeighbours = [
-      [[0, -1], [-1, 0], [-1, -1]], [[0, -1], [1, 0], [1, -1]],
-      [[0, 1], [1, 0], [1, 1]], [[0, 1], [-1, 0], [-1, 1]],
+      [[0, -1], [-1, 0], [-1, -1]],
+      [[0, -1], [1, 0], [1, -1]],
+      [[0, 1], [1, 0], [1, 1]],
+      [[0, 1], [-1, 0], [-1, 1]],
     ] as const;
+
     type ShoreBacking = { surface: Exclude<SurfaceKind, 'water'>; sourceX: number; sourceY: number };
     const shoreBackings = new Map<string, ShoreBacking>();
     const shoreBackingAt = (tx: number, ty: number): ShoreBacking => {
@@ -646,8 +786,12 @@ export class Renderer {
         if (!surface || surface === 'water') continue;
         const existing = candidates.get(surface);
         const score = (existing?.score ?? 0) + (dx === 0 || dy === 0 ? 2 : 1);
-        candidates.set(surface, { surface, sourceX: existing?.sourceX ?? tx + dx,
-          sourceY: existing?.sourceY ?? ty + dy, score });
+        candidates.set(surface, {
+          surface,
+          sourceX: existing?.sourceX ?? tx + dx,
+          sourceY: existing?.sourceY ?? ty + dy,
+          score,
+        });
       }
       let best: (ShoreBacking & { score: number }) | undefined;
       for (const candidate of candidates.values()) if (!best || candidate.score > best.score) best = candidate;
@@ -657,12 +801,13 @@ export class Renderer {
       shoreBackings.set(key, backing);
       return backing;
     };
-    // Cache just the visible chunks; sampling terrain then avoids regenerating tile noise every frame.
+
     for (let cy = Math.floor(bounds.top / CHUNK_SIZE); cy <= Math.floor(bounds.bottom / CHUNK_SIZE); cy++) {
       for (let cx = Math.floor(bounds.left / CHUNK_SIZE); cx <= Math.floor(bounds.right / CHUNK_SIZE); cx++) {
         this.world.getChunk(cx, cy);
       }
     }
+
     for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
       for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
         if (this.outsideLocalMap(tx, ty) || (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7))) {
@@ -676,105 +821,74 @@ export class Renderer {
         const variation = noise(tx, ty);
         const surface = surfaceAt(tx, ty);
         const waterBacking = tile === 'water' ? shoreBackingAt(tx, ty) : undefined;
-        ctx.fillStyle = waterBacking ? surfaceColor(waterBacking.surface, waterBacking.sourceX, waterBacking.sourceY)
-          : surface && surface !== 'water' ? surfaceColor(surface, tx, ty)
-          : dungeon ? dungeon.theme.floor : TERRAIN.grass;
-        // Opaque, pixel-aligned coverage avoids hairline seams at fractional camera zoom.
+
+        ctx.fillStyle = waterBacking
+          ? surfaceColor(waterBacking.surface, waterBacking.sourceX, waterBacking.sourceY)
+          : surface && surface !== 'water'
+            ? surfaceColor(surface, tx, ty)
+            : dungeon ? dungeon.theme.floor : TERRAIN.grass;
+
         const left = Math.floor(x * transform.a + transform.e);
         const top = Math.floor(y * transform.d + transform.f);
         const right = Math.ceil((x + TILE_SIZE) * transform.a + transform.e);
         const bottom = Math.ceil((y + TILE_SIZE) * transform.d + transform.f);
-        ctx.fillRect((left - transform.e) / transform.a, (top - transform.f) / transform.d,
-          (right - left) / transform.a, (bottom - top) / transform.d);
+        ctx.fillRect((left - transform.e) / transform.a, (top - transform.f) / transform.d, (right - left) / transform.a, (bottom - top) / transform.d);
+
         if (tile === 'water') {
-          // The water atlas exposes its backing around curved banks. Blend that
-          // backing at mixed grass/path ends before placing the transparent sprite.
           for (let corner = 0; corner < 4; corner++) {
             const [aOffset, bOffset, diagonalOffset] = cornerNeighbours[corner];
             const a = surfaceAt(tx + aOffset[0], ty + aOffset[1]);
             const b = surfaceAt(tx + bOffset[0], ty + bOffset[1]);
             const diagonal = surfaceAt(tx + diagonalOffset[0], ty + diagonalOffset[1]);
-            if (!diagonal || diagonal === 'water' || diagonal === waterBacking!.surface
-              || (a !== diagonal && b !== diagonal)) continue;
+            if (!diagonal || diagonal === 'water' || diagonal === waterBacking!.surface || (a !== diagonal && b !== diagonal)) continue;
             const dungeonJunction = diagonal === 'stone' || waterBacking!.surface === 'stone';
-            const walkwayJunction = (diagonal === 'path' && waterBacking!.surface === 'grass')
-              || (diagonal === 'grass' && waterBacking!.surface === 'path');
+            const walkwayJunction = (diagonal === 'path' && waterBacking!.surface === 'grass') || (diagonal === 'grass' && waterBacking!.surface === 'path');
             const radius = dungeonJunction ? 19 : walkwayJunction ? 17 : 13;
             const color = surfaceColor(diagonal, tx + diagonalOffset[0], ty + diagonalOffset[1]);
             this.environmentArt.roundTerrainCorner(ctx, x, y, corner, color, radius);
-
-            coverTileBleed(ctx, tx + (corner === 1 || corner === 2 ? 1 : 0),
-              ty + (corner === 2 || corner === 3 ? 1 : 0), corner, radius, color, transform.a);
+            coverTileBleed(ctx, tx + (corner === 1 || corner === 2 ? 1 : 0), ty + (corner === 2 || corner === 3 ? 1 : 0), corner, radius, color, transform.a);
           }
           const shore = this.drawWater(tx, ty, x, y, time, ctx);
           if (shore) waterPlants.push({ x, y, variation: noise(tx, ty, 17), shore });
         } else if (tile === 'rock' || tile === 'bush') {
-          // All scenery, including dungeon obstacles, uses the shared 1x1/2x2 pass below.
+          // Gestito dal pass sceneryGroups
         } else {
           const isCold = this.world.getTemperature(tx, ty) < 0.28;
           this.environmentArt.draw(ctx, tile, x, y, variation, 0, 1, 1, isCold);
         }
       }
     }
-    // Paint only after opaque coverage, so neighbouring cells cannot erase brush edges.
-    // Nel ciclo di paintGround in drawTerrain (verso riga 430):
-    // Nel ciclo di paintGround in drawTerrain (verso riga 430):
-// Nel ciclo di paintGround in drawTerrain (verso riga 430):
-// In drawTerrain (verso riga 430), all'interno del ciclo dei tile:
-for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
-  for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
-    if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) continue;
-    const surface = surfaceAt(tx, ty);
-    if (surface && surface !== 'water') {
-      this.environmentArt.paintGround(ctx,
-        surface === 'stone' ? 'path' : surface, tx * TILE_SIZE, ty * TILE_SIZE, surface === 'stone');
 
-      // -------------------------------------------------------------
-      // 1. SNOWBANKS CICCIOTTI SUI BORDI DELLA NEVE (MAI VERSO IL GHIACCIO)
-      // -------------------------------------------------------------
-      if (surface === 'snow') {
-        const isGround = (s: SurfaceKind | null) => s === 'grass' || s === 'mud' || s === 'path' || s === 'stone';
-        const north = isGround(surfaceAt(tx, ty - 1));
-        const south = isGround(surfaceAt(tx, ty + 1));
-        const west  = isGround(surfaceAt(tx - 1, ty));
-        const east  = isGround(surfaceAt(tx + 1, ty));
+    for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
+      for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
+        if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) continue;
+        const surface = surfaceAt(tx, ty);
+        if (surface && surface !== 'water') {
+          this.environmentArt.paintGround(ctx, surface === 'stone' ? 'path' : surface, tx * TILE_SIZE, ty * TILE_SIZE, surface === 'stone');
 
-        if (north || south || west || east) {
-          this.environmentArt.drawSnowBanks(
-            ctx,
-            tx * TILE_SIZE,
-            ty * TILE_SIZE,
-            north,
-            south,
-            west,
-            east,
-            noise(tx, ty)
-          );
-        }
-      }
+          if (surface === 'snow') {
+            const isGround = (s: SurfaceKind | null) => s === 'grass' || s === 'mud' || s === 'path' || s === 'stone';
+            const north = isGround(surfaceAt(tx, ty - 1));
+            const south = isGround(surfaceAt(tx, ty + 1));
+            const west = isGround(surfaceAt(tx - 1, ty));
+            const east = isGround(surfaceAt(tx + 1, ty));
 
-      // -------------------------------------------------------------
-      // 2. CHIAZZE PROGRESSIVE E INGOMBRANTI (SOLO SU TERRA/ERBA, MAI SU GHIACCIO)
-      // -------------------------------------------------------------
-      if (surface === 'grass' || surface === 'mud' || surface === 'stone') {
-        const temp = this.world.getTemperature(tx, ty);
-        if (temp < 0.38) {
-          // Level 3 (temp < 0.30): CHIAZZE ENORMI a ridosso della neve
-          // Level 2 (temp < 0.33): chiazze medie
-          // Level 1 (temp < 0.36): fiocchi e chiazze rade
-          const level = temp < 0.30 ? 3 : temp < 0.34 ? 2 : 1;
-          this.environmentArt.drawSnowFringe(
-            ctx,
-            tx * TILE_SIZE,
-            ty * TILE_SIZE,
-            noise(tx, ty),
-            level
-          );
+            if (north || south || west || east) {
+              this.environmentArt.drawSnowBanks(ctx, tx * TILE_SIZE, ty * TILE_SIZE, north, south, west, east, noise(tx, ty));
+            }
+          }
+
+          if (surface === 'grass' || surface === 'mud' || surface === 'stone') {
+            const temp = this.world.getTemperature(tx, ty);
+            if (temp < 0.38) {
+              const level = temp < 0.30 ? 3 : temp < 0.34 ? 2 : 1;
+              this.environmentArt.drawSnowFringe(ctx, tx * TILE_SIZE, ty * TILE_SIZE, noise(tx, ty), level);
+            }
+          }
         }
       }
     }
-  }
-}
+
     const seamAccents = new Map<string, { x: number; y: number; variation: number }>();
     const vertexQuadrants = [[-1, -1, 2], [0, -1, 3], [0, 0, 0], [-1, 0, 1]] as const;
     for (let vy = Math.floor(bounds.top / TILE_SIZE); vy <= Math.floor(bounds.bottom / TILE_SIZE) + 1; vy++) {
@@ -799,9 +913,7 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
           overlaySurface = majority.surface!;
           overlayTx = majority.tx;
           overlayTy = majority.ty;
-        } else if (!unique && !majority && quadrants[0].surface === quadrants[2].surface
-          && quadrants[1].surface === quadrants[3].surface) {
-          // Caso scacchiera diagonale: eseguiamo l'arrotondamento per stabilire continuità
+        } else if (!unique && !majority && quadrants[0].surface === quadrants[2].surface && quadrants[1].surface === quadrants[3].surface) {
           const surfaceA = quadrants[0].surface!;
           const surfaceB = quadrants[1].surface!;
           const priority = (s: SurfaceKind) => {
@@ -830,14 +942,12 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
           if (current === 'water' || other === 'water') continue;
 
           const dungeonJunction = current === 'stone' || other === 'stone';
-          const walkwayJunction = (current === 'path' && other === 'grass')
-            || (current === 'grass' && other === 'path');
+          const walkwayJunction = (current === 'path' && other === 'grass') || (current === 'grass' && other === 'path');
           const radius = dungeonJunction ? 19 : walkwayJunction ? 17 : 13;
           const color = surfaceColor(other, overlayTx, overlayTy);
           const ux = q.tx * TILE_SIZE, uy = q.ty * TILE_SIZE;
 
           this.environmentArt.roundTerrainCorner(ctx, ux, uy, q.corner, color, radius);
-
           coverTileBleed(ctx, vx, vy, q.corner, radius, color, transform.a);
 
           if (dungeonJunction) {
@@ -849,25 +959,25 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
         }
       }
     }
-    for (const accent of seamAccents.values())
+
+    for (const accent of seamAccents.values()) {
       this.environmentArt.drawTerrainSeam(ctx, accent.x, accent.y, accent.variation);
+    }
     this.environmentArt.paintWater(ctx, bounds, this.world);
     for (const plant of waterPlants) {
       this.environmentArt.drawWaterPlants(ctx, plant.x, plant.y, plant.variation, plant.shore);
     }
-    // Draw complete scenery after every ground tile, including groups anchored offscreen.
+
     const getScenery = (tx: number, ty: number): TileKind => {
       if (this.outsideLocalMap(tx, ty)) return 'grass';
       if (this.world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return 'grass';
       return this.world.getTile(tx, ty);
     };
-    // Trova il ciclo dei gruppi di scenery in drawTerrain:
+
     for (let ty = Math.floor(bounds.top / TILE_SIZE / 2) * 2; ty <= Math.floor(bounds.bottom / TILE_SIZE); ty += 2) {
       for (let tx = Math.floor(bounds.left / TILE_SIZE / 2) * 2; tx <= Math.floor(bounds.right / TILE_SIZE); tx += 2) {
         for (const group of sceneryGroups(getScenery, tx, ty)) {
-          // CONTROLLA SE LA SCENOGRAFIA POGGIA SULLA NEVE O SUL GHIACCIO:
           const isSnowy = surfaceAt(group.x, group.y) === 'snow' || surfaceAt(group.x, group.y) === 'ice';
-
           this.environmentArt.draw(ctx, group.tile, group.x * TILE_SIZE, group.y * TILE_SIZE,
             noise(group.x, group.y), 0, group.width, group.height, isSnowy);
         }
@@ -887,45 +997,44 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     const { x, y, radius } = ARENA_GATE;
     ctx.save();
     ctx.fillStyle = 'rgba(80, 88, 95, 0.26)';
-    circle(ctx, x, y, radius); ctx.fill();
+    circle(ctx, x, y, radius);
+    ctx.fill();
     ctx.strokeStyle = state?.phase === 'countdown' ? '#ffe3a0' : '#a5d9e8';
     ctx.lineWidth = 3;
-    circle(ctx, x, y, radius); ctx.stroke();
-    ctx.setLineDash([5, 9]); ctx.lineWidth = 1;
-    circle(ctx, x, y, radius - 10); ctx.stroke(); ctx.setLineDash([]);
+    circle(ctx, x, y, radius);
+    ctx.stroke();
+    ctx.setLineDash([5, 9]);
+    ctx.lineWidth = 1;
+    circle(ctx, x, y, radius - 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
     if (state?.startsAt) {
       const progress = Math.max(0, Math.min(1, 1 - (state.startsAt - time) / ARENA_GATE.countdownMs));
-      ctx.strokeStyle = '#ffe3a0'; ctx.lineWidth = 7;
-      ctx.beginPath(); ctx.arc(x, y, radius + 7, -Math.PI / 2, -Math.PI / 2 + progress * TAU); ctx.stroke();
+      ctx.strokeStyle = '#ffe3a0';
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.arc(x, y, radius + 7, -Math.PI / 2, -Math.PI / 2 + progress * TAU);
+      ctx.stroke();
     }
-    ctx.textAlign = 'center'; ctx.fillStyle = '#e5f2f475';
-    ctx.font = '700 15px system-ui'; ctx.fillText('ARENA 1 VS 1', x, y - radius - 22);
-    ctx.font = '12px system-ui'; ctx.fillText('Entra nel cerchio', x, y + radius + 24);
-    ctx.font = '700 28px system-ui'; ctx.fillText('⚔', x, y + 9);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e5f2f475';
+    ctx.font = '700 15px system-ui';
+    ctx.fillText('ARENA 1 VS 1', x, y - radius - 22);
+    ctx.font = '12px system-ui';
+    ctx.fillText('Entra nel cerchio', x, y + radius + 24);
+    ctx.font = '700 28px system-ui';
+    ctx.fillText('⚔', x, y + 9);
     ctx.restore();
   }
 
-  // Puoi impostare questo booleano a true/false per accendere o spegnere il meteo
- // Puoi impostare questo booleano a true/false per accendere o spegnere il meteo
-  
-
   private drawRain(time: number): void {
-    
     const { ctx, width, height } = this;
     ctx.save();
-
-    // -------------------------------------------------------------
-    // 1. FILTRO ATMOSFERICO TEMPORALESCO
-    // -------------------------------------------------------------
     ctx.fillStyle = 'rgba(18, 32, 44, 0.22)';
     ctx.fillRect(0, 0, width, height);
 
-    // -------------------------------------------------------------
-    // 2. GOCCE DI PIOGGIA NELL'ARIA (Densità dinamica proporzionale allo zoom)
-    // -------------------------------------------------------------
     const wind = 0.22;
-    // Calcola le gocce in base all'area reale: la fittezza della pioggia non cambia mai!
-    const dropCount = Math.round((width * height) / 4600);
+    const dropCount = Math.round((width * height) / 9200);
 
     ctx.strokeStyle = 'rgba(215, 238, 255, 0.42)';
     ctx.lineWidth = 0.8;
@@ -951,10 +1060,6 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     }
     ctx.stroke();
 
-    // -------------------------------------------------------------
-    // 3. SCHIZZI CHE TOCCANO IL TERRENO (Densità costante e ancorati 1:1)
-    // -------------------------------------------------------------
-    // La griglia nel mondo si adatta allo zoom così la frequenza degli schizzi a video resta uniforme
     const CELL = 110 / this.zoom;
     const viewW = width / this.zoom;
     const viewH = height / this.zoom;
@@ -969,15 +1074,12 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     for (let gy = startGY; gy <= endGY; gy++) {
       for (let gx = startGX; gx <= endGX; gx++) {
         const seed = noise(gx, gy, 31);
-        if (seed < 0.65) continue; // Mantiene la percentuale di schizzi bilanciata
+        if (seed < 0.65) continue;
 
         const cycle = (time * 0.0028 + seed * 10) % 1;
-
-        // Coordinate fisse del terreno nel mondo
         const worldX = gx * CELL + noise(gx, gy, 1) * CELL;
         const worldY = gy * CELL + noise(gx, gy, 2) * CELL;
 
-        // Proiezione a schermo bloccata sul terreno (nessun slittamento)
         const posX = (worldX - this.camera.x) * this.zoom + width / 2;
         const posY = (worldY - this.camera.y) * this.zoom + height / 2;
 
@@ -990,26 +1092,18 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
         ctx.stroke();
       }
     }
-
     ctx.restore();
   }
-  /** Nevicata procedurale atmosferica: 3 livelli di profondità, oscillazione del vento e zero RAM */
-  /** Nevicata lenta, soffice e costante a schermo (non segue i tuoi movimenti) */
-  /** Nevicata ancorata 1:1 al mondo: i fiocchi cadono lenti nel mondo e ci cammini attraverso */
+
   private drawSnow(time: number): void {
     const { ctx, width, height } = this;
     ctx.save();
-
-    // 1. Leggerissima velatura fredda atmosferica a schermo
     ctx.fillStyle = 'rgba(215, 235, 250, 0.04)';
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Area del mondo visibile dalla telecamera (con margine per non vedere i fiocchi comparire dal nulla)
     const margin = 80;
     const boxW = width / this.zoom + margin * 2;
     const boxH = height / this.zoom + margin * 2;
-
-    // Densità proporzionata all'area visibile del mondo
     const flakeCount = Math.round((boxW * boxH) / 6000);
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.90)';
@@ -1018,60 +1112,40 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     for (let i = 0; i < flakeCount; i++) {
       const seed = i * 4919;
       const depth = i % 3;
-
-      // CADUTA LENTA NEL MONDO: da 30 a 55 pixel al secondo in coordinate del mondo
       const fallSpeed = 0.035 + depth * 0.018;
       const radius = (1.0 + depth * 0.75) * Math.max(0.85, this.zoom);
 
-      // Posizione base fissa nel mondo
       const seedX = Math.abs(Math.sin(seed) * 100000) % boxW;
       const seedY = Math.abs(Math.cos(seed) * 100000) % boxH;
-
-      // Volteggio orizzontale lento e dolce
       const sway = Math.sin(time * 0.0012 + seed) * 12;
 
-      // Posizione nel mondo a questo istante temporale
       const worldFallY = time * fallSpeed;
       const worldDriftX = time * 0.008 + sway;
 
-      // Calcolo relativo alla telecamera: quando ti muovi, i fiocchi RESTANO FERMI NEL MONDO!
       const dx = ((seedX + worldDriftX - this.camera.x) % boxW + boxW * 1.5) % boxW - boxW / 2;
       const dy = ((seedY + worldFallY - this.camera.y) % boxH + boxH * 1.5) % boxH - boxH / 2;
 
-      // Conversione finale a coordinate schermo
       const screenX = dx * this.zoom + width / 2;
       const screenY = dy * this.zoom + height / 2;
 
       ctx.moveTo(screenX + radius, screenY);
       ctx.arc(screenX, screenY, radius, 0, TAU);
     }
-
     ctx.fill();
     ctx.restore();
   }
 
-  /** Vignettatura cinematografica morbida: scurisce leggermente i bordi dello schermo */
-  /** Vignettatura marcata e cinematografica */
   private drawVignette(): void {
     const { ctx, width, height } = this;
     ctx.save();
-
     const maxDim = Math.max(width, height);
-    
-    // Il buio inizia già al 15% dal centro e raggiunge la massima oscurità agli angoli
     const vignette = ctx.createRadialGradient(
       width / 2, height / 2, maxDim * 0.15,
       width / 2, height / 2, maxDim * 0.58
     );
-    
-    // 0 = Centro perfetto: 100% trasparente (piena visibilità sul personaggio)
     vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    
-    // 0.5 = Metà schermo: l'ombra inizia a farsi notare chiaramente
     vignette.addColorStop(0.75, 'rgba(0, 0, 0, 0.45)');
-    
-    // 1 = Bordi e angoli dello schermo: ombra scura e decisa (65% di nero)
-    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.75)'); 
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.75)');
 
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, width, height);
@@ -1129,7 +1203,6 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
   private drawDungeon(definition: DungeonDefinition): void {
     const { ctx } = this;
     ctx.save();
-    // Weathered stones guide the eye along the trail without floating sign text.
     const normal = dungeonApproachNormal(definition);
     for (const [index, progress] of definition.approach.markers.entries()) {
       const center = dungeonApproachPoint(definition, progress), side = index % 2 ? 1 : -1;
@@ -1144,10 +1217,7 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
   }
 
   private drawCrossroads(time: number): void {
-    // -------------------------------------------------------------
-    // OTTIMIZZAZIONE (CULLING): Se è fuori schermo, esci subito!
-    // -------------------------------------------------------------
-    const margin = OUTPOST.radius + 70; // Raggio + margine per fumi e bagliori
+    const margin = OUTPOST.radius + 70;
     if (
       this.bounds.right < OUTPOST.x - margin ||
       this.bounds.left > OUTPOST.x + margin ||
@@ -1160,11 +1230,7 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     const { ctx } = this;
     ctx.save();
 
-    // -------------------------------------------------------------
-    // FUNZIONE DI SUPPORTO PER FIAMME REALISTICHE E FLUIDE
-    // -------------------------------------------------------------
     const drawRealisticFlame = (x: number, y: number, w: number, h: number, seed: number) => {
-      // Tempo rallentato + oscillazione armonica asincrona (3 frequenze)
       const t = time * 0.0042;
       const sway1 = Math.sin(t + seed) * 0.5 + Math.sin(t * 2.1 + seed * 1.7) * 0.3 + Math.sin(t * 4.3 + seed * 3.1) * 0.2;
       const sway2 = Math.cos(t * 0.85 + seed * 2.2) * 0.5 + Math.sin(t * 1.9 + seed * 0.9) * 0.35 + Math.cos(t * 3.7) * 0.15;
@@ -1174,7 +1240,6 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       const tipX = sway1 * (w * 0.7);
       const tipY = -curH;
 
-      // 1. Bagliore caldo e morbido sul terreno/aria
       const glowR = Math.max(w * 3.2, curH * 1.55);
       const g = ctx.createRadialGradient(x, y - curH * 0.3, 2, x, y - curH * 0.3, glowR);
       g.addColorStop(0, 'rgba(255, 175, 45, 0.42)');
@@ -1184,64 +1249,36 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       circle(ctx, x, y - curH * 0.3, glowR);
       ctx.fill();
 
-      // 2. Lingua esterna (Rosso cremisi e arancio scuro fluido)
       ctx.fillStyle = '#db4716';
       ctx.beginPath();
       ctx.moveTo(x - w, y);
-      ctx.bezierCurveTo(
-        x - w * 1.1 + sway2 * 4, y - curH * 0.35,
-        x - w * 0.4 + sway1 * 5, y - curH * 0.75,
-        x + tipX, y + tipY
-      );
-      ctx.bezierCurveTo(
-        x + w * 0.45 + sway2 * 5, y - curH * 0.7,
-        x + w * 1.05 - sway1 * 3, y - curH * 0.35,
-        x + w, y
-      );
+      ctx.bezierCurveTo(x - w * 1.1 + sway2 * 4, y - curH * 0.35, x - w * 0.4 + sway1 * 5, y - curH * 0.75, x + tipX, y + tipY);
+      ctx.bezierCurveTo(x + w * 0.45 + sway2 * 5, y - curH * 0.7, x + w * 1.05 - sway1 * 3, y - curH * 0.35, x + w, y);
       ctx.closePath();
       ctx.fill();
 
-      // 3. Lingua intermedia (Arancio vivo)
       ctx.fillStyle = '#f0841f';
       const midW = w * 0.68;
       const midH = curH * 0.78;
       const midTipX = sway2 * (midW * 0.6);
       ctx.beginPath();
       ctx.moveTo(x - midW, y);
-      ctx.bezierCurveTo(
-        x - midW * 0.9, y - midH * 0.4,
-        x - midW * 0.3 + sway1 * 3, y - midH * 0.75,
-        x + midTipX, y - midH
-      );
-      ctx.bezierCurveTo(
-        x + midW * 0.3 + sway2 * 3, y - midH * 0.7,
-        x + midW * 0.9, y - midH * 0.4,
-        x + midW, y
-      );
+      ctx.bezierCurveTo(x - midW * 0.9, y - midH * 0.4, x - midW * 0.3 + sway1 * 3, y - midH * 0.75, x + midTipX, y - midH);
+      ctx.bezierCurveTo(x + midW * 0.3 + sway2 * 3, y - midH * 0.7, x + midW * 0.9, y - midH * 0.4, x + midW, y);
       ctx.closePath();
       ctx.fill();
 
-      // 4. Cuore interno candido (Giallo zafferano/bianco incandescente)
       ctx.fillStyle = '#fff194';
       const coreW = w * 0.36;
       const coreH = curH * 0.48;
       const coreTipX = (sway1 + sway2) * 0.5 * (coreW * 0.5);
       ctx.beginPath();
       ctx.moveTo(x - coreW, y);
-      ctx.bezierCurveTo(
-        x - coreW * 0.8, y - coreH * 0.4,
-        x - coreW * 0.2, y - coreH * 0.8,
-        x + coreTipX, y - coreH
-      );
-      ctx.bezierCurveTo(
-        x + coreW * 0.2, y - coreH * 0.8,
-        x + coreW * 0.8, y - coreH * 0.4,
-        x + coreW, y
-      );
+      ctx.bezierCurveTo(x - coreW * 0.8, y - coreH * 0.4, x - coreW * 0.2, y - coreH * 0.8, x + coreTipX, y - coreH);
+      ctx.bezierCurveTo(x + coreW * 0.2, y - coreH * 0.8, x + coreW * 0.8, y - coreH * 0.4, x + coreW, y);
       ctx.closePath();
       ctx.fill();
 
-      // 5. Faville e scintille organiche (salgono fluide con dissolvenza a seno)
       const sparkCount = w > 12 ? 5 : 3;
       for (let s = 0; s < sparkCount; s++) {
         const sparkSpeed = 0.0016 + (s % 3) * 0.0005;
@@ -1258,9 +1295,6 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       }
     };
 
-    // -------------------------------------------------------------
-    // 1. TERRENO: Bagliore e Pavimentazione a Ciottoli
-    // -------------------------------------------------------------
     const campGlow = ctx.createRadialGradient(OUTPOST.x, OUTPOST.y, 10, OUTPOST.x, OUTPOST.y, OUTPOST.radius);
     campGlow.addColorStop(0, 'rgba(224, 166, 85, 0.08)');
     campGlow.addColorStop(0.7, 'rgba(110, 160, 120, 0.04)');
@@ -1288,13 +1322,10 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // -------------------------------------------------------------
-    // 2. CONFINE: Rocce e Menhir Irregolari
-    // -------------------------------------------------------------
     const numMonoliths = 22;
     for (let i = 0; i < numMonoliths; i++) {
       const baseAngle = (i * TAU) / numMonoliths;
-      if (baseAngle > 1.3 && baseAngle < 1.84) continue; // Varco PvP aperto
+      if (baseAngle > 1.3 && baseAngle < 1.84) continue;
 
       const angle = baseAngle + Math.sin(i * 12.3) * 0.04;
       const r = OUTPOST.radius + Math.cos(i * 7.1) * 7;
@@ -1334,9 +1365,6 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       ctx.restore();
     }
 
-    // -------------------------------------------------------------
-    // 3. BRACIERI PERIMETRALI (Con Fiamme Fluide e Lente)
-    // -------------------------------------------------------------
     const brazierAngles = [
       -Math.PI * 0.75, -Math.PI * 0.5, -Math.PI * 0.25, 0,
       Math.PI * 0.25, Math.PI * 0.42, Math.PI * 0.58, Math.PI * 0.75, Math.PI
@@ -1350,32 +1378,24 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       ctx.save();
       ctx.translate(bx, by);
 
-      // Treppiede / braciere in ferro battuto
       ctx.fillStyle = '#222520';
       ctx.fillRect(-7, 2, 14, 4);
       polygon(ctx, [-6, 3, -10, 11, -7, 11, -4, 3]); ctx.fill();
       polygon(ctx, [6, 3, 10, 11, 7, 11, 4, 3]); ctx.fill();
       polygon(ctx, [-9, 2, 9, 2, 6, -3, -6, -3]); ctx.fill();
 
-      // Brace scura
       ctx.fillStyle = '#7a2512';
       circle(ctx, 0, -1, 5);
       ctx.fill();
 
-      // Disegna la fiamma fluida per il braciere
       drawRealisticFlame(0, -2, 6.5, 17, b * 4.3);
-
       ctx.restore();
     }
 
-    // -------------------------------------------------------------
-    // 4. FALÒ CENTRALE DELL'ACCAMPAMENTO
-    // -------------------------------------------------------------
     const fireX = OUTPOST.x, fireY = OUTPOST.y + 38;
     ctx.save();
     ctx.translate(fireX, fireY);
 
-    // Cerchio di sassi attorno al fuoco
     for (let r = 0; r < 8; r++) {
       const rockAng = (r * TAU) / 8;
       ctx.fillStyle = '#545248';
@@ -1383,7 +1403,6 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       ctx.fill();
     }
 
-    // Ceppi di legna incrociati
     ctx.strokeStyle = '#3d2516';
     ctx.lineWidth = 5;
     ctx.beginPath();
@@ -1391,19 +1410,13 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     ctx.moveTo(-14, 8); ctx.lineTo(14, -8);
     ctx.stroke();
 
-    // Brace viva
     ctx.fillStyle = '#b33112';
     circle(ctx, 0, 0, 11);
     ctx.fill();
 
-    // Grande fiamma centrale fluida e calda
     drawRealisticFlame(0, 0, 12, 30, 99.1);
-
     ctx.restore();
 
-    // -------------------------------------------------------------
-    // 5. TESTI E INDICAZIONI
-    // -------------------------------------------------------------
     ctx.font = '700 11px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#f5e8c4';
@@ -1427,16 +1440,28 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
   private drawPickup(pickup: Pickup, time: number): void {
     const { ctx } = this;
     const bob = Math.sin(time * 0.0025 + pickup.x) * 2.5;
-    ctx.save(); ctx.translate(pickup.x, pickup.y);
-    ctx.fillStyle = 'rgba(26,38,25,0.2)'; ctx.beginPath(); ctx.ellipse(0, 7, 11, 4, 0, 0, TAU); ctx.fill();
+    ctx.save();
+    ctx.translate(pickup.x, pickup.y);
+    ctx.fillStyle = 'rgba(26,38,25,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(0, 7, 11, 4, 0, 0, TAU);
+    ctx.fill();
+
     const glow = ctx.createRadialGradient(0, bob, 2, 0, bob, 20);
-    glow.addColorStop(0, `${PICKUP_COLORS[pickup.kind]}44`); glow.addColorStop(1, `${PICKUP_COLORS[pickup.kind]}00`);
-    ctx.fillStyle = glow; circle(ctx, 0, bob, 20); ctx.fill();
+    glow.addColorStop(0, `${PICKUP_COLORS[pickup.kind]}44`);
+    glow.addColorStop(1, `${PICKUP_COLORS[pickup.kind]}00`);
+    ctx.fillStyle = glow;
+    circle(ctx, 0, bob, 20);
+    ctx.fill();
+
     ctx.translate(0, bob);
     polygon(ctx, [0, -10, 8, 0, 0, 10, -8, 0]);
-    ctx.fillStyle = '#394938'; ctx.fill();
-    ctx.strokeStyle = PICKUP_COLORS[pickup.kind]; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.strokeStyle = PICKUP_COLORS[pickup.kind]; ctx.lineWidth = 1.5;
+    ctx.fillStyle = '#394938';
+    ctx.fill();
+    ctx.strokeStyle = PICKUP_COLORS[pickup.kind];
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
     ctx.beginPath();
     if (pickup.kind === 'heal') {
       ctx.moveTo(-3.5, 0); ctx.lineTo(3.5, 0); ctx.moveTo(0, -3.5); ctx.lineTo(0, 3.5);
@@ -1447,16 +1472,27 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     } else {
       ctx.moveTo(-3, -3); ctx.lineTo(3, 3); ctx.moveTo(3, -3); ctx.lineTo(-3, 3);
     }
-    ctx.stroke(); ctx.restore();
+    ctx.stroke();
+    ctx.restore();
   }
 
-  private drawActor(actor: Actor, time: number, self: boolean, allied: boolean, selected: boolean,
-    hitTargets: ReadonlySet<string>, moveDirection?: Vec2 | null, detailed = true): void {
+  private drawActor(
+    actor: Actor,
+    time: number,
+    self: boolean,
+    allied: boolean,
+    selected: boolean,
+    hitTargets: ReadonlySet<string>,
+    moveDirection?: Vec2 | null,
+    detailed = true
+  ): void {
     const { ctx } = this;
     const dead = actor.hp <= 0;
     const color = dead ? '#91968a' : CLASSES[actor.classId].color;
     const r = actor.radius || PLAYER_RADIUS;
-    ctx.save(); ctx.translate(actor.x, actor.y);
+    ctx.save();
+    ctx.translate(actor.x, actor.y);
+
     if (actor.hidden) ctx.globalAlpha = self || allied ? 0.58 : 0.32;
     if (actor.effects.some(effect => effect.kind === 'root' && effect.until > time)) {
       ctx.strokeStyle = '#6ebd57';
@@ -1472,69 +1508,111 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     if (dead) ctx.globalAlpha = 0.45;
     if (detailed) {
       ctx.fillStyle = 'rgba(36, 48, 37, 0.28)';
-      ctx.beginPath(); ctx.ellipse(1, 13, r + 5, r * 0.56, 0, 0, TAU); ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(1, 13, r + 5, r * 0.56, 0, 0, TAU);
+      ctx.fill();
     }
     if (self || allied || selected) {
       ctx.strokeStyle = self ? '#f1e7c2' : allied ? '#abd6c0' : '#f0b7a0';
       ctx.lineWidth = selected ? 2 : 1.5;
       if (!self && !selected) ctx.setLineDash([3, 4]);
-      circle(ctx, 0, 0, r + 7); ctx.stroke(); ctx.setLineDash([]);
+      circle(ctx, 0, 0, r + 7);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     if (selected) {
       polygon(ctx, [-4, -r - 38, 4, -r - 38, 0, -r - 33]);
-      ctx.fillStyle = '#f5dcba'; ctx.fill();
+      ctx.fillStyle = '#f5dcba';
+      ctx.fill();
     }
     if (actor.spawnProtectedUntil > time || actor.effects.some(effect => effect.kind === 'shield' && effect.until > time)) {
-      ctx.strokeStyle = actor.spawnProtectedUntil > time ? 'rgba(199,235,213,0.65)' : '#f1dfad'; ctx.lineWidth = 2;
-      circle(ctx, 0, 0, r + 12 + Math.sin(time * 0.005) * 1.5); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,242,195,0.06)'; ctx.fill();
+      ctx.strokeStyle = actor.spawnProtectedUntil > time ? 'rgba(199,235,213,0.65)' : '#f1dfad';
+      ctx.lineWidth = 2;
+      circle(ctx, 0, 0, r + 12 + Math.sin(time * 0.005) * 1.5);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,242,195,0.06)';
+      ctx.fill();
     }
     if (actor.effects.some(effect => effect.kind === 'power' && effect.until > time)) {
-      ctx.strokeStyle = '#eacf82'; ctx.lineWidth = 1; ctx.setLineDash([3, 6]);
-      circle(ctx, 0, 0, r + 10); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = '#eacf82';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 6]);
+      circle(ctx, 0, 0, r + 10);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     if (actor.effects.some(effect => effect.kind === 'weakness' && effect.until > time)) {
-      ctx.strokeStyle = '#c798db'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(-5, r + 13); ctx.lineTo(0, r + 17); ctx.lineTo(5, r + 13); ctx.stroke();
+      ctx.strokeStyle = '#c798db';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-5, r + 13); ctx.lineTo(0, r + 17); ctx.lineTo(5, r + 13);
+      ctx.stroke();
     }
     if (actor.effects.some(effect => effect.kind === 'slow' && effect.until > time)) {
-      ctx.strokeStyle = '#9ddfea'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(-r, r + 3); ctx.lineTo(r, r + 3); ctx.stroke();
+      ctx.strokeStyle = '#9ddfea';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-r, r + 3); ctx.lineTo(r, r + 3);
+      ctx.stroke();
     }
     if (actor.effects.some(effect => effect.kind === 'haste' && effect.until > time)) {
-      ctx.save(); ctx.rotate(actor.aim);
-      ctx.strokeStyle = 'rgba(180,224,224,0.7)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(-r - 5, -5); ctx.lineTo(-r - 15, -5); ctx.moveTo(-r - 5, 5); ctx.lineTo(-r - 12, 5); ctx.stroke(); ctx.restore();
+      ctx.save();
+      ctx.rotate(actor.aim);
+      ctx.strokeStyle = 'rgba(180,224,224,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-r - 5, -5); ctx.lineTo(-r - 15, -5);
+      ctx.moveTo(-r - 5, 5); ctx.lineTo(-r - 12, 5);
+      ctx.stroke();
+      ctx.restore();
     }
+
     if (actor.kind === 'npc') this.drawNpc(actor, time, color);
     else this.drawPlayer(actor, color, dead, time, moveDirection);
+
     if (!dead && hitTargets.has(actor.id)) {
-      circle(ctx, 0, 0, r + 2); ctx.fillStyle = 'rgba(255,241,221,0.48)'; ctx.fill();
+      circle(ctx, 0, 0, r + 2);
+      ctx.fillStyle = 'rgba(255,241,221,0.48)';
+      ctx.fill();
     }
     if (self && !dead) {
-      ctx.save(); ctx.rotate(actor.aim);
+      ctx.save();
+      ctx.rotate(actor.aim);
       polygon(ctx, [r + 15, -3, r + 20, 0, r + 15, 3]);
-      ctx.fillStyle = '#f2eacb'; ctx.fill(); ctx.restore();
+      ctx.fillStyle = '#f2eacb';
+      ctx.fill();
+      ctx.restore();
     }
     if (actor.kind === 'player' || selected || actor.hp < actor.maxHp || actor.npcKind === 'boss') {
       const barWidth = actor.kind === 'player' ? 42 : 32;
       const barY = -r - 11;
-      ctx.fillStyle = 'rgba(24,32,24,0.75)'; ctx.fillRect(-barWidth / 2 - 1, barY - 1, barWidth + 2, 5);
+      ctx.fillStyle = 'rgba(24,32,24,0.75)';
+      ctx.fillRect(-barWidth / 2 - 1, barY - 1, barWidth + 2, 5);
       ctx.fillStyle = self || allied ? '#c7d59d' : actor.kind === 'npc' ? '#dab07f' : '#d49381';
       ctx.fillRect(-barWidth / 2, barY, barWidth * Math.max(0, Math.min(1, actor.hp / actor.maxHp)), 3);
+
       if (actor.kind === 'player' && detailed) {
-        ctx.textAlign = 'center'; ctx.font = `${self ? '600' : '500'} 10px Inter, system-ui, sans-serif`;
-        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(34,43,29,0.65)';
+        ctx.textAlign = 'center';
+        ctx.font = `${self ? '600' : '500'} 10px Inter, system-ui, sans-serif`;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(34,43,29,0.65)';
         const label = `${actor.name.slice(0, 20)}${self ? ' · tu' : ''}`;
-        ctx.strokeText(label, 0, barY - 7); ctx.fillStyle = self ? '#faf2d8' : allied ? '#ceebd6' : '#e7e6d7'; ctx.fillText(label, 0, barY - 7);
+        ctx.strokeText(label, 0, barY - 7);
+        ctx.fillStyle = self ? '#faf2d8' : allied ? '#ceebd6' : '#e7e6d7';
+        ctx.fillText(label, 0, barY - 7);
       } else if (selected || actor.npcKind === 'boss') {
-        ctx.textAlign = 'center'; ctx.font = '500 9px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#f0e8cf'; ctx.fillText(actor.npcKind === 'boss' && dead ? `Cadavere · ${Math.max(0, Math.ceil((actor.deadUntil - time) / 1000))}s` : `${actor.name} · ${actor.level}`, 0, barY - 6);
+        ctx.textAlign = 'center';
+        ctx.font = '500 9px Inter, system-ui, sans-serif';
+        ctx.fillStyle = '#f0e8cf';
+        ctx.fillText(actor.npcKind === 'boss' && dead ? `Cadavere · ${Math.max(0, Math.ceil((actor.deadUntil - time) / 1000))}s` : `${actor.name} · ${actor.level}`, 0, barY - 6);
       }
     }
     if (actor.hidden && self) {
-      ctx.globalAlpha = 1; ctx.font = '500 9px Inter, system-ui, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillStyle = '#e0e8be'; ctx.fillText('NASCOSTO', 0, r + 29);
+      ctx.globalAlpha = 1;
+      ctx.font = '500 9px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#e0e8be';
+      ctx.fillText('NASCOSTO', 0, r + 29);
     }
     ctx.restore();
   }
@@ -1586,23 +1664,20 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       ctx.save(); ctx.rotate(actor.aim);
       polygon(ctx, [8, 8, 27, 6, 32, 9, 27, 12, 8, 10]); ctx.fillStyle = '#e9ded0'; ctx.fill();
       ctx.strokeStyle = '#ac8760'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(12, 4); ctx.lineTo(12, 14); ctx.stroke(); ctx.restore();
-    } else if (actor.classId === 'paladin'){
+    } else if (actor.classId === 'paladin') {
       polygon(ctx, [-8, -8, 8, -8, 8, 2, 4, 8, 0, 11, -4, 8, -8, 2]); ctx.fill();
       ctx.strokeStyle = '#74643d'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(0, 6); ctx.moveTo(-4, -1); ctx.lineTo(4, -1); ctx.stroke();
       ctx.save(); ctx.rotate(actor.aim); ctx.strokeStyle = '#d9c38e'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(8, 10); ctx.lineTo(24, 10); ctx.stroke();
       ctx.fillStyle = '#eaddb3'; ctx.fillRect(20, 4, 8, 12); ctx.restore();
-    }
-    else if (actor.classId === 'hunter') {
-      // Tunica verde foresta e cappuccio da cacciatore
+    } else if (actor.classId === 'hunter') {
       polygon(ctx, [-7, -7, 0, -11, 7, -7, 7, 7, -7, 7]);
       ctx.fill();
       ctx.strokeStyle = '#394d33';
       ctx.lineWidth = 1.3;
       ctx.stroke();
-      
-      // Arco impugnato e freccia puntata nella direzione di mira
+
       ctx.save();
       ctx.rotate(actor.aim);
       ctx.strokeStyle = '#855d37';
@@ -1611,7 +1686,6 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       ctx.arc(12, 0, 15, -Math.PI * 0.38, Math.PI * 0.38);
       ctx.stroke();
 
-      // Corda tesa
       ctx.strokeStyle = '#e2ebd8';
       ctx.lineWidth = 0.9;
       ctx.beginPath();
@@ -1620,7 +1694,6 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       ctx.lineTo(12 + Math.cos(Math.PI * 0.38) * 15, Math.sin(Math.PI * 0.38) * 15);
       ctx.stroke();
 
-      // Freccia pronta
       ctx.strokeStyle = '#effae8';
       ctx.lineWidth = 1.6;
       ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(23, 0); ctx.stroke();
@@ -1629,7 +1702,6 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
       ctx.fill();
       ctx.restore();
     }
-    
   }
 
   private drawNpc(actor: Actor, time: number, color: string): void {
@@ -1659,35 +1731,81 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     if (actor.npcKind === 'boss') {
       if (actor.hp <= 0) {
         ctx.fillStyle = '#9c9479';
-        for (const [x, y] of [[-22, 0], [-2, 7], [20, -2]]) { polygon(ctx, [x - 10, y - 8, x + 9, y - 7, x + 12, y + 9, x - 7, y + 12]); ctx.fill(); ctx.stroke(); }
+        for (const [x, y] of [[-22, 0], [-2, 7], [20, -2]]) {
+          polygon(ctx, [x - 10, y - 8, x + 9, y - 7, x + 12, y + 9, x - 7, y + 12]);
+          ctx.fill();
+          ctx.stroke();
+        }
       } else if (actor.bossSkin === 'stone-warden') {
-        ctx.fillStyle = '#a99b76'; polygon(ctx, [-29, -12, -20, -28, 20, -28, 29, -12, 24, 23, -24, 23]); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#675b48'; ctx.fillRect(-14, -19, 28, 22);
-        ctx.fillStyle = '#eac773'; ctx.fillRect(-10, -12, 6, 4); ctx.fillRect(4, -12, 6, 4);
-        ctx.strokeStyle = '#e6c279'; polygon(ctx, [0, 6, 7, 14, 0, 23, -7, 14]); ctx.stroke();
+        ctx.fillStyle = '#a99b76';
+        polygon(ctx, [-29, -12, -20, -28, 20, -28, 29, -12, 24, 23, -24, 23]);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#675b48';
+        ctx.fillRect(-14, -19, 28, 22);
+        ctx.fillStyle = '#eac773';
+        ctx.fillRect(-10, -12, 6, 4);
+        ctx.fillRect(4, -12, 6, 4);
+        ctx.strokeStyle = '#e6c279';
+        polygon(ctx, [0, 6, 7, 14, 0, 23, -7, 14]);
+        ctx.stroke();
       } else {
-        // Asset-independent fallback used by newly configured bosses.
-        ctx.fillStyle = '#443a49'; polygon(ctx, [-24, -19, -12, -29, 0, -22, 12, -29, 24, -19, 27, 18, 0, 29, -27, 18]); ctx.fill(); ctx.stroke();
-        ctx.strokeStyle = '#d47a56'; ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.moveTo(-13, -21); ctx.quadraticCurveTo(-28, -36, -34, -19); ctx.moveTo(13, -21); ctx.quadraticCurveTo(28, -36, 34, -19); ctx.stroke();
-        ctx.fillStyle = '#f0a16e'; ctx.fillRect(-10, -10, 6, 4); ctx.fillRect(4, -10, 6, 4);
-        ctx.save(); ctx.rotate(actor.aim); ctx.strokeStyle = '#b86b50'; ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.moveTo(8, 8); ctx.lineTo(34, 8); ctx.stroke(); ctx.restore();
+        ctx.fillStyle = '#443a49';
+        polygon(ctx, [-24, -19, -12, -29, 0, -22, 12, -29, 24, -19, 27, 18, 0, 29, -27, 18]);
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = '#d47a56';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-13, -21); ctx.quadraticCurveTo(-28, -36, -34, -19);
+        ctx.moveTo(13, -21); ctx.quadraticCurveTo(28, -36, 34, -19);
+        ctx.stroke();
+        ctx.fillStyle = '#f0a16e';
+        ctx.fillRect(-10, -10, 6, 4);
+        ctx.fillRect(4, -10, 6, 4);
+        ctx.save();
+        ctx.rotate(actor.aim);
+        ctx.strokeStyle = '#b86b50';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(8, 8); ctx.lineTo(34, 8);
+        ctx.stroke();
+        ctx.restore();
       }
     } else if (actor.npcKind === 'wisp') {
       const bob = Math.sin(time * 0.003 + actor.x) * 2;
       polygon(ctx, [0, -r + bob, r * 0.7, bob, 0, r + bob, -r * 0.7, bob]);
-      ctx.fillStyle = '#b4c6c5'; ctx.fill(); ctx.stroke();
-      circle(ctx, 0, bob, 3); ctx.fillStyle = '#edf3db'; ctx.fill();
+      ctx.fillStyle = '#b4c6c5';
+      ctx.fill();
+      ctx.stroke();
+      circle(ctx, 0, bob, 3);
+      ctx.fillStyle = '#edf3db';
+      ctx.fill();
     } else if (actor.npcKind === 'sentinel') {
       polygon(ctx, [-r * 0.75, -r * 0.7, r * 0.55, -r, r, r * 0.2, r * 0.6, r * 0.8, -r * 0.7, r * 0.7, -r, -r * 0.1]);
-      ctx.fillStyle = '#a5a18a'; ctx.fill(); ctx.stroke();
-      ctx.strokeStyle = '#e5c68c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-5, -1); ctx.lineTo(5, -1); ctx.stroke();
+      ctx.fillStyle = '#a5a18a';
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#e5c68c';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-5, -1); ctx.lineTo(5, -1);
+      ctx.stroke();
     } else {
-      ctx.beginPath(); ctx.ellipse(0, 1, r, r * 0.8 + Math.sin(time * 0.003 + actor.y) * 0.8, 0, 0, TAU);
-      ctx.fillStyle = actor.hp <= 0 ? color : '#a5b981'; ctx.fill(); ctx.stroke();
-      ctx.fillStyle = 'rgba(225,238,190,0.35)'; ctx.beginPath(); ctx.ellipse(-4, -4, 5, 2.5, -0.4, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#3f4a37'; circle(ctx, -4, 1, 1.5); ctx.fill(); circle(ctx, 4, 1, 1.5); ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(0, 1, r, r * 0.8 + Math.sin(time * 0.003 + actor.y) * 0.8, 0, 0, TAU);
+      ctx.fillStyle = actor.hp <= 0 ? color : '#a5b981';
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(225,238,190,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(-4, -4, 5, 2.5, -0.4, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#3f4a37';
+      circle(ctx, -4, 1, 1.5);
+      ctx.fill();
+      circle(ctx, 4, 1, 1.5);
+      ctx.fill();
     }
   }
 
@@ -1695,15 +1813,24 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     const { ctx } = this;
     const angle = Math.atan2(projectile.vy, projectile.vx);
     const r = projectile.radius;
-    ctx.save(); ctx.translate(projectile.x, projectile.y); ctx.rotate(angle);
+    ctx.save();
+    ctx.translate(projectile.x, projectile.y);
+    ctx.rotate(angle);
     const trail = ctx.createLinearGradient(-r * 5, 0, r, 0);
-    trail.addColorStop(0, `${projectile.color}00`); trail.addColorStop(1, `${projectile.color}aa`);
+    trail.addColorStop(0, `${projectile.color}00`);
+    trail.addColorStop(1, `${projectile.color}aa`);
     ctx.fillStyle = trail;
-    polygon(ctx, [-r * 5, 0, -r * 0.2, -r * 0.65, r, 0, -r * 0.2, r * 0.65]); ctx.fill();
-    ctx.shadowColor = projectile.color; ctx.shadowBlur = 8;
+    polygon(ctx, [-r * 5, 0, -r * 0.2, -r * 0.65, r, 0, -r * 0.2, r * 0.65]);
+    ctx.fill();
+    ctx.shadowColor = projectile.color;
+    ctx.shadowBlur = 8;
     circle(ctx, 0, 0, r * (0.82 + Math.sin(time * 0.015) * 0.08));
-    ctx.fillStyle = projectile.color; ctx.fill(); ctx.shadowBlur = 0;
-    circle(ctx, r * 0.18, -r * 0.12, r * 0.36); ctx.fillStyle = '#fff6df'; ctx.fill();
+    ctx.fillStyle = projectile.color;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    circle(ctx, r * 0.18, -r * 0.12, r * 0.36);
+    ctx.fillStyle = '#fff6df';
+    ctx.fill();
     ctx.restore();
   }
 
@@ -1712,35 +1839,63 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     const { ctx } = this;
     const progress = Math.max(0, Math.min(1, (time - event.at) / Math.max(1, event.duration)));
     const fade = 1 - progress;
-    ctx.save(); ctx.translate(event.x, event.y); ctx.globalAlpha = fade;
-    ctx.strokeStyle = event.color; ctx.fillStyle = event.color; ctx.lineWidth = 2;
+    ctx.save();
+    ctx.translate(event.x, event.y);
+    ctx.globalAlpha = fade;
+    ctx.strokeStyle = event.color;
+    ctx.fillStyle = event.color;
+    ctx.lineWidth = 2;
     const radius = Math.max(12, event.radius);
+
     if (event.abilityKind === 'melee') {
       const angle = event.aim ?? 0;
       ctx.globalAlpha = fade * 0.15;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, radius, angle - 0.78, angle + 0.78); ctx.closePath(); ctx.fill();
-      ctx.globalAlpha = fade; ctx.lineWidth = 4 * fade + 1;
-      ctx.beginPath(); ctx.arc(0, 0, radius * (0.68 + progress * 0.3), angle - 0.78 + progress * 0.9, angle + 0.78 + progress * 0.25); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, radius, angle - 0.78, angle + 0.78);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = fade;
+      ctx.lineWidth = 4 * fade + 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * (0.68 + progress * 0.3), angle - 0.78 + progress * 0.9, angle + 0.78 + progress * 0.25);
+      ctx.stroke();
     } else if (event.abilityKind === 'dash') {
       ctx.rotate(event.aim ?? 0);
       ctx.globalAlpha = fade * 0.7;
       for (let i = -1; i <= 1; i++) {
-        ctx.beginPath(); ctx.moveTo(-8, i * 10); ctx.lineTo(radius * (0.4 + progress * 0.6), i * 10); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-8, i * 10);
+        ctx.lineTo(radius * (0.4 + progress * 0.6), i * 10);
+        ctx.stroke();
       }
     } else if (event.abilityKind === 'projectile') {
-      circle(ctx, 0, 0, 9 + progress * 17); ctx.stroke();
+      circle(ctx, 0, 0, 9 + progress * 17);
+      ctx.stroke();
     } else {
-      ctx.globalAlpha = fade * 0.1; circle(ctx, 0, 0, radius); ctx.fill();
+      ctx.globalAlpha = fade * 0.1;
+      circle(ctx, 0, 0, radius);
+      ctx.fill();
       ctx.globalAlpha = fade * 0.9;
-      circle(ctx, 0, 0, radius * (0.45 + progress * 0.55)); ctx.stroke();
-      ctx.globalAlpha = fade * 0.35; ctx.lineWidth = 1;
-      ctx.setLineDash([5, 8]); circle(ctx, 0, 0, radius); ctx.stroke(); ctx.setLineDash([]);
+      circle(ctx, 0, 0, radius * (0.45 + progress * 0.55));
+      ctx.stroke();
+      ctx.globalAlpha = fade * 0.35;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 8]);
+      circle(ctx, 0, 0, radius);
+      ctx.stroke();
+      ctx.setLineDash([]);
       if (event.abilityKind === 'heal' || event.kind === 'heal') {
-        ctx.globalAlpha = fade * 0.6; ctx.lineWidth = 2;
+        ctx.globalAlpha = fade * 0.6;
+        ctx.lineWidth = 2;
         for (let i = 0; i < 4; i++) {
-          const angle = i * Math.PI / 2 + 0.7;
-          const x = Math.cos(angle) * radius * 0.6, y = Math.sin(angle) * radius * 0.6 - progress * 15;
-          ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x + 4, y); ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4); ctx.stroke();
+          const angle = (i * Math.PI) / 2 + 0.7;
+          const x = Math.cos(angle) * radius * 0.6;
+          const y = Math.sin(angle) * radius * 0.6 - progress * 15;
+          ctx.beginPath();
+          ctx.moveTo(x - 4, y); ctx.lineTo(x + 4, y);
+          ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4);
+          ctx.stroke();
         }
       }
     }
@@ -1753,36 +1908,66 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
     const { ctx } = this;
     const progress = Math.max(0, Math.min(1, (time - event.at) / Math.max(1, event.duration)));
     const amount = event.amount;
-    const label = amount !== undefined ? `${event.kind === 'heal' ? '+' : '−'}${Math.round(amount)}`
+    const label = amount !== undefined
+      ? `${event.kind === 'heal' ? '+' : '−'}${Math.round(amount)}`
       : event.text || (event.kind === 'death' ? 'SCONFITTO' : event.kind === 'respawn' ? 'RINASCITA' : '');
     if (!label) return;
+
     ctx.save();
     ctx.globalAlpha = Math.min(1, (1 - progress) * 2.5);
     ctx.font = `${amount !== undefined ? '700 14px' : '600 10px'} Inter, system-ui, sans-serif`;
-    ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(30,37,28,0.75)'; ctx.fillStyle = event.color;
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(30,37,28,0.75)';
+    ctx.fillStyle = event.color;
     const y = event.y - 27 - progress * 35;
-    ctx.strokeText(label, event.x, y); ctx.fillText(label, event.x, y);
+    ctx.strokeText(label, event.x, y);
+    ctx.fillText(label, event.x, y);
     ctx.restore();
   }
 
   private previewActors(classId: ClassId, time: number): Actor[] {
     const def = CLASSES[classId];
     const actor: Actor = {
-      id: 'preview', kind: 'player', name: 'Viandante', classId,
-      x: 0, y: 0, radius: PLAYER_RADIUS, hp: def.maxHp, maxHp: def.maxHp,
-      resource: def.maxResource, maxResource: def.maxResource,
-      aim: -0.6 + Math.sin(time * 0.0005) * 0.15, speed: def.speed, level: 1,
-      xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0,
-      deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 },
+      id: 'preview',
+      kind: 'player',
+      name: 'Viandante',
+      classId,
+      x: 0,
+      y: 0,
+      radius: PLAYER_RADIUS,
+      hp: def.maxHp,
+      maxHp: def.maxHp,
+      resource: def.maxResource,
+      maxResource: def.maxResource,
+      aim: -0.6 + Math.sin(time * 0.0005) * 0.15,
+      speed: def.speed,
+      level: 1,
+      xp: 0,
+      kills: 0,
+      deaths: 0,
+      teamId: null,
+      hidden: false,
+      revealedUntil: 0,
+      deadUntil: 0,
+      spawnProtectedUntil: 0,
+      effects: [],
+      cooldowns: { basic: 0, q: 0, e: 0, r: 0 },
     };
     const previews: Actor[] = [actor];
     for (const [cx, cy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) {
       for (const spawn of this.world.getChunk(cx, cy).npcs) {
         if (!this.visible(spawn)) continue;
         previews.push({
-          ...actor, ...spawn, id: `preview:${spawn.id}`, kind: 'npc', name: 'Creatura',
+          ...actor,
+          ...spawn,
+          id: `preview:${spawn.id}`,
+          kind: 'npc',
+          name: 'Creatura',
           classId: spawn.npcKind === 'wisp' ? 'mage' : spawn.npcKind === 'sentinel' ? 'paladin' : 'warrior',
-          radius: spawn.npcKind === 'sentinel' ? 18 : 13, hp: 65, maxHp: 65,
+          radius: spawn.npcKind === 'sentinel' ? 18 : 13,
+          hp: 65,
+          maxHp: 65,
         });
       }
     }
@@ -1790,61 +1975,97 @@ for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom
   }
 }
 
-/** A bounded, local map of known procedural terrain. No map images or world-sized cache. */
+/** Mappa locale limitata del terreno procedurale noto. */
 export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = []): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const rect = canvas.getBoundingClientRect(), dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
   const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-    canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const scale = Math.min(width, height) / 1600;
   const center = self ?? { x: 0, y: 0 };
   const left = center.x - width / (2 * scale), top = center.y - height / (2 * scale);
+
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#525f46'; ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = '#525f46';
+  ctx.fillRect(0, 0, width, height);
+
   for (let ty = Math.floor(top / TILE_SIZE); ty <= Math.ceil((top + height / scale) / TILE_SIZE); ty++) {
     for (let tx = Math.floor(left / TILE_SIZE); tx <= Math.ceil((left + width / scale) / TILE_SIZE); tx++) {
       const tile = world.getTile(tx, ty);
       const dungeon = world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
       ctx.fillStyle = dungeon && tile === 'rock' ? dungeon.theme.wallTop
         : dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor
-        : mapTerrainColor(tile, world.getMoisture((tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE), noise(tx, ty));
+        : mapTerrainColor(tile, world.getMoisture((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE), noise(tx, ty));
       ctx.fillRect((tx * TILE_SIZE - left) * scale, (ty * TILE_SIZE - top) * scale, TILE_SIZE * scale + 0.5, TILE_SIZE * scale + 0.5);
     }
   }
-  ctx.strokeStyle = 'rgba(235,227,192,0.1)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(width / 2, 0); ctx.lineTo(width / 2, height); ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2); ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(235,227,192,0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(width / 2, 0); ctx.lineTo(width / 2, height);
+  ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2);
+  ctx.stroke();
+
   for (const pickup of pickups) {
     ctx.fillStyle = PICKUP_COLORS[pickup.kind];
     ctx.fillRect((pickup.x - left) * scale - 1, (pickup.y - top) * scale - 1, 2, 2);
   }
+
   if (world.mode === 'world') {
     for (const dungeon of DUNGEON_DEFINITIONS) {
       const dx = Math.max(10, Math.min(width - 10, (dungeon.area.x - left) * scale));
       const dy = Math.max(10, Math.min(height - 10, (dungeon.area.y - top) * scale));
-      ctx.save(); ctx.translate(dx, dy); ctx.rotate(Math.PI / 4);
-      ctx.fillStyle = dungeon.theme.minimap; ctx.strokeStyle = '#423f32'; ctx.lineWidth = 1.5;
-      ctx.fillRect(-5, -5, 10, 10); ctx.strokeRect(-5, -5, 10, 10); ctx.restore();
+      ctx.save();
+      ctx.translate(dx, dy);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = dungeon.theme.minimap;
+      ctx.strokeStyle = '#423f32';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(-5, -5, 10, 10);
+      ctx.strokeRect(-5, -5, 10, 10);
+      ctx.restore();
     }
-    ctx.fillStyle = '#b6d9b018'; ctx.strokeStyle = '#b6d9b0'; ctx.lineWidth = 1;
-    circle(ctx, -left * scale, -top * scale, OUTPOST.radius * scale); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = '#a5d9e8'; ctx.lineWidth = 2;
-    circle(ctx, (ARENA_GATE.x - left) * scale, (ARENA_GATE.y - top) * scale, ARENA_GATE.radius * scale); ctx.stroke();
+    ctx.fillStyle = '#b6d9b018';
+    ctx.strokeStyle = '#b6d9b0';
+    ctx.lineWidth = 1;
+    circle(ctx, -left * scale, -top * scale, OUTPOST.radius * scale);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#a5d9e8';
+    ctx.lineWidth = 2;
+    circle(ctx, (ARENA_GATE.x - left) * scale, (ARENA_GATE.y - top) * scale, ARENA_GATE.radius * scale);
+    ctx.stroke();
   }
+
   for (const actor of actors) {
     if (actor.id === self?.id || actor.hp <= 0) continue;
     ctx.fillStyle = actor.kind === 'npc' ? '#ccbb8d' : actor.teamId && actor.teamId === self?.teamId ? '#a6dcb4' : '#e6a08c';
-    circle(ctx, (actor.x - left) * scale, (actor.y - top) * scale, actor.kind === 'npc' ? 1.6 : 2.5); ctx.fill();
+    circle(ctx, (actor.x - left) * scale, (actor.y - top) * scale, actor.kind === 'npc' ? 1.6 : 2.5);
+    ctx.fill();
   }
+
   const originX = -left * scale, originY = -top * scale;
-  ctx.strokeStyle = 'rgba(242,229,181,0.7)'; ctx.lineWidth = 1;
-  circle(ctx, originX, originY, 4); ctx.stroke();
+  ctx.strokeStyle = 'rgba(242,229,181,0.7)';
+  ctx.lineWidth = 1;
+  circle(ctx, originX, originY, 4);
+  ctx.stroke();
+
   if (self) {
-    ctx.save(); ctx.translate(width / 2, height / 2); ctx.rotate(self.aim);
+    ctx.save();
+    ctx.translate(width / 2, height / 2);
+    ctx.rotate(self.aim);
     polygon(ctx, [6, 0, -4, -3.5, -2, 0, -4, 3.5]);
-    ctx.fillStyle = '#fbefd2'; ctx.fill(); ctx.strokeStyle = '#384537'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+    ctx.fillStyle = '#fbefd2';
+    ctx.fill();
+    ctx.strokeStyle = '#384537';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
   }
 }
