@@ -224,6 +224,46 @@ export class GameUI {
     this.exitDialog.addEventListener('cancel', () => this.display.resume());
     this.mapVisible = false;
     const mapPanel = root.querySelector<HTMLElement>('.minimap-panel')!; mapPanel.id = 'game-minimap';
+    const mapActions = document.createElement('div');
+    mapActions.className = 'map-actions';
+    mapActions.append(root.querySelector('.fullscreen-toggle')!, this.ref('leave'));
+    mapPanel.append(mapActions);
+    root.querySelector('.player-panel')!.append(this.ref('effects'));
+    this.ref('effects').classList.add('character-effects');
+    const targetEffects = document.createElement('div');
+    targetEffects.className = 'effect-list character-effects';
+    targetEffects.dataset.ref = 'target-effects';
+    this.refs.set('target-effects', targetEffects);
+    this.ref('target').append(targetEffects);
+    const hud = root.querySelector<HTMLElement>('.game-hud')!;
+    const hudTouches = new Map<number, HTMLButtonElement>();
+    // A second finger does not receive a browser compatibility click while the
+    // joystick owns the first finger. Activate HUD buttons from their pointer.
+    hud.addEventListener('pointerdown', event => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
+      if (event.pointerType !== 'touch' || !button || button.closest('.ability-bar') || button.disabled) return;
+      event.preventDefault();
+      hudTouches.set(event.pointerId, button);
+      button.setPointerCapture(event.pointerId);
+    });
+    hud.addEventListener('pointerup', event => {
+      const button = hudTouches.get(event.pointerId);
+      hudTouches.delete(event.pointerId);
+      if (!button) return;
+      const bounds = button.getBoundingClientRect();
+      if (event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom) button.click();
+    });
+    for (const name of ['pointercancel', 'lostpointercapture']) hud.addEventListener(name, event => hudTouches.delete((event as PointerEvent).pointerId));
+    hud.addEventListener('click', event => {
+      const button = (event.target as HTMLElement).closest('button');
+      if ((event as PointerEvent).pointerType === 'touch' && button && !button.closest('.ability-bar')) {
+        event.preventDefault(); event.stopImmediatePropagation();
+      }
+    }, true);
+    // Pointer clicks on HUD buttons must not leave keyboard gameplay on a button.
+    hud.addEventListener('click', event => {
+      if ((event.target as HTMLElement).closest('button') && this.isPlaying && !this.exitDialog.open) this.canvas.focus({ preventScroll: true });
+    });
     this.mapToggle.type = 'button'; this.mapToggle.className = 'compact-map map-toggle';
     const location = root.querySelector('.world-location')!;
     this.compactMinimap.className = 'compact-minimap';
@@ -240,7 +280,7 @@ export class GameUI {
       event.preventDefault(); event.stopPropagation();
       this.setMapVisible(false);
     });
-    this.ref('map-close').addEventListener('click', () => { this.setMapVisible(false); this.mapToggle.focus(); });
+    this.ref('map-close').addEventListener('click', () => { this.setMapVisible(false); this.canvas.focus({ preventScroll: true }); });
     this.updateMap();
     this.ref('leave').setAttribute('aria-label', 'Torna al menu');
     this.ref('social-toggle').setAttribute('aria-label', 'Compagni');
@@ -301,15 +341,15 @@ export class GameUI {
       this.actions.previewClass?.(this.currentClass);
     }));
 
-    this.ref('leave').addEventListener('click', () => { if (this.display.touch) this.confirmLeave(); else this.actions.leave(); });
+    this.ref('leave').addEventListener('click', () => this.confirmLeave());
     this.ref('settings-toggle').addEventListener('click', () => this.toggleSettings());
     document.addEventListener('pointerdown', event => {
       const target = event.target as Node;
       if (!this.ref('settings-panel').contains(target) && !this.ref('settings-toggle').contains(target)) this.toggleSettings(false);
     });
     document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && this.mapVisible) { this.setMapVisible(false); this.mapToggle.focus(); }
-      if (event.key === 'Escape' && !this.ref('settings-panel').hidden) { this.toggleSettings(false); this.ref('settings-toggle').focus(); }
+      if (event.key === 'Escape' && this.mapVisible) { this.setMapVisible(false); this.canvas.focus({ preventScroll: true }); }
+      if (event.key === 'Escape' && !this.ref('settings-panel').hidden) { this.toggleSettings(false); this.canvas.focus({ preventScroll: true }); }
     });
     this.ref('social-toggle').addEventListener('click', () => this.toggleSocial());
     this.ref('social-close').addEventListener('click', () => this.toggleSocial(false));
@@ -322,7 +362,6 @@ export class GameUI {
     targetSummary.addEventListener('click', () => {
       const expanded = this.ref('target').classList.toggle('is-expanded');
       targetSummary.setAttribute('aria-expanded', String(expanded));
-      this.actions.releaseControls?.();
     });
     this.ref('target-close').addEventListener('click', () => this.actions.select(null));
     this.ref('target-friend').addEventListener('click', () => { if (this.selected) this.actions.social('friend-request', this.selected.id); });
@@ -338,15 +377,15 @@ export class GameUI {
 
   get selectedClass(): ClassId { return this.currentClass; }
   get minimapVisible(): boolean { return this.mapVisible; }
-  get inputBlocked(): boolean { return !this.ref('world-entrance').hidden || !this.ref('settings-panel').hidden || this.exitDialog.open || !this.ref('social-panel').hidden || this.mapVisible; }
+  get inputBlocked(): boolean { return !this.ref('world-entrance').hidden || this.exitDialog.open; }
   private toggleSettings(open = this.ref('settings-panel').hidden): void {
     this.ref('settings-panel').hidden = !open;
     this.ref('settings-toggle').setAttribute('aria-expanded', String(open));
-    if (open) { this.toggleSocial(false); this.setMapVisible(false); this.actions.releaseControls?.(); }
+    if (open) { this.toggleSocial(false); this.setMapVisible(false); }
   }
   private setMapVisible(visible: boolean): void {
     this.mapVisible = visible;
-    if (visible) { this.toggleSettings(false); this.toggleSocial(false); this.actions.releaseControls?.(); }
+    if (visible) { this.toggleSettings(false); this.toggleSocial(false); }
     this.updateMap();
   }
   private updateMap(): void {
@@ -355,7 +394,7 @@ export class GameUI {
     this.mapToggle.setAttribute('aria-expanded', String(this.mapVisible));
     this.mapToggle.setAttribute('aria-label', this.mapVisible ? 'Nascondi mappa' : 'Mostra mappa');
     this.mapToggle.title = this.mapVisible ? 'Nascondi mappa' : 'Mostra mappa';
-    this.ref('map-dismiss').hidden = !this.mapVisible;
+    this.ref('map-dismiss').hidden = true;
   }
   private confirmLeave(): void {
     if (!this.isPlaying || this.exitDialog.open) return;
@@ -736,18 +775,26 @@ export class GameUI {
       button.querySelector('.cooldown-count')!.textContent = cooldown > 0 ? (cooldown < 1000 ? (cooldown / 1000).toFixed(1) : String(Math.ceil(cooldown / 1000))) : '';
     });
 
-    const effectNames = { haste: 'Passo celere', power: 'Potere antico', weakness: 'Maledizione', slow: 'Rallentato', shield: 'Scudo attivo', root: 'Immobilizzato' };
-    const effects = player.effects.filter(effect => effect.until > snapshot.time).map(effect => `${effectNames[effect.kind]} · ${Math.ceil((effect.until - snapshot.time) / 1000)}s`);
-    if (player.hidden) effects.unshift('Nascosto nel cespuglio');
-    if (player.spawnProtectedUntil > snapshot.time) effects.unshift('Protezione della Soglia');
-    const effectText = effects.join('|');
-    if (this.ref('effects').dataset.value !== effectText) {
-      this.ref('effects').dataset.value = effectText;
-      this.ref('effects').replaceChildren(...effects.map(effect => textElement('span', 'effect-chip', effect)));
-    }
+    this.renderEffects(this.ref('effects'), player, snapshot.time);
     if (this.selected) this.setSelected(snapshot.actors.find(actor => actor.id === this.selected!.id) || null);
     this.renderTeamRoster();
     this.updateInviteButtons();
+  }
+
+  private renderEffects(container: HTMLElement, actor: Actor, time: number): void {
+    const effectNames = { haste: 'Passo celere', power: 'Potere antico', weakness: 'Maledizione', slow: 'Rallentato', shield: 'Scudo attivo', root: 'Immobilizzato' };
+    const effects = actor.effects.filter(effect => effect.until > time).map(effect => `${effectNames[effect.kind]} · ${Math.ceil((effect.until - time) / 1000)}s`);
+    if (actor.hidden) effects.unshift('Nascosto nel cespuglio');
+    if (actor.spawnProtectedUntil > time) effects.unshift('Protezione della Soglia');
+    const effectText = effects.join('|');
+    if (container.dataset.value !== effectText) {
+      container.dataset.value = effectText;
+      container.replaceChildren(...effects.map(effect => {
+        const chip = textElement('span', 'effect-chip', effect);
+        chip.title = effect;
+        return chip;
+      }));
+    }
   }
 
   setSocial(state: SocialState): void {
@@ -800,7 +847,12 @@ export class GameUI {
         meter.setAttribute('role', 'meter'); meter.setAttribute('aria-label', `Vita di ${member.name}`);
         meter.setAttribute('aria-valuemin', '0');
         meter.append(document.createElement('i'));
-        row.append(label, meter); roster.append(row);
+        const memberPortrait = textElement('span', 'team-portrait player-portrait', '');
+        memberPortrait.innerHTML = '<svg class="team-health-ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="team-ring-track" cx="22" cy="22" r="17"/><circle class="team-ring-base" cx="22" cy="22" r="17"/><circle class="team-ring-fill" cx="22" cy="22" r="17" pathLength="100"/></svg><span class="team-portrait-art"></span>';
+        const resource = textElement('span', 'team-member-resource team-member-meter', '');
+        resource.setAttribute('role', 'meter'); resource.setAttribute('aria-label', `Risorsa di ${member.name}`);
+        resource.setAttribute('aria-valuemin', '0'); resource.append(document.createElement('i'));
+        row.append(label, memberPortrait, meter, resource); roster.append(row);
       }
     }
     for (const row of roster.querySelectorAll<HTMLButtonElement>('.team-member')) {
@@ -813,6 +865,23 @@ export class GameUI {
       row.disabled = !member.online || !actor;
       row.title = row.disabled ? `${member.name}: ${member.online ? 'fuori portata o in altra area' : 'offline'}` : `Seleziona ${member.name}`;
       row.setAttribute('aria-pressed', String(this.selected?.id === member.id));
+      const memberPortrait = row.querySelector<HTMLElement>('.team-portrait')!;
+      const portraitKey = actor?.classId ?? 'unavailable';
+      if (memberPortrait.dataset.portrait !== portraitKey) {
+        memberPortrait.dataset.portrait = portraitKey;
+        memberPortrait.querySelector('.team-portrait-art')!.innerHTML = actor ? portrait(actor.classId) : icon('<circle cx="12" cy="8" r="4"/><path d="M4 22v-2a8 8 0 0 1 16 0v2"/>');
+      }
+      const hpPercent = available ? Math.max(0, Math.min(100, hp! / maxHp! * 100)) : 0;
+      memberPortrait.querySelector<SVGCircleElement>('.team-ring-fill')!.style.strokeDasharray = `${hpPercent} 100`;
+      row.setAttribute('aria-label', `${member.name}: ${!member.online ? 'offline' : available ? `${Math.ceil(hp!)} di ${Math.ceil(maxHp!)} punti vita` : 'in altra area'}`);
+      const resource = row.querySelector<HTMLElement>('.team-member-resource')!;
+      resource.hidden = !actor || actor.maxResource <= 0;
+      if (actor && actor.maxResource > 0) {
+        resource.setAttribute('aria-valuemax', String(actor.maxResource));
+        resource.setAttribute('aria-valuenow', String(Math.max(0, actor.resource)));
+        resource.querySelector('i')!.style.width = `${Math.max(0, Math.min(100, actor.resource / actor.maxResource * 100))}%`;
+        resource.querySelector<HTMLElement>('i')!.style.background = CLASSES[actor.classId].resource === 'rage' ? '#dc9c7c' : '#ae9ee9';
+      }
       row.querySelector('.team-member-health')!.textContent = !member.online ? 'Offline' : available ? `${Math.ceil(hp!)} / ${Math.ceil(maxHp!)} PV` : 'In altra area';
       const meter = row.querySelector<HTMLElement>('.team-member-meter')!;
       meter.hidden = !available;
@@ -836,6 +905,7 @@ export class GameUI {
     }
     this.ref('target').hidden = !actor;
     if (!actor) return;
+    this.renderEffects(this.ref('target-effects'), actor, this.latest?.time ?? Date.now());
     summary.querySelector('strong')!.textContent = actor.name;
     summary.querySelector('.target-level')!.textContent = `LV ${actor.level}`;
     const targetPortrait = summary.querySelector<HTMLElement>('.target-portrait')!;
@@ -876,7 +946,7 @@ export class GameUI {
     const panel = this.ref('social-panel');
     const visible = open ?? panel.hidden;
     panel.hidden = !visible;
-    if (visible) { this.toggleSettings(false); this.setMapVisible(false); this.actions.releaseControls?.(); }
+    if (visible) { this.toggleSettings(false); this.setMapVisible(false); }
     this.ref('social-toggle').setAttribute('aria-expanded', String(visible));
     if (visible) this.renderSocial();
   }

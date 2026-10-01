@@ -101,12 +101,12 @@ audioButton.className = 'glass hud-menu-button';
 const refreshAudioButton = (): void => {
   audioButton.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M11 4 6 8H2v8h4l5 4Z"/><path d="${audio.muted ? 'm16 9 6 6m0-6-6 6' : 'M15 8a6 6 0 0 1 0 8M18 4a11 11 0 0 1 0 16'}"/></svg><span>${audio.muted ? 'Audio: spento' : 'Audio: acceso'}</span>`;
   audioButton.title = audio.muted ? 'Attiva suoni' : 'Disattiva suoni';
-  audioButton.setAttribute('aria-label', 'Disattiva suoni');
+  audioButton.setAttribute('aria-label', audio.muted ? 'Attiva suoni' : 'Disattiva suoni');
   audioButton.setAttribute('aria-pressed', String(audio.muted));
 };
 refreshAudioButton();
 audioButton.addEventListener('click', () => { audio.setMuted(!audio.muted); refreshAudioButton(); });
-document.querySelector('.settings-actions')!.append(audioButton);
+document.querySelector('.map-actions')!.append(audioButton);
 window.addEventListener('pointerdown', audio.unlock);
 window.addEventListener('keydown', audio.unlock);
 
@@ -210,7 +210,10 @@ const isTyping = (): boolean => {
 
 window.addEventListener('keydown', event => {
   if (!playing || !connection.connected || ui.inputBlocked || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
-  if (controls.press(event.code)) event.preventDefault();
+  if (controls.press(event.code)) {
+    event.preventDefault();
+    if (document.activeElement instanceof HTMLButtonElement && document.activeElement.closest('.game-hud')) ui.canvas.focus({ preventScroll: true });
+  }
 });
 
 window.addEventListener('keyup', event => controls.release(event.code));

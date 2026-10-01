@@ -41,19 +41,16 @@ test('HUD settings on desktop/mobile and renderer entity churn', { timeout: 90_0
       await page.goto(`http://127.0.0.1:${port}`); await page.locator('[data-ref=join]').click();
       await expect(page.locator('.game-hud')).toBeVisible();
       await expect(page.locator('.player-network [data-ref=online]')).toHaveText('1');
-      assert.equal(await page.locator('[data-ref=coords], .map-coordinates, .map-actions, .map-network').count(), 0);
-      await page.getByRole('button', { name: 'Impostazioni', exact: true }).click();
-      await expect(page.locator('.settings-panel')).toBeVisible();
-      await expect(page.locator('.settings-panel .fullscreen-toggle')).toBeVisible();
-      await expect(page.locator('.settings-panel [data-ref=leave]')).toBeVisible();
-      const audio = page.locator('.settings-panel button[aria-pressed]');
-      await audio.click(); await expect(audio).toHaveAttribute('aria-pressed', 'true');
-      const box = (await page.locator('.settings-toggle').boundingBox())!;
-      assert.equal(box.width, box.height);
-      const panel = (await page.locator('.settings-panel').boundingBox())!;
+      assert.equal(await page.locator('[data-ref=coords], .map-coordinates, .map-network').count(), 0);
+      await page.locator('.map-toggle').click();
+      await expect(page.locator('.map-actions .fullscreen-toggle')).toBeVisible();
+      const panel = (await page.locator('.minimap-panel').boundingBox())!;
       assert.ok(panel.x >= 0 && panel.x + panel.width <= (mobile ? 390 : 1440));
-      await page.screenshot({ path: `test-results/settings-${mobile ? 'mobile' : 'desktop'}.png` });
-      await page.keyboard.press('Escape'); await expect(page.locator('.settings-panel')).toBeHidden();
+      await page.screenshot({ path: `test-results/map-actions-${mobile ? 'mobile' : 'desktop'}.png` });
+      await expect(page.locator('.map-actions [data-ref=leave]')).toBeVisible();
+      const audio = page.locator('.map-actions button[aria-pressed]');
+      await audio.click(); await expect(audio).toHaveAttribute('aria-pressed', 'true');
+      await page.keyboard.press('Escape'); await expect(page.locator('.minimap-panel')).toBeHidden();
       if (!mobile) {
         const result = await page.evaluate(async () => {
           const renderPath = '/client/render.ts', simPath = '/shared/config.ts';
@@ -81,9 +78,10 @@ test('HUD settings on desktop/mobile and renderer entity churn', { timeout: 90_0
         console.log('Synthetic crowd: 2000 entities, 300 / 2000 on screen', result);
         assert.ok(result.maxCache <= 2001); assert.ok(result.retained <= 1, 'departed entity animations are released');
       }
-      await page.getByRole('button', { name: 'Impostazioni', exact: true }).click();
-      await page.locator('.settings-panel [data-ref=leave]').click();
-      if (mobile) await page.locator('[data-exit]').click();
+      await page.locator('.map-toggle').click();
+      await page.locator('.map-actions [data-ref=leave]').click();
+      await expect(page.locator('.exit-confirmation')).toBeVisible();
+      await page.locator('[data-exit]').click();
       await expect(page.locator('.lobby')).toBeVisible();
       assert.deepEqual(errors, []); await context.close();
     }

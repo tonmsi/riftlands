@@ -2160,8 +2160,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   if (self) {
     ctx.save();
     ctx.translate(width / 2, height / 2);
-    ctx.rotate(self.aim);
-    polygon(ctx, [6, 0, -4, -3.5, -2, 0, -4, 3.5]);
+    circle(ctx, 0, 0, 4);
     ctx.fillStyle = '#fbefd2';
     ctx.fill();
     ctx.strokeStyle = '#384537';
