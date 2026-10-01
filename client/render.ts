@@ -6,7 +6,7 @@ import { OUTPOST } from '../shared/outpost';
 import type { ArenaGateState } from '../shared/types';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames, inwardFlameAngle } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
-import { DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossDrop, type BossLockState, type BossPreparationState, type BossWindup } from '../shared/bosses';
+import { BOSS_WAKE_MS, DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossDrop, type BossLockState, type BossPreparationState, type BossWindup } from '../shared/bosses';
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
 import { EnvironmentArt } from './environment-art';
 import { renderDpr } from './frame-budget';
@@ -496,16 +496,6 @@ export class Renderer {
         ? frame.bossWindups?.find(w => w.bossId === actor.id) 
         : undefined;
 
-      // 2. Trova se è aggrato (il dungeon si risveglia)
-      const isPreparing = actor.npcKind === 'boss' 
-        ? frame.bossPreparations?.some(p => p.bossId === actor.id)
-        : false;
-
-      // 3. Trova se il combattimento è iniziato (dungeon chiuso)
-      const isLocked = actor.npcKind === 'boss'
-        ? frame.bossLocks?.some(l => l.bossId === actor.id && l.locked)
-        : false;
-
       this.drawActor(
         actor,
         frame.time,
@@ -514,9 +504,7 @@ export class Renderer {
         actor.id === frame.selectedId,
         hitTargets,
         self ? frame.moveDirection : undefined,
-        activeWindup, // <--- Aggiungi questo parametro!
-        isPreparing, // <--- MANCAVA QUESTO!
-        isLocked,    // <--- MANCAVA QUESTO!
+        activeWindup,
         actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss'
       );
     }
@@ -1528,9 +1516,7 @@ export class Renderer {
     selected: boolean,
     hitTargets: ReadonlySet<string>,
     moveDirection?: Vec2 | null,
-    windup?: BossWindup, // <--- Nuovo
-    isPreparing?: boolean,
-    isLocked?: boolean, // <--- Nuovo parametro
+    windup?: BossWindup,
     detailed = true
   ): void {
     const { ctx } = this;
@@ -1614,7 +1600,7 @@ export class Renderer {
       ctx.restore();
     }
 
-    if (actor.kind === 'npc') this.drawNpc(actor, time, color, windup, isPreparing, isLocked);
+    if (actor.kind === 'npc') this.drawNpc(actor, time, color, windup);
     else this.drawPlayer(actor, color, dead, time, moveDirection);
 
     if (!dead && hitTargets.has(actor.id)) {
@@ -1751,7 +1737,7 @@ export class Renderer {
     }
   }
 
- private drawNpc(actor: Actor, time: number, color: string, windup?: BossWindup, isPreparing?: boolean, isLocked?: boolean): void {
+ private drawNpc(actor: Actor, time: number, color: string, windup?: BossWindup): void {
     const { ctx } = this;
     const r = actor.radius;
     
@@ -1786,14 +1772,14 @@ export class Renderer {
           spriteKey = attackKey;
           isAttacking = true;
         }
-      } else if (isPreparing) {
-        // PRIORITÀ 2: È stato aggrato, si sta risvegliando
+      } else if (actor.bossAwakenedAt !== undefined && time < actor.bossAwakenedAt + BOSS_WAKE_MS) {
+        // Il server autorizza il risveglio solo dopo l'avvio del dungeon.
         if (this.npcSprites.has(prepKey)) {
           spriteKey = prepKey;
           isWakingUp = true;
         }
-      } else if (!isLocked && actor.hp >= actor.maxHp && !moving) {
-        // PRIORITÀ 3: Dorme SOLO se il dungeon non è chiuso, la vita è intatta e NON si sta muovendo
+      } else if (actor.bossAwakenedAt === undefined) {
+        // Anche durante ingresso e teletrasporto resta sul primo frame del prep.
         if (this.npcSprites.has(prepKey)) {
           spriteKey = prepKey;
           isAsleep = true;
@@ -1813,9 +1799,10 @@ export class Renderer {
         frameIndex = Math.min(totalFrames - 1, Math.floor(progress * totalFrames));
       
       } else if (isWakingUp) {
-        // Animazione Risveglio (cicla un frame ogni 200ms)
+        // Risveglio eseguito una volta, sincronizzato con il server.
         const totalFrames = sprite.frames.length;
-        frameIndex = Math.floor(time / 200) % totalFrames;
+        const progress = Math.max(0, Math.min(1, (time - actor.bossAwakenedAt!) / BOSS_WAKE_MS));
+        frameIndex = Math.min(totalFrames - 1, Math.floor(progress * totalFrames));
       
       } else if (isAsleep) {
         // Dorme: Immagine fissa sul PRIMO frame (indice 0)

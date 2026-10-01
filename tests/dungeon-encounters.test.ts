@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { newDungeonDraft, compileDungeonDraft, parseDungeonDraft, validateDungeonDraft, draftFromDungeon } from '../shared/dungeon-draft';
 import { buildDungeonBundle } from '../shared/dungeon-install';
-import { BOSS_BY_ID } from '../shared/bosses';
+import { BOSS_BY_ID, BOSS_WAKE_MS, DUNGEON_ARRIVAL_MS } from '../shared/bosses';
 import { STONE_WARDEN, MAZE_STALKER } from '../shared/boss-templates';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonFlames, insideDungeonRegion, insideDungeonVisitorArea, type DungeonDefinition } from '../shared/dungeons';
 import { WorldSimulation } from '../server/simulation';
@@ -74,6 +74,15 @@ test('activation is separate from spawns and flames, and does not wake distant b
         assert.deepEqual({x:e.boss.x,y:e.boss.y},start,'flames lock without waking a distant boss');
         Object.assign(f.player,{x:e.boss.x+80,y:e.boss.y}); f.sim.step();
         assert.equal(e.targetId,f.player.id);
+        const awakenedAt = e.boss.bossAwakenedAt;
+        assert.equal(awakenedAt, f.sim.now, 'late aggro starts its own wake animation');
+        for (let i = 0; i < 7; i++) {
+            f.sim.step(.1);
+            assert.equal(e.boss.bossAwakenedAt, awakenedAt);
+            assert.equal(e.boss.spriteMoving, false);
+            assert.equal(e.windup, undefined, 'attacks wait for the wake animation');
+            assert.deepEqual({ x:e.boss.x, y:e.boss.y }, start);
+        }
         Object.assign(f.player, e.dungeon.spawnPoints.party[0]); f.sim.step();
         assert.equal(e.targetId,f.player.id,'aggro persists after leaving detection radius');
         Object.assign(f.player, {x:flame.x,y:flame.y}); f.sim.step();
@@ -90,10 +99,13 @@ test('aggro of any linked boss starts the encounter, but never from outside comb
         f.sim.step(); assert.equal(a.ownerId,undefined);
         Object.assign(f.player,{x:b.boss.x+80,y:b.boss.y}); f.sim.step();
         assert.ok(a.preparationFor(f.player));
+        assert.equal(b.boss.bossAwakenedAt, undefined, 'aggro during entry does not animate the boss');
         Object.assign(f.player, a.dungeon.spawnPoints.party[0]);
         for (let i = 0; i < 9; i++) f.sim.step(.1);
         assert.equal(a.ownerId,f.player.id);
         assert.equal(b.targetId,f.player.id);
+        assert.equal(b.boss.bossAwakenedAt, b.lockState().startedAt);
+        assert.equal(a.boss.bossAwakenedAt, undefined, 'the other linked boss stays asleep');
         assert.equal(a.targetId,undefined,'another boss in the same encounter remains dormant');
     } finally {f.cleanup();}
 });
@@ -123,7 +135,46 @@ test('solo entry announces relocation, pauses the boss on arrival, and can be ca
         Object.assign(g.player,e.dungeon.encounter.ejectTo); g.sim.step();
         assert.equal(e.preparationFor(g.player),undefined);
         assert.equal(e.lockState().locked,false);
+        assert.equal(e.boss.bossAwakenedAt, undefined);
     } finally {g.cleanup();}
+});
+
+for (const team of [false, true]) test(`Warden waits for ${team ? 'team' : 'solo'} entry before waking once`, () => {
+    const f = fixture(false, team, true);
+    try {
+        const e = f.encounters[0], start = { x: e.boss.x, y: e.boss.y };
+        e.dungeon.encounter.regions.bossAggro = { kind: 'circle', center: start, radius: 100 };
+        Object.assign(f.player, { x: start.x + 80, y: start.y });
+        f.sim.step();
+        const preparation = e.preparationFor(f.player)!;
+        assert.ok(preparation);
+        while (f.sim.now + 100 < preparation.endsAt) {
+            f.sim.step(.1);
+            assert.equal(e.boss.bossAwakenedAt, undefined);
+            assert.equal(e.boss.spriteMoving, false);
+            assert.equal(e.windup, undefined);
+            assert.deepEqual({ x: e.boss.x, y: e.boss.y }, start);
+        }
+        f.sim.step(.1);
+        const awakenedAt = e.boss.bossAwakenedAt!;
+        assert.equal(awakenedAt, e.lockState().startedAt);
+        assert.equal(e.ownerId, f.player.id);
+        assert.deepEqual({ x: f.player.x, y: f.player.y }, e.dungeon.spawnPoints.party[0]);
+        assert.ok(BOSS_WAKE_MS <= DUNGEON_ARRIVAL_MS, 'entry grace covers the wake animation');
+        for (let i = 0; i < 11; i++) {
+            f.sim.step(.1);
+            assert.equal(e.boss.bossAwakenedAt, awakenedAt);
+            assert.equal(e.boss.spriteMoving, false);
+            assert.equal(e.windup, undefined);
+            assert.deepEqual({ x: e.boss.x, y: e.boss.y }, start);
+        }
+        f.sim.step(.1);
+        assert.ok(e.boss.spriteMoving || e.windup, 'combat begins after arrival');
+        f.player.hp = 0;
+        f.player.deadUntil = f.sim.now + 5000;
+        f.sim.step();
+        assert.equal(e.boss.bossAwakenedAt, undefined, 'wipe restores the sleeping pose');
+    } finally { f.cleanup(); }
 });
 
 test('authored spawns on a room edge move inside the new stones safely', () => {

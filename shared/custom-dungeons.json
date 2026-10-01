@@ -55061,7 +55061,7 @@
               "x": -72,
               "y": -1368
             },
-            "radius": 600
+            "radius": 200
           },
           "bossLeash": {
             "kind": "polygon",

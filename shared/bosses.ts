@@ -54,6 +54,7 @@ export interface BossWindup extends Vec2 {
 }
 export const DUNGEON_ENTRY_MS = 900;
 export const DUNGEON_ARRIVAL_MS = 1200;
+export const BOSS_WAKE_MS = 800;
 export interface BossLockState { bossId: string; locked: boolean; startedAt?: number; ownerId?: string; relation?: 'participant' | 'eliminated' | 'outsider'; }
 export interface BossPreparationState { bossId: string; name: string; startedAt: number; endsAt: number; entrants: number; team: boolean; }
 
