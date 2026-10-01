@@ -55,6 +55,11 @@ export class GameConnection {
     return this.token;
   }
 
+  saveToken(token: string): void {
+    this.token = token;
+    try { localStorage.setItem(JWT_KEY, token); } catch { /* Session remains usable in memory. */ }
+  }
+
   logout(): void {
     this.leave();
     this.token = undefined;

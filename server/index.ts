@@ -32,6 +32,41 @@ const mime: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js
 const server = createServer((request, response) => {
   const path = (request.url ?? '/').split('?')[0];
   response.setHeader('X-Content-Type-Options', 'nosniff');
+  if (path === '/api/auth' && request.method === 'POST') {
+    response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('Content-Type', 'application/json');
+    const origin = request.headers.origin;
+    try {
+      if (origin && new URL(origin).host !== request.headers.host) throw new Error();
+    } catch { response.writeHead(403); response.end(JSON.stringify({ error: 'Origine non consentita.' })); return; }
+    const ip = request.socket.remoteAddress ?? 'unknown';
+    let body = '', size = 0;
+    request.setTimeout(10_000, () => request.destroy());
+    request.setEncoding('utf8');
+    request.on('data', (chunk: string) => {
+      size += Buffer.byteLength(chunk);
+      if (size > 4096) { response.writeHead(413); response.end(JSON.stringify({ error: 'Richiesta troppo grande.' })); request.destroy(); return; }
+      body += chunk;
+    });
+    request.on('end', () => {
+      if (response.writableEnded) return;
+      void (async () => {
+        let input: { mode?: unknown; name?: unknown; password?: unknown };
+        try { input = JSON.parse(body); if (!input || typeof input !== 'object') throw new Error(); }
+        catch { response.writeHead(400); response.end(JSON.stringify({ error: 'Dati non validi.' })); return; }
+        try {
+          const result = await authenticateCredentials(ip, input.mode, input.name, input.password);
+          if (response.destroyed) return;
+          response.end(JSON.stringify({ token: result.token, account: publicAccount(result.account) }));
+        } catch (error) {
+          if (response.destroyed) return;
+          response.writeHead(400);
+          response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Accesso non riuscito.' }));
+        }
+      })();
+    });
+    return;
+  }
   if (path === '/api/lobby' && request.method === 'GET') {
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('Content-Type', 'application/json');
@@ -86,6 +121,26 @@ const byAccount = new Map<string, Session>();
 const ipConnections = new Map<string, number>();
 const registrations = new Map<string, { count: number; until: number }>();
 const authBudget = new AuthBudget();
+
+async function authenticateCredentials(ip: string, mode: unknown, rawName: unknown, rawPassword: unknown): Promise<{ account: Account; token: string }> {
+  const name = typeof rawName === 'string' ? rawName.trim() : '';
+  const password = typeof rawPassword === 'string' ? rawPassword : '';
+  if (!name || !password) throw new Error('Inserisci sia il nome sia la password.');
+  if (name.length > 20 || password.length > 100) throw new Error('Nome o password troppo lunghi.');
+  if (mode !== 'register' && mode !== 'login') throw new Error('Modalità di accesso non supportata.');
+  const release = authBudget.acquire(ip, performance.now());
+  if (!release) throw new Error('Troppi tentativi di accesso. Riprova tra poco.');
+  try {
+    if (mode === 'register') {
+      let entry = registrations.get(ip);
+      if (!entry || entry.until < Date.now()) { entry = { count: 0, until: Date.now() + 600_000 }; registrations.set(ip, entry); }
+      if (entry.count >= 20) throw new Error('Troppi nuovi personaggi creati di recente. Riprova tra poco.');
+      entry.count++;
+      return await store.registerAsync(name, password);
+    }
+    return await store.loginAsync(name, password);
+  } finally { release(); }
+}
 
 server.on('upgrade', (request, socket, head) => {
   if ((request.url ?? '').split('?')[0] !== '/ws') {
@@ -169,31 +224,13 @@ wss.on('connection', (ws, request) => {
 
       let authResult: { account: Account; token: string };
       let authenticated = false;
-      let releaseAuth: (() => void) | null = null;
       session.authenticating = true;
       try {
         if (message.token) {
           if (typeof message.token !== 'string') throw new Error('Formato token di sessione non valido.');
           authResult = store.authenticateJwt(message.token);
         } else {
-          const mode = message.mode ?? 'login';
-          const name = typeof message.name === 'string' ? message.name : '';
-          const password = typeof message.password === 'string' ? message.password : '';
-          if (!name || !password) throw new Error('Inserisci sia il nome sia la password.');
-          releaseAuth = authBudget.acquire(ip, performance.now());
-          if (!releaseAuth) throw new Error('Troppi tentativi di accesso. Riprova tra poco.');
-
-          if (mode === 'register') {
-            let entry = registrations.get(ip);
-            if (!entry || entry.until < Date.now()) { entry = { count: 0, until: Date.now() + 600_000 }; registrations.set(ip, entry); }
-            if (entry.count >= 20) throw new Error('Troppi nuovi personaggi creati di recente. Riprova tra poco.');
-            entry.count++;
-            authResult = await store.registerAsync(name, password);
-          } else if (mode === 'login') {
-            authResult = await store.loginAsync(name, password);
-          } else {
-            throw new Error('Modalità di accesso non supportata.');
-          }
+          authResult = await authenticateCredentials(ip, message.mode ?? 'login', message.name, message.password);
         }
 
         authenticated = true;
@@ -214,7 +251,6 @@ wss.on('connection', (ws, request) => {
       } catch (error) {
         fatal(session, error instanceof Error ? error.message : 'Accesso non riuscito.', !!message.token && !authenticated);
       } finally {
-        releaseAuth?.();
         session.authenticating = false;
       }
       return;

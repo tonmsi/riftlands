@@ -10,12 +10,13 @@ import { LocalMovementView } from './motion';
 import { LocalCombatPresentation } from './combat-presentation';
 import { SnapshotBuffer } from './snapshots';
 import { Renderer, drawMinimap } from './render';
-import { GameUI } from './ui';
+import { GameUI, PROFILE_URLS } from './ui';
 import { dungeonAt } from '../shared/dungeons';
 import { CONTROLS_STORAGE_KEY, defaultControls, GameControls, parseControls } from './controls';
 import { MobileControls } from './mobile-controls';
 import { GameAudio } from './audio';
 import { FrameBudget } from './frame-budget';
+import { prepareLobbyArt } from './lobby-assets';
 
 let playing = false;
 let latest: Snapshot | null = null;
@@ -34,6 +35,7 @@ const localCombat = new LocalCombatPresentation();
 let lastMinimap = 0;
 let profileCache = '';
 let joinGeneration = 0;
+let lobbyToken: string | undefined;
 let mobileControls: MobileControls | undefined;
 const releaseControls = (): void => { controls.clear(); mobileControls?.reset(); };
 
@@ -41,21 +43,37 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   releaseControls,
   joinCredentials: (mode, name, password, classId) => {
     const generation = ++joinGeneration;
-    ui.setConnection('connecting', 'Preparazione grafica…');
-    void renderer.spritesReady.then(() => {
-      if (generation === joinGeneration) connection.joinWithCredentials(mode, name, password, classId);
-    });
+    ui.setConnection('connecting', 'Accesso all’accampamento…');
+    void (async () => {
+      try {
+        const response = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, name, password }), signal: AbortSignal.timeout(15_000) });
+        const result = await response.json() as { token: string; account: PublicAccount; error?: string };
+        if (generation !== joinGeneration) return;
+        if (!response.ok) throw new Error(result.error || 'Accesso non riuscito.');
+        connection.saveToken(result.token);
+        lobbyToken = result.token;
+        saveProfile(result.account);
+        ui.setSavedAccount(result.account);
+        ui.setConnection('idle');
+      } catch (error) {
+        if (generation !== joinGeneration) return;
+        ui.setConnection('idle');
+        ui.toast(error instanceof Error ? error.message : 'Accesso non riuscito.', 'error');
+      }
+    })();
   },
   joinSaved: classId => {
     const generation = ++joinGeneration;
     ui.setConnection('connecting', 'Preparazione grafica…');
-    void renderer.spritesReady.then(() => {
+    void menuAssetsReady.then(() => {
       if (generation === joinGeneration) connection.joinWithToken(classId);
     });
   },
+  lobbyToken: () => lobbyToken,
   logout: () => {
     joinGeneration++;
     connection.logout();
+    lobbyToken = undefined;
     clearProfile();
     ui.setSavedAccount(null);
     ui.toast('Disconnessione completata.');
@@ -92,6 +110,7 @@ window.addEventListener('pointerdown', audio.unlock);
 window.addEventListener('keydown', audio.unlock);
 
 const renderer = new Renderer(ui.canvas);
+const menuAssetsReady = prepareLobbyArt(renderer.spritesReady, (done, total, failed) => ui.setAssetProgress(done, total, failed), Object.values(PROFILE_URLS)).then(art => ui.setLobbyArt(art));
 const connection = new GameConnection({
   reset: () => { releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
   status: (status, detail) => {
@@ -100,12 +119,14 @@ const connection = new GameConnection({
     if (status === 'offline') { playing = false; ui.setPlaying(false); if (detail) ui.toast(detail, 'error'); }
   },
   authExpired: () => {
+    lobbyToken = undefined;
     clearProfile();
     ui.setSavedAccount(null);
     ui.toast('La sessione precedente è scaduta. Accedi con le tue credenziali.', 'error');
   },
   message: message => {
     if (message.type === 'welcome') {
+      lobbyToken = message.token;
       renderer.setSeed(message.seed);
       saveProfile(message.account);
       ui.setSavedAccount(message.account);

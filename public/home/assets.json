@@ -1,0 +1,11 @@
+{
+  "logo": "home/logolong.png",
+  "loginBackground": "home/mageback.png",
+  "selectionBackground": "home/paladinback.png",
+  "classes": {
+    "paladin": { "portrait": null, "background": "home/paladinback.png" },
+    "warrior": { "portrait": null, "background": "home/warrback.png" },
+    "mage": { "portrait": null, "background": "home/mageback.png" },
+    "hunter": { "portrait": null, "background": null }
+  }
+}
