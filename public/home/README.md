@@ -25,6 +25,8 @@ Un valore `null` mantiene lo stile predefinito, senza richiedere file mancanti.
 
 Gli sfondi riempiono la schermata e possono essere ritagliati: lascia i dettagli importanti al centro. Le illustrazioni del personaggio e il logo mantengono le proporzioni.
 
-Gli asset iniziano a caricarsi durante il login, anche quando la sessione è già attiva. La barra conta le risorse completate (non i byte); l'ingresso in partita aspetta sprite, ritratti e PNG configurati. Le immagini vengono decodificate prima dell'uso, con tre download simultanei. Se un'immagine fallisce o non risponde entro 60 secondi, si usa lo stile predefinito senza bloccare l'ingresso. Il login può essere completato mentre le immagini si caricano.
+All'apertura e al refresh appare una schermata neutra di caricamento. Logo, menu e sfondi vengono mostrati insieme soltanto dopo la decodifica di sprite, ritratti e PNG configurati, anche quando la sessione è già attiva. La barra conta le risorse completate (non i byte), con tre download simultanei. Se un'immagine fallisce o non risponde entro 60 secondi, si usa lo stile predefinito come risultato finale, senza mostrare prima un fallback provvisorio.
+
+La cornice della home e lo sfondo mantengono le dimensioni del viewport. Il contenuto scorre dentro il menu: il passaggio tra statistiche, classifiche, achievement e amici non cambia la scala dello sfondo né la larghezza della schermata.
 
 La modifica del manifest viene letta al prossimo caricamento della pagina. Dopo una build, i PNG e il manifest vengono copiati in `dist/home`.

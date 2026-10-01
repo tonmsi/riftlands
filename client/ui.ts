@@ -101,15 +101,17 @@ export class GameUI {
       const stored = localStorage.getItem('riftlands.selected-class');
       if (stored && Object.hasOwn(CLASSES, stored)) this.currentClass = stored as ClassId;
     } catch { /* Selection remains available without browser storage. */ }
-    root.className = 'rift-app';
+    root.className = 'rift-app is-menu-loading';
     root.innerHTML = `
+      <div class="menu-boot" data-ref="menu-boot" role="status"><span class="boot-mark" aria-hidden="true">✦</span><strong>Preparazione dell’accampamento</strong><span data-ref="boot-label">Caricamento delle immagini e del mondo…</span><progress data-ref="boot-progress" max="1" value="0" aria-label="Preparazione risorse"></progress></div>
       <div class="world-stage"><canvas class="world-canvas" aria-label="Mondo di gioco multiplayer" tabindex="0"></canvas>
       </div>
       <div class="lobby" data-screen="auth">
         <header class="site-header"><a class="brand" href="/" aria-label="Riftlands, ingresso"><img data-ref="brand-image" alt="Riftlands" hidden><span data-ref="brand-fallback"><span class="brand-symbol">${icon('<path d="m12 1 10 11-10 11L2 12Z"/><path d="m12 5 6 7-6 7-6-7ZM12 1v22"/>')}</span>RIFTLANDS</span></a><div class="header-right"><a href="/dungeon-maker.html">Dungeon maker ↗</a><span class="connection-pill" data-ref="lobby-connection"><i></i><span>Pronto a esplorare</span></span></div></header>
         <nav class="camp-nav" data-ref="camp-nav" aria-label="Accampamento" hidden><button type="button" data-screen-target="character" aria-pressed="true">La tua leggenda</button><button type="button" data-screen-target="stats" aria-pressed="false">Statistiche</button><button type="button" data-screen-target="rankings" aria-pressed="false">Classifiche</button><button type="button" data-screen-target="achievements" aria-pressed="false">Achievement</button><button type="button" data-screen-target="friends" aria-pressed="false">Amici</button></nav>
         <div class="asset-loader" data-ref="asset-loader"><span data-ref="asset-label" role="status">Preparazione delle Terre di Soglia…</span><progress data-ref="asset-progress" max="1" value="0" aria-label="Caricamento asset"></progress></div>
-        <main class="lobby-main"><section class="entry-panel" aria-label="Menu principale">
+        <div class="camp-content" data-ref="camp-content">
+        <main class="lobby-main" data-ref="lobby-main"><section class="entry-panel" aria-label="Menu principale">
           <div class="intro"><span class="eyebrow" data-ref="menu-eyebrow">OLTRE IL CONFINE</span><h1 data-ref="menu-title">Ogni leggenda ha un inizio.</h1><p data-ref="menu-description">Le Terre di Soglia ti aspettano. Scrivi la tua storia.</p></div>
           
           <form data-ref="entry-form" class="entry-form">
@@ -155,22 +157,15 @@ export class GameUI {
             </div>
             <section class="journey-panel" data-ref="journey-panel" hidden><span class="eyebrow">LE TERRE DI SOGLIA</span><h2>Oltre il confine,<br>la tua storia.</h2><p>Esplora un mondo condiviso. Trova i tuoi compagni. Affronta ciò che si nasconde oltre il Crocevia.</p><div class="journey-class" data-ref="journey-class"></div><button type="button" class="text-button" data-ref="change-champion">← Cambia campione</button></section>
             
-            <button type="submit" class="join-button" data-ref="join">
+            <div class="entry-actions"><button type="submit" class="join-button" data-ref="join">
               <span data-ref="join-text">Entra nel mondo</span><span class="join-arrow">↗</span>
             </button>
-            <div class="entry-note"><span class="save-dot"></span>I tuoi progressi sono protetti dal tuo account personale.</div>
+            <div class="entry-note"><span class="save-dot"></span>I tuoi progressi sono protetti dal tuo account personale.</div></div>
           </form>
 
           <div class="lobby-controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Muoviti</span><span><kbd>␣</kbd> Attacca</span><span><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd> Abilità</span><span class="mouse-hint">↖ Tieni il sinistro per mirare</span></div>
         </section></main>
         <section class="lobby-hub" data-ref="lobby-hub" aria-label="Il tuo profilo" hidden>
-          <nav class="hub-nav" aria-label="Sezioni del menu">
-            <button type="button" data-hub="friends" aria-pressed="true">Amici</button>
-            <button type="button" data-hub="rankings" aria-pressed="false">Classifiche</button>
-            <button type="button" data-hub="stats" aria-pressed="false">Statistiche</button>
-            <button type="button" data-hub="achievements" aria-pressed="false">Achievement</button>
-            <button type="button" data-hub="settings" aria-pressed="false">Impostazioni</button>
-          </nav>
           <div class="hub-panel" data-hub-panel="friends"><h2>I tuoi amici</h2><div data-ref="lobby-friends">Accedi per vedere i tuoi amici.</div></div>
           <div class="hub-panel" data-hub-panel="rankings" hidden><h2>Classifica esperienza</h2><p>I primi 20 giocatori, ordinati per XP.</p><ol data-ref="lobby-rankings"></ol></div>
           <div class="hub-panel" data-hub-panel="stats" hidden><h2>Le tue statistiche</h2><div data-ref="lobby-stats">Accedi per vedere i tuoi progressi.</div></div>
@@ -178,6 +173,7 @@ export class GameUI {
           <div class="hub-panel" data-hub-panel="settings" hidden><span class="eyebrow">IL TUO STILE DI GIOCO</span><h2>Impostazioni</h2><p>Prepara i comandi prima di partire. Le tue preferenze vengono salvate su questo dispositivo.</p><div class="setting-tile"><div><strong>Tastiera e mouse</strong><p>Movimento, attacchi e abilità. Ogni azione, a modo tuo.</p></div><button type="button" data-ref="configure-controls">Configura tasti ↗</button></div></div>
           <div class="hub-status"><span data-ref="lobby-data-status" role="status"></span><button type="button" data-ref="refresh-lobby">Aggiorna</button></div>
         </section>
+        </div>
         <footer class="camp-footer"><span>RIFTLANDS <i>✦</i> TERRE DI SOGLIA</span><span>La tua prossima avventura comincia qui.</span></footer>
       </div>
       <div class="game-hud" hidden>
@@ -250,9 +246,6 @@ export class GameUI {
     optionsButton.addEventListener('click', () => this.showHub('settings'));
     root.querySelector('.header-right')!.prepend(optionsButton);
 
-    root.querySelectorAll<HTMLButtonElement>('[data-hub]').forEach(button => button.addEventListener('click', () => {
-      this.showHub(button.dataset.hub!);
-    }));
     root.querySelectorAll<HTMLButtonElement>('[data-screen-target]').forEach(button => button.addEventListener('click', () => {
       if (button.dataset.screenTarget === 'character') { this.menuScreen = 'character'; this.renderMenu(); }
       else this.showHub(button.dataset.screenTarget!);
@@ -415,20 +408,22 @@ export class GameUI {
   private showHub(section: string): void {
     if (!this.savedAccount) return;
     this.menuScreen = 'hub';
-    this.root.querySelectorAll<HTMLButtonElement>('[data-hub]').forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.hub === section)));
     this.root.querySelectorAll<HTMLElement>('[data-hub-panel]').forEach(panel => { panel.hidden = panel.dataset.hubPanel !== section; });
     this.root.querySelectorAll<HTMLButtonElement>('[data-screen-target]').forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.screenTarget === section)));
     this.renderMenu();
+    this.ref('camp-content').scrollTop = 0;
     void this.refreshLobby();
   }
 
   private renderMenu(): void {
     const lobby = this.root.querySelector<HTMLElement>('.lobby')!;
+    const changedScreen = lobby.dataset.screen !== this.menuScreen;
     lobby.dataset.screen = this.menuScreen;
     this.root.querySelector<HTMLElement>('.entry-panel')!.hidden = this.menuScreen === 'hub';
     this.ref('camp-nav').hidden = !this.savedAccount;
     this.root.querySelector<HTMLButtonElement>('.options-button')!.hidden = !this.savedAccount;
     this.ref('lobby-hub').hidden = this.menuScreen !== 'hub';
+    this.ref('lobby-main').hidden = this.menuScreen === 'hub';
     this.ref('character-selection').hidden = this.menuScreen !== 'character';
     this.ref('journey-panel').hidden = this.menuScreen !== 'ready';
     this.ref('saved-card').hidden = !this.savedAccount || this.menuScreen === 'ready';
@@ -442,6 +437,7 @@ export class GameUI {
     if (this.menuScreen !== 'hub') this.root.querySelectorAll<HTMLButtonElement>('[data-screen-target]').forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.screenTarget === 'character')));
     this.updateMenuBackground();
     this.updateJoinAvailability();
+    if (changedScreen) this.ref('camp-content').scrollTop = 0;
   }
 
   private updateMenuBackground(): void {
@@ -451,16 +447,22 @@ export class GameUI {
     this.root.querySelector<HTMLElement>('.lobby')!.style.setProperty('--menu-art', image ? `url(${JSON.stringify(image)})` : 'none');
   }
 
-  setLobbyArt(art: LobbyArt): void {
+  async setLobbyArt(art: LobbyArt): Promise<void> {
     this.lobbyArt = art;
     if (art.logo) { (this.ref('brand-image') as HTMLImageElement).src = art.logo; this.ref('brand-image').hidden = false; this.ref('brand-fallback').hidden = true; }
     this.renderClass();
     this.updateMenuBackground();
+    await Promise.all(Array.from(this.root.querySelectorAll<HTMLImageElement>('.lobby img'), image => image.decode().catch(() => {})));
+    this.ref('menu-boot').hidden = true;
+    this.root.classList.remove('is-menu-loading');
   }
 
   setAssetProgress(done: number, total: number, failed: number): void {
     const progress = this.ref('asset-progress') as HTMLProgressElement;
     progress.max = total; progress.value = done;
+    const bootProgress = this.ref('boot-progress') as HTMLProgressElement;
+    bootProgress.max = total; bootProgress.value = done;
+    this.write('boot-label', done === total ? 'Ultimi preparativi…' : `Caricamento risorse · ${done}/${total}`);
     this.assetsLoaded = done === total;
     this.write('asset-label', this.assetsLoaded ? (failed ? 'Mondo pronto · alcune immagini non disponibili' : 'Le Terre di Soglia sono pronte') : `Caricamento risorse · ${done}/${total}`);
     this.ref('asset-loader').classList.toggle('is-ready', this.assetsLoaded);
@@ -536,7 +538,22 @@ export class GameUI {
       button.classList.toggle('selected', active);
       button.setAttribute('aria-pressed', String(active));
     });
-    this.ref('class-detail').innerHTML = `<div class="class-detail-heading"><h3>${chosen.subtitle}</h3><div class="class-stats"><span><i class="stat-health"></i>${chosen.maxHp} PV</span><span><i class="stat-resource" style="background:${chosen.color}"></i>${chosen.maxResource} ${chosen.resource === 'rage' ? 'RAGE' : 'MANA'}</span></div></div><p>${chosen.description}</p><div class="lobby-abilities">${SLOTS.map(slot => `<div class="lobby-ability" title="${chosen.abilities[slot].description}"><kbd>${this.keyLabel(slot)}</kbd><span>${chosen.abilities[slot].name}</span></div>`).join('')}</div>`;
+    const basic = chosen.abilities.basic;
+    const number = (value: number) => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 2 }).format(value);
+    const stats = [
+      ['Salute', number(chosen.maxHp), 'PV'],
+      [chosen.resource === 'rage' ? 'Rabbia' : 'Mana', number(chosen.maxResource), 'punti'],
+      ['Movimento', number(chosen.speed), 'unità/s'],
+      ['Vel. attacco', number(1 / basic.cooldown), 'attacchi/s'],
+      ['Danno base', number(basic.damage), 'per colpo'],
+      ['Armatura', number(chosen.armor * 100), '% riduzione'],
+      ['Portata', number(basic.range), 'unità'],
+      ['Intervallo', number(basic.cooldown), 's tra attacchi'],
+    ];
+    this.ref('class-detail').innerHTML = `<div class="class-detail-heading"><span class="eyebrow">PROFILO DEL CAMPIONE</span><h3>${chosen.subtitle}</h3></div><p>${chosen.description}</p><dl class="champion-stats" aria-label="Statistiche base di ${chosen.name}">${stats.map(([label, value, unit]) => `<div><dt>${label}</dt><dd>${value}<small>${unit}</small></dd></div>`).join('')}</dl><p class="gem-note">Statistiche base · potenziamenti con gemme in arrivo</p><div class="lobby-abilities">${SLOTS.map(slot => {
+      const ability = chosen.abilities[slot];
+      return `<div class="lobby-ability" title="${ability.description}"><kbd>${this.keyLabel(slot)}</kbd><span><strong>${ability.name}</strong><small>Ricarica ${number(ability.cooldown)} s${ability.cost ? ` · ${ability.cost} ${chosen.resource === 'rage' ? 'rabbia' : 'mana'}` : ' · nessun costo'}</small></span></div>`;
+    }).join('')}</div>`;
   }
 
   setConnection(status: 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline', detail?: string): void {

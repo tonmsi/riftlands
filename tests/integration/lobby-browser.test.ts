@@ -31,7 +31,16 @@ test('camp: authentication before class selection, preload, themed sections and 
     const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
     const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     let sockets = 0; page.on('websocket', () => sockets++);
-    await page.goto(`http://127.0.0.1:${port}`);
+    // Hold the configured PNGs: the menu and temporary branding must stay hidden.
+    let releaseArtwork!: () => void;
+    const artworkGate = new Promise<void>(done => { releaseArtwork = done; });
+    await page.route('**/home/*.png', async route => { await artworkGate; await route.continue(); });
+    await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-ref="menu-boot"]')).toBeVisible();
+    await expect(page.locator('.lobby')).toBeHidden();
+    await page.screenshot({ path: 'test-results/lobby-loading.png' });
+    releaseArtwork();
+    await expect(page.locator('[data-ref="menu-boot"]')).toBeHidden();
     await expect(page.locator('.asset-loader')).toHaveClass(/is-ready/);
     await expect(page.locator('[data-ref="character-selection"]')).toBeHidden();
     await expect(page.locator('[data-ref="camp-nav"]')).toBeHidden();
@@ -45,7 +54,19 @@ test('camp: authentication before class selection, preload, themed sections and 
     assert.equal((await (await fetch(`http://127.0.0.1:${port}/health`)).json()).online, 0);
     await page.locator('[data-class="paladin"]').click();
     await expect(page.locator('[data-ref="champion-name"]')).toHaveText('Paladino');
+    await expect(page.locator('.champion-stats > div').filter({ has: page.locator('dt', { hasText: /^Movimento$/ }) })).toContainText('180');
+    await expect(page.locator('.champion-stats > div').filter({ has: page.locator('dt', { hasText: /^Vel. attacco$/ }) })).toContainText('1,54');
+    await expect(page.locator('.champion-stats > div').filter({ has: page.locator('dt', { hasText: /^Armatura$/ }) })).toContainText('22');
     await page.screenshot({ path: 'test-results/lobby-character-desktop.png', fullPage: true });
+    assert.equal(await page.locator('.hub-nav').count(), 0, 'navigation is not repeated inside a panel');
+    const shell = await page.locator('.lobby').boundingBox();
+    const contentWidth = await page.locator('.camp-content').evaluate(element => element.clientWidth);
+    for (const section of ['rankings', 'achievements', 'friends', 'stats']) {
+      await page.locator(`[data-screen-target="${section}"]`).click();
+      assert.deepEqual(await page.locator('.lobby').boundingBox(), shell);
+      assert.equal(await page.locator('.camp-content').evaluate(element => element.clientWidth), contentWidth);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), true, 'only the content scrolls');
+    }
     await page.locator('[data-screen-target="stats"]').click();
     await expect(page.locator('.profile-stats')).toBeVisible();
     await page.screenshot({ path: 'test-results/lobby-stats-desktop.png', fullPage: true });
@@ -62,10 +83,13 @@ test('camp: authentication before class selection, preload, themed sections and 
     await page.locator('[data-ref="join"]').click();
     await expect(page.locator('.game-hud')).toBeVisible();
     await page.reload();
+    await expect(page.locator('[data-ref="menu-boot"]')).toBeHidden();
     await expect(page.locator('.lobby')).toHaveAttribute('data-screen', 'character');
     await expect(page.locator('[data-ref="auth-box"]')).toBeHidden();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: 'test-results/lobby-character-mobile.png', fullPage: true });
+    await page.locator('.champion-stats').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: 'test-results/lobby-character-stats-mobile.png', fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.locator('[data-screen-target="stats"]').click();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -82,11 +106,20 @@ test('camp: authentication before class selection, preload, themed sections and 
     await page.locator('[data-ref="password"]').fill('test-password');
     await page.locator('[data-ref="join"]').click();
     await expect(page.locator('.lobby')).toHaveAttribute('data-screen', 'character');
-    await page.route('**/home/assets.json', route => route.fulfill({ json: {
-      logo: '/favicon.svg', loginBackground: '/favicon.svg?login', selectionBackground: '/favicon.svg?neutral',
-      classes: { paladin: { background: '/favicon.svg?paladin' }, warrior: { background: '/favicon.svg?warrior' }, mage: { portrait: '/home/missing.png' } },
-    } }));
-    await page.reload();
+    let releaseManifest!: () => void;
+    const manifestGate = new Promise<void>(done => { releaseManifest = done; });
+    await page.route('**/home/assets.json', async route => {
+      await manifestGate;
+      await route.fulfill({ json: {
+        logo: '/favicon.svg', loginBackground: '/favicon.svg?login', selectionBackground: '/favicon.svg?neutral',
+        classes: { paladin: { background: '/favicon.svg?paladin' }, warrior: { background: '/favicon.svg?warrior' }, mage: { portrait: '/home/missing.png' } },
+      } });
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-ref="menu-boot"]')).toBeVisible();
+    await expect(page.locator('.lobby')).toBeHidden();
+    releaseManifest();
+    await expect(page.locator('[data-ref="menu-boot"]')).toBeHidden();
     await expect(page.locator('[data-ref="asset-label"]')).toContainText('alcune immagini non disponibili');
     await expect(page.locator('[data-ref="brand-image"]')).toBeVisible();
     await page.locator('[data-class="paladin"]').click();

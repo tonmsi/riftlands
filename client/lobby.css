@@ -166,3 +166,152 @@ html,body,#app{min-width:0}
 .lobby .journey-panel{padding-top:60px}
 }
 @media(prefers-reduced-motion:reduce){.lobby .champion-portrait img{animation:none}.lobby .join-button:hover:not(:disabled){transform:none}}
+
+/* Illustrated camp: steady viewport, readable ink and the same panel language. */
+.rift-app .lobby {
+  --gold:#ffd184;
+  --panel-edge:#b9dcec45;
+  --panel-fill:linear-gradient(145deg,#12232ef5,#111c27ed);
+  height:100dvh;
+  min-height:0;
+  color:#f7f7f2;
+  background:#111a21;
+  font-family:Inter,"Segoe UI",system-ui,sans-serif;
+}
+.is-menu-loading .lobby { visibility:hidden; pointer-events:none }
+.lobby::before { background-image:linear-gradient(90deg,#0c172155,#0c172122),var(--menu-art) }
+.lobby::after { background:linear-gradient(180deg,#0b162199,transparent 34%,#09142088),radial-gradient(ellipse at 50% 55%,transparent 25%,#09142033) }
+.lobby[data-screen="auth"]::after { background:linear-gradient(90deg,#0c1721c9,transparent 75%),linear-gradient(180deg,#0b162188,transparent 45%,#0b1621aa) }
+.lobby .site-header,.lobby .camp-nav,.lobby .asset-loader,.lobby .camp-footer { flex-shrink:0 }
+.lobby .site-header { min-height:86px; padding:16px 0; border-bottom-color:#d5eafb38 }
+.lobby .brand img { height:54px; width:clamp(170px,19vw,280px) }
+.lobby .header-right { gap:24px; color:#f4f7fb; font-size:14px; font-weight:600 }
+.lobby .header-right a,.lobby .options-button { color:#f4f7fb; text-shadow:0 2px 6px #000; font-size:14px; font-weight:600 }
+.lobby .connection-pill { font-size:12px; color:#d1f3db }
+.lobby .camp-nav { gap:30px; background:#10202dcf; border:1px solid #cce8f129; border-radius:16px; margin-top:8px; padding:0 18px }
+.lobby .camp-nav button { min-height:52px; padding:14px 0; font-size:14px; font-weight:650; color:#dae7f0 }
+.lobby .camp-nav button[aria-pressed="true"] { color:#ffe3a7 }
+.lobby .asset-loader { min-height:32px; font-size:12px; color:#e6edf2; text-shadow:0 1px 4px #000 }
+.lobby .asset-loader.is-ready { color:#c2eed0 }
+.lobby .camp-content { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:#819eab66 #0e1b240d }
+.lobby .lobby-main { min-height:100%; padding:16px 0 24px }
+.lobby .intro { margin-bottom:16px; text-shadow:0 2px 12px #06101c,0 1px 3px #000 }
+.lobby .intro h1 { font-family:Inter,"Segoe UI",system-ui,sans-serif; font-size:clamp(28px,3vw,38px); font-weight:800; letter-spacing:-1px; color:#fffdf5; margin:10px 0 }
+.lobby .eyebrow { color:#ffe3a7; font-size:11px; font-weight:750; letter-spacing:2px }
+.lobby .intro p { color:#f0f3f7; font-size:15px; font-weight:500; line-height:1.6 }
+.lobby .saved-account-card,.lobby .class-card,.lobby .class-detail,.lobby .lobby-hub,.lobby .journey-panel,.lobby[data-screen="auth"] .entry-form {
+  border:1px solid var(--panel-edge); border-radius:18px; background:var(--panel-fill);
+  box-shadow:0 12px 30px #07111955,inset 0 1px #e8f6ff12;
+  backdrop-filter:blur(14px) saturate(1.1);
+}
+.lobby .saved-account-card { padding:9px 16px; margin-bottom:16px }
+.lobby .saved-info strong { color:#fff; font-size:15px; font-weight:750 }
+.lobby .saved-info small { font-size:12px; color:#d4e1eb }
+.lobby .saved-label { font-size:10px; color:#d3e5ef }
+.lobby .saved-gold { background:#0c1720b3; border-color:#ffd18455; border-radius:12px }
+.lobby .change-account-btn { color:#ecf5fb; font-size:12px; font-weight:600 }
+.lobby .character-selection { grid-template-columns:190px minmax(240px,1fr) 360px; gap:24px; align-items:center }
+.lobby .class-card { border-radius:14px; min-height:86px; padding:10px }
+.lobby .class-card.selected { background:linear-gradient(135deg,color-mix(in srgb,var(--class-color) 25%,#14212d),#13202cee); border-color:var(--class-color); box-shadow:0 0 0 1px var(--class-color),0 8px 24px #07111944 }
+.lobby .class-name { font-family:Inter,"Segoe UI",system-ui,sans-serif; font-size:16px; font-weight:750; color:#fffaf1 }
+.lobby .class-role { color:#d2dfeb; font-size:9px; letter-spacing:0; font-weight:550 }
+.lobby .class-symbol img { image-rendering:auto }
+.lobby .champion-caption { color:#ffe3a7; font-size:11px; letter-spacing:2px; font-weight:750; text-shadow:0 2px 5px #000 }
+.lobby .champion-stage h2 { color:#fffaf1; font-family:Inter,"Segoe UI",system-ui,sans-serif; font-size:32px; font-weight:850; text-shadow:0 2px 8px #000 }
+.lobby .class-detail { padding:20px; align-self:center }
+.lobby .class-detail h3 { font-family:Inter,"Segoe UI",system-ui,sans-serif; color:#fff; font-weight:750; font-size:21px; margin:8px 0 10px; line-height:1.3 }
+.lobby .class-detail>.gem-note { color:#cce4f2; font-size:11px; line-height:1.5; margin:10px 0 14px }
+.lobby .class-detail>p { color:#e0eaf3; font-size:13px; line-height:1.6; margin:10px 0 16px }
+.lobby .champion-stats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin:0 }
+.lobby .champion-stats>div { padding:9px 10px; border-radius:10px; background:#08131d88; border:1px solid #a6cfe01f }
+.lobby .champion-stats dt { color:#d0e0ed; font-size:11px; font-weight:600 }
+.lobby .champion-stats dd { margin:4px 0 0; color:#fff6e4; font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1 }
+.lobby .champion-stats small { display:block; color:#b9d1e1; font-size:10px; font-weight:500; margin-top:4px }
+.lobby .lobby-abilities { grid-template-columns:repeat(2,minmax(0,1fr)); border-top-color:#cce8f130; padding-top:14px; gap:12px 8px }
+.lobby .lobby-ability { color:#eff7ff; font-size:11px; gap:7px; align-items:flex-start }
+.lobby .lobby-ability strong { font-weight:650; display:block }
+.lobby .lobby-ability small { display:block; color:#bcd3e2; font-size:10px; line-height:1.6 }
+.lobby .lobby-ability kbd { color:#ffe0a3; border-color:#a6d0e352; border-radius:8px; background:#091723; font-weight:700 }
+.lobby .join-button { font-size:15px; font-weight:750; min-height:54px; padding:15px 20px; margin-top:18px; border-radius:16px; border-color:#ffe7b6; background:linear-gradient(145deg,#ffe0a0,#e7b45f); color:#16212a; box-shadow:0 7px 22px #10192166,inset 0 1px #fff8 }
+.lobby .join-button:hover:not(:disabled) { background:#ffe6ad }
+.lobby .entry-note { color:#edf4f8; font-size:12px; text-shadow:0 1px 4px #000 }
+.lobby[data-screen="auth"] .lobby-main { padding:35px 0; align-items:center }
+.lobby[data-screen="auth"] .intro { padding:25px 0; }
+.lobby[data-screen="auth"] .intro h1 { font-size:clamp(44px,5vw,68px); font-weight:850; letter-spacing:-2px }
+.lobby[data-screen="auth"] .intro p { color:#fff; font-size:17px; line-height:1.7 }
+.lobby[data-screen="auth"] .entry-form { border-radius:22px; padding:28px }
+.lobby .auth-tab { color:#e0eaf4; font-size:15px; font-weight:650 }
+.lobby .auth-tab.active { color:#ffe2a0 }
+.lobby .name-label>span,.lobby .password-label>span { color:#e0eaf4; font-size:12px; letter-spacing:.8px; font-weight:650 }
+.lobby input { background:#091620cc; color:#fff; border-color:#c5e1f142; border-radius:12px; min-height:50px }
+.lobby input::placeholder { color:#b1c8d7 }
+.lobby .lobby-hub { width:min(100%,1000px); min-height:480px; margin:20px auto; border-radius:22px }
+.lobby .hub-panel { padding:30px; color:#e0eaf3; font-size:15px; line-height:1.7; min-height:400px }
+.lobby .hub-panel h2 { font-family:Inter,"Segoe UI",system-ui,sans-serif; font-size:30px; font-weight:800; color:#fff; margin:5px 0 24px }
+.lobby .hub-row { padding:18px 0; border-bottom-color:#c8e7f126 }
+.lobby .hub-row strong { font-size:15px; color:#f7faff; font-weight:650 }
+.lobby .hub-row>span { font-size:13px; color:#d6e5ef }
+.lobby .profile-stats div,.lobby .setting-tile { background:#0a1723a6; border-color:#c5e1f130; border-radius:16px }
+.lobby .profile-stats dt { color:#d0e1ee; font-size:13px; font-weight:650 }
+.lobby .profile-stats dd { color:#ffe1a1; font-family:Inter,"Segoe UI",system-ui,sans-serif; font-size:34px; font-weight:850 }
+.lobby .hub-status { padding:0 30px 24px; color:#d0e1ee; font-size:12px; min-height:62px }
+.lobby .hub-status button,.lobby .setting-tile button { color:#fff0cd; border-color:#c5e1f14d; background:#203647; border-radius:12px; font-size:13px; font-weight:650 }
+.lobby .setting-tile strong { color:#fff; font-size:17px }.lobby .setting-tile p { color:#d1e3ef; font-size:14px }
+.lobby .journey-panel { margin:36px auto; padding:40px; }
+.lobby .journey-panel h2 { font-family:Inter,"Segoe UI",system-ui,sans-serif; font-size:clamp(36px,4.5vw,56px); font-weight:850; color:#fff7e6 }
+.lobby .journey-panel p { color:#e0eaf4; font-size:16px }
+.lobby .journey-class { color:#ffe2a6; font-size:15px; font-weight:650 }
+.lobby .text-button { color:#e0eaf4; font-size:14px }
+.lobby .camp-footer { padding:14px 0; min-height:44px; color:#d1e2ef; font-size:11px; border-top-color:#c5e1f126; text-shadow:0 1px 4px #000 }
+.lobby .champion-portrait img { animation:none }
+.lobby .champion-portrait { background:radial-gradient(ellipse at center,#0d1c2977,transparent 68%) }
+.lobby .champion-stats small { display:inline; margin:0 0 0 5px }
+.lobby[data-screen="character"] .entry-panel { position:relative }
+.lobby[data-screen="character"] .intro { text-align:left; padding-right:350px; min-height:94px }
+.lobby[data-screen="character"] .intro .eyebrow { justify-content:flex-start }
+.lobby[data-screen="character"] .saved-account-card { position:absolute; right:0; top:16px; max-width:330px; margin:0 }
+.lobby[data-screen="character"] .entry-form { display:grid; grid-template-columns:190px minmax(240px,1fr) 360px; column-gap:24px; align-items:center }
+.lobby[data-screen="character"] .character-selection { display:contents }
+.lobby[data-screen="character"] .class-choices { grid-row:1/3 }
+.lobby[data-screen="character"] .class-detail { grid-row:1/3 }
+.lobby[data-screen="character"] .entry-actions { grid-column:2; grid-row:2; align-self:start }
+.rift-app:not(.is-playing) .control-options { background:linear-gradient(145deg,#152835,#111c27); border-color:#b9dcec45; border-radius:22px; color:#f7f7f2; font-family:Inter,"Segoe UI",system-ui,sans-serif; box-shadow:0 20px 70px #0008,inset 0 1px #fff1 }
+.rift-app:not(.is-playing) .control-options button,.rift-app:not(.is-playing) .control-options select { background:#203647; border-color:#b9dcec45; border-radius:10px; color:#eff7ff }
+.rift-app:not(.is-playing) .control-options p { color:#d0e1ed }
+.rift-app:not(.is-playing) .control-options [data-save] { color:#14202a; background:#ffda8b; font-weight:750 }
+@media(max-width:1050px) {
+  .lobby .character-selection { grid-template-columns:160px minmax(180px,1fr) 320px; gap:16px }
+  .lobby .class-card { grid-template-columns:40px 1fr }.lobby .class-symbol { width:40px }
+  .lobby .class-name { font-size:14px }.lobby .class-role { font-size:8px }
+  .lobby .class-detail { padding:16px }.lobby .class-detail h3 { font-size:19px }
+  .lobby[data-screen="character"] .intro { padding-right:300px }.lobby[data-screen="character"] .intro h1 { font-size:30px }
+  .lobby[data-screen="character"] .entry-form { grid-template-columns:160px minmax(180px,1fr) 320px; column-gap:16px }
+}
+@media(max-width:760px) {
+  .rift-app .lobby { padding:0 max(14px,env(safe-area-inset-left)) 0 max(14px,env(safe-area-inset-right)) }
+  .lobby .site-header { min-height:76px; padding:12px 0; gap:8px }.lobby .brand img { width:190px; height:44px }
+  .lobby .header-right { gap:14px }.lobby .header-right a,.lobby .options-button { font-size:12px }
+  .lobby .camp-nav { gap:22px; border-radius:13px; padding:0 12px }.lobby .camp-nav button { font-size:13px; min-height:48px }
+  .lobby .asset-loader { font-size:10px; min-height:30px; gap:10px }.lobby .asset-loader progress { width:70px }
+  .lobby .lobby-main { padding:16px 0 20px }.lobby .intro h1 { font-size:28px }.lobby .intro p { font-size:14px }
+  .lobby .character-selection { display:flex; gap:16px }.lobby .champion-portrait { height:260px }
+  .lobby .class-choices { grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px }
+  .lobby .class-card { min-height:106px; padding:8px 4px; border-radius:12px; display:flex }
+  .lobby .class-symbol { width:100%; height:58px }.lobby .class-name { font-size:12px }
+  .lobby .class-detail { padding:20px; border-radius:18px }.lobby .class-detail h3 { font-size:21px }
+  .lobby .champion-stats dt { font-size:12px }.lobby .champion-stats dd { font-size:22px }
+  .lobby .saved-info strong { font-size:14px }.lobby .saved-info small { font-size:11px }
+  .lobby .join-button { width:100%; font-size:14px }.lobby .entry-note { font-size:11px }
+  .lobby[data-screen="auth"] .intro h1 { font-size:42px; line-height:1.15; letter-spacing:-1.5px }
+  .lobby[data-screen="auth"] .intro p { font-size:15px }.lobby[data-screen="auth"] .intro { padding:12px 0 }
+  .lobby[data-screen="auth"] .entry-form { padding:22px }.lobby[data-screen="auth"] .lobby-main { padding:20px 0 }
+  .lobby .lobby-hub { margin:16px auto; min-height:440px }.lobby .hub-panel { padding:24px 18px; min-height:360px; font-size:14px }
+  .lobby .hub-panel h2 { font-size:26px }.lobby .hub-status { padding:0 18px 20px }
+  .lobby .journey-panel { padding:28px 20px; margin:24px auto }.lobby .journey-panel h2 { font-size:36px }
+  .lobby .camp-footer { min-height:36px; padding:10px 0; font-size:10px; padding-bottom:max(10px,env(safe-area-inset-bottom)) }
+  .lobby[data-screen="character"] .intro { text-align:center; padding:0; min-height:0 }
+  .lobby[data-screen="character"] .intro .eyebrow { justify-content:center }
+  .lobby[data-screen="character"] .saved-account-card { position:static; max-width:100%; margin:0 auto 16px }
+  .lobby[data-screen="character"] .entry-form { display:block }
+  .lobby[data-screen="character"] .character-selection { display:flex }
+}

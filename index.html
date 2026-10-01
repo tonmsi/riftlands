@@ -1,2 +1,27 @@
 <!doctype html>
-<html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"><link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Riftlands"><meta name="theme-color" content="#101b1b"><meta name="description" content="Riftlands: un mondo multiplayer infinito da esplorare, tre classi e una storia tutta da scrivere."><title>Riftlands — Oltre il confine</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"></head><body><div id="app"></div><script type="module" src="/client/main.ts"></script></body></html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Riftlands">
+  <meta name="theme-color" content="#111a21">
+  <meta name="description" content="Riftlands: un mondo multiplayer infinito da esplorare, quattro classi e una storia tutta da scrivere.">
+  <title>Riftlands — Oltre il confine</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <!-- Visible before the module or any illustration loads. No temporary brand. -->
+  <style>
+    html,body{margin:0;background:#111a21;color:#f7f7f2;font-family:"Segoe UI",sans-serif}
+    .menu-boot{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#111a21;text-align:center;padding:24px;box-sizing:border-box}
+    .menu-boot strong{font-size:20px;font-weight:650}.menu-boot>span:not(.boot-mark){font-size:14px;color:#c6d5df}
+    .boot-mark{font-size:42px;color:#ffc965}.menu-boot progress{width:240px;max-width:80vw;height:5px;accent-color:#ffc965}
+  </style>
+</head>
+<body>
+  <div id="app"><div class="menu-boot" role="status"><span class="boot-mark" aria-hidden="true">✦</span><strong>Preparazione dell’accampamento</strong><span>Caricamento delle immagini e del mondo…</span><progress aria-label="Preparazione risorse"></progress></div></div>
+  <noscript>Attiva JavaScript per accedere al gioco.</noscript>
+  <script type="module" src="/client/main.ts"></script>
+</body>
+</html>
