@@ -112,9 +112,7 @@ export class GameUI {
         <div class="asset-loader" data-ref="asset-loader"><span data-ref="asset-label" role="status">Preparazione delle Terre di Soglia…</span><progress data-ref="asset-progress" max="1" value="0" aria-label="Caricamento asset"></progress></div>
         <div class="camp-content" data-ref="camp-content">
         <main class="lobby-main" data-ref="lobby-main"><section class="entry-panel" aria-label="Menu principale">
-          <div class="intro"><span class="eyebrow" data-ref="menu-eyebrow">OLTRE IL CONFINE</span><h1 data-ref="menu-title">Ogni leggenda ha un inizio.</h1><p data-ref="menu-description">Le Terre di Soglia ti aspettano. Scrivi la tua storia.</p></div>
-          
-          <form data-ref="entry-form" class="entry-form">
+          <div class="camp-heading"><div class="intro"><span class="eyebrow" data-ref="menu-eyebrow">OLTRE IL CONFINE</span><h1 data-ref="menu-title">Ogni leggenda ha un inizio.</h1><p data-ref="menu-description">Le Terre di Soglia ti aspettano. Scrivi la tua storia.</p></div>
             <!-- SCHERMATA SESSIONE ATTIVA -->
             <div class="saved-account-card" data-ref="saved-card" hidden>
               <div class="account-icon">${icon('<circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/>')}</div>
@@ -126,7 +124,8 @@ export class GameUI {
               <div class="saved-gold" title="Gold raccolti">${icon('<circle cx="12" cy="12" r="8"/><path d="M14.8 8.7a4.5 4.5 0 1 0 0 6.6M9 10h5M9 14h5"/>')}<strong data-ref="lobby-gold">0</strong></div>
               <button type="button" class="change-account-btn" data-ref="change-account-btn">Cambia</button>
             </div>
-
+          </div>
+          <form data-ref="entry-form" class="entry-form">
             <!-- SCHERMATA LOGIN / REGISTRAZIONE -->
             <div class="auth-box" data-ref="auth-box">
               <div class="auth-tabs" role="tablist">

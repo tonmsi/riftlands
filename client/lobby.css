@@ -199,7 +199,7 @@ html,body,#app{min-width:0}
 .lobby .intro h1 { font-family:Inter,"Segoe UI",system-ui,sans-serif; font-size:clamp(28px,3vw,38px); font-weight:800; letter-spacing:-1px; color:#fffdf5; margin:10px 0 }
 .lobby .eyebrow { color:#ffe3a7; font-size:11px; font-weight:750; letter-spacing:2px }
 .lobby .intro p { color:#f0f3f7; font-size:15px; font-weight:500; line-height:1.6 }
-.lobby .saved-account-card,.lobby .class-card,.lobby .class-detail,.lobby .lobby-hub,.lobby .journey-panel,.lobby[data-screen="auth"] .entry-form {
+.lobby .class-card,.lobby .class-detail,.lobby .lobby-hub,.lobby[data-screen="auth"] .entry-form {
   border:1px solid var(--panel-edge); border-radius:18px; background:var(--panel-fill);
   box-shadow:0 12px 30px #07111955,inset 0 1px #e8f6ff12;
   backdrop-filter:blur(14px) saturate(1.1);
@@ -267,9 +267,9 @@ html,body,#app{min-width:0}
 .lobby .champion-portrait { background:radial-gradient(ellipse at center,#0d1c2977,transparent 68%) }
 .lobby .champion-stats small { display:inline; margin:0 0 0 5px }
 .lobby[data-screen="character"] .entry-panel { position:relative }
-.lobby[data-screen="character"] .intro { text-align:left; padding-right:350px; min-height:94px }
+.lobby[data-screen="character"] .intro { text-align:left; padding-right:0; min-height:0 }
 .lobby[data-screen="character"] .intro .eyebrow { justify-content:flex-start }
-.lobby[data-screen="character"] .saved-account-card { position:absolute; right:0; top:16px; max-width:330px; margin:0 }
+.lobby[data-screen="character"] .saved-account-card { position:static; max-width:100%; margin:0 }
 .lobby[data-screen="character"] .entry-form { display:grid; grid-template-columns:190px minmax(240px,1fr) 360px; column-gap:24px; align-items:center }
 .lobby[data-screen="character"] .character-selection { display:contents }
 .lobby[data-screen="character"] .class-choices { grid-row:1/3 }
@@ -284,9 +284,10 @@ html,body,#app{min-width:0}
   .lobby .class-card { grid-template-columns:40px 1fr }.lobby .class-symbol { width:40px }
   .lobby .class-name { font-size:14px }.lobby .class-role { font-size:8px }
   .lobby .class-detail { padding:16px }.lobby .class-detail h3 { font-size:19px }
-  .lobby[data-screen="character"] .intro { padding-right:300px }.lobby[data-screen="character"] .intro h1 { font-size:30px }
+  .lobby[data-screen="character"] .intro { padding-right:0 }.lobby[data-screen="character"] .intro h1 { font-size:30px }
   .lobby[data-screen="character"] .entry-form { grid-template-columns:160px minmax(180px,1fr) 320px; column-gap:16px }
 }
+
 @media(max-width:760px) {
   .rift-app .lobby { padding:0 max(14px,env(safe-area-inset-left)) 0 max(14px,env(safe-area-inset-right)) }
   .lobby .site-header { min-height:76px; padding:12px 0; gap:8px }.lobby .brand img { width:190px; height:44px }
@@ -314,4 +315,81 @@ html,body,#app{min-width:0}
   .lobby[data-screen="character"] .saved-account-card { position:static; max-width:100%; margin:0 auto 16px }
   .lobby[data-screen="character"] .entry-form { display:block }
   .lobby[data-screen="character"] .character-selection { display:flex }
+}
+
+/* Arcade lobby: art stays visible; outlines carry the important controls. */
+.lobby .camp-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:20px; align-items:center; margin-bottom:18px }
+.lobby .camp-heading .intro { margin:0 }
+.lobby[data-screen="auth"] .camp-heading { display:block; margin:0 }
+.lobby .saved-account-card { display:grid; grid-template-columns:minmax(100px,1fr) auto auto; gap:12px; padding:0; width:auto; background:none; border:0; box-shadow:none; backdrop-filter:none; border-radius:0 }
+.lobby .saved-account-card .account-icon,.lobby .saved-label { display:none }
+.lobby .saved-info { min-width:0; text-shadow:0 2px 3px #06111b,0 0 8px #06111b }
+.lobby .saved-info strong { display:block; max-width:22ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:16px; font-weight:900 }
+.lobby .saved-info small { color:#f3f7ff; font-size:11px; white-space:nowrap }
+.lobby .saved-gold { background:#ffd056; color:#342107; border:2px solid #101b28; border-radius:9px; box-shadow:0 3px 0 #091220; padding:8px 10px; font-weight:900; min-height:38px; white-space:nowrap }
+.lobby .saved-gold strong,.lobby .saved-gold svg { color:#342107 }
+.lobby .change-account-btn { min-height:38px; padding:8px 12px; background:#10203299; border:2px solid #0a1520; border-radius:9px; color:#fff; box-shadow:0 3px 0 #091220; font-weight:800 }
+.lobby .camp-nav { background:none; border:0; padding:0; border-radius:0; gap:24px; min-height:48px }
+.lobby .camp-nav { scrollbar-width:none }.lobby .camp-nav::-webkit-scrollbar { display:none }
+.lobby .camp-nav button { min-height:44px; padding:10px 14px; border:2px solid transparent; border-radius:8px; color:#fff; font-weight:850; text-shadow:0 2px 2px #091522,1px 0 #091522,-1px 0 #091522 }
+.lobby .camp-nav button[aria-pressed="true"] { color:#18243a; background:#ffda64; border-color:#101b28; box-shadow:0 3px 0 #071423; text-shadow:none }
+.lobby .asset-loader.is-ready progress { visibility:hidden }
+.lobby .camp-content { scrollbar-width:none; scrollbar-gutter:auto }
+.lobby .camp-content::-webkit-scrollbar { display:none }
+.lobby .intro h1,.lobby .champion-stage h2,.lobby .journey-panel h2,.lobby .hub-panel h2 { font-family:"Arial Black","Segoe UI",system-ui,sans-serif; font-weight:900; -webkit-text-stroke:1px #071422; paint-order:stroke fill; text-shadow:0 3px 0 #071422,0 4px 10px #06101ccc; letter-spacing:-.7px }
+.lobby .eyebrow { text-shadow:0 2px 3px #081625; color:#ffdf7e }
+.lobby .class-card { background:#0a192b52; backdrop-filter:none; border:2px solid #081725b3; border-radius:10px; min-height:72px; padding:7px 10px; box-shadow:0 3px 0 #0817257a; grid-template-columns:48px 1fr }
+.lobby .class-card.selected { background:linear-gradient(130deg,color-mix(in srgb,var(--class-color) 80%,#25496b),color-mix(in srgb,var(--class-color) 40%,#13233c)); border:2px solid #fff0ba; box-shadow:0 4px 0 #081725,0 0 0 2px #081725 }
+.lobby .class-name { font-size:16px; font-weight:900; -webkit-text-stroke:.5px #071422; paint-order:stroke fill; text-shadow:0 2px 1px #071422 }
+.lobby .class-role { color:#fff; text-shadow:0 1px 2px #071422; font-size:9px }
+.lobby .class-symbol { width:48px; height:50px }
+.lobby .class-detail { background:linear-gradient(145deg,#0d213591,#0b1c3070); border:0; border-radius:14px; box-shadow:none; backdrop-filter:blur(5px); padding:16px }
+.lobby .class-detail h3 { font-size:20px; font-weight:850; text-shadow:0 2px 4px #051322 }
+.lobby .class-detail>p { text-shadow:0 1px 3px #051322; margin:8px 0 12px }
+.lobby .champion-stats { gap:0 14px }
+.lobby .champion-stats>div { background:none; border:0; border-bottom:1px solid #e2f0ff38; border-radius:0; padding:8px 0 }
+.lobby .champion-stats dt { color:#e5f0ff; text-shadow:0 1px 3px #061423 }
+.lobby .champion-stats dd { color:#fff4d0; font-size:20px; text-shadow:0 2px 3px #061423 }
+.lobby .champion-stats small { color:#e1ecfb }
+.lobby .class-detail>.gem-note { margin:10px 0; text-shadow:0 1px 3px #061423 }
+.lobby .lobby-abilities { padding-top:10px; gap:10px 8px }
+.lobby .lobby-ability small { color:#e1ecfb; text-shadow:0 1px 2px #061423 }
+.lobby .champion-glow,.lobby .champion-glow::after { border:0; box-shadow:none }
+.lobby .champion-portrait { background:none }
+.lobby .join-button { background:linear-gradient(#ffe57b 0 48%,#ffd03e 49%); border:3px solid #101b28; border-radius:11px; box-shadow:0 5px 0 #101b28,inset 0 2px #fff5; color:#172135; font-weight:900; text-transform:uppercase; letter-spacing:.2px; font-size:15px; min-height:54px }
+.lobby .join-button:hover:not(:disabled) { background:linear-gradient(#fff094 0 48%,#ffda50 49%); transform:translateY(-1px) }
+.lobby .join-button:active:not(:disabled) { transform:translateY(3px); box-shadow:0 2px 0 #101b28 }
+.lobby .entry-note { font-size:11px; color:#f0f5ff }
+.lobby .lobby-hub { background:#0c2135a3; border:1px solid #c4e6ff30; border-radius:14px; box-shadow:none; backdrop-filter:blur(6px); min-height:0 }
+.lobby .hub-panel { min-height:240px; padding:24px }
+.lobby .profile-stats div,.lobby .setting-tile { background:#071a2b5e; border:0; border-radius:10px }
+.lobby .hub-status { padding:0 24px 20px; min-height:50px }
+.lobby .journey-panel { background:none; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; margin:0; padding:0; min-height:0; max-width:none }
+.lobby[data-screen="ready"]::before { background-image:var(--menu-art) }
+.lobby[data-screen="ready"]::after { background:linear-gradient(180deg,#07142270,transparent 32%,transparent 65%,#07142270) }
+.lobby[data-screen="ready"] .lobby-main { position:relative; padding:0; display:flex; align-items:flex-end; justify-content:center }
+.lobby[data-screen="ready"] .entry-panel { width:100%; padding:24px 0 }
+.lobby[data-screen="ready"] .journey-panel>.eyebrow,.lobby[data-screen="ready"] .journey-panel h2,.lobby[data-screen="ready"] .journey-panel p,.lobby[data-screen="ready"] .journey-class,.lobby[data-screen="ready"] .entry-note,.lobby[data-screen="ready"] .camp-heading,.lobby[data-screen="ready"] .camp-footer { display:none }
+.lobby[data-screen="ready"] .site-header,.lobby[data-screen="ready"] .camp-nav,.lobby[data-screen="ready"] .asset-loader { display:none }
+.lobby[data-screen="ready"] .entry-form { display:flex; flex-direction:column; align-items:center; gap:12px }
+.lobby[data-screen="ready"] .journey-panel { order:2; text-align:center }
+.lobby[data-screen="ready"] .entry-actions { order:1 }
+.lobby[data-screen="ready"] .join-button { margin:0; width:min(360px,calc(100vw - 40px)); background:linear-gradient(#adf878 0 48%,#7cdc45 49%); color:#10261b }
+.lobby[data-screen="ready"] .text-button { color:#fff; font-weight:800; text-shadow:0 2px 3px #071422; background:none; padding:8px }
+.lobby .camp-footer { border:0; font-size:10px; min-height:32px; padding:8px 0 }
+@media(max-width:1050px) {
+  .lobby .camp-heading { grid-template-columns:minmax(0,1fr) auto; gap:12px }
+  .lobby .saved-account-card { gap:8px }.lobby .saved-info strong { max-width:14ch }
+  .lobby .camp-nav { gap:12px }.lobby .camp-nav button { padding:10px; font-size:13px }
+}
+@media(max-width:760px) {
+  .lobby .camp-heading { display:flex; flex-direction:column; gap:12px; margin-bottom:16px }
+  .lobby[data-screen="character"] .saved-account-card { margin:0; width:100%; max-width:440px; grid-template-columns:minmax(0,1fr) auto auto }
+  .lobby .saved-info strong { max-width:100% }.lobby .saved-info small { white-space:normal }
+  .lobby .saved-gold { padding:7px 9px }.lobby .change-account-btn { padding:7px 9px }
+  .lobby .camp-nav { padding:0 2px; gap:8px }.lobby .camp-nav button { font-size:12px; min-height:40px; padding:8px 10px }
+  .lobby .class-card { min-height:94px; padding:6px 4px }.lobby .class-symbol { width:100%; height:56px }
+  .lobby .class-name { font-size:12px }.lobby .class-detail { padding:16px; width:100% }
+  .lobby .lobby-hub { min-height:0 }.lobby .hub-panel { min-height:240px; padding:22px 16px }
+  .lobby .hub-status { padding:0 16px 16px }.lobby .journey-panel { padding:0; margin:0 }
 }

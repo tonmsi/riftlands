@@ -57,6 +57,30 @@ test('camp: authentication before class selection, preload, themed sections and 
     await expect(page.locator('.champion-stats > div').filter({ has: page.locator('dt', { hasText: /^Movimento$/ }) })).toContainText('180');
     await expect(page.locator('.champion-stats > div').filter({ has: page.locator('dt', { hasText: /^Vel. attacco$/ }) })).toContainText('1,54');
     await expect(page.locator('.champion-stats > div').filter({ has: page.locator('dt', { hasText: /^Armatura$/ }) })).toContainText('22');
+    const labels = await page.evaluate(() => {
+      const labels = {
+        name: document.querySelector('[data-ref="saved-name"]')!.textContent!,
+        stats: document.querySelector('[data-ref="saved-stats"]')!.textContent!,
+        gold: document.querySelector('[data-ref="lobby-gold"]')!.textContent!,
+      };
+      document.querySelector('[data-ref="saved-name"]')!.textContent = 'LongCharacterName1234';
+      document.querySelector('[data-ref="saved-stats"]')!.textContent = 'Livello 84 · 12500 uccisioni';
+      document.querySelector('[data-ref="lobby-gold"]')!.textContent = '1905000';
+      return labels;
+    });
+    for (const [width, height] of [[1519, 839], [1280, 720], [1024, 768], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      const account = (await page.locator('[data-ref="saved-card"]').boundingBox())!;
+      const stats = (await page.locator('[data-ref="class-detail"]').boundingBox())!;
+      assert.ok(account.y + account.height <= stats.y, `account overlaps stats at ${width}×${height}`);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    }
+    await page.evaluate(labels => {
+      document.querySelector('[data-ref="saved-name"]')!.textContent = labels.name;
+      document.querySelector('[data-ref="saved-stats"]')!.textContent = labels.stats;
+      document.querySelector('[data-ref="lobby-gold"]')!.textContent = labels.gold;
+    }, labels);
+    await page.setViewportSize({ width: 1440, height: 960 });
     await page.screenshot({ path: 'test-results/lobby-character-desktop.png', fullPage: true });
     assert.equal(await page.locator('.hub-nav').count(), 0, 'navigation is not repeated inside a panel');
     const shell = await page.locator('.lobby').boundingBox();
@@ -79,6 +103,11 @@ test('camp: authentication before class selection, preload, themed sections and 
     await page.locator('[data-screen-target="character"]').click();
     await page.locator('[data-ref="join"]').click();
     await expect(page.locator('.lobby')).toHaveAttribute('data-screen', 'ready');
+    await expect(page.locator('.journey-panel h2')).toBeHidden();
+    assert.deepEqual(await page.locator('.journey-panel').evaluate(element => {
+      const style = getComputedStyle(element);
+      return [style.backgroundColor, style.backgroundImage, style.boxShadow, style.borderTopWidth];
+    }), ['rgba(0, 0, 0, 0)', 'none', 'none', '0px']);
     await page.screenshot({ path: 'test-results/lobby-journey-desktop.png', fullPage: true });
     await page.locator('[data-ref="join"]').click();
     await expect(page.locator('.game-hud')).toBeVisible();
