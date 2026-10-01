@@ -2076,7 +2076,7 @@ export class Renderer {
 }
 
 /** Mappa locale limitata del terreno procedurale noto. */
-export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = []): void {
+export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const rect = canvas.getBoundingClientRect(), dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
@@ -2086,7 +2086,8 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
     canvas.height = Math.round(height * dpr);
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const scale = Math.min(width, height) / 1600;
+  const scale = Math.min(width, height) / visibleSpan;
+  canvas.dataset.worldSpan = String(visibleSpan);
   const center = self ?? { x: 0, y: 0 };
   const left = center.x - width / (2 * scale), top = center.y - height / (2 * scale);
 

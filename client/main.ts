@@ -2,6 +2,7 @@ import './style.css';
 import './mobile.css';
 import './team.css';
 import './lobby.css';
+import './hud.css';
 import { CLASSES, TICK_RATE } from '../shared/config';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import { GameConnection } from './net';
@@ -325,8 +326,10 @@ function frame(now: number): void {
       return { x: input.dx, y: input.dy };
     })() : null,
   });
-  if (self && playing && ui.minimapVisible && now - lastMinimap > 250) {
-    drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? []); lastMinimap = now;
+  if (self && playing && now - lastMinimap > 250) {
+    drawMinimap(ui.compactMinimap, renderer.world, self, actors, latest?.pickups ?? []);
+    if (ui.minimapVisible) drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? [], 4800);
+    lastMinimap = now;
   }
 }
 requestAnimationFrame(frame);

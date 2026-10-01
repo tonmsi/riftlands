@@ -120,6 +120,11 @@ test('camp: authentication before class selection, preload, themed sections and 
     await expect(page.locator('[data-ref="world-entrance"]')).toBeHidden();
     assert.ok(Date.now() - enteredAt >= 2000, 'artwork remains visible for at least two seconds');
     await expect(page.locator('.game-hud')).toBeVisible();
+    await expect(page.locator('.compact-minimap')).toHaveAttribute('data-world-span', '1600');
+    await page.screenshot({ path: 'test-results/hud-game-desktop.png' });
+    await page.locator('.map-toggle').click();
+    await expect(page.locator('.minimap')).toHaveAttribute('data-world-span', '4800');
+    await page.locator('[data-ref="map-close"]').click();
     await page.reload();
     await expect(page.locator('[data-ref="menu-boot"]')).toBeHidden();
     await expect(page.locator('.lobby')).toHaveAttribute('data-screen', 'character');

@@ -67,6 +67,7 @@ function textElement(tag: string, className: string, text: string): HTMLElement 
 export class GameUI {
   public readonly canvas: HTMLCanvasElement;
   public readonly minimap: HTMLCanvasElement;
+  public readonly compactMinimap = document.createElement('canvas');
   private currentClass: ClassId = 'mage';
   private activeClass: ClassId | null = null;
   private selected: Actor | null = null;
@@ -187,9 +188,9 @@ export class GameUI {
         <aside class="team-invite glass" data-ref="team-invite" aria-label="Invito al team" hidden></aside>
         <div class="player-details" data-ref="player-details" role="region" aria-label="Compagni del team" tabindex="0"><section class="team-roster glass" data-ref="team-roster" aria-label="Membri del team" hidden></section></div>
         <section class="target-panel glass" data-ref="target" hidden><div class="target-heading"><span data-ref="target-type">GIOCATORE</span><button data-ref="target-close" aria-label="Deseleziona bersaglio">×</button></div><strong data-ref="target-name"></strong><small data-ref="target-detail"></small><div class="meter hp-meter target-health"><i data-ref="target-fill"></i></div><div class="target-actions" data-ref="target-actions"><button data-ref="target-friend">+ Amico</button><button data-ref="target-team">+ Team</button></div></section>
-        <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><div><span class="eyebrow">NON VIAGGIARE DA SOLO</span><h2>I tuoi compagni</h2></div><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
+        <aside class="social-panel glass" data-ref="social-panel" hidden><div class="social-header"><h2>Compagni</h2><button data-ref="social-close" aria-label="Chiudi compagni">×</button></div><div class="social-content" data-ref="social-content"></div></aside>
         <div class="map-dismiss" data-ref="map-dismiss" hidden aria-hidden="true"></div>
-        <div class="minimap-panel glass"><header class="map-heading"><span>LE TERRE DI SOGLIA</span><strong data-ref="map-location">Terre di Soglia</strong></header><canvas class="minimap" width="260" height="260" aria-label="Mappa locale"></canvas><div><span>MAPPA LOCALE</span><span>N ↑</span></div></div>
+        <div class="minimap-panel glass"><button type="button" class="map-close" data-ref="map-close" aria-label="Chiudi mappa">×</button><header class="map-heading"><strong data-ref="map-location">Terre di Soglia</strong></header><canvas class="minimap" width="260" height="260" aria-label="Mappa estesa"></canvas><div><span>MAPPA ESTESA</span><span>N ↑</span></div></div>
         <div class="combat-hud"><div class="combat-instruction"><span>WASD / FRECCE <b>muovi</b></span><span>SINISTRO PREMUTO <b>mira</b></span><span>CLIC <b>seleziona</b></span></div><div class="ability-bar glass" data-ref="ability-bar"></div><div class="combat-caption"><span data-ref="combat-class"></span><span>·</span><span>SPAZIO / CLIC DESTRO per attaccare</span></div></div>
         <div class="world-tip glass"><span>✧</span><span>I cespugli ti nascondono.<br><b>Attaccare rivela la tua posizione.</b></span></div>
         <div class="connection-banner" data-ref="connection-banner" hidden>Riconnessione al mondo…</div>
@@ -221,23 +222,25 @@ export class GameUI {
     this.exitDialog.querySelector('[data-resume]')!.addEventListener('click', () => { this.exitDialog.close(); this.display.resume(); });
     this.exitDialog.querySelector('[data-exit]')!.addEventListener('click', () => { this.exitDialog.close(); this.actions.leave(); });
     this.exitDialog.addEventListener('cancel', () => this.display.resume());
-    this.mapVisible = !this.display.touch;
-    try { const saved = localStorage.getItem('riftlands.minimap'); if (saved !== null) this.mapVisible = saved === 'visible'; } catch { /* Device preference is optional. */ }
+    this.mapVisible = false;
     const mapPanel = root.querySelector<HTMLElement>('.minimap-panel')!; mapPanel.id = 'game-minimap';
-    this.mapToggle.type = 'button'; this.mapToggle.className = 'world-location glass map-toggle';
+    this.mapToggle.type = 'button'; this.mapToggle.className = 'compact-map map-toggle';
     const location = root.querySelector('.world-location')!;
-    this.mapToggle.append(...Array.from(location.childNodes));
+    this.compactMinimap.className = 'compact-minimap';
+    this.compactMinimap.setAttribute('aria-hidden', 'true');
+    this.mapToggle.append(this.compactMinimap);
     location.remove();
-    root.querySelector('.menu-buttons')!.prepend(this.mapToggle);
+    root.querySelector('.game-hud')!.append(this.mapToggle);
     this.mapToggle.setAttribute('aria-controls', mapPanel.id);
     this.mapToggle.addEventListener('click', () => {
       this.setMapVisible(!this.mapVisible);
     });
     this.ref('map-dismiss').addEventListener('pointerdown', event => {
-      if (!this.display.touch || !this.mapVisible) return;
+      if (!this.mapVisible) return;
       event.preventDefault(); event.stopPropagation();
       this.setMapVisible(false);
     });
+    this.ref('map-close').addEventListener('click', () => { this.setMapVisible(false); this.mapToggle.focus(); });
     this.updateMap();
     this.ref('leave').setAttribute('aria-label', 'Torna al menu');
     this.ref('social-toggle').setAttribute('aria-label', 'Compagni');
@@ -305,6 +308,7 @@ export class GameUI {
       if (!this.ref('settings-panel').contains(target) && !this.ref('settings-toggle').contains(target)) this.toggleSettings(false);
     });
     document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && this.mapVisible) { this.setMapVisible(false); this.mapToggle.focus(); }
       if (event.key === 'Escape' && !this.ref('settings-panel').hidden) { this.toggleSettings(false); this.ref('settings-toggle').focus(); }
     });
     this.ref('social-toggle').addEventListener('click', () => this.toggleSocial());
@@ -313,7 +317,7 @@ export class GameUI {
     targetSummary.type = 'button';
     targetSummary.className = 'target-summary';
     targetSummary.setAttribute('aria-expanded', 'false');
-    targetSummary.innerHTML = '<strong></strong><span class="target-summary-meter target-summary-hp"><i></i><span></span></span><span class="target-summary-meter target-summary-resource"><i></i><span></span></span>';
+    targetSummary.innerHTML = '<span class="target-portrait player-portrait"></span><span class="target-vitals"><span class="target-name-row"><strong></strong><small class="target-level"></small></span><span class="target-summary-meter target-summary-hp"><i></i><span></span></span><span class="target-summary-meter target-summary-resource"><i></i><span></span></span></span>';
     this.ref('target').prepend(targetSummary);
     targetSummary.addEventListener('click', () => {
       const expanded = this.ref('target').classList.toggle('is-expanded');
@@ -334,17 +338,16 @@ export class GameUI {
 
   get selectedClass(): ClassId { return this.currentClass; }
   get minimapVisible(): boolean { return this.mapVisible; }
-  get inputBlocked(): boolean { return !this.ref('world-entrance').hidden || !this.ref('settings-panel').hidden || this.exitDialog.open || !this.ref('social-panel').hidden || (this.display.touch && this.mapVisible); }
+  get inputBlocked(): boolean { return !this.ref('world-entrance').hidden || !this.ref('settings-panel').hidden || this.exitDialog.open || !this.ref('social-panel').hidden || this.mapVisible; }
   private toggleSettings(open = this.ref('settings-panel').hidden): void {
     this.ref('settings-panel').hidden = !open;
     this.ref('settings-toggle').setAttribute('aria-expanded', String(open));
-    if (open) this.actions.releaseControls?.();
+    if (open) { this.toggleSocial(false); this.setMapVisible(false); this.actions.releaseControls?.(); }
   }
   private setMapVisible(visible: boolean): void {
     this.mapVisible = visible;
-    if (visible && this.display.touch) this.actions.releaseControls?.();
+    if (visible) { this.toggleSettings(false); this.toggleSocial(false); this.actions.releaseControls?.(); }
     this.updateMap();
-    try { localStorage.setItem('riftlands.minimap', visible ? 'visible' : 'hidden'); } catch { /* Ignore storage restrictions. */ }
   }
   private updateMap(): void {
     this.root.classList.toggle('map-open', this.mapVisible);
@@ -633,6 +636,7 @@ export class GameUI {
 
   setPlaying(playing: boolean): void {
     if (!playing) this.cancelWorldEntrance();
+    if (!playing) this.setMapVisible(false);
     this.isPlaying = playing;
     this.toggleSettings(false);
     this.display.setPlaying(playing);
@@ -833,6 +837,14 @@ export class GameUI {
     this.ref('target').hidden = !actor;
     if (!actor) return;
     summary.querySelector('strong')!.textContent = actor.name;
+    summary.querySelector('.target-level')!.textContent = `LV ${actor.level}`;
+    const targetPortrait = summary.querySelector<HTMLElement>('.target-portrait')!;
+    const portraitKey = actor.kind === 'npc' ? `npc:${actor.npcKind}` : actor.classId;
+    if (targetPortrait.dataset.portrait !== portraitKey) {
+      targetPortrait.dataset.portrait = portraitKey;
+      targetPortrait.innerHTML = actor.kind === 'npc' ? icon('<path d="m4 5 4 2 4-4 4 4 4-2-2 13-6 3-6-3Z"/><path d="m7 11 3 1M17 11l-3 1M9 16h6"/>') : portrait(actor.classId);
+    }
+    targetPortrait.style.color = actor.kind === 'npc' ? '#ffbb9b' : CLASSES[actor.classId].color;
     const resourceName = CLASSES[actor.classId].resource === 'rage' ? 'Rage' : 'Mana';
     const updateSummaryMeter = (selector: string, value: number, max: number, label: string) => {
       const meter = summary.querySelector<HTMLElement>(selector)!;
@@ -842,7 +854,7 @@ export class GameUI {
     updateSummaryMeter('.target-summary-hp', actor.hp, actor.maxHp, 'PV');
     updateSummaryMeter('.target-summary-resource', actor.resource, actor.maxResource, resourceName);
     summary.querySelector<HTMLElement>('.target-summary-resource')!.hidden = actor.maxResource <= 0;
-    summary.style.setProperty('--target-resource-color', CLASSES[actor.classId].resource === 'rage' ? '#ac6043' : '#65549d');
+    summary.style.setProperty('--target-resource-color', CLASSES[actor.classId].resource === 'rage' ? '#df9877' : '#aaa0e8');
     this.write('target-type', actor.kind === 'npc' ? 'CREATURA DEL MONDO' : 'VIAGGIATORE');
     this.write('target-name', actor.name);
     this.write('target-detail', `${CLASSES[actor.classId].name} · Livello ${actor.level} · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV`);
@@ -864,7 +876,7 @@ export class GameUI {
     const panel = this.ref('social-panel');
     const visible = open ?? panel.hidden;
     panel.hidden = !visible;
-    if (visible) this.actions.releaseControls?.();
+    if (visible) { this.toggleSettings(false); this.setMapVisible(false); this.actions.releaseControls?.(); }
     this.ref('social-toggle').setAttribute('aria-expanded', String(visible));
     if (visible) this.renderSocial();
   }
