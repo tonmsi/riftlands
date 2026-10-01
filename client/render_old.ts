@@ -29,13 +29,7 @@ const BOSS_SPRITE_URLS: Record<string, string> = {
 // Configura qui le sprite speciali. Fallback automatico se non presenti.
 const BOSS_ATTACK_SPRITES: Record<string, { url: string; cols: number; rows: number }> = {
   'stone-warden:charge': { url: new URL('../assets/boss-warden-charge.svg', import.meta.url).href, cols: 4, rows: 1 },
-  // Puoi aggiungere in futuro: 'stone-waarden:slam': { ... }
-  'stone-warden:slam': { url: new URL('../assets/boss-warden-slam.svg', import.meta.url).href, cols: 4, rows: 1 },
-  
-  // Aggiungi qui la Nova (es. 5 frame per farlo caricare di energia)
-  'stone-warden:nova': { url: new URL('../assets/boss-warden-nova.svg', import.meta.url).href, cols: 4, rows: 1 },
-  'stone-warden:prep': { url: new URL('../assets/boss-warden-prep.svg', import.meta.url).href, cols: 4, rows: 1 }, 
-
+  // Puoi aggiungere in futuro: 'stone-warden:slam': { ... }
 };
 const BUSH_SPRITE_URL = new URL('../assets/bush.svg', import.meta.url).href;
 
@@ -496,16 +490,6 @@ export class Renderer {
         ? frame.bossWindups?.find(w => w.bossId === actor.id) 
         : undefined;
 
-      // 2. Trova se è aggrato (il dungeon si risveglia)
-      const isPreparing = actor.npcKind === 'boss' 
-        ? frame.bossPreparations?.some(p => p.bossId === actor.id)
-        : false;
-
-      // 3. Trova se il combattimento è iniziato (dungeon chiuso)
-      const isLocked = actor.npcKind === 'boss'
-        ? frame.bossLocks?.some(l => l.bossId === actor.id && l.locked)
-        : false;
-
       this.drawActor(
         actor,
         frame.time,
@@ -515,8 +499,6 @@ export class Renderer {
         hitTargets,
         self ? frame.moveDirection : undefined,
         activeWindup, // <--- Aggiungi questo parametro!
-        isPreparing, // <--- MANCAVA QUESTO!
-        isLocked,    // <--- MANCAVA QUESTO!
         actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss'
       );
     }
@@ -1529,8 +1511,6 @@ export class Renderer {
     hitTargets: ReadonlySet<string>,
     moveDirection?: Vec2 | null,
     windup?: BossWindup, // <--- Nuovo
-    isPreparing?: boolean,
-    isLocked?: boolean, // <--- Nuovo parametro
     detailed = true
   ): void {
     const { ctx } = this;
@@ -1614,7 +1594,7 @@ export class Renderer {
       ctx.restore();
     }
 
-    if (actor.kind === 'npc') this.drawNpc(actor, time, color, windup, isPreparing, isLocked);
+    if (actor.kind === 'npc') this.drawNpc(actor, time, color, windup);
     else this.drawPlayer(actor, color, dead, time, moveDirection);
 
     if (!dead && hitTargets.has(actor.id)) {
@@ -1751,53 +1731,20 @@ export class Renderer {
     }
   }
 
- private drawNpc(actor: Actor, time: number, color: string, windup?: BossWindup, isPreparing?: boolean, isLocked?: boolean): void {
+  private drawNpc(actor: Actor, time: number, color: string, windup?: BossWindup): void {
     const { ctx } = this;
     const r = actor.radius;
     
+    // Determina quale sprite usare
     let spriteKey = actor.npcKind === 'boss' ? `boss:${actor.bossSkin}` : actor.npcKind;
     let isAttacking = false;
-    let isWakingUp = false;
-    let isAsleep = false;
 
-    // --- LOGICA DI MOVIMENTO (spostata in alto per sapere subito se si muove) ---
-    const previous = this.classMotion.get(actor.id);
-    const dx = previous ? actor.x - previous.x : 0;
-    const dy = previous ? actor.y - previous.y : 0;
-    const distance = Math.hypot(dx, dy);
-    
-    // Margine di tolleranza per evitare sfarfallii sui muri (se era in moto e fa micro-passi, resta in moto)
-    const moving = actor.spriteMoving ?? (distance > 0.02 || (previous?.moving === true && distance > 0.005));
-    let row = actor.spriteRow ?? previous?.row ?? 0;
-    
-    if (moving && actor.spriteRow === undefined) {
-      // Usiamo playerSpriteDirectionRow per applicare la tolleranza sulle diagonali
-      row = playerSpriteDirectionRow(dx, dy, row, true);
-    }
-    // -------------------------------------------------------------------------
-
-    if (actor.npcKind === 'boss') {
-      const prepKey = `boss:${actor.bossSkin}:prep`;
-
-      if (windup) {
-        // PRIORITÀ 1: Sta attaccando
-        const attackKey = `boss:${actor.bossSkin}:${windup.kind}`;
-        if (this.npcSprites.has(attackKey)) {
-          spriteKey = attackKey;
-          isAttacking = true;
-        }
-      } else if (isPreparing) {
-        // PRIORITÀ 2: È stato aggrato, si sta risvegliando
-        if (this.npcSprites.has(prepKey)) {
-          spriteKey = prepKey;
-          isWakingUp = true;
-        }
-      } else if (!isLocked && actor.hp >= actor.maxHp && !moving) {
-        // PRIORITÀ 3: Dorme SOLO se il dungeon non è chiuso, la vita è intatta e NON si sta muovendo
-        if (this.npcSprites.has(prepKey)) {
-          spriteKey = prepKey;
-          isAsleep = true;
-        }
+    // Fallback logic: usa la sprite dell'attacco se esiste, altrimenti mantiene la base
+    if (actor.npcKind === 'boss' && windup) {
+      const attackKey = `boss:${actor.bossSkin}:${windup.kind}`;
+      if (this.npcSprites.has(attackKey)) {
+        spriteKey = attackKey;
+        isAttacking = true;
       }
     }
 
@@ -1806,24 +1753,21 @@ export class Renderer {
       let frameIndex = 0;
 
       if (isAttacking && windup) {
-        // Animazione Attacco
+        // Logica per le sprite d'attacco (basata sul tempo di windup)
         const duration = windup.resolvesAt - windup.startedAt;
         const progress = Math.max(0, Math.min(1, (time - windup.startedAt) / duration));
+        
+        // Mappa il progresso da 0% a 100% sui frame disponibili (es: 4 frame)
         const totalFrames = sprite.frames.length;
         frameIndex = Math.min(totalFrames - 1, Math.floor(progress * totalFrames));
-      
-      } else if (isWakingUp) {
-        // Animazione Risveglio (cicla un frame ogni 200ms)
-        const totalFrames = sprite.frames.length;
-        frameIndex = Math.floor(time / 200) % totalFrames;
-      
-      } else if (isAsleep) {
-        // Dorme: Immagine fissa sul PRIMO frame (indice 0)
-        frameIndex = 0;
-      
       } else {
-        // Movimento / Combattimento standard
-        // Aggiorniamo il tracking ora che sappiamo la direzione corretta
+        // Vecchia logica per il movimento normale
+        const previous = this.classMotion.get(actor.id);
+        const dx = previous ? actor.x - previous.x : 0;
+        const dy = previous ? actor.y - previous.y : 0;
+        const moving = actor.spriteMoving ?? Math.hypot(dx, dy) > 0.02;
+        let row = actor.spriteRow ?? previous?.row ?? 0;
+        if (moving && actor.spriteRow === undefined) row = spriteDirectionRow(dx, dy, row);
         const startedAt = moving && (!previous || !previous.moving || previous.row !== row)
           ? time : previous?.startedAt ?? time;
         this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
@@ -1839,8 +1783,6 @@ export class Renderer {
       ctx.drawImage(cachedFrame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
       return;
     }
-    
-    // === VECCHIO CODICE GRAFICA PROCEDURALE DI FALLBACK ===
     ctx.strokeStyle = '#3c483b'; ctx.lineWidth = 1.8;
     if (actor.npcKind === 'boss') {
       if (actor.hp <= 0) {
@@ -1922,6 +1864,7 @@ export class Renderer {
       ctx.fill();
     }
   }
+
   private drawProjectile(projectile: Projectile, time: number): void {
     const { ctx } = this;
     const angle = Math.atan2(projectile.vy, projectile.vx);
