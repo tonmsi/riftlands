@@ -31,6 +31,13 @@ test('camp: authentication before class selection, preload, themed sections and 
     const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
     const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     let sockets = 0; page.on('websocket', () => sockets++);
+    let releaseWorld = false;
+    await page.routeWebSocket('**/ws', route => {
+      const upstream = route.connectToServer();
+      upstream.onMessage(data => {
+        if (JSON.parse(String(data)).type !== 'snapshot' || releaseWorld) route.send(data);
+      });
+    });
     // Hold the configured PNGs: the menu and temporary branding must stay hidden.
     let releaseArtwork!: () => void;
     const artworkGate = new Promise<void>(done => { releaseArtwork = done; });
@@ -70,6 +77,7 @@ test('camp: authentication before class selection, preload, themed sections and 
     });
     for (const [width, height] of [[1519, 839], [1280, 720], [1024, 768], [390, 844]]) {
       await page.setViewportSize({ width, height });
+      if (width <= 760) await page.locator('[data-ref="champion-info-toggle"]').click();
       const account = (await page.locator('[data-ref="saved-card"]').boundingBox())!;
       const stats = (await page.locator('[data-ref="class-detail"]').boundingBox())!;
       assert.ok(account.y + account.height <= stats.y, `account overlaps stats at ${width}×${height}`);
@@ -101,22 +109,30 @@ test('camp: authentication before class selection, preload, themed sections and 
     await page.locator('[data-save]').click();
     assert.ok((await page.evaluate(() => localStorage.getItem('riftlands.controls.v1')))?.includes('KeyF'));
     await page.locator('[data-screen-target="character"]').click();
+    const enteredAt = Date.now();
     await page.locator('[data-ref="join"]').click();
-    await expect(page.locator('.lobby')).toHaveAttribute('data-screen', 'ready');
-    await expect(page.locator('.journey-panel h2')).toBeHidden();
-    assert.deepEqual(await page.locator('.journey-panel').evaluate(element => {
-      const style = getComputedStyle(element);
-      return [style.backgroundColor, style.backgroundImage, style.boxShadow, style.borderTopWidth];
-    }), ['rgba(0, 0, 0, 0)', 'none', 'none', '0px']);
-    await page.screenshot({ path: 'test-results/lobby-journey-desktop.png', fullPage: true });
-    await page.locator('[data-ref="join"]').click();
+    await expect(page.locator('[data-ref="world-entrance"]')).toBeVisible();
+    assert.ok((await page.locator('[data-ref="world-entrance"]').getAttribute('style'))?.includes('paladinback'));
+    await page.screenshot({ path: 'test-results/lobby-entrance-desktop.png', fullPage: true });
+    await expect.poll(() => page.locator('[data-ref="entrance-progress"]').evaluate(element => (element as HTMLProgressElement).value)).toBe(92);
+    await expect(page.locator('[data-ref="world-entrance"]')).toBeVisible();
+    releaseWorld = true;
+    await expect(page.locator('[data-ref="world-entrance"]')).toBeHidden();
+    assert.ok(Date.now() - enteredAt >= 2000, 'artwork remains visible for at least two seconds');
     await expect(page.locator('.game-hud')).toBeVisible();
     await page.reload();
     await expect(page.locator('[data-ref="menu-boot"]')).toBeHidden();
     await expect(page.locator('.lobby')).toHaveAttribute('data-screen', 'character');
     await expect(page.locator('[data-ref="auth-box"]')).toBeHidden();
     await page.setViewportSize({ width: 390, height: 844 });
+    const play = (await page.locator('[data-ref="join"]').boundingBox())!;
+    const champion = (await page.locator('.champion-stage').boundingBox())!;
+    assert.ok(play.y + play.height <= champion.y && play.y < 400, 'mobile Play is above the character');
+    const brand = (await page.locator('.brand').boundingBox())!;
+    const settings = (await page.locator('.options-button').boundingBox())!;
+    assert.ok(settings.y < brand.y + brand.height && settings.y + settings.height > brand.y, 'mobile header stays on one row');
     await page.screenshot({ path: 'test-results/lobby-character-mobile.png', fullPage: true });
+    await page.locator('[data-ref="champion-info-toggle"]').click();
     await page.locator('.champion-stats').scrollIntoViewIfNeeded();
     await page.screenshot({ path: 'test-results/lobby-character-stats-mobile.png', fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -149,7 +165,7 @@ test('camp: authentication before class selection, preload, themed sections and 
     await expect(page.locator('.lobby')).toBeHidden();
     releaseManifest();
     await expect(page.locator('[data-ref="menu-boot"]')).toBeHidden();
-    await expect(page.locator('[data-ref="asset-label"]')).toContainText('alcune immagini non disponibili');
+    await expect(page.locator('[data-ref="asset-label"]')).toContainText(/immagini non disponibili/);
     await expect(page.locator('[data-ref="brand-image"]')).toBeVisible();
     await page.locator('[data-class="paladin"]').click();
     await page.locator('[data-screen-target="stats"]').click();
@@ -161,6 +177,10 @@ test('camp: authentication before class selection, preload, themed sections and 
     assert.ok((await page.locator('.lobby').getAttribute('style'))?.includes('?warrior'));
     await page.locator('[data-screen-target="character"]').click();
     await page.locator('[data-ref="join"]').click();
+    await expect(page.locator('[data-ref="world-entrance"]')).toBeVisible();
+    assert.ok((await page.locator('[data-ref="world-entrance"]').getAttribute('style'))?.includes('?warrior'));
+    await page.locator('[data-ref="entrance-cancel"]').click();
+    await expect(page.locator('[data-ref="world-entrance"]')).toBeHidden();
     await expect(page.locator('[data-ref="join"]')).toBeEnabled();
     const authResponse = await fetch(`http://127.0.0.1:${port}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://other.example' }, body: '{}' });
     assert.equal(authResponse.status, 403);

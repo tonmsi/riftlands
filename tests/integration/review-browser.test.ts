@@ -113,7 +113,7 @@ test('dungeon authoring persists and exports; touch movement remains responsive 
       route.onMessage(data => deliver(() => upstream.send(data))); upstream.onMessage(data => deliver(() => route.send(data)));
       route.onClose(() => { for (const timer of timers) clearTimeout(timer); upstream.close(); });
     });
-    await mobile.goto(`http://127.0.0.1:${port}`); await mobile.locator('[data-ref=join]').click(); await mobile.locator('[data-ref=join]').click();
+    await mobile.goto(`http://127.0.0.1:${port}`); await mobile.locator('[data-ref=join]').click(); await expect(mobile.locator('[data-ref="world-entrance"]')).toBeHidden();
     await expect(mobile.locator('.game-hud')).toBeVisible(); await mobile.waitForTimeout(500);
     await mobile.evaluate(async () => {
       const { Renderer } = await import('/client/render.ts' as string);

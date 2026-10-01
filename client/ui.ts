@@ -77,7 +77,11 @@ export class GameUI {
   private socialCache = '';
   private authMode: 'login' | 'register' = 'login';
   private savedAccount: PublicAccount | null = null;
-  private menuScreen: 'auth' | 'character' | 'ready' | 'hub' = 'auth';
+  private menuScreen: 'auth' | 'character' | 'hub' = 'auth';
+  private entranceFrame = 0;
+  private entranceTimer = 0;
+  private entranceStarted = 0;
+  private entranceReady = false;
   private assetsLoaded = false;
   private lobbyArt: LobbyArt = { classes: {} };
   private readonly refs = new Map<string, HTMLElement>();
@@ -104,15 +108,16 @@ export class GameUI {
     root.className = 'rift-app is-menu-loading';
     root.innerHTML = `
       <div class="menu-boot" data-ref="menu-boot" role="status"><span class="boot-mark" aria-hidden="true">✦</span><strong>Preparazione dell’accampamento</strong><span data-ref="boot-label">Caricamento delle immagini e del mondo…</span><progress data-ref="boot-progress" max="1" value="0" aria-label="Preparazione risorse"></progress></div>
+      <div class="world-entrance" data-ref="world-entrance" role="region" aria-label="Ingresso in partita" hidden><div class="entrance-controls"><progress data-ref="entrance-progress" max="100" value="0" aria-label="Ingresso in partita"></progress><button type="button" data-ref="entrance-cancel">Annulla</button></div></div>
       <div class="world-stage"><canvas class="world-canvas" aria-label="Mondo di gioco multiplayer" tabindex="0"></canvas>
       </div>
       <div class="lobby" data-screen="auth">
-        <header class="site-header"><a class="brand" href="/" aria-label="Riftlands, ingresso"><img data-ref="brand-image" alt="Riftlands" hidden><span data-ref="brand-fallback"><span class="brand-symbol">${icon('<path d="m12 1 10 11-10 11L2 12Z"/><path d="m12 5 6 7-6 7-6-7ZM12 1v22"/>')}</span>RIFTLANDS</span></a><div class="header-right"><a href="/dungeon-maker.html">Dungeon maker ↗</a><span class="connection-pill" data-ref="lobby-connection"><i></i><span>Pronto a esplorare</span></span></div></header>
+        <header class="site-header"><a class="brand" href="/" aria-label="Riftlands, ingresso"><img data-ref="brand-image" alt="Riftlands" hidden><span data-ref="brand-fallback"><span class="brand-symbol">${icon('<path d="m12 1 10 11-10 11L2 12Z"/><path d="m12 5 6 7-6 7-6-7ZM12 1v22"/>')}</span>RIFTLANDS</span></a><div class="header-right"><a href="/dungeon-maker.html">Dungeon maker ↗</a></div><span class="connection-pill" data-ref="lobby-connection" role="status" hidden><i></i><span></span></span></header>
         <nav class="camp-nav" data-ref="camp-nav" aria-label="Accampamento" hidden><button type="button" data-screen-target="character" aria-pressed="true">La tua leggenda</button><button type="button" data-screen-target="stats" aria-pressed="false">Statistiche</button><button type="button" data-screen-target="rankings" aria-pressed="false">Classifiche</button><button type="button" data-screen-target="achievements" aria-pressed="false">Achievement</button><button type="button" data-screen-target="friends" aria-pressed="false">Amici</button></nav>
         <div class="asset-loader" data-ref="asset-loader"><span data-ref="asset-label" role="status">Preparazione delle Terre di Soglia…</span><progress data-ref="asset-progress" max="1" value="0" aria-label="Caricamento asset"></progress></div>
         <div class="camp-content" data-ref="camp-content">
         <main class="lobby-main" data-ref="lobby-main"><section class="entry-panel" aria-label="Menu principale">
-          <div class="camp-heading"><div class="intro"><span class="eyebrow" data-ref="menu-eyebrow">OLTRE IL CONFINE</span><h1 data-ref="menu-title">Ogni leggenda ha un inizio.</h1><p data-ref="menu-description">Le Terre di Soglia ti aspettano. Scrivi la tua storia.</p></div>
+          <div class="camp-heading"><div class="intro"><h1 data-ref="menu-title">Accedi al gioco</h1></div>
             <!-- SCHERMATA SESSIONE ATTIVA -->
             <div class="saved-account-card" data-ref="saved-card" hidden>
               <div class="account-icon">${icon('<circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/>')}</div>
@@ -149,17 +154,17 @@ export class GameUI {
             </div>
 
             <div class="character-selection" data-ref="character-selection" hidden>
-            <div class="champion-stage"><div class="champion-glow"></div><div class="champion-portrait" data-ref="champion-portrait"></div><span class="champion-caption">LA TUA LEGGENDA</span><h2 data-ref="champion-name"></h2></div>
+            <div class="champion-stage"><div class="champion-glow"></div><div class="champion-portrait" data-ref="champion-portrait"></div><h2 data-ref="champion-name"></h2></div>
             <div class="section-label"><b>Scegli il campione</b><span>Una nuova storia, ogni volta</span></div>
             <div class="class-choices" role="group" aria-label="Campione">${(Object.keys(CLASSES) as ClassId[]).map(id => `<button type="button" class="class-card ${id === 'mage' ? 'selected' : ''}" data-class="${id}" aria-pressed="${id === 'mage'}" style="--class-color:${CLASSES[id].color}"><span class="class-symbol">${portrait(id)}</span><span class="class-name">${CLASSES[id].name}</span><span class="class-role">${id === 'mage' ? 'DISTANZA · CONTROLLO' : id === 'warrior' ? 'MISCHIA · ASSALTO' : id === 'hunter' ? 'DISTANZA · TRAPPOLE' : 'DIFESA · SUPPORTO'}</span><span class="selection-dot"></span></button>`).join('')}</div>
-            <div class="class-detail" data-ref="class-detail"></div>
+            <button type="button" class="champion-info-toggle" data-ref="champion-info-toggle" aria-expanded="false" aria-controls="champion-info">Statistiche e abilità</button>
+            <div id="champion-info" class="class-detail" data-ref="class-detail"></div>
             </div>
-            <section class="journey-panel" data-ref="journey-panel" hidden><span class="eyebrow">LE TERRE DI SOGLIA</span><h2>Oltre il confine,<br>la tua storia.</h2><p>Esplora un mondo condiviso. Trova i tuoi compagni. Affronta ciò che si nasconde oltre il Crocevia.</p><div class="journey-class" data-ref="journey-class"></div><button type="button" class="text-button" data-ref="change-champion">← Cambia campione</button></section>
             
             <div class="entry-actions"><button type="submit" class="join-button" data-ref="join">
-              <span data-ref="join-text">Entra nel mondo</span><span class="join-arrow">↗</span>
+              <span data-ref="join-text">Accedi</span><span class="join-mobile" aria-hidden="true">Play</span><span class="join-arrow">↗</span>
             </button>
-            <div class="entry-note"><span class="save-dot"></span>I tuoi progressi sono protetti dal tuo account personale.</div></div>
+            </div>
           </form>
 
           <div class="lobby-controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Muoviti</span><span><kbd>␣</kbd> Attacca</span><span><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd> Abilità</span><span class="mouse-hint">↖ Tieni il sinistro per mirare</span></div>
@@ -173,7 +178,6 @@ export class GameUI {
           <div class="hub-status"><span data-ref="lobby-data-status" role="status"></span><button type="button" data-ref="refresh-lobby">Aggiorna</button></div>
         </section>
         </div>
-        <footer class="camp-footer"><span>RIFTLANDS <i>✦</i> TERRE DI SOGLIA</span><span>La tua prossima avventura comincia qui.</span></footer>
       </div>
       <div class="game-hud" hidden>
         <section class="player-panel glass"><div class="player-portrait" data-ref="portrait"></div><div class="player-vitals"><div class="player-name-row"><strong data-ref="player-name"></strong><span data-ref="player-level">LV 1</span><span class="player-network"><span data-ref="online" title="Giocatori online">1</span><i class="network-dot" aria-hidden="true"></i><span data-ref="ping">— ms</span></span></div><div class="vital-row"><span>HP</span><div class="meter hp-meter"><i data-ref="hp-fill"></i><span data-ref="hp-label"></span></div></div><div class="vital-row"><span data-ref="resource-name">MP</span><div class="meter resource-meter"><i data-ref="resource-fill"></i><span data-ref="resource-label"></span></div></div><div class="xp-meter"><i data-ref="xp-fill"></i></div></div></section>
@@ -250,7 +254,12 @@ export class GameUI {
       else this.showHub(button.dataset.screenTarget!);
     }));
     this.ref('configure-controls').addEventListener('click', () => this.options.open(this.controls));
-    this.ref('change-champion').addEventListener('click', () => { this.menuScreen = 'character'; this.renderMenu(); });
+    this.ref('champion-info-toggle').addEventListener('click', () => {
+      const open = this.ref('class-detail').classList.toggle('is-mobile-open');
+      this.ref('champion-info-toggle').setAttribute('aria-expanded', String(open));
+      this.ref('champion-info-toggle').textContent = open ? 'Chiudi statistiche' : 'Statistiche e abilità';
+    });
+    this.ref('entrance-cancel').addEventListener('click', () => this.actions.leave());
     this.ref('refresh-lobby').addEventListener('click', () => void this.refreshLobby());
     void this.refreshLobby();
 
@@ -266,9 +275,9 @@ export class GameUI {
       if (this.status === 'connecting') return;
 
       if (this.savedAccount) {
-        if (this.menuScreen === 'character') { this.menuScreen = 'ready'; this.renderMenu(); return; }
         if (!this.assetsLoaded) return;
         if (this.display.touch) void this.display.enterFullscreen();
+        this.startWorldEntrance();
         this.actions.joinSaved(this.currentClass);
         return;
       }
@@ -325,7 +334,7 @@ export class GameUI {
 
   get selectedClass(): ClassId { return this.currentClass; }
   get minimapVisible(): boolean { return this.mapVisible; }
-  get inputBlocked(): boolean { return !this.ref('settings-panel').hidden || this.exitDialog.open || !this.ref('social-panel').hidden || (this.display.touch && this.mapVisible); }
+  get inputBlocked(): boolean { return !this.ref('world-entrance').hidden || !this.ref('settings-panel').hidden || this.exitDialog.open || !this.ref('social-panel').hidden || (this.display.touch && this.mapVisible); }
   private toggleSettings(open = this.ref('settings-panel').hidden): void {
     this.ref('settings-panel').hidden = !open;
     this.ref('settings-toggle').setAttribute('aria-expanded', String(open));
@@ -374,8 +383,9 @@ export class GameUI {
     this.ref('tab-register').classList.toggle('active', !isLogin);
     this.ref('tab-register').setAttribute('aria-selected', String(!isLogin));
     this.ref('name-heading').textContent = isLogin ? 'NOME PERSONAGGIO' : 'SCEGLI IL TUO NOME';
-    this.write('join-text', isLogin ? 'Accedi al tuo accampamento' : 'Crea il tuo account');
+    this.write('join-text', isLogin ? 'Accedi' : 'Crea account');
     this.passwordInput.autocomplete = isLogin ? 'current-password' : 'new-password';
+    this.renderMenu();
   }
 
   setSavedAccount(account: PublicAccount | null): void {
@@ -396,7 +406,7 @@ export class GameUI {
       this.nameInput.removeAttribute('required');
       this.passwordInput.removeAttribute('required');
     } else {
-      this.write('join-text', this.authMode === 'login' ? 'Accedi al tuo accampamento' : 'Crea il tuo account');
+      this.write('join-text', this.authMode === 'login' ? 'Accedi' : 'Crea account');
       this.nameInput.setAttribute('required', 'true');
       this.passwordInput.setAttribute('required', 'true');
       this.passwordInput.value = '';
@@ -424,15 +434,13 @@ export class GameUI {
     this.ref('lobby-hub').hidden = this.menuScreen !== 'hub';
     this.ref('lobby-main').hidden = this.menuScreen === 'hub';
     this.ref('character-selection').hidden = this.menuScreen !== 'character';
-    this.ref('journey-panel').hidden = this.menuScreen !== 'ready';
-    this.ref('saved-card').hidden = !this.savedAccount || this.menuScreen === 'ready';
+    this.ref('saved-card').hidden = !this.savedAccount;
     const auth = this.menuScreen === 'auth';
-    if (auth) this.write('join-text', this.authMode === 'login' ? 'Accedi al tuo accampamento' : 'Crea il tuo account');
-    this.write('menu-eyebrow', auth ? 'OLTRE IL CONFINE' : 'IL TUO ACCAMPAMENTO');
-    this.write('menu-title', auth ? 'Ogni leggenda ha un inizio.' : 'Scegli la tua leggenda.');
-    this.write('menu-description', auth ? 'Le Terre di Soglia ti aspettano. Scrivi la tua storia.' : 'Quattro destini. Un mondo da esplorare.');
-    this.root.querySelector<HTMLElement>('.intro')!.hidden = this.menuScreen === 'ready';
-    if (!auth) this.write('join-text', this.menuScreen === 'character' ? 'Continua con ' + CLASSES[this.currentClass].name : this.assetsLoaded ? 'Entra nelle Terre di Soglia' : 'Preparazione del mondo…');
+    if (auth) this.write('join-text', this.authMode === 'login' ? 'Accedi' : 'Crea account');
+    this.write('menu-title', this.authMode === 'login' ? 'Accedi al gioco' : 'Crea il tuo account');
+    this.root.querySelector<HTMLElement>('.intro')!.hidden = !auth;
+    if (!auth) this.write('join-text', 'Continua con ' + CLASSES[this.currentClass].name);
+    this.ref('join').setAttribute('aria-label', auth ? (this.authMode === 'login' ? 'Accedi' : 'Crea account') : 'Play con ' + CLASSES[this.currentClass].name);
     if (this.menuScreen !== 'hub') this.root.querySelectorAll<HTMLButtonElement>('[data-screen-target]').forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.screenTarget === 'character')));
     this.updateMenuBackground();
     this.updateJoinAvailability();
@@ -463,13 +471,59 @@ export class GameUI {
     bootProgress.max = total; bootProgress.value = done;
     this.write('boot-label', done === total ? 'Ultimi preparativi…' : `Caricamento risorse · ${done}/${total}`);
     this.assetsLoaded = done === total;
-    this.write('asset-label', this.assetsLoaded ? (failed ? 'Mondo pronto · alcune immagini non disponibili' : 'Le Terre di Soglia sono pronte') : `Caricamento risorse · ${done}/${total}`);
+    this.write('asset-label', this.assetsLoaded ? (failed ? 'Alcune immagini non disponibili' : '') : `Caricamento risorse · ${done}/${total}`);
     this.ref('asset-loader').classList.toggle('is-ready', this.assetsLoaded);
+    this.ref('asset-loader').hidden = this.assetsLoaded && !failed;
     this.renderMenu();
   }
 
   private updateJoinAvailability(): void {
-    (this.ref('join') as HTMLButtonElement).disabled = this.status === 'connecting' || this.status === 'reconnecting' || (this.menuScreen === 'ready' && !this.assetsLoaded);
+    (this.ref('join') as HTMLButtonElement).disabled = this.status === 'connecting' || this.status === 'reconnecting' || !this.ref('world-entrance').hidden || (Boolean(this.savedAccount) && !this.assetsLoaded);
+  }
+
+  private startWorldEntrance(): void {
+    this.cancelWorldEntrance();
+    const overlay = this.ref('world-entrance');
+    const art = this.lobbyArt.classes[this.currentClass]?.background ?? this.lobbyArt.selectionBackground ?? this.lobbyArt.loginBackground;
+    overlay.style.backgroundImage = art ? `url(${JSON.stringify(art)})` : 'none';
+    overlay.hidden = false;
+    overlay.classList.remove('is-leaving');
+    this.root.classList.add('is-entering');
+    this.entranceReady = false;
+    this.entranceStarted = performance.now();
+    this.options.close();
+    this.actions.releaseControls?.();
+    const progress = this.ref('entrance-progress') as HTMLProgressElement;
+    progress.value = 0;
+    const advance = () => {
+      const elapsed = performance.now() - this.entranceStarted;
+      progress.value = Math.min(92, elapsed / 2000 * 92);
+      if (elapsed >= 2000 && this.entranceReady) {
+        progress.value = 100;
+        this.entranceFrame = 0;
+        overlay.classList.add('is-leaving');
+        this.root.classList.remove('is-entering');
+        this.entranceTimer = window.setTimeout(() => {
+          overlay.hidden = true;
+          this.entranceTimer = 0;
+          this.updateJoinAvailability();
+          if (this.isPlaying) this.canvas.focus({ preventScroll: true });
+        }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 400);
+      } else this.entranceFrame = requestAnimationFrame(advance);
+    };
+    this.entranceFrame = requestAnimationFrame(advance);
+    this.updateJoinAvailability();
+  }
+
+  private cancelWorldEntrance(): void {
+    cancelAnimationFrame(this.entranceFrame);
+    clearTimeout(this.entranceTimer);
+    this.entranceFrame = 0;
+    this.entranceTimer = 0;
+    this.entranceReady = false;
+    this.ref('world-entrance').hidden = true;
+    this.root.classList.remove('is-entering');
+    this.updateJoinAvailability();
   }
 
   private renderLobbyStats(): void {
@@ -529,9 +583,11 @@ export class GameUI {
     const customPortrait = this.lobbyArt.classes[this.currentClass]?.portrait;
     if (customPortrait) { const image = document.createElement('img'); image.src = customPortrait; image.alt = ''; this.ref('champion-portrait').replaceChildren(image); }
     this.write('champion-name', chosen.name);
-    this.write('journey-class', chosen.name + ' · ' + chosen.subtitle);
     this.updateMenuBackground();
-    if (this.menuScreen === 'character') this.write('join-text', 'Continua con ' + chosen.name);
+    if (this.menuScreen === 'character') {
+      this.write('join-text', 'Continua con ' + chosen.name);
+      this.ref('join').setAttribute('aria-label', 'Play con ' + chosen.name);
+    }
     this.root.querySelectorAll<HTMLButtonElement>('[data-class]').forEach(button => {
       const active = button.dataset.class === this.currentClass;
       button.classList.toggle('selected', active);
@@ -560,10 +616,13 @@ export class GameUI {
     if (status === 'connecting' || status === 'reconnecting') this.options.close();
     const optionsButton = this.root.querySelector<HTMLButtonElement>('.options-button');
     if (optionsButton) optionsButton.disabled = this.isPlaying || status === 'connecting' || status === 'reconnecting';
-    const labels = { idle: 'Pronto a esplorare', connecting: 'Connessione in corso', online: 'Connesso al mondo', reconnecting: 'Riconnessione…', offline: 'Connessione interrotta' };
+    const labels = { idle: '', connecting: 'Connessione in corso', online: '', reconnecting: 'Riconnessione…', offline: 'Connessione interrotta' };
     const pill = this.ref('lobby-connection');
     pill.dataset.status = status;
     pill.querySelector('span')!.textContent = detail || labels[status];
+    pill.hidden = status === 'idle' || status === 'online';
+    if (status === 'offline') this.cancelWorldEntrance();
+    if (status === 'reconnecting') this.entranceReady = false;
     this.updateJoinAvailability();
     const banner = this.ref('connection-banner');
     banner.hidden = !this.isPlaying || (status !== 'offline' && status !== 'reconnecting');
@@ -573,6 +632,7 @@ export class GameUI {
   }
 
   setPlaying(playing: boolean): void {
+    if (!playing) this.cancelWorldEntrance();
     this.isPlaying = playing;
     this.toggleSettings(false);
     this.display.setPlaying(playing);
@@ -583,8 +643,9 @@ export class GameUI {
     (this.root.querySelector('.lobby') as HTMLElement).hidden = playing;
     (this.root.querySelector('.game-hud') as HTMLElement).hidden = !playing;
     this.ref('connection-banner').hidden = true;
-    if (playing) this.canvas.focus({ preventScroll: true });
-    else {
+    if (playing) {
+      if (this.ref('world-entrance').hidden) this.canvas.focus({ preventScroll: true });
+    } else {
       this.toggleSocial(false);
       this.setSelected(null);
       this.latest = null;
@@ -597,6 +658,7 @@ export class GameUI {
   }
 
   setSnapshot(snapshot: Snapshot, ping: number): void {
+    if (!this.ref('world-entrance').hidden) this.entranceReady = true;
     this.latest = snapshot;
     const player = snapshot.self;
     const definition = CLASSES[player.classId];

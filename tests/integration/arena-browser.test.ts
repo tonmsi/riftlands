@@ -55,7 +55,7 @@ test('two browsers: gate cancellation, 1v1 transfer, obstacles and opponent aban
       }));
       await page.goto(`http://127.0.0.1:${port}`);
       await page.locator('[data-ref=join]').click();
-      await page.locator('[data-ref=join]').click();
+      await expect(page.locator('[data-ref="world-entrance"]')).toBeHidden();
       await expect(page.locator('.game-hud')).toBeVisible();
       await page.locator('.world-canvas').click();
       clients.push({ page, state });

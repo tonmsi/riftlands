@@ -47,7 +47,7 @@ test('moving casts originate on the rendered player at 30/150/300 ms RTT without
                     clearTimeout(t); upstream.close(); }); });
                 await page.goto(`http://127.0.0.1:${port}`);
                 await page.locator('[data-ref=join]').click();
-                await page.locator('[data-ref=join]').click();
+                await expect(page.locator('[data-ref="world-entrance"]')).toBeHidden();
                 await expect(page.locator('.game-hud')).toBeVisible();
                 await page.waitForTimeout(400);
                 await page.evaluate(async () => {

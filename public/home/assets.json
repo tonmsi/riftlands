@@ -1,7 +1,7 @@
 {
   "logo": "home/logoshort.png",
-  "loginBackground": "home/mageback.png",
-  "selectionBackground": "home/paladinback.png",
+  "loginBackground": "home/loginback2.png",
+  "selectionBackground": "home/selectionback4.png",
   "classes": {
     "paladin": { "portrait": null, "background": "home/paladinback.png" },
     "warrior": { "portrait": null, "background": "home/warrback.png" },
