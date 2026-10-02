@@ -9,7 +9,7 @@ import { coordinateHash } from './coordinate-random';
 import { EDIT_CHUNK_SIZE, type WorldTileChunk } from './world-tiles';
 export { coordinateHash } from './coordinate-random';
 
-export interface NpcSpawn { id: string; x: number; y: number; npcKind: 'slime' | 'sentinel' | 'wisp'; level: number; }
+export interface NpcSpawn { id: string; x: number; y: number; npcKind: import('./npcs').NpcTemplateId; level: number; }
 export interface Chunk { key: string; cx: number; cy: number; tiles: TileKind[]; npcs: NpcSpawn[]; pickups: Pickup[]; }
 export const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 export const chunkCoords = (x: number, y: number): { cx: number; cy: number } => ({ cx: Math.floor(x / CHUNK_SIZE), cy: Math.floor(y / CHUNK_SIZE) });

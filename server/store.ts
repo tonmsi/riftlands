@@ -4,8 +4,12 @@ import { dirname, join, resolve } from 'node:path';
 import type { Actor, PublicAccount } from '../shared/types';
 import { CLASSES } from '../shared/config';
 import { validBossStates, type BossState } from '../shared/bosses';
+import { newInventory, validInventory, type Inventory } from '../shared/items';
+import { newNarrativeProgress, validNarrativeProgress, type NarrativeProgress } from '../shared/narrative';
 
 export interface Account {
+  inventory?: Inventory;
+  narrative?: NarrativeProgress;
   gold?: number;
   id: string;
   name: string;
@@ -104,6 +108,8 @@ export class AccountStore {
         const account = entry as Account;
         if (account.gold !== undefined && (!Number.isSafeInteger(account.gold) || account.gold < 0)) throw new Error('Saldo gold non valido.');
         account.gold ??= 0;
+        if (account.inventory !== undefined && !validInventory(account.inventory) || account.narrative !== undefined && !validNarrativeProgress(account.narrative)) throw new Error('Inventario o missioni non validi.');
+        account.inventory ??= newInventory(); account.narrative ??= newNarrativeProgress();
         this.accounts.set(account.id, account);
         this.accountsByName.set(account.nameLower, account.id);
       }
@@ -234,7 +240,7 @@ export class AccountStore {
       xp: 0,
       friends: [],
       requests: [],
-      lastSeen: Date.now()
+      lastSeen: Date.now(), inventory: newInventory(), narrative: newNarrativeProgress()
     };
 
     this.accounts.set(account.id, account);

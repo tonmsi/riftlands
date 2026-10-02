@@ -1,5 +1,5 @@
 import type { TileKind, Vec2 } from './types';
-import type { NpcKind } from './npcs';
+import { NPC_DEFINITIONS, type NpcKind, type NpcTemplateId } from './npcs';
 import { WORLD_TILE_TERRAINS, type WorldTileChunk } from './world-tiles';
 
 /** Coordinates in authored documents are tiles, including fractional visual dimensions.
@@ -31,7 +31,7 @@ export interface WorldZone {
   temperature?: number; moisture?: number; pvp?: boolean; generateAssets?: boolean;
   npcs?: NpcRule; arenaId?: string;
 }
-export interface WorldNpc extends Vec2 { id: string; npcKind: NpcKind; level: number; }
+export interface WorldNpc extends Vec2 { id: string; npcKind: NpcTemplateId; level: number; }
 /** One placement per installed dungeon, preserving encounter/boss identity and persistence. */
 export interface WorldDungeon extends Vec2 { dungeonId: string; enabled?: boolean; }
 export interface WorldDocument {
@@ -143,7 +143,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     }
   }
   unique(d.zones, z => z.id, 'zone');
-  for (const n of d.npcs) if (!point(n) || !id(n.id) || !['slime', 'wisp', 'sentinel'].includes(n.npcKind) || !integer(n.level, 1, 100)) fail('NPC manuale');
+  for (const n of d.npcs) if (!point(n) || !id(n.id) || !Object.hasOwn(NPC_DEFINITIONS, n.npcKind) || !integer(n.level, 1, 100)) fail('NPC manuale');
   unique(d.npcs, n => n.id, 'NPC manuali');
   for (const p of d.dungeons) if (!point(p) || !id(p.dungeonId) || (p.enabled !== undefined && !boolean(p.enabled))) fail('piazzamento dungeon');
   unique(d.dungeons, p => p.dungeonId, 'dungeon');

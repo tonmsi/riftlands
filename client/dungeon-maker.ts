@@ -4,7 +4,7 @@ import { chooseDungeonPlacement } from './dungeon-placement';
 import { parseDungeonFile } from '../shared/dungeon-import';
 import { BOSS_TEMPLATES as BOSS_DEFINITIONS } from '../shared/boss-templates';
 import { DUNGEON_DEFINITIONS, flameBarrierFromTiles, inwardFlameAngle } from '../shared/dungeons';
-import { NPC_CATALOG, type NpcKind } from '../shared/npcs';
+import { NPC_DEFINITIONS, type NpcTemplateId } from '../shared/npcs';
 import { CLASSES } from '../shared/config';
 import { createDungeonPlaytest, type DungeonPlaytest } from './dungeon-playtest';
 import { Renderer } from './render';
@@ -67,7 +67,7 @@ function palette(container: string, label: string, tool: string, color: string):
 }
 for (const [id, item] of Object.entries(TERRAIN_CATALOG))
     palette('terrain', item.name, `tile:${id}`, item.color);
-for (const [id, item] of Object.entries(NPC_CATALOG))
+for (const [id, item] of Object.entries(NPC_DEFINITIONS))
     palette('npcs', item.name, `npc:${id}`, item.color);
 for (const [id, item] of Object.entries(PICKUP_CATALOG))
     palette('pickups', item.name, `pickup:${id}`, item.color);
@@ -215,7 +215,7 @@ function draw(): void {
         }
         ctx.beginPath();
         ctx.arc(x, y, Math.max(5, e.radius / 48 * s), 0, Math.PI * 2);
-        ctx.fillStyle = e.kind === 'boss' ? '#df946f' : e.kind === 'party' ? '#7fe0d3' : e.kind === 'activation' ? '#d4b5ff' : e.kind === 'pickup' ? PICKUP_CATALOG[e.template as PickupKind].color : NPC_CATALOG[e.template as NpcKind].color;
+        ctx.fillStyle = e.kind === 'boss' ? '#df946f' : e.kind === 'party' ? '#7fe0d3' : e.kind === 'activation' ? '#d4b5ff' : e.kind === 'pickup' ? PICKUP_CATALOG[e.template as PickupKind].color : NPC_DEFINITIONS[e.template as NpcTemplateId].color;
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#102023';
@@ -276,7 +276,7 @@ function paint(p: Vec2): void {
         const kind = tool.startsWith('pickup:') ? 'pickup' : tool.startsWith('npc:') ? 'npc' : tool.startsWith('boss:') ? 'boss' : tool as 'boss' | 'party' | 'activation' | 'flame';
         if (kind === 'flame' && (p.x === 0 || p.y === 0 || p.x === draft.width - 1 || p.y === draft.height - 1)) { status('Il bordo si chiude con i massi: posiziona le fiamme all’interno.'); return; }
         const template = kind === 'pickup' ? tool.slice(7) : kind === 'npc' ? tool.slice(4) : tool.startsWith('boss:') ? tool.slice(5) : '';
-        const npc = kind === 'npc' ? NPC_CATALOG[template as NpcKind] : undefined, boss = BOSS_DEFINITIONS.find(b => b.id === template);
+        const npc = kind === 'npc' ? NPC_DEFINITIONS[template as NpcTemplateId] : undefined, boss = BOSS_DEFINITIONS.find(b => b.id === template);
         const e: DraftEntity = { id: crypto.randomUUID(), kind, template, label: npc?.name ?? boss?.name ?? (kind === 'boss' ? 'Boss da creare' : kind === 'flame' ? 'Fiamme' : kind === 'activation' ? 'Punto di attivazione' : 'Spawn gruppo'), ...p, level: 1, radius: npc?.radius ?? boss?.radius ?? (kind === 'boss' ? 36 : 15), ...(kind !== 'npc' ? { encounterId: activeEncounter } : {}), ...(kind === 'boss' ? { aggroRadius: DEFAULT_BOSS_AGGRO_RADIUS } : {}), ...(kind === 'flame' ? { span: 1, vertical: false } : {}) };
         draft.entities.push(e);
         if (kind === 'pickup') { e.label = PICKUP_CATALOG[template as PickupKind].name; e.radius = 12; delete e.encounterId; }

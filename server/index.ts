@@ -11,6 +11,7 @@ import { RoomManager } from './rooms';
 import { AuthBudget } from './auth-budget';
 import { NetworkMetrics } from './metrics';
 import { acquireDataLease } from './data-lease';
+import { newNarrativeProgress } from '../shared/narrative';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
@@ -83,7 +84,7 @@ const server = createServer((request, response) => {
       const friend = store.accounts.get(id);
       return friend ? [{ id, name: friend.name, online: byAccount.has(id) }] : [];
     }) ?? [];
-    response.end(JSON.stringify({ account: account ? publicAccount(account) : null, friends, leaderboard }));
+    response.end(JSON.stringify({ account: account ? publicAccount(account) : null, narrative: account?.narrative ?? newNarrativeProgress(), friends, leaderboard }));
     return;
   }
   if (path === '/health') {
@@ -115,7 +116,7 @@ if (!production) {
 } else if (!existsSync(resolve(dist, 'index.html'))) throw new Error('Build frontend assente. Esegui npm run build prima di npm start.');
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
-type Session = { ws: WebSocket; id?: string; authenticating?: boolean; roomEpoch?: number; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
+type Session = { ws: WebSocket; id?: string; authenticating?: boolean; roomEpoch?: number; narrativeRevision?: number; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; interactionTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
 const sessions = new Map<WebSocket, Session>();
 const byAccount = new Map<string, Session>();
 const ipConnections = new Map<string, number>();
@@ -159,13 +160,14 @@ server.on('upgrade', (request, socket, head) => {
   wss.handleUpgrade(request, socket, head, ws => wss.emit('connection', ws, request));
 });
 
-function send(session: Session, message: ServerMessage): void {
-  if (session.ws.readyState !== WebSocket.OPEN) return;
-  if (session.ws.bufferedAmount > 1024 * 1024) { session.ws.close(1008, 'Connessione troppo lenta'); return; }
-  if (message.type === 'snapshot' && session.ws.bufferedAmount > 0) return;
+function send(session: Session, message: ServerMessage): boolean {
+  if (session.ws.readyState !== WebSocket.OPEN) return false;
+  if (session.ws.bufferedAmount > 1024 * 1024) { session.ws.close(1008, 'Connessione troppo lenta'); return false; }
+  if (message.type === 'snapshot' && session.ws.bufferedAmount > 0) return false;
   const encoded = JSON.stringify(message);
   session.ws.send(encoded);
   if (message.type === 'snapshot') { metrics.snapshotsSent++; metrics.snapshotBytes += Buffer.byteLength(encoded); }
+  return true;
 }
 
 function fatal(session: Session, message: string, authExpired = false): void {
@@ -189,14 +191,20 @@ function sendSnapshot(session: Session): void {
   const notice = rooms.takeNotice(session.id!);
   if (notice) send(session, { type: 'notice', message: notice, tone: 'info' });
   const snapshot = rooms.snapshotFor(session.id!);
-  if (snapshot) send(session, snapshot);
+  if (snapshot) {
+    const narrative = store.accounts.get(session.id!)?.narrative ?? newNarrativeProgress();
+    const revision = narrative.revision ?? 0;
+    // Private journal state travels on connect/reconnect and when changed, never every tick.
+    if (session.narrativeRevision !== revision) snapshot.narrative = structuredClone(narrative);
+    if (send(session, snapshot)) session.narrativeRevision = revision;
+  }
   metrics.snapshot(performance.now() - started);
 }
 
 wss.on('connection', (ws, request) => {
   const ip = request.socket.remoteAddress ?? 'unknown';
   ipConnections.set(ip, (ipConnections.get(ip) ?? 0) + 1);
-  const session: Session = { ws, ip, alive: true, receivedAt: performance.now(), tokens: 100, socialTokens: 8, badPackets: 0, helloDeadline: setTimeout(() => fatal(session, 'Accesso scaduto.'), 5000) };
+  const session: Session = { ws, ip, alive: true, receivedAt: performance.now(), tokens: 100, socialTokens: 8, interactionTokens: 12, badPackets: 0, helloDeadline: setTimeout(() => fatal(session, 'Accesso scaduto.'), 5000) };
   sessions.set(ws, session);
   ws.on('pong', () => { session.alive = true; });
   ws.on('error', () => { /* close callback owns lifecycle; malformed clients are isolated. */ });
@@ -205,6 +213,7 @@ wss.on('connection', (ws, request) => {
     const elapsed = Math.max(0, (at - session.receivedAt) / 1000);
     session.tokens = Math.min(100, session.tokens + elapsed * 75);
     session.socialTokens = Math.min(8, session.socialTokens + elapsed * 2);
+    session.interactionTokens = Math.min(12, session.interactionTokens + elapsed * 6);
     session.receivedAt = at;
     if (binary || session.tokens < 1) { fatal(session, 'Troppi messaggi o formato non valido.'); return; }
     session.tokens--;
@@ -268,6 +277,13 @@ wss.on('connection', (ws, request) => {
       if (typeof message.roomId !== 'string' || !Number.isSafeInteger(message.epoch) || !message.input || typeof message.input !== 'object' || !rooms.enqueueInput(session.id, message.input, message.roomId, message.epoch)) {
         if (++session.badPackets > 8) fatal(session, 'Comandi di movimento non validi.');
       }
+    } else if (message.type === 'interaction') {
+      if (session.interactionTokens < 1) { send(session, { type: 'notice', message: 'Attendi un momento prima di interagire ancora.', tone: 'error' }); return; }
+      session.interactionTokens--;
+      if (typeof message.roomId !== 'string' || !Number.isSafeInteger(message.epoch)) { fatal(session, 'Interazione non valida.'); return; }
+      try {
+        if (rooms.interact(session.id, message.command, message.roomId, message.epoch)) { store.flush(); sendSnapshot(session); }
+      } catch (error) { send(session, { type: 'notice', message: error instanceof Error ? error.message : 'Interazione non riuscita.', tone: 'error' }); }
     } else if (message.type === 'ping') {
       if (!Number.isFinite(message.at) || Math.abs(message.at) > 1e15) { fatal(session, 'Ping non valido.'); return; }
       send(session, { type: 'pong', at: message.at, time: simulation.now });

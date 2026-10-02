@@ -4,7 +4,7 @@ import type { World } from '../shared/world';
 import { shapeBounds } from '../shared/world-authoring';
 import type { WorldDocument, WorldAsset, WorldZone } from '../shared/world-schema';
 import { worldAssetVisual } from '../shared/world-schema';
-import { NPC_CATALOG } from '../shared/npcs';
+import { NPC_DEFINITIONS } from '../shared/npcs';
 import { canStampAsset } from '../shared/world-editing';
 import { WorldAssetArt } from './world-asset-art';
 import { AssetGridCamera } from './world-asset-view';
@@ -132,7 +132,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
     for (const n of npcs) {
         if (n.x < b.left || n.x > b.right || n.y < b.top || n.y > b.bottom)
             continue;
-        ctx.fillStyle = NPC_CATALOG[n.npcKind].color;
+        ctx.fillStyle = NPC_DEFINITIONS[n.npcKind].color;
         ctx.beginPath();
         ctx.arc((n.x + .5) * s, (n.y + .5) * s, Math.max(2, s * .24), 0, Math.PI * 2);
         ctx.fill();

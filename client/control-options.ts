@@ -1,7 +1,7 @@
 import { activeActions, assignBinding, bindingLabel, changeMovement, CONTROL_LABELS, defaultControls, type ControlAction, type ControlSettings } from './controls';
 
 export class ControlOptions {
-  private readonly dialog = document.createElement('dialog');
+  readonly dialog = document.createElement('dialog');
   private readonly rows = document.createElement('div');
   private readonly status = document.createElement('p');
   private readonly mode = document.createElement('select');

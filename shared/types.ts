@@ -1,4 +1,8 @@
 import type { BossDrop, BossLockState, BossPreparationState, BossWindup } from './bosses';
+import type { Inventory } from './items';
+import type { NarrativeProgress } from './narrative';
+import type { GroundItem, DialogueView, InteractionCommand } from './interactions';
+import type { NpcTemplateId } from './npcs';
 export type ClassId = 'mage' | 'warrior' | 'paladin' | 'hunter';
 export type AbilitySlot = 'basic' | 'q' | 'e' | 'r';
 export type Vec2 = { x: number; y: number };
@@ -15,7 +19,8 @@ export interface InputCommand { seq: number; dx: number; dy: number; aim: number
 export interface Actor { spriteRow?: number; spriteMoving?: boolean; }
 export interface Actor { bossAwakenedAt?: number; }
 export interface StatusEffect { kind: 'haste' | 'power' | 'weakness' | 'slow' | 'shield' | 'root'; until: number; }
-export interface Actor extends Vec2 { id: string; kind: 'player' | 'npc'; name: string; classId: ClassId; radius: number; hp: number; maxHp: number; resource: number; maxResource: number; aim: number; speed: number; level: number; xp: number; kills: number; deaths: number; teamId: string | null; hidden: boolean; revealedUntil: number; deadUntil: number; spawnProtectedUntil: number; effects: StatusEffect[]; cooldowns: Record<AbilitySlot, number>; npcKind?: 'slime' | 'sentinel' | 'wisp' | 'boss'; bossKey?: string; bossSkin?: string; }
+export interface Actor extends Vec2 { id: string; kind: 'player' | 'npc'; name: string; classId: ClassId; radius: number; hp: number; maxHp: number; resource: number; maxResource: number; aim: number; speed: number; level: number; xp: number; kills: number; deaths: number; teamId: string | null; hidden: boolean; revealedUntil: number; deadUntil: number; spawnProtectedUntil: number; effects: StatusEffect[]; cooldowns: Record<AbilitySlot, number>; npcKind?: NpcTemplateId | 'boss'; bossKey?: string; bossSkin?: string; }
+export interface Actor { disposition?: 'neutral' | 'hostile'; dialogueId?: string; questMarker?: 'available' | 'active' | 'completed'; }
 export interface Projectile extends Vec2 { id: string; ownerId: string; vx: number; vy: number; radius: number; damage: number; expiresAt: number; color: string; slow?: number; }
 /** Correlation only: the server derives this from the consumed command, never from client projectile data. */
 export interface Projectile { inputSeq?: number; }
@@ -28,6 +33,7 @@ export interface SocialState { friends: { id: string; name: string; online: bool
 export interface PublicAccount { id: string; name: string; kills: number; deaths: number; xp: number; }
 export interface PublicAccount { gold?: number; }
 export interface Snapshot { gold?: number; goldDrops?: BossDrop[]; bossWindups?: BossWindup[]; bossLocks?: BossLockState[]; bossPreparations?: BossPreparationState[]; }
+export interface Snapshot { inventory?: Inventory; narrative?: NarrativeProgress; groundItems?: GroundItem[]; dialogue?: DialogueView | null; }
 export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: Actor; actors: Actor[]; projectiles: Projectile[]; pickups: Pickup[]; traps?: Trap[]; events: GameEvent[]; online: number; activeChunks: number; arenaGate?: ArenaGateState; matchEndsAt?: number; sanctuary?: 'safe' | 'combat' | 'outside'; }
 
 export type ClientMessage =
@@ -43,6 +49,7 @@ export type ClientMessage =
   | { type: 'input'; input: InputCommand; roomId: string; epoch: number }
   | { type: 'leave' }
   | { type: 'ping'; at: number }
+  | { type: 'interaction'; command: InteractionCommand; roomId: string; epoch: number }
   | {
       type: 'social';
       action:

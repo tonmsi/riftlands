@@ -1,6 +1,6 @@
 import { TILE_SIZE } from './config';
 import type { Pickup, TileKind, Vec2 } from './types';
-import { NPC_CATALOG, type NpcKind } from './npcs';
+import { NPC_DEFINITIONS, type NpcTemplateId } from './npcs';
 import customDungeons from './custom-dungeons.json';
 import { WORLD_DOCUMENT } from './world-content';
 import { relocateDungeon } from './dungeon-relocation';
@@ -85,7 +85,7 @@ export interface DungeonDefinition {
   passages: readonly DungeonPassage[];
   /** Players are placed at these positions when the encounter starts. */
   spawnPoints: { boss: Vec2; party: readonly Vec2[] };
-  npcSpawns?: readonly (Vec2 & { id: string; npcKind: NpcKind; level: number })[];
+  npcSpawns?: readonly (Vec2 & { id: string; npcKind: NpcTemplateId; level: number })[];
   pickupSpawns?: readonly Pickup[];
   encounter: DungeonEncounterDefinition;
   spawnExclusionMargin: number;
@@ -379,7 +379,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
     pickupIds.add(pickup.id);
   }
   for (const npc of definition.npcSpawns ?? []) {
-    if (!npc.id || npcIds.has(npc.id) || !Object.hasOwn(NPC_CATALOG, npc.npcKind) || !finitePoint(npc)
+    if (!npc.id || npcIds.has(npc.id) || !Object.hasOwn(NPC_DEFINITIONS, npc.npcKind) || !finitePoint(npc)
       || !Number.isInteger(npc.level) || npc.level < 1 || npc.level > 25
       || !walkable(dungeonTile(definition, Math.floor(npc.x / TILE_SIZE), Math.floor(npc.y / TILE_SIZE)))) fail('spawn NPC non valido.');
     npcIds.add(npc.id);

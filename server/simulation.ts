@@ -5,11 +5,15 @@ import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, lev
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
 import { playerSpriteDirectionRow } from '../shared/sprite-direction';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2, RoomMode } from '../shared/types';
-import { World, chunkCoords, chunkKey } from '../shared/world';
+import { World, chunkCoords, chunkKey, coordinateHash } from '../shared/world';
 import { OUTPOST } from '../shared/outpost';
 import { BOSS_BY_ID, type BossDefinition } from '../shared/bosses';
 import { DUNGEON_BY_BOSS_ID, type DungeonDefinition } from '../shared/dungeons';
-import { NPC_CATALOG } from '../shared/npcs';
+import { NPC_DEFINITIONS, type NpcWanderBehavior } from '../shared/npcs';
+import { InteractionSystem } from './interactions';
+import { validInteractionCommand, type InteractionCommand } from '../shared/interactions';
+import { newInventory } from '../shared/items';
+import { newNarrativeProgress } from '../shared/narrative';
 import { BossEncounter } from './boss-encounter';
 import type { Account, AccountStore } from './store';
 
@@ -17,7 +21,7 @@ const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
 const copyActor = (actor: Actor): Actor => ({ ...actor, effects: actor.effects.map(effect => ({ ...effect })), cooldowns: { ...actor.cooldowns } });
 type Connection = { account: Account; connected: boolean; removeAt: number; inputs: InputCommand[]; ack: number; highestSeq: number; combatAt: number };
-type NpcMeta = { home: Vec2; chunk: string; nextAttack: number };
+type NpcMeta = { home: Vec2; chunk: string; nextAttack: number; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
 type ActiveChunk = { key: string; lastUsed: number; npcIds: string[]; pickupIds: string[] };
 type Team = { id: string; leaderId: string; members: Set<string> };
 type Invite = { fromId: string; teamId: string; expiresAt: number };
@@ -26,11 +30,13 @@ export interface SimulationEnvironment {
   dungeons: readonly DungeonDefinition[];
   bosses: ReadonlyMap<string, BossDefinition>;
   spawn: Vec2;
+  lootRandom?: () => number;
 }
 export type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
 
 /** Single authoritative simulation. Time fields are milliseconds; step delta is seconds. */
 export class WorldSimulation {
+  readonly interactions: InteractionSystem;
   readonly bosses = new Map<string, BossEncounter>();
   readonly world: World;
   readonly seed: number;
@@ -74,6 +80,10 @@ export class WorldSimulation {
     this.world = environment?.world ?? new World(seed, 160, mode);
     this.now = now;
     this.store = store;
+    this.interactions = new InteractionSystem({ players: this.players, npcs: this.npcs, accounts: this.accounts, world: this.world,
+      connected: id => !!this.connections.get(id)?.connected, combatAt: id => this.connections.get(id)?.combatAt ?? 0,
+      changed: id => this.persistPlayer(id), nearbyPlayers: (point, radius) => this.near(point, radius).filter(actor => actor.kind === 'player'),
+    }, environment?.lootRandom);
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
     if (mode === 'world') {
       for (const dungeon of environment?.dungeons ?? DUNGEON_BY_BOSS_ID.values()) {
@@ -94,8 +104,13 @@ export class WorldSimulation {
   }
 
   get online(): number { return [...this.connections.values()].filter(connection => connection.connected).length; }
+  interact(id: string, command: InteractionCommand): void {
+    if (this.mode !== 'world' || !validInteractionCommand(command)) throw new Error('Interazione non disponibile in questa istanza.');
+    this.interactions.command(id, command, this.now);
+  }
 
   addPlayer(account: Account, classId: ClassId): Actor {
+    account.inventory ??= newInventory(); account.narrative ??= newNarrativeProgress();
     const current = this.players.get(account.id);
     this.accounts.set(account.id, account);
     if (current) {
@@ -149,6 +164,7 @@ export class WorldSimulation {
   }
 
   disconnectPlayer(id: string): void {
+    this.interactions.close(id);
     const connection = this.connections.get(id);
     if (!connection) return;
     connection.connected = false;
@@ -168,6 +184,7 @@ export class WorldSimulation {
 
   /** Transfer is distinct from logout: no old body or owned attack may remain. */
   detachPlayer(id: string): void {
+    this.interactions.close(id);
     this.persistPlayer(id);
     this.players.delete(id);
     this.connections.delete(id);
@@ -239,13 +256,14 @@ export class WorldSimulation {
     this.stepNpcs(dt);
     for (const encounter of this.bosses.values()) encounter.step(this.now, dt, [...this.players.values()],
       id => !!this.connections.get(id)?.connected, this.world, (target, amount) => this.damage(target, encounter.boss, amount));
-    resolveActorCollisions([...this.players.values(), ...this.npcs.values()].filter(actor => actor.hp > 0), this.world);
+    resolveActorCollisions([...this.players.values(), ...this.npcs.values()].filter(actor => actor.hp > 0 && actor.disposition !== 'neutral'), this.world);
     if (this.mode === 'world') for (const actor of this.players.values()) if (this.world.pvpAt(actor.x, actor.y)) actor.spawnProtectedUntil = 0;
     this.rebuildCells();
     this.stepProjectiles(dt);
     this.stepBursts();
     this.stepTraps();
     this.stepPickups();
+    if (this.mode === 'world') this.interactions.step(this.now);
     for (const encounter of this.bosses.values()) for (const player of this.players.values()) encounter.collect(player, this.accounts.get(player.id)!, !!this.connections.get(player.id)?.connected, this.now);
     while (this.events.length && this.events[0].at + 1800 < this.now) this.events.shift();
     if (this.tick % 150 === 0) {
@@ -301,7 +319,7 @@ export class WorldSimulation {
   }
 
   private allied(a: Actor, b: Actor): boolean {
-    return a.id === b.id || (a.kind === 'npc' && b.kind === 'npc') || (!!a.teamId && a.teamId === b.teamId);
+    return a.disposition === 'neutral' || b.disposition === 'neutral' || a.id === b.id || (a.kind === 'npc' && b.kind === 'npc') || (!!a.teamId && a.teamId === b.teamId);
   }
 
   private visibleTo(observer: Actor, target: Actor): boolean {
@@ -551,7 +569,7 @@ export class WorldSimulation {
   }
 
   private damage(target: Actor, attacker: Actor | undefined, amount: number): boolean {
-    if (target.hp <= 0 || target.spawnProtectedUntil > this.now || (attacker && this.allied(attacker, target))) return false;
+    if (target.disposition === 'neutral' || target.hp <= 0 || target.spawnProtectedUntil > this.now || (attacker && this.allied(attacker, target))) return false;
     const encounter = target.bossKey ? this.bosses.get(target.bossKey) : undefined;
     if (encounter && !encounter.canDamage(attacker)) return false;
     if (target.kind === 'player' && attacker?.kind !== 'npc' && (this.isSafeProtected(target) || (attacker && this.isSafeProtected(attacker)))) return false;
@@ -579,6 +597,7 @@ export class WorldSimulation {
     target.deadUntil = this.now + (target.kind === 'npc' ? 35_000 : 5000);
     target.effects = [];
     this.emit({ kind: 'death', x: target.x, y: target.y, actorId: target.id, radius: 65, duration: 800, color: '#ffd4a3' });
+    if (this.mode === 'world') this.interactions.killed(target, attacker, this.now);
     if (attacker?.kind === 'player' && !encounter) {
       if (target.kind === 'player') attacker.kills++;
       attacker.xp += target.kind === 'player' ? 50 : 20 + target.level * 3;
@@ -626,7 +645,7 @@ export class WorldSimulation {
       let hitAt = wallAt;
       const oldTeam = this.projectileTeams.get(id);
       for (const actor of this.near(start, distance(start, end) + projectile.radius + 30)) {
-        if (actor.id === projectile.ownerId || actor.spawnProtectedUntil > this.now || (owner && this.allied(owner, actor)) || (oldTeam && actor.teamId === oldTeam)) continue;
+        if (actor.disposition === 'neutral' || actor.id === projectile.ownerId || actor.spawnProtectedUntil > this.now || (owner && this.allied(owner, actor)) || (oldTeam && actor.teamId === oldTeam)) continue;
         const t = segmentCircleHit(start, end, actor, actor.radius + projectile.radius);
         if (t !== null && t < hitAt) { hitAt = t; hit = actor; }
       }
@@ -658,10 +677,11 @@ export class WorldSimulation {
           if (this.npcs.size >= 3000) break;
           const slept = this.npcSleep.get(npc.id);
           const npcHp = 55 + Math.min(npc.level, 12) * 12;
-          const spec = NPC_CATALOG[npc.npcKind];
+          const spec = NPC_DEFINITIONS[npc.npcKind];
           const actor: Actor = slept ? copyActor(slept.body) : {
             id: npc.id, kind: 'npc', npcKind: npc.npcKind, classId: spec.classId,
             name: spec.name,
+            disposition: spec.disposition, ...(spec.dialogueId ? { dialogueId: spec.dialogueId } : {}),
             x: npc.x, y: npc.y, radius: spec.radius,
             hp: npcHp, maxHp: npcHp, resource: 0, maxResource: 100, aim: 0, speed: spec.speed,
             level: npc.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: EMPTY_COOLDOWNS(),
@@ -690,10 +710,39 @@ export class WorldSimulation {
     }
   }
 
+  private stepWanderingNpc(npc: Actor, meta: NpcMeta, behavior: NpcWanderBehavior | undefined, dt: number): void {
+    npc.spriteMoving = false;
+    if (!behavior || npc.hp <= 0 || npc.speed <= 0) return;
+    const state = meta.wander ??= { nextAt: this.now, sequence: 0 };
+    const pause = () => {
+      state.destination = undefined;
+      state.nextAt = this.now + behavior.pauseMs[0] + coordinateHash(meta.home.x, meta.home.y + state.sequence, this.seed) * (behavior.pauseMs[1] - behavior.pauseMs[0]);
+    };
+    if (!state.destination && this.now >= state.nextAt) {
+      const angle = coordinateHash(meta.home.x + ++state.sequence, meta.home.y, this.seed) * Math.PI * 2;
+      const radius = behavior.radius * (.3 + .5 * coordinateHash(meta.home.x, meta.home.y + state.sequence, this.seed));
+      for (let i = 0; i < 12; i++) {
+        const direction = angle + i * Math.PI / 6;
+        const destination = { x: meta.home.x + Math.cos(direction) * radius, y: meta.home.y + Math.sin(direction) * radius };
+        if (distance(npc, destination) > 8 && !collidesWorld(destination.x, destination.y, npc.radius, this.world) && hasLineOfSight(npc, destination, this.world)) { state.destination = destination; break; }
+      }
+      if (!state.destination) pause();
+    }
+    if (!state.destination) return;
+    const remaining = distance(npc, state.destination);
+    if (remaining <= 3) { pause(); return; }
+    const before = { x: npc.x, y: npc.y }, dx = (state.destination.x - npc.x) / remaining, dy = (state.destination.y - npc.y) / remaining;
+    Object.assign(npc, moveWithCollisions(npc, dx, dy, Math.min(remaining, movementSpeed(npc, this.now) * terrainSpeed(npc, this.world) * dt), this.world));
+    npc.spriteMoving = distance(before, npc) > .001;
+    if (npc.spriteMoving) { npc.aim = Math.atan2(npc.y - before.y, npc.x - before.x); npc.spriteRow = playerSpriteDirectionRow(npc.x - before.x, npc.y - before.y, npc.spriteRow ?? 0, true); }
+    else pause();
+  }
+
   private stepNpcs(dt: number): void {
     for (const npc of this.npcs.values()) {
       if (npc.npcKind === 'boss') continue;
       const meta = this.npcMeta.get(npc.id)!;
+      if (npc.disposition === 'neutral') { this.stepWanderingNpc(npc, meta, npc.npcKind ? NPC_DEFINITIONS[npc.npcKind].behavior : undefined, dt); continue; }
       if (npc.hp <= 0) {
         if (this.now >= npc.deadUntil) { Object.assign(npc, meta.home); npc.hp = npc.maxHp; npc.deadUntil = 0; npc.effects = []; meta.nextAttack = this.now + 1200; }
         continue;
@@ -752,11 +801,13 @@ export class WorldSimulation {
     // può così mostrarli sul bordo dello schermo invece di perderne la posizione.
     const actors = [...this.players.values(), ...this.npcs.values()].filter(actor =>
       (actor.id === id || (!!self.teamId && actor.teamId === self.teamId) || distance(self, actor) < INTEREST_RADIUS) && visible(actor)
-    ).map(copyActor);
+    ).map(actor => ({ ...copyActor(actor), ...(actor.dialogueId ? { questMarker: this.interactions.marker(id, actor.dialogueId, this.now) } : {}) }));
     const visibleIds = new Set(actors.map(actor => actor.id));
     return {
       type: 'snapshot', tick: this.tick, time: this.now, ack: connection.ack, self: copyActor(self), actors,
       gold: this.accounts.get(id)?.gold ?? 0,
+      inventory: structuredClone(this.accounts.get(id)?.inventory ?? newInventory()),
+      ...(this.mode === 'world' ? { groundItems: this.interactions.visibleDrops(id, this.now, INTEREST_RADIUS), dialogue: this.interactions.view(id, this.now) } : { groundItems: [], dialogue: null }),
       goldDrops: [...this.bosses.values()].flatMap(encounter => encounter.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > this.now && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop }))),
       bossWindups: [...this.bosses.values()].flatMap(encounter => encounter.windup && distance(self, encounter.windup) < INTEREST_RADIUS ? [{ ...encounter.windup }] : []),
       bossLocks: [...this.bosses.values()].map(encounter => encounter.lockState(self)),

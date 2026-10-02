@@ -67,7 +67,9 @@ test('real transport: room handshake, reconnect, duplicate session ownership and
     assert.equal('passwordHash' in ownLobby.account, false);
     const room = (await first.next('room')).room;
     assert.equal(room.mode, 'world');
-    assert.equal((await first.next('snapshot')).self.id, welcome.playerId);
+    const initial = await first.next('snapshot');
+    assert.equal(initial.self.id, welcome.playerId); assert.deepEqual(initial.narrative?.quests, {});
+    assert.equal((await first.next('snapshot')).narrative, undefined, 'unchanged private journal is not streamed every tick');
     first.ws.terminate();
     await once(first.ws, 'close');
 
@@ -76,6 +78,7 @@ test('real transport: room handshake, reconnect, duplicate session ownership and
     assert.equal((await resumed.next('welcome')).playerId, welcome.playerId);
     const resumedRoom = (await resumed.next('room')).room;
     assert.ok(resumedRoom.epoch > room.epoch);
+    assert.deepEqual((await resumed.next('snapshot')).narrative?.quests, {}, 'reconnect restores the journal even when its revision did not change');
 
     const replacement = await client();
     replacement.send({ type: 'hello', token: welcome.token, classId: 'mage', protocol: PROTOCOL_VERSION });

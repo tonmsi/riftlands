@@ -26,6 +26,8 @@ test('registration reconnects with the issued token and discards stale room owne
     sockets[0].onmessage({ data: JSON.stringify({ type: 'pong', time: 1000, at: performance.now() - 300 }) });
     assert.ok(connection.serverTime() >= 1150 && connection.serverTime() < 1180, 'first pong establishes the clock without slow convergence');
     sockets[0].onmessage({ data: JSON.stringify({ type: 'room', room: { id: 'world', epoch: 1 } }) });
+    assert.equal(connection.send({ type: 'interaction', command: { kind: 'talk', targetId: 'fisher' } }), true);
+    assert.deepEqual(sockets[0].sent.at(-1), { type: 'interaction', command: { kind: 'talk', targetId: 'fisher' }, roomId: 'world', epoch: 1 });
     sockets[0].onclose({ code: 1006, reason: '' });
     t.mock.timers.tick(1000);
     sockets[1].onopen();
@@ -34,6 +36,7 @@ test('registration reconnects with the issued token and discards stale room owne
     assert.equal(sockets[1].sent[0].mode, undefined);
     sockets[1].onmessage({ data: JSON.stringify({ type: 'welcome', token: 'issued-token', time: 0 }) });
     assert.equal(connection.send({ type: 'input', input: { seq: 1, dx: 1, dy: 0, aim: 0 } }), false);
+    assert.equal(connection.send({ type: 'interaction', command: { kind: 'talk', targetId: 'fisher' } }), false);
   } finally {
     connection.leave();
     for (const [key, descriptor] of descriptors) {

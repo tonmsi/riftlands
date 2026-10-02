@@ -3,6 +3,8 @@ import './mobile.css';
 import './team.css';
 import './lobby.css';
 import './hud.css';
+import './interactions.css';
+import { INTERACTION_RANGE } from '../shared/interactions';
 import { CLASSES, TICK_RATE } from '../shared/config';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import { GameConnection } from './net';
@@ -87,6 +89,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   },
   social: (action, targetId) => { connection.send({ type: 'social', action, targetId }); },
   select: id => { selectedId = id; ui.setSelected(latest?.actors.find(actor => actor.id === id) ?? null); },
+  interact: command => { if (playing && connection.connected) connection.send({ type: 'interaction', command }); },
   cast: slot => { if (playing && connection.connected && !ui.inputBlocked) controls.cast(slot); },
   controlsChanged: settings => {
     if (playing) return;
@@ -147,6 +150,7 @@ const connection = new GameConnection({
       audio.reset();
       lastMinimap = 0;
       ui.setSelected(null);
+      ui.interactions.reset();
     } else if (message.type === 'snapshot') {
       const old = predicted;
       latest = message;
@@ -210,6 +214,10 @@ const isTyping = (): boolean => {
 
 window.addEventListener('keydown', event => {
   if (!playing || !connection.connected || ui.inputBlocked || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (event.code === 'KeyF' && !event.repeat && predicted) {
+    const target = renderedActors.filter(actor => actor.dialogueId && Math.hypot(actor.x - predicted!.x, actor.y - predicted!.y) <= INTERACTION_RANGE).sort((a, b) => Math.hypot(a.x - predicted!.x, a.y - predicted!.y) - Math.hypot(b.x - predicted!.x, b.y - predicted!.y))[0];
+    if (target) { event.preventDefault(); connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
+  }
   if (controls.press(event.code)) {
     event.preventDefault();
     if (document.activeElement instanceof HTMLButtonElement && document.activeElement.closest('.game-hud')) ui.canvas.focus({ preventScroll: true });
@@ -231,6 +239,7 @@ ui.canvas.addEventListener('pointerdown', event => {
   }
   const position = renderer.screenToWorld(event.clientX, event.clientY);
   const target = renderedActors.find(actor => actor.id !== predicted?.id && Math.hypot(actor.x - position.x, actor.y - position.y) < actor.radius + 14);
+  if (target?.dialogueId) { connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
   if (target) { selectedId = target.id; ui.setSelected(target); }
   else if (selectedId) { selectedId = null; ui.setSelected(null); }
 });
@@ -239,6 +248,8 @@ ui.canvas.addEventListener('pointerdown', event => {
 ui.canvas.addEventListener('mousedown', event => {
   if (!playing || !connection.connected || ui.inputBlocked || ![0, 1, 2].includes(event.button)) return;
   controls.setPointer({ x: event.clientX, y: event.clientY });
+  const point = renderer.screenToWorld(event.clientX, event.clientY);
+  if (renderedActors.some(actor => actor.dialogueId && Math.hypot(actor.x - point.x, actor.y - point.y) < actor.radius + 14)) return;
   if (controls.press(`Mouse${event.button}`)) event.preventDefault();
 });
 window.addEventListener('mouseup', event => controls.release(`Mouse${event.button}`));
@@ -309,6 +320,7 @@ function frame(now: number): void {
   renderer.render({
     arenaGate: latest?.arenaGate,
     goldDrops: latest?.goldDrops,
+    groundItems: latest?.groundItems,
     bossWindups: latest?.bossWindups,
     bossLocks: latest?.bossLocks,
     bossPreparations: latest?.bossPreparations,

@@ -3,6 +3,11 @@ import { nearArenaGate } from '../shared/arena';
 import { bindingLabel, defaultControls, type ControlSettings } from './controls';
 import { ControlOptions } from './control-options';
 import { GameDisplay } from './game-display';
+import { InteractionUI } from './interaction-ui';
+import { PopupManager } from './popups';
+import { QuestJournalUI, renderCompletedQuests } from './quest-journal';
+import { newNarrativeProgress, type NarrativeProgress } from '../shared/narrative';
+import type { InteractionCommand } from '../shared/interactions';
 import type { LobbyArt } from './lobby-assets';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, PublicAccount, Snapshot, SocialState } from '../shared/types';
 
@@ -15,6 +20,7 @@ export const PROFILE_URLS: Partial<Record<ClassId, string>> = {
 type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
 
 export interface UIActions {
+  interact?: (command: InteractionCommand) => void;
   joinCredentials: (mode: 'login' | 'register', name: string, password: string, classId: ClassId) => void;
   joinSaved: (classId: ClassId) => void;
   logout: () => void;
@@ -65,6 +71,9 @@ function textElement(tag: string, className: string, text: string): HTMLElement 
 }
 
 export class GameUI {
+  readonly interactions: InteractionUI;
+  private readonly popups: PopupManager;
+  private readonly journal: QuestJournalUI;
   public readonly canvas: HTMLCanvasElement;
   public readonly minimap: HTMLCanvasElement;
   public readonly compactMinimap = document.createElement('canvas');
@@ -174,7 +183,7 @@ export class GameUI {
           <div class="hub-panel" data-hub-panel="friends"><h2>I tuoi amici</h2><div data-ref="lobby-friends">Accedi per vedere i tuoi amici.</div></div>
           <div class="hub-panel" data-hub-panel="rankings" hidden><h2>Classifica esperienza</h2><p>I primi 20 giocatori, ordinati per XP.</p><ol data-ref="lobby-rankings"></ol></div>
           <div class="hub-panel" data-hub-panel="stats" hidden><h2>Le tue statistiche</h2><div data-ref="lobby-stats">Accedi per vedere i tuoi progressi.</div></div>
-          <div class="hub-panel" data-hub-panel="achievements" hidden><h2>I tuoi achievement</h2><span class="coming-soon">In arrivo</span><p>Qui troverai i traguardi del tuo viaggio quando saranno disponibili.</p></div>
+          <div class="hub-panel" data-hub-panel="achievements" hidden><h2>I tuoi achievement</h2><h3>Missioni completate</h3><div data-ref="completed-quests"><p>Non hai ancora completato missioni.</p></div><h3>Traguardi</h3><span class="coming-soon">In arrivo</span></div>
           <div class="hub-panel" data-hub-panel="settings" hidden><span class="eyebrow">IL TUO STILE DI GIOCO</span><h2>Impostazioni</h2><p>Prepara i comandi prima di partire. Le tue preferenze vengono salvate su questo dispositivo.</p><div class="setting-tile"><div><strong>Tastiera e mouse</strong><p>Movimento, attacchi e abilità. Ogni azione, a modo tuo.</p></div><button type="button" data-ref="configure-controls">Configura tasti ↗</button></div></div>
           <div class="hub-status"><span data-ref="lobby-data-status" role="status"></span><button type="button" data-ref="refresh-lobby">Aggiorna</button></div>
         </section>
@@ -211,6 +220,9 @@ export class GameUI {
     root.append(this.arenaStatus);
     this.goldWallet = this.ref('hud-gold');
     this.canvas = root.querySelector<HTMLCanvasElement>('.world-canvas')!;
+    this.popups = new PopupManager(root);
+    this.interactions = new InteractionUI(root, command => this.actions.interact?.(command), message => this.toast(message), () => this.canvas.focus({ preventScroll: true }), this.popups);
+    this.journal = new QuestJournalUI(root.querySelector('.game-hud')!, root.querySelector('.player-panel')!, this.popups);
     this.minimap = root.querySelector<HTMLCanvasElement>('.minimap')!;
     this.nameInput = this.ref('name') as HTMLInputElement;
     this.passwordInput = this.ref('password') as HTMLInputElement;
@@ -287,6 +299,12 @@ export class GameUI {
     this.options = new ControlOptions(root, () => !this.isPlaying && this.status !== 'connecting' && this.status !== 'reconnecting', settings => {
       this.setControls(settings); this.actions.controlsChanged?.(settings);
     });
+    this.popups.register(this.options.dialog, () => this.options.dialog.open, () => this.options.close());
+    this.popups.register(this.exitDialog, () => this.exitDialog.open, () => { this.exitDialog.close(); this.display.resume(); });
+    this.popups.register(mapPanel, () => this.mapVisible, () => this.setMapVisible(false), this.mapToggle);
+    this.popups.register(this.ref('social-panel'), () => !this.ref('social-panel').hidden, () => this.toggleSocial(false), this.ref('social-toggle'));
+    this.popups.register(this.ref('settings-panel'), () => !this.ref('settings-panel').hidden, () => this.toggleSettings(false), this.ref('settings-toggle'));
+    this.popups.register(this.ref('team-invite'), () => !this.ref('team-invite').hidden, () => { this.ref('team-invite').hidden = true; });
     const optionsButton = document.createElement('button'); optionsButton.type = 'button';
     optionsButton.className = 'options-button'; optionsButton.textContent = 'Impostazioni'; optionsButton.hidden = true;
     optionsButton.addEventListener('click', () => this.showHub('settings'));
@@ -343,14 +361,6 @@ export class GameUI {
 
     this.ref('leave').addEventListener('click', () => this.confirmLeave());
     this.ref('settings-toggle').addEventListener('click', () => this.toggleSettings());
-    document.addEventListener('pointerdown', event => {
-      const target = event.target as Node;
-      if (!this.ref('settings-panel').contains(target) && !this.ref('settings-toggle').contains(target)) this.toggleSettings(false);
-    });
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && this.mapVisible) { this.setMapVisible(false); this.canvas.focus({ preventScroll: true }); }
-      if (event.key === 'Escape' && !this.ref('settings-panel').hidden) { this.toggleSettings(false); this.canvas.focus({ preventScroll: true }); }
-    });
     this.ref('social-toggle').addEventListener('click', () => this.toggleSocial());
     this.ref('social-close').addEventListener('click', () => this.toggleSocial(false));
     const targetSummary = document.createElement('button');
@@ -363,6 +373,9 @@ export class GameUI {
       const expanded = this.ref('target').classList.toggle('is-expanded');
       targetSummary.setAttribute('aria-expanded', String(expanded));
     });
+    this.popups.register(this.ref('target'), () => this.ref('target').classList.contains('is-expanded'), () => {
+      this.ref('target').classList.remove('is-expanded'); targetSummary.setAttribute('aria-expanded', 'false');
+    }, targetSummary);
     this.ref('target-close').addEventListener('click', () => this.actions.select(null));
     this.ref('target-friend').addEventListener('click', () => { if (this.selected) this.actions.social('friend-request', this.selected.id); });
     this.ref('target-team').addEventListener('click', () => { if (this.selected) this.sendSocial('team-invite', this.selected.id); });
@@ -432,6 +445,7 @@ export class GameUI {
 
   setSavedAccount(account: PublicAccount | null): void {
     const changed = this.savedAccount?.id !== account?.id;
+    if (changed || !account) { this.journal.reset(); renderCompletedQuests(this.ref('completed-quests'), newNarrativeProgress()); }
     this.savedAccount = account;
     this.renderLobbyStats();
     if (changed) void this.refreshLobby();
@@ -596,9 +610,13 @@ export class GameUI {
         return;
       }
       if (!response.ok) throw new Error();
-      const data = await response.json() as { account: PublicAccount | null; friends: SocialState['friends']; leaderboard: Pick<PublicAccount, 'id' | 'name' | 'xp' | 'kills'>[] };
+      const data = await response.json() as { account: PublicAccount | null; narrative?: NarrativeProgress; friends: SocialState['friends']; leaderboard: Pick<PublicAccount, 'id' | 'name' | 'xp' | 'kills'>[] };
       if (request !== this.lobbyRequest) return;
       if (data.account || this.savedAccount) this.setSavedAccount(data.account);
+      if (!this.isPlaying) {
+        const narrative = data.account ? data.narrative ?? newNarrativeProgress() : newNarrativeProgress();
+        this.journal.update(narrative); renderCompletedQuests(this.ref('completed-quests'), narrative);
+      }
       const friends = this.ref('lobby-friends'); friends.replaceChildren();
       if (!data.account) friends.textContent = 'Accedi per vedere i tuoi amici.';
       else if (!data.friends.length) friends.textContent = 'Nessun amico ancora. Seleziona un giocatore nel mondo per aggiungerlo.';
@@ -674,6 +692,7 @@ export class GameUI {
   }
 
   setPlaying(playing: boolean): void {
+    if (!playing) this.popups.dismiss();
     if (!playing) this.cancelWorldEntrance();
     if (!playing) this.setMapVisible(false);
     this.isPlaying = playing;
@@ -685,6 +704,7 @@ export class GameUI {
     this.root.classList.toggle('is-playing', playing);
     (this.root.querySelector('.lobby') as HTMLElement).hidden = playing;
     (this.root.querySelector('.game-hud') as HTMLElement).hidden = !playing;
+    this.interactions.setVisible(playing);
     this.ref('connection-banner').hidden = true;
     if (playing) {
       if (this.ref('world-entrance').hidden) this.canvas.focus({ preventScroll: true });
@@ -701,6 +721,8 @@ export class GameUI {
   }
 
   setSnapshot(snapshot: Snapshot, ping: number): void {
+    this.interactions.update(snapshot);
+    this.journal.update(snapshot.narrative, snapshot.inventory);
     if (!this.ref('world-entrance').hidden) this.entranceReady = true;
     this.latest = snapshot;
     const player = snapshot.self;
@@ -810,10 +832,10 @@ export class GameUI {
     const invites = this.socialState?.teamInvites ?? [];
     const invite = invites[0];
     const panel = this.ref('team-invite');
-    panel.hidden = !invite;
     const key = JSON.stringify(invites);
     if (key === this.inviteKey) return;
     this.inviteKey = key;
+    panel.hidden = !invite;
     panel.replaceChildren();
     if (!invite) return;
     const message = textElement('p', '', `${invite.name} ti ha invitato nel suo team`);

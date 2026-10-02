@@ -54,7 +54,7 @@ export class LocalCombatPresentation {
             return;
         let aim = input.aim;
         if (input.autoAim) {
-            const eligible = (target: Actor) => target.id !== actor.id && target.hp > 0 && (!actor.teamId || target.teamId !== actor.teamId)
+            const eligible = (target: Actor) => target.disposition !== 'neutral' && target.id !== actor.id && target.hp > 0 && (!actor.teamId || target.teamId !== actor.teamId)
                 && target.spawnProtectedUntil <= now && Math.hypot(target.x - actor.x, target.y - actor.y) < INTEREST_RADIUS
                 && !(world.mode === 'world' && target.kind === 'player' && !world.pvpAt(target.x, target.y) && (target.pvpUntil ?? 0) <= now)
                 && (!target.bossKey || snapshot?.bossLocks?.some(lock => lock.bossId === target.bossKey && lock.relation === 'participant'))

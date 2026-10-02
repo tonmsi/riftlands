@@ -55171,11 +55171,11 @@
           },
           {
             "kind": "nova",
-            "damage": 24,
+            "damage": 34,
             "range": 285,
-            "radius": 235,
+            "radius": 435,
             "innerRadius": 82,
-            "windupMs": 1100,
+            "windupMs": 1400,
             "cooldownMs": 1450
           }
         ],

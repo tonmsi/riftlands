@@ -1,0 +1,45 @@
+.interaction-ui { position:fixed; inset:0; z-index:2; pointer-events:none; color:#f2f0df; font-family:Inter,"Segoe UI",sans-serif; }
+.interaction-ui[hidden], .interaction-ui [hidden] { display:none!important; }
+.interaction-ui button { font:inherit; color:inherit; }
+.inventory-panel { position:absolute; z-index:1; right:calc(var(--safe-right,0px) + 20px); top:calc(var(--safe-top,0px) + 134px); width:104px; pointer-events:auto; }
+.inventory-slots { display:flex; justify-content:center; gap:6px; flex-wrap:wrap; }
+.inventory-slot { position:relative; width:62px; height:62px; padding:2px; border:2px solid #8b9b7399; border-radius:12px; background:linear-gradient(145deg,#384532f2,#17251ef5); cursor:pointer; touch-action:none; user-select:none; overflow:hidden; }
+.inventory-slot canvas { width:100%; height:100%; pointer-events:none; }
+.inventory-slot b { position:absolute; right:4px; bottom:2px; color:#fff3c3; font-size:13px; text-shadow:0 1px 3px #000; pointer-events:none; }
+.inventory-slot.is-empty::after { content:'◇'; position:absolute; inset:0; display:grid; place-items:center; color:#c7d1ae4d; font-size:22px; }
+.inventory-slot.is-requested { border-color:#efcf6e; box-shadow:0 0 14px #e7be3b44; }
+.inventory-slot.is-holding { animation:inventory-hold .65s linear forwards; }
+.drop-item-panel { position:fixed; inset:auto; margin:0; width:164px; padding:8px; border:1px solid #b4c29488; border-radius:10px; background:#17251ff5; box-shadow:0 6px 20px #0006; color:#f2f0df; pointer-events:auto; }
+.quantity-stepper { display:grid; grid-template-columns:38px 1fr 38px; align-items:center; gap:4px; }
+.quantity-stepper output { text-align:center; font-size:16px; font-variant-numeric:tabular-nums; user-select:none; }
+.quantity-stepper button { height:38px; font-size:22px; padding:0; touch-action:none; user-select:none; }
+.drop-item-actions { display:flex; gap:6px; margin-top:6px; }
+.drop-item-actions button { flex:1; padding:7px 4px; font-size:11px; }
+.drop-item-panel button, .dialogue-choices button { border:1px solid #a3b78980; border-radius:7px; background:#394b31; cursor:pointer; }
+.drop-item-panel button:disabled { opacity:.38; cursor:default; }
+.npc-dialogue { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(600px,calc(100% - 32px)); max-height:min(320px,calc(var(--game-height,100dvh) - 180px)); display:flex; gap:16px; padding:18px; background:linear-gradient(125deg,#344331f5,#18271ff5); border:2px solid #aebd8b; box-shadow:0 8px 30px #0008,inset 0 0 0 2px #17201a; border-radius:12px 20px 13px 16px; pointer-events:auto; }
+.npc-portrait { width:72px; height:72px; flex:none; display:grid; place-items:center; border:2px solid #c2b494; border-radius:50%; background:radial-gradient(circle at 35% 30%,#c4b38a,#5d6450); font-size:40px; color:#e6e5c9; }
+.dialogue-content { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
+.npc-dialogue header { display:flex; gap:12px; align-items:center; flex:none; }
+.npc-dialogue header strong { flex:1; color:#f4d89b; font-size:15px; }
+.npc-dialogue header button { background:none; border:0; color:#d9e0c9; font-size:24px; cursor:pointer; }
+.dialogue-scroll { overflow-y:auto; min-height:0; overscroll-behavior:contain; scrollbar-width:thin; touch-action:pan-y; }
+.npc-dialogue p { font-size:14px; line-height:1.65; margin:10px 0 12px; }
+.dialogue-request { display:block; padding:8px; background:#cfba6630; border-radius:6px; font-size:11px; line-height:1.5; margin-bottom:10px; }
+.dialogue-choices { display:flex; flex-wrap:wrap; gap:8px; flex:none; padding-top:6px; }
+.dialogue-choices button { font-size:12px; text-align:left; padding:9px 12px; }
+.interaction-ui button:focus-visible, .dialogue-scroll:focus-visible { outline:2px solid #f3d48b; outline-offset:3px; }
+@keyframes inventory-hold { to { box-shadow:inset 0 0 0 5px #e0c67d; border-color:#edd092; } }
+.rift-app.touch-layout .inventory-panel { top:calc(var(--safe-top,0px) + 92px); right:calc(var(--safe-right,0px) + 12px); width:72px; }
+.rift-app.touch-layout .inventory-slot { width:52px; height:52px; }
+.rift-app.touch-layout .npc-dialogue { width:min(440px,calc(100% - 24px)); max-height:min(280px,calc(var(--game-height,100dvh) - 180px)); padding:12px; gap:10px; }
+.rift-app.touch-layout .npc-portrait { width:44px; height:44px; font-size:28px; }
+.rift-app.touch-layout .npc-dialogue p { font-size:12px; }
+.rift-app.touch-layout .dialogue-choices button { padding:8px; font-size:11px; }
+@media (orientation:landscape) and (max-height:600px) {
+  .rift-app.touch-layout .npc-dialogue { width:min(440px,calc(100% - 340px)); max-height:min(200px,calc(var(--game-height,100dvh) - 120px)); padding:10px; gap:8px; }
+  .rift-app.touch-layout .npc-portrait { width:32px; height:32px; font-size:23px; }
+  .rift-app.touch-layout .npc-dialogue header strong { font-size:12px; }
+  .rift-app.touch-layout .dialogue-choices { gap:5px; }
+  .rift-app.touch-layout .dialogue-choices button { padding:6px 8px; }
+}

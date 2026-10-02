@@ -3,6 +3,8 @@ import type { AbilitySlot, Actor, ClassId, GameEvent, Pickup, Projectile, TileKi
 import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
 import { WorldAssetArt } from './world-asset-art';
+import { drawItemArt } from './item-art';
+import type { GroundItem } from '../shared/interactions';
 import { shapeBounds } from '../shared/world-authoring';
 import { assetCellFades } from '../shared/world-schema';
 import type { ArenaGateState } from '../shared/types';
@@ -12,6 +14,7 @@ import { BOSS_WAKE_MS, DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossDrop, type
 import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction';
 import { EnvironmentArt } from './environment-art';
 import { renderDpr } from './frame-budget';
+import { NPC_DEFINITIONS } from '../shared/npcs';
 import { TERRAIN, groundColor, shorelineMask, sceneryGroups, mapTerrainColor, pathColor } from './terrain-style';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
@@ -19,10 +22,15 @@ const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   mage: new URL('../assets/mage256.svg', import.meta.url).href,
   warrior: new URL('../assets/warrior256.svg', import.meta.url).href,
 };
+// Optional character sheets use the same 4x4 raster cache and animation as hostile NPCs.
+const optionalNpcSprites = import.meta.glob<string>('../assets/npc-*.{svg,png}', { eager: true, query: '?url', import: 'default' });
 const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = {
   wisp: new URL('../assets/wisp.svg', import.meta.url).href,
   slime: new URL('../assets/slime.svg', import.meta.url).href,
   sentinel: new URL('../assets/sentinel.svg', import.meta.url).href,
+  ...Object.fromEntries(Object.entries(optionalNpcSprites).flatMap(([path, url]) => {
+    const kind = path.match(/\/npc-([^/]+)\.(svg|png)$/)?.[1]; return kind && Object.hasOwn(NPC_DEFINITIONS, kind) ? [[kind, url]] : [];
+  })),
 };
 const BOSS_SPRITE_URLS: Record<string, string> = {
   'stone-warden': new URL('../assets/boss-warden.svg', import.meta.url).href,
@@ -32,10 +40,10 @@ const BOSS_SPRITE_URLS: Record<string, string> = {
 const BOSS_ATTACK_SPRITES: Record<string, { url: string; cols: number; rows: number }> = {
   'stone-warden:charge': { url: new URL('../assets/boss-warden-charge.svg', import.meta.url).href, cols: 4, rows: 1 },
   // Puoi aggiungere in futuro: 'stone-waarden:slam': { ... }
-  'stone-warden:slam': { url: new URL('../assets/boss-warden-slam.svg', import.meta.url).href, cols: 4, rows: 1 },
+  'stone-warden:slam': { url: new URL('../assets/boss-warden-slam.svg', import.meta.url).href, cols: 4, rows: 2 },
   
   // Aggiungi qui la Nova (es. 5 frame per farlo caricare di energia)
-  'stone-warden:nova': { url: new URL('../assets/boss-warden-nova.svg', import.meta.url).href, cols: 4, rows: 1 },
+  'stone-warden:nova': { url: new URL('../assets/boss-warden-nova.svg', import.meta.url).href, cols: 4, rows: 2 },
   'stone-warden:prep': { url: new URL('../assets/boss-warden-prep.svg', import.meta.url).href, cols: 4, rows: 1 }, 
 
 };
@@ -100,6 +108,7 @@ async function rasterizeSpriteSheet(url: string, frameSize: number, drawSize: nu
 }
 export interface RenderFrame {
   goldDrops?: BossDrop[];
+  groundItems?: GroundItem[];
   bossWindups?: BossWindup[];
   bossLocks?: BossLockState[];
   bossPreparations?: BossPreparationState[];
@@ -484,6 +493,12 @@ export class Renderer {
       ...this.world.getChunk(-1, 0).pickups,
     ];
     for (const pickup of pickups) if (this.visible(pickup)) this.drawPickup(pickup, frame.time);
+    for (const item of frame.groundItems ?? []) if (this.visible(item) && item.expiresAt > frame.time) {
+      ctx.save(); ctx.translate(item.x - 11, item.y - 11 + Math.sin(frame.time * .003 + item.x) * 1.5);
+      ctx.globalAlpha = Math.min(1, (item.expiresAt - frame.time) / 1000); drawItemArt(ctx, item.stack.itemId, 22, frame.time);
+      if (item.stack.quantity > 1) { ctx.font = 'bold 9px system-ui'; ctx.fillStyle = '#f5e7b3'; ctx.fillText(String(item.stack.quantity), 15, 24); }
+      ctx.restore();
+    }
 
     if (frame.traps) {
       for (const trap of frame.traps) if (this.visible(trap)) this.drawTrap(trap, frame.time);
@@ -1318,6 +1333,13 @@ export class Renderer {
     ctx.translate(actor.x, actor.y);
 
     if (actor.hidden) ctx.globalAlpha = self || allied ? 0.58 : 0.32;
+    if (actor.dialogueId) {
+      ctx.strokeStyle = actor.questMarker === 'available' ? '#ead182' : actor.questMarker === 'active' ? '#8ac6bf' : '#b1b6a0'; ctx.lineWidth = 2;
+      if (actor.questMarker === 'active') ctx.setLineDash([5, 3]);
+      circle(ctx, 0, 0, r + 6); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = 'bold 14px system-ui'; ctx.fillStyle = ctx.strokeStyle; ctx.textAlign = 'center';
+      ctx.fillText(actor.questMarker === 'available' ? '!' : actor.questMarker === 'active' ? '…' : '•', 0, -r - 12);
+    }
     if (actor.effects.some(effect => effect.kind === 'root' && effect.until > time)) {
       ctx.strokeStyle = '#6ebd57';
       ctx.lineWidth = 3;
@@ -1407,7 +1429,7 @@ export class Renderer {
       ctx.fill();
       ctx.restore();
     }
-    if (actor.kind === 'player' || selected || actor.hp < actor.maxHp || actor.npcKind === 'boss') {
+    if (actor.disposition !== 'neutral' && (actor.kind === 'player' || selected || actor.hp < actor.maxHp || actor.npcKind === 'boss')) {
       const barWidth = actor.kind === 'player' ? 42 : 32;
       const barY = -r - 11;
       ctx.fillStyle = 'rgba(24,32,24,0.75)';
@@ -1531,7 +1553,6 @@ export class Renderer {
  private drawNpc(actor: Actor, time: number, color: string, windup?: BossWindup): void {
     const { ctx } = this;
     const r = actor.radius;
-    
     let spriteKey = actor.npcKind === 'boss' ? `boss:${actor.bossSkin}` : actor.npcKind;
     let isAttacking = false;
     let isWakingUp = false;
@@ -1615,10 +1636,19 @@ export class Renderer {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(cachedFrame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+      if (actor.disposition === 'neutral') { ctx.fillStyle = '#eee7ce'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(actor.name.split(',')[0], 0, r + 19); }
       return;
     }
     
     // === VECCHIO CODICE GRAFICA PROCEDURALE DI FALLBACK ===
+    if (actor.disposition === 'neutral') {
+      ctx.save(); if (moving) ctx.translate(0, Math.sin(time * .008) * 1.2);
+      const gradient = ctx.createRadialGradient(-5, -7, 1, 0, 0, r); gradient.addColorStop(0, '#cfbf9a'); gradient.addColorStop(1, '#78795d');
+      ctx.fillStyle = gradient; circle(ctx, 0, 0, r); ctx.fill(); ctx.strokeStyle = '#343d30'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#e1e0cc'; ctx.beginPath(); ctx.ellipse(0, 7, 11, 7, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#30392d'; circle(ctx, -5, -3, 1.8); ctx.fill(); circle(ctx, 5, -3, 1.8); ctx.fill(); ctx.restore();
+      ctx.fillStyle = '#eee7ce'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(actor.name.split(',')[0], 0, r + 19); return;
+    }
     ctx.strokeStyle = '#3c483b'; ctx.lineWidth = 1.8;
     if (actor.npcKind === 'boss') {
       if (actor.hp <= 0) {

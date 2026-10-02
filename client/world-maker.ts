@@ -5,7 +5,7 @@ import { WORLD_DOCUMENT } from '../shared/world-content';
 import { World } from '../shared/world';
 import { coordinateHash } from '../shared/coordinate-random';
 import type { TileKind, Vec2 } from '../shared/types';
-import { NPC_CATALOG } from '../shared/npcs';
+import { NPC_DEFINITIONS } from '../shared/npcs';
 import { DUNGEON_DEFINITIONS, type DungeonDefinition } from '../shared/dungeons';
 import { worldDungeons, validateWorld } from '../shared/world-validation';
 import { shapeBounds } from '../shared/world-authoring';
@@ -327,7 +327,7 @@ canvas.addEventListener('pointerdown', event => {
     canvas.setPointerCapture(event.pointerId);
     if (tool === 'npc') {
         if (!draft.npcs.some(n => n.x === p.x && n.y === p.y))
-            draft.npcs.push({ ...p, id: uid('npc'), npcKind: val('npc') as keyof typeof NPC_CATALOG, level: 1 });
+            draft.npcs.push({ ...p, id: uid('npc'), npcKind: val('npc') as import('../shared/npcs').NpcTemplateId, level: 1 });
     }
     else if (tool === 'dungeon') {
         const dungeonId = val('dungeon');

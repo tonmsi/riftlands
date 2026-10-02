@@ -16,6 +16,15 @@ function fixture() {
     const view = new LocalCombatPresentation();
     return { world, actor, command, snapshot, view };
 }
+test('cosmetic auto-aim ignores the neutral quest giver in front of a hostile actor', () => {
+    const { world, actor, command, snapshot, view } = fixture();
+    const frame = snapshot();
+    frame.actors = [{ ...actor, id: 'neutral', kind: 'npc', disposition: 'neutral', x: 40, y: 0 },
+        { ...actor, id: 'enemy', kind: 'npc', disposition: 'hostile', x: 0, y: 80 }];
+    view.predict({ ...command, autoAim: true }, actor, frame, world, 1000);
+    const shot = view.sample(actor, [], [], world, 1000).projectiles[0];
+    assert.ok(Math.abs(shot.vx) < .001 && shot.vy > 0);
+});
 test('first rendered shot starts exactly on the displayed body, then flies independently at its own speed', () => {
     const { world, actor, command, view } = fixture(), before = structuredClone(actor);
     view.predict(command, actor, null, world, 1000);

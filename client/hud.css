@@ -26,6 +26,24 @@
 .rift-app .player-panel .player-portrait { grid-column:1; grid-row:2/5 }
 .rift-app .player-panel .vital-row,.rift-app .player-panel .xp-meter { grid-column:2; margin:0 }
 .rift-app .player-panel { left:calc(var(--safe-left) + 18px) }
+.rift-app .game-hud .player-panel.has-active-quests { border-color:#70b7ed66; box-shadow:inset 0 0 0 2px #a2ad7d80,0 3px 0 #111c17a6,0 0 0 1px #70b7ed24; }
+.rift-app .game-hud .player-journal-toggle { position:absolute; inset:0; z-index:1; padding:0; border:0; border-radius:inherit; background:transparent; }
+.rift-app .game-hud .player-panel>.character-effects { z-index:2; }
+.rift-app .game-hud .quest-journal { position:absolute; z-index:45; left:calc(var(--safe-left) + 18px); top:calc(var(--safe-top) + 114px); width:min(360px,calc(100% - 32px)); max-height:min(440px,calc(var(--game-height,100dvh) - 300px)); display:flex; flex-direction:column; padding:12px; pointer-events:auto; background:linear-gradient(145deg,#203447f5,#101e2cf5); }
+.rift-app .quest-journal[hidden] { display:none; }
+.rift-app .quest-journal header { display:flex; align-items:center; justify-content:space-between; gap:8px; flex:none; }
+.rift-app .quest-journal header>button { border:0; background:none; padding:0; width:32px; height:32px; font-size:22px; }
+.rift-app .quest-journal-scroll { min-height:0; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; scrollbar-width:thin; }
+.rift-app .quest-journal h3 { margin:12px 0 6px; font-size:11px; color:#aac9e6; }
+.rift-app .quest-journal p { margin:6px 0; font-size:12px; line-height:1.5; color:#c7d7e5; }
+.rift-app .journal-quest { padding:10px 0; border-bottom:1px solid #ffffff14; }
+.rift-app .journal-quest strong { display:block; font-size:13px; color:#f1deb0; }
+.rift-app .journal-quest progress { display:block; width:100%; height:6px; accent-color:#73ace2; }
+.rift-app .journal-quest small { display:block; margin-top:6px; font-size:10px; color:#c7d7e5; }
+.rift-app.touch-layout .game-hud .quest-journal { left:calc(var(--safe-left) + 8px); top:calc(var(--safe-top) + 98px); width:min(360px,calc(100% - 16px)); max-height:calc(var(--game-height,100dvh) - 290px); padding:10px; }
+@media (orientation:landscape) and (max-height:600px) {
+  .rift-app.touch-layout .game-hud .quest-journal { top:calc(var(--safe-top) + 90px); width:min(360px,calc(100% - 32px)); max-height:min(180px,calc(var(--game-height,100dvh) - 250px)); }
+}
 .rift-app .target-panel { left:calc(var(--safe-left) + 270px); max-height:240px; overflow:visible }
 .rift-app .player-portrait {
   display:flex; width:42px; height:42px; border-radius:50%; border:2px solid #17251d; overflow:hidden;

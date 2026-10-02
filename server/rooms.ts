@@ -4,6 +4,7 @@ import { ARENA_GATE, ARENA_DURATION_SECONDS } from '../shared/arena';
 import type { ClassId, InputCommand, RoomMode, RoomState, SocialState, ArenaGateState } from '../shared/types';
 import type { Account, AccountStore } from './store';
 import { WorldSimulation, type SocialAction } from './simulation';
+import type { InteractionCommand } from '../shared/interactions';
 
 type Membership = { roomId: string; epoch: number; account: Account; classId: ClassId; connected: boolean; expiresAt?: number };
 export interface MatchRoom {
@@ -88,6 +89,11 @@ export class RoomManager {
     if (roomId !== member.roomId || epoch !== member.epoch) return true;
     return this.simulationFor(id).enqueueInput(id, input);
   }
+  interact(id: string, command: InteractionCommand, roomId: string, epoch: number): boolean {
+    const member = this.membership(id);
+    if (!member.connected || roomId !== member.roomId || epoch !== member.epoch) return false;
+    this.simulationFor(id).interact(id, command); return true;
+  }
 
   /** Trusted server API; a future queue/invitation service supplies a validated roster. */
   createMatch(mode: MatchRoom['mode'], teams: [string[], string[]], durationSeconds = 600): string {
@@ -105,7 +111,7 @@ export class RoomManager {
     // Prepare everything before removing any character from the global world.
     for (const [teamIndex, team] of teams.entries()) for (const [slot, playerId] of team.entries()) {
       const member = this.membership(playerId);
-      const temporary: Account = { ...member.account, body: undefined, friends: [], requests: [] };
+      const temporary: Account = { ...member.account, inventory: structuredClone(member.account.inventory), narrative: structuredClone(member.account.narrative), body: undefined, friends: [], requests: [] };
       const actor = simulation.addPlayer(temporary, member.classId);
       actor.teamId = `${id}:${teamIndex}`;
       actor.x = (teamIndex === 0 ? -1 : 1) * (mode === 'arena' ? 300 : 700);
