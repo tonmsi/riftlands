@@ -4,6 +4,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { removeDungeon } from '../scripts/dungeon-removal';
+import { newWorldDocument } from '../shared/world-schema';
 
 async function fixture(t: TestContext) {
     const directory = await mkdtemp(join(tmpdir(), 'riftlands-remove-'));
@@ -95,4 +96,15 @@ test('removing the last installed dungeon leaves an empty catalog', async t => {
     await writeFile(f.catalogPath, JSON.stringify([f.bundles[0]]));
     await removeDungeon(f);
     assert.deepEqual(JSON.parse(await readFile(f.catalogPath, 'utf8')), []);
+});
+
+test('catalog removal also cleans world references and backs up their original positions', async t => {
+    const f = await fixture(t), worldPath = join(f.directory, 'custom-world.json'), document = newWorldDocument();
+    document.dungeons.push({ dungeonId: 'remove-me', x: 100, y: 100 }, { dungeonId: 'keep-me', x: -100, y: 100 });
+    const text = JSON.stringify(document);
+    await writeFile(worldPath, text);
+    const result = await removeDungeon(f);
+    assert.deepEqual(JSON.parse(await readFile(worldPath, 'utf8')).dungeons, [document.dungeons[1]]);
+    const backup = result.backups.find(path => path.startsWith(worldPath));
+    assert.ok(backup); assert.equal(await readFile(backup, 'utf8'), text);
 });

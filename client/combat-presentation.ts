@@ -1,5 +1,4 @@
 import { CLASSES, INTEREST_RADIUS } from '../shared/config';
-import { inOutpost } from '../shared/outpost';
 import { hasLineOfSight } from '../shared/physics';
 import { sweptWorldHit } from '../shared/projectiles';
 import type { AbilityDef, AbilitySlot, Actor, GameEvent, InputCommand, Projectile, Snapshot } from '../shared/types';
@@ -45,7 +44,7 @@ export class LocalCombatPresentation {
         const ability = CLASSES[actor.classId].abilities[input.cast];
         if (ability.kind !== 'projectile' && ability.kind !== 'melee')
             return;
-        if (world.mode === 'world' && inOutpost(actor) && (actor.pvpUntil ?? 0) <= now)
+        if (world.mode === 'world' && !world.pvpAt(actor.x, actor.y) && (actor.pvpUntil ?? 0) <= now)
             return;
         this.prune(now);
         const reservations = [...this.casts.values()].filter(c => !c.rejected);
@@ -57,7 +56,7 @@ export class LocalCombatPresentation {
         if (input.autoAim) {
             const eligible = (target: Actor) => target.id !== actor.id && target.hp > 0 && (!actor.teamId || target.teamId !== actor.teamId)
                 && target.spawnProtectedUntil <= now && Math.hypot(target.x - actor.x, target.y - actor.y) < INTEREST_RADIUS
-                && !(world.mode === 'world' && target.kind === 'player' && inOutpost(target) && (target.pvpUntil ?? 0) <= now)
+                && !(world.mode === 'world' && target.kind === 'player' && !world.pvpAt(target.x, target.y) && (target.pvpUntil ?? 0) <= now)
                 && (!target.bossKey || snapshot?.bossLocks?.some(lock => lock.bossId === target.bossKey && lock.relation === 'participant'))
                 && hasLineOfSight(actor, target, world);
             const candidates = (snapshot?.actors ?? []).filter(eligible);

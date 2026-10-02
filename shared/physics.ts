@@ -1,6 +1,6 @@
 import { TILE_SIZE } from './config';
 import type { Actor, Vec2 } from './types';
-import { isSolid, World } from './world';
+import { World } from './world';
 
 /** Circle vs solid terrain AABBs, also correct across negative chunk coordinates. */
 export function collidesWorld(x: number, y: number, radius: number, world: World): boolean {
@@ -8,7 +8,7 @@ export function collidesWorld(x: number, y: number, radius: number, world: World
   const minX = Math.floor((x - radius) / TILE_SIZE), maxX = Math.floor((x + radius) / TILE_SIZE);
   const minY = Math.floor((y - radius) / TILE_SIZE), maxY = Math.floor((y + radius) / TILE_SIZE);
   for (let ty = minY; ty <= maxY; ty++) for (let tx = minX; tx <= maxX; tx++) {
-    if (!isSolid(world.getTile(tx, ty))) continue;
+    if (!world.isBlocked(tx, ty)) continue;
     const nearestX = Math.max(tx * TILE_SIZE, Math.min(x, (tx + 1) * TILE_SIZE));
     const nearestY = Math.max(ty * TILE_SIZE, Math.min(y, (ty + 1) * TILE_SIZE));
     if ((x - nearestX) ** 2 + (y - nearestY) ** 2 < radius ** 2 + 1e-8) return true;
@@ -81,7 +81,7 @@ export function hasLineOfSight(a: Vec2, b: Vec2, world: World): boolean {
   // Grid DDA checks every crossed tile, including the two corner-adjacent cells.
   let tx = Math.floor(a.x / TILE_SIZE), ty = Math.floor(a.y / TILE_SIZE);
   const endX = Math.floor(b.x / TILE_SIZE), endY = Math.floor(b.y / TILE_SIZE);
-  if (isSolid(world.getTile(tx, ty))) return false;
+  if (world.isBlocked(tx, ty)) return false;
   const stepX = Math.sign(dx), stepY = Math.sign(dy);
   const deltaX = dx === 0 ? Infinity : Math.abs(TILE_SIZE / dx), deltaY = dy === 0 ? Infinity : Math.abs(TILE_SIZE / dy);
   let nextX = dx === 0 ? Infinity : ((tx + (stepX > 0 ? 1 : 0)) * TILE_SIZE - a.x) / dx;
@@ -89,11 +89,11 @@ export function hasLineOfSight(a: Vec2, b: Vec2, world: World): boolean {
   const max = Math.abs(endX - tx) + Math.abs(endY - ty) + 2;
   for (let i = 0; i < max && (tx !== endX || ty !== endY); i++) {
     if (Math.abs(nextX - nextY) < 1e-10) {
-      if (isSolid(world.getTile(tx + stepX, ty)) || isSolid(world.getTile(tx, ty + stepY))) return false;
+      if (world.isBlocked(tx + stepX, ty) || world.isBlocked(tx, ty + stepY)) return false;
       tx += stepX; ty += stepY; nextX += deltaX; nextY += deltaY;
     } else if (nextX < nextY) { tx += stepX; nextX += deltaX; }
     else { ty += stepY; nextY += deltaY; }
-    if (isSolid(world.getTile(tx, ty))) return false;
+    if (world.isBlocked(tx, ty)) return false;
   }
   return true;
 }

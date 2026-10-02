@@ -1,8 +1,12 @@
-import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, WORLD_SEED } from './config';
-import { ARENA_GATE, arenaTileIsWall } from './arena';
-import { OUTPOST } from './outpost';
-import { DUNGEON_DEFINITIONS, configuredDungeonTile, inDungeonApproachCorridor, insideDungeon, isClosedDungeonTile, onDungeonApproach } from './dungeons';
+import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE } from './config';
+import { arenaTileIsWall } from './arena';
+import { DUNGEON_DEFINITIONS, configuredDungeonTile, dungeonEncounters, dungeonStoneTiles, inDungeonApproachCorridor, insideDungeon, onDungeonApproach, type DungeonDefinition } from './dungeons';
 import type { Biome, Pickup, TileKind, RoomMode } from './types';
+import { WORLD_DOCUMENT } from './world-content';
+import { WorldAuthoring, type TileBounds, type GenerationEnvironment } from './world-authoring';
+import type { AssetPlacement, WorldDocument } from './world-schema';
+import { coordinateHash } from './coordinate-random';
+export { coordinateHash } from './coordinate-random';
 
 export interface NpcSpawn { id: string; x: number; y: number; npcKind: 'slime' | 'sentinel' | 'wisp'; level: number; }
 export interface Chunk { key: string; cx: number; cy: number; tiles: TileKind[]; npcs: NpcSpawn[]; pickups: Pickup[]; }
@@ -10,12 +14,6 @@ export const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 export const chunkCoords = (x: number, y: number): { cx: number; cy: number } => ({ cx: Math.floor(x / CHUNK_SIZE), cy: Math.floor(y / CHUNK_SIZE) });
 export const isSolid = (tile: TileKind): boolean => tile === 'rock' || tile === 'water';
 
-/** Coordinate-addressed PRNG: generation never depends on exploration order. */
-export function coordinateHash(x: number, y: number, seed: number): number {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(seed | 0, 1274126177);
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
 const smooth = (v: number): number => v * v * (3 - 2 * v);
 function noise(x: number, y: number, seed: number): number {
   const ix = Math.floor(x), iy = Math.floor(y), fx = smooth(x - ix), fy = smooth(y - iy);
@@ -29,7 +27,34 @@ export class World {
   private cache = new Map<string, Chunk>();
   private readonly lockedBosses = new Set<string>();
   lockRevision = 0;
-  constructor(public readonly seed = WORLD_SEED, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world') {}
+  readonly authoring: WorldAuthoring;
+  private readonly manualNpcs = new Map<string, NpcSpawn[]>();
+  private readonly lockedTiles = new Map<string, ReadonlySet<string>>();
+  private readonly generationEnvironment: GenerationEnvironment;
+  constructor(public readonly seed = WORLD_DOCUMENT.seed, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world',
+    document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS) {
+    this.authoring = new WorldAuthoring(document);
+    for (const n of document.npcs) {
+      const x = (n.x + .5) * TILE_SIZE, y = (n.y + .5) * TILE_SIZE, c = chunkCoords(x, y), key = chunkKey(c.cx, c.cy);
+      const bucket = this.manualNpcs.get(key) ?? []; bucket.push({ ...n, id: `authored:${n.id}`, x, y }); this.manualNpcs.set(key, bucket);
+    }
+    for (const d of dungeons.flatMap(dungeonEncounters)) this.lockedTiles.set(d.bossId, new Set(dungeonStoneTiles(d).map(t => `${t.x},${t.y}`)));
+    this.generationEnvironment = { tile: (x, y) => this.generateTile(x, y), temperature: (x, y) => this.getTemperature(x, y),
+      moisture: (x, y) => this.getMoisture((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE),
+      reserved: (x, y) => configuredDungeonTile(x, y, this.dungeons) !== undefined
+        || this.dungeons.some(d => onDungeonApproach(d, { x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE }))
+        || this.arenaAt((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE) !== undefined };
+  }
+  assetsIn(bounds: TileBounds): AssetPlacement[] { return this.mode === 'world' ? this.authoring.assetsIn(bounds, this.generationEnvironment, this.seed) : []; }
+  isBlocked(tx: number, ty: number): boolean {
+    return isSolid(this.getTile(tx, ty)) || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }).some(p => this.authoring.cell(p, tx, ty)?.blocked);
+  }
+  isHiding(x: number, y: number): boolean {
+    const tx = Math.floor(x / TILE_SIZE), ty = Math.floor(y / TILE_SIZE);
+    return this.getTile(tx, ty) === 'bush' || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }).some(p => this.authoring.cell(p, tx, ty)?.visibility === 'hide');
+  }
+  pvpAt(x: number, y: number): boolean { return this.mode !== 'world' || (this.authoring.rule(x / TILE_SIZE, y / TILE_SIZE, 'pvp') ?? true); }
+  arenaAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE).find(z => z.arenaId)?.id : undefined; }
   get cacheSize(): number { return this.cache.size; }
   setBossLocked(id: string, locked: boolean): void { if (this.lockedBosses.has(id) !== locked) this.lockRevision++; if (locked) this.lockedBosses.add(id); else this.lockedBosses.delete(id); }
   setBossLocks(ids: Iterable<string>): void { const next = new Set(ids); for (const id of this.lockedBosses) if (!next.has(id)) this.setBossLocked(id, false); for (const id of next) this.setBossLocked(id, true); }
@@ -42,19 +67,20 @@ export class World {
   }
 
   getMoisture(x: number, y: number): number {
-    return this.mode === 'world' ? noise(x / 1250, y / 1250, this.seed + 411) : 0;
+    return this.mode === 'world' ? this.authoring.rule(x / TILE_SIZE, y / TILE_SIZE, 'moisture') ?? noise(x / 1250, y / 1250, this.seed + 411) : 0;
   }
 
-  // All'interno della classe World, vicino a getMoisture (verso riga 46):
   getTemperature(tx: number, ty: number): number {
     if (this.mode !== 'world') return 1;
+    const override = this.authoring.rule(tx + .5, ty + .5, 'temperature');
+    if (override !== undefined) return override;
     const warpX = (noise(tx * 0.025, ty * 0.025, this.seed + 701) - 0.5) * 5;
     const warpY = (noise(tx * 0.025, ty * 0.025, this.seed + 709) - 0.5) * 5;
     return noise((tx + warpY) * 0.035, (ty - warpX) * 0.035, this.seed + 805);
   }
 
   getTile(tx: number, ty: number): TileKind {
-    if (this.mode === 'world' && isClosedDungeonTile(tx, ty, this.lockedBosses)) return 'rock';
+    if (this.mode === 'world' && [...this.lockedBosses].some(id => this.lockedTiles.get(id)?.has(`${tx},${ty}`))) return 'rock';
     const cx = Math.floor(tx / CHUNK_TILES), cy = Math.floor(ty / CHUNK_TILES);
     const cached = this.cache.get(chunkKey(cx, cy));
     if (cached) return cached.tiles[(ty - cy * CHUNK_TILES) * CHUNK_TILES + tx - cx * CHUNK_TILES];
@@ -68,33 +94,28 @@ export class World {
       const half = 24;
       return tx < -half || tx >= half || ty < -half || ty >= half ? 'rock' : 'grass';
     }
-    // Walkable approach to the physical arena entrance. PvP rules stay unchanged.
+    // Dungeon interiors own their terrain. Authored overrides precede procedural terrain outside them.
     const x = (tx + 0.5) * TILE_SIZE, y = (ty + 0.5) * TILE_SIZE;
-    const curatedTile = configuredDungeonTile(tx, ty);
+    const curatedTile = configuredDungeonTile(tx, ty, this.dungeons);
     if (curatedTile) return curatedTile;
-    if (Math.hypot(x, y) < OUTPOST.clearingRadius) return Math.abs(x) < 65 || Math.abs(y - 72) < 38 || Math.hypot(x, y) < 85 ? 'path' : 'grass';
-    if (Math.hypot(x - ARENA_GATE.x, y - ARENA_GATE.y) < ARENA_GATE.radius + 55 || (Math.abs(x) < 75 && y < -120 && y > ARENA_GATE.y)) return 'path';
-    const curatedDungeonApproach = DUNGEON_DEFINITIONS.some(definition => inDungeonApproachCorridor(definition, { x, y }));
-    if (DUNGEON_DEFINITIONS.some(definition => onDungeonApproach(definition, { x, y }))) return 'path';
-    const distance = Math.hypot(tx + 0.5, ty + 0.5);
-    if (distance < 4.7) return distance < 2.7 ? 'path' : 'grass';
+    const authored = this.authoring.tiles.get(`${tx},${ty}`)?.terrain;
+    if (authored !== undefined) return authored;
+    const curatedDungeonApproach = this.dungeons.some(definition => inDungeonApproachCorridor(definition, { x, y }));
+    if (this.dungeons.some(definition => onDungeonApproach(definition, { x, y }))) return 'path';
     // An uninterrupted road network guarantees routes through terrain in every direction.
     const mod = (n: number): number => ((n % 48) + 48) % 48;
     if ((!curatedDungeonApproach && (mod(tx) === 0 || mod(tx) === 47)) || mod(ty) === 0 || mod(ty) === 47) return 'path';
     // Broad landforms with gentle domain warping replace the small, busy pools.
     // Coordinate-only sampling preserves identical authority/prediction worlds.
-    // In generateTile(tx, ty), all'incirca dopo il calcolo di moisture:
     const warpX = (noise(tx * 0.025, ty * 0.025, this.seed + 701) - 0.5) * 5;
     const warpY = (noise(tx * 0.025, ty * 0.025, this.seed + 709) - 0.5) * 5;
     const elevation = noise((tx + warpX) * 0.065, (ty + warpY) * 0.065, this.seed);
     const detail = coordinateHash(tx, ty, this.seed + 31);
-    const moisture = noise(tx * 0.12, ty * 0.12, this.seed + 491);
+    const moisture = this.getMoisture(x, y);
 
-    // AGGIUNGI QUI IL RUMORE DI TEMPERATURA:
-    // Sostituisci il vecchio calcolo di temperature con:
     const temperature = this.getTemperature(tx, ty);
 
-    // GESTIONE REGIONE FREDDA (Tundra / Picchi innevati)
+    // Shared climate controls terrain and asset eligibility.
     if (temperature < 0.28) {
       // L'acqua alle basse temperature diventa ghiaccio solido calpestabile
       if (elevation < 0.29) return 'ice';
@@ -102,15 +123,11 @@ export class World {
       if (elevation > 0.79 || (elevation > 0.64 && detail < 0.045)) return 'rock';
       // Conca fredda o depressione del terreno: lastra di ghiaccio
       if (elevation < 0.35 && detail < 0.25) return 'ice';
-      // Cespugli resistenti o pini innevati
-      if (moisture > 0.65 && detail < 0.35) return 'bush';
       return 'snow';
     }
 
-    // Continua con la logica normale del resto del mondo...
     if (elevation < 0.29) return 'water';
     if (elevation > 0.79 || (elevation > 0.64 && detail < 0.045)) return 'rock';
-    if (moisture > 0.60 && detail < 0.38) return 'bush';
     if (moisture > 0.72) return 'mud';
     return 'grass';
   }
@@ -122,29 +139,35 @@ export class World {
     for (let y = 0; y < CHUNK_TILES; y++) for (let x = 0; x < CHUNK_TILES; x++) tiles.push(this.generateTile(cx * CHUNK_TILES + x, cy * CHUNK_TILES + y));
     const chunk: Chunk = { key, cx, cy, tiles, npcs: [], pickups: [] };
     // Try a bounded number of positions and place on walkable tile centres.
-    for (let i = 0; this.mode === 'world' && i < 24 && (chunk.npcs.length < 3 || chunk.pickups.length < 2); i++) {
+    for (let i = 0; this.mode === 'world' && i < 48; i++) {
       const tx = Math.floor(coordinateHash(cx * 41 + i, cy, this.seed + 88) * CHUNK_TILES);
       const ty = Math.floor(coordinateHash(cx, cy * 41 + i, this.seed + 97) * CHUNK_TILES);
       const tile = tiles[ty * CHUNK_TILES + tx];
       const x = (cx * CHUNK_TILES + tx + 0.5) * TILE_SIZE, y = (cy * CHUNK_TILES + ty + 0.5) * TILE_SIZE;
-      if (isSolid(tile) || tile === 'path' || Math.hypot(x, y) < 890
-        || DUNGEON_DEFINITIONS.some(definition => insideDungeon(definition, { x, y }, definition.spawnExclusionMargin))) continue;
+      if (this.isBlocked(cx * CHUNK_TILES + tx, cy * CHUNK_TILES + ty) || tile === 'path'
+        || this.dungeons.some(definition => insideDungeon(definition, { x, y }, definition.spawnExclusionMargin))) continue;
       if (chunk.npcs.some(n => Math.hypot(n.x - x, n.y - y) < 120) || chunk.pickups.some(p => Math.hypot(p.x - x, p.y - y) < 100)) continue;
-      if (chunk.npcs.length < 3) {
+      const rule = this.authoring.rule(x / TILE_SIZE, y / TILE_SIZE, 'npcs');
+      const limit = rule?.maxPerChunk ?? 3, weights = rule?.weights ?? { slime: 1, wisp: 1, sentinel: 1 };
+      const total = weights.slime + weights.wisp + weights.sentinel;
+      if (chunk.npcs.length < limit && total > 0 && coordinateHash(cx * 41 + i, cy, this.seed + 129) < (rule?.density ?? 1)) {
         const index = chunk.npcs.length;
-        chunk.npcs.push({ id: `npc:${key}:${index}`, x, y, npcKind: (['slime', 'wisp', 'sentinel'] as const)[Math.floor(coordinateHash(cx, cy + i, this.seed + 123) * 3)], level: Math.min(25, 1 + Math.floor(Math.hypot(x, y) / 2200)) });
-      } else {
+        let weight = coordinateHash(cx, cy + i, this.seed + 123) * total;
+        const npcKind = (['slime', 'wisp', 'sentinel'] as const).find(k => (weight -= weights[k]) < 0)!;
+        chunk.npcs.push({ id: `npc:${key}:${index}`, x, y, npcKind, level: Math.min(25, 1 + Math.floor(Math.hypot(x, y) / 2200)) });
+      } else if (chunk.pickups.length < 2 && (rule?.density ?? 1) > 0) {
         const index = chunk.pickups.length;
         chunk.pickups.push({ id: `pickup:${key}:${index}`, x, y, radius: 12, kind: (['heal', 'haste', 'power', 'weakness'] as const)[Math.floor(coordinateHash(cx + i, cy, this.seed + 345) * 4)] });
       }
     }
     if (this.mode === 'world' && cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
     if (this.mode === 'world' && cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
-    if (this.mode === 'world') for (const dungeon of DUNGEON_DEFINITIONS) for (const npc of dungeon.npcSpawns ?? []) {
+    if (this.mode === 'world') for (const n of this.manualNpcs.get(key) ?? []) if (!this.isBlocked(Math.floor(n.x / TILE_SIZE), Math.floor(n.y / TILE_SIZE))) chunk.npcs.push({ ...n });
+    if (this.mode === 'world') for (const dungeon of this.dungeons) for (const npc of dungeon.npcSpawns ?? []) {
       const position = chunkCoords(npc.x, npc.y);
       if (position.cx === cx && position.cy === cy) chunk.npcs.push({ ...npc, id: `dungeon:${dungeon.id}:${npc.id}` });
     }
-    if (this.mode === 'world') for (const dungeon of DUNGEON_DEFINITIONS) for (const pickup of dungeon.pickupSpawns ?? []) {
+    if (this.mode === 'world') for (const dungeon of this.dungeons) for (const pickup of dungeon.pickupSpawns ?? []) {
       const position = chunkCoords(pickup.x, pickup.y);
       if (position.cx === cx && position.cy === cy) chunk.pickups.push({ ...pickup, id: `dungeon:${dungeon.id}:${pickup.id}` });
     }

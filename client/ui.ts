@@ -1,5 +1,5 @@
 import { CLASSES, levelFromXp } from '../shared/config';
-import { ARENA_GATE } from '../shared/arena';
+import { nearArenaGate } from '../shared/arena';
 import { bindingLabel, defaultControls, type ControlSettings } from './controls';
 import { ControlOptions } from './control-options';
 import { GameDisplay } from './game-display';
@@ -733,7 +733,7 @@ export class GameUI {
     const bossPreparation = snapshot.bossPreparations?.[0];
     const worldTip = this.root.querySelector<HTMLElement>('.world-tip');
     if (worldTip) worldTip.hidden = !!snapshot.matchEndsAt || !player.hidden;
-    let arenaText = Math.hypot(player.x - ARENA_GATE.x, player.y - ARENA_GATE.y) < ARENA_GATE.radius + 55 ? 'Arena 1v1 · Entra nel cerchio per partecipare' : '';
+    let arenaText = nearArenaGate(player) ? 'Arena 1v1 · Entra nella zona per partecipare' : '';
     if (bossPreparation) {
       const seconds = Math.max(0, (bossPreparation.endsAt - snapshot.time) / 1000).toFixed(1);
       const ready = `${bossPreparation.entrants} ${bossPreparation.entrants === 1 ? 'membro pronto' : 'membri pronti'}`;

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { DT, WORLD_SEED } from '../shared/config';
-import { ARENA_GATE, ARENA_DURATION_SECONDS, insideArenaGate } from '../shared/arena';
-import { inOutpost } from '../shared/outpost';
+import { ARENA_GATE, ARENA_DURATION_SECONDS } from '../shared/arena';
 import type { ClassId, InputCommand, RoomMode, RoomState, SocialState, ArenaGateState } from '../shared/types';
 import type { Account, AccountStore } from './store';
 import { WorldSimulation, type SocialAction } from './simulation';
@@ -22,7 +21,7 @@ export class RoomManager {
   private readonly memberships = new Map<string, Membership>();
   private readonly gateEntries = new Map<string, number>();
   private readonly mustExitGate = new Set<string>();
-  private gatePair?: { ids: [string, string]; startsAt: number };
+  private gatePairs = new Map<string, { ids: [string, string]; startsAt: number }>();
   private readonly notices = new Map<string, string>();
   constructor(private readonly store?: AccountStore, seed = WORLD_SEED, now = Date.now()) {
     this.global = new WorldSimulation(seed, now, store);
@@ -53,7 +52,7 @@ export class RoomManager {
       member && member.roomId !== 'world' ? member.classId : classId);
     if (!member) {
       // Reconnecting/restarting inside the entrance must not silently opt into another match.
-      if (account.body && insideArenaGate(actor)) this.mustExitGate.add(account.id);
+      if (account.body && this.global.world.arenaAt(actor.x, actor.y)) this.mustExitGate.add(account.id);
       member = { roomId: 'world', epoch: 0, account, classId, connected: true };
       this.memberships.set(account.id, member);
     }
@@ -174,34 +173,38 @@ export class RoomManager {
   private stepArenaGate(): void {
     for (const id of this.mustExitGate) {
       const member = this.memberships.get(id), actor = this.global.players.get(id);
-      if (!member || (actor && !insideArenaGate(actor))) this.mustExitGate.delete(id);
+      if (!member || (actor && !this.global.world.arenaAt(actor.x, actor.y))) this.mustExitGate.delete(id);
     }
     const eligible = (id: string): boolean => {
       const member = this.memberships.get(id), actor = this.global.players.get(id);
-      return !!member?.connected && member.roomId === 'world' && !!actor && insideArenaGate(actor) && !this.mustExitGate.has(id) && this.global.canTransfer(id);
+      return !!member?.connected && member.roomId === 'world' && !!actor && !!this.global.world.arenaAt(actor.x, actor.y) && !this.mustExitGate.has(id) && this.global.canTransfer(id);
     };
     for (const id of this.gateEntries.keys()) if (!eligible(id)) this.gateEntries.delete(id);
     for (const id of this.global.players.keys()) if (eligible(id) && !this.gateEntries.has(id)) this.gateEntries.set(id, this.global.now);
-    if (this.gatePair && (!this.gatePair.ids.every(eligible) || this.rooms.size >= 16)) this.gatePair = undefined;
-    if (!this.gatePair && this.gateEntries.size >= 2 && this.rooms.size < 16) {
-      const ids = [...this.gateEntries].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).slice(0, 2).map(([id]) => id) as [string, string];
-      this.gatePair = { ids, startsAt: this.global.now + ARENA_GATE.countdownMs };
+    const entranceFor = (id: string) => { const actor = this.global.players.get(id)!; return this.global.world.arenaAt(actor.x, actor.y)!; };
+    for (const [entrance, pair] of this.gatePairs) if (this.rooms.size >= 16 || !pair.ids.every(id => eligible(id) && entranceFor(id) === entrance)) this.gatePairs.delete(entrance);
+    const queues = new Map<string, [string, number][]>();
+    for (const entry of this.gateEntries) { const entrance = entranceFor(entry[0]), queue = queues.get(entrance) ?? []; queue.push(entry); queues.set(entrance, queue); }
+    for (const [entrance, queue] of queues) if (!this.gatePairs.has(entrance) && queue.length >= 2 && this.rooms.size + this.gatePairs.size < 16) {
+      const ids = queue.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).slice(0, 2).map(([id]) => id) as [string, string];
+      this.gatePairs.set(entrance, { ids, startsAt: this.global.now + ARENA_GATE.countdownMs });
     }
-    if (this.gatePair && this.global.now >= this.gatePair.startsAt) {
-      const [a, b] = this.gatePair.ids;
-      this.gatePair = undefined;
-      this.createMatch('arena', [[a], [b]], ARENA_DURATION_SECONDS);
+    for (const [entrance, pair] of this.gatePairs) if (this.global.now >= pair.startsAt && this.rooms.size < 16) {
+      this.gatePairs.delete(entrance); this.createMatch('arena', [[pair.ids[0]], [pair.ids[1]]], ARENA_DURATION_SECONDS);
     }
   }
 
   gateStateFor(id: string): ArenaGateState | undefined {
     const member = this.membership(id), actor = this.global.players.get(id);
-    if (member.roomId !== 'world' || !actor || !insideArenaGate(actor)) return undefined;
-    const players = Math.min(2, this.gateEntries.size);
+    if (member.roomId !== 'world' || !actor) return undefined;
+    const entrance = this.global.world.arenaAt(actor.x, actor.y);
+    if (!entrance) return undefined;
+    const players = Math.min(2, [...this.gateEntries.keys()].filter(id => { const a = this.global.players.get(id)!; return this.global.world.arenaAt(a.x, a.y) === entrance; }).length);
     if (this.mustExitGate.has(id)) return { phase: 'reenter', players };
     if (!this.global.canTransfer(id)) return { phase: 'combat', players };
     if (this.rooms.size >= 16) return { phase: 'full', players };
-    if (this.gatePair?.ids.includes(id)) return { phase: 'countdown', players: 2, startsAt: this.gatePair.startsAt };
+    const pair = this.gatePairs.get(entrance);
+    if (pair?.ids.includes(id)) return { phase: 'countdown', players: 2, startsAt: pair.startsAt };
     return { phase: 'waiting', players };
   }
 
@@ -209,7 +212,7 @@ export class RoomManager {
     const snapshot = this.simulationFor(id).snapshotFor(id);
     if (snapshot) {
       snapshot.arenaGate = this.gateStateFor(id);
-      if (this.membership(id).roomId === 'world') snapshot.sanctuary = !inOutpost(snapshot.self) ? 'outside' : this.global.isSafeProtected(snapshot.self) ? 'safe' : 'combat';
+      if (this.membership(id).roomId === 'world') snapshot.sanctuary = this.global.world.pvpAt(snapshot.self.x, snapshot.self.y) ? 'outside' : this.global.isSafeProtected(snapshot.self) ? 'safe' : 'combat';
       snapshot.matchEndsAt = this.rooms.get(this.membership(id).roomId)?.endsAt;
     }
     return snapshot;

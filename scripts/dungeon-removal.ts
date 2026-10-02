@@ -3,6 +3,7 @@ import { copyFile, readFile, rename, stat, unlink, writeFile } from 'node:fs/pro
 import { constants } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DungeonBundle } from '../shared/dungeon-install';
+import { parseWorldDocument } from '../shared/world-schema';
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const parse = (text: string): unknown => JSON.parse(text.replace(/^\uFEFF/, ''));
@@ -62,10 +63,23 @@ export async function changeCatalog(options: { id: string; catalogPath: string; 
     const tag = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}--${id === '--all' ? 'catalog' : `dungeon-${id}`}`;
     const files = [{ path: catalogPath, before: catalogText,
         after: JSON.stringify(next, null, 2) + '\n' }];
+    const worldPath = join(dirname(catalogPath), 'custom-world.json');
+    let worldText: string | undefined;
+    try { worldText = await readFile(worldPath, 'utf8'); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    if (worldText !== undefined) {
+        const document = parseWorldDocument(worldText), ids = new Set(next.map(b => b.definition.id));
+        const placements = document.dungeons.filter(d => ids.has(d.dungeonId));
+        if (placements.length !== document.dungeons.length) {
+            document.dungeons = placements;
+            files.push({ path: worldPath, before: worldText, after: JSON.stringify(document, null, 2) + '\n' });
+        }
+    }
     // Save cleanup first: if interrupted, the old catalog can still load the cleaned save.
     if (dataText !== undefined && (removedStates > 0 || id === '--all'))
         files.unshift({ path: savePath, before: dataText, after: JSON.stringify(data, null, 2) + '\n' });
     const backups = dataText === undefined ? [catalogPath] : [catalogPath, savePath];
+    if (files.some(file => file.path === worldPath)) backups.push(worldPath);
     const staged: string[] = [];
     let saveWritten = false;
     try {

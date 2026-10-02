@@ -4,6 +4,8 @@ Prototipo multiplayer 2D dall’alto: mondo procedurale, combattimento PvP/PvE e
 
 La review di rete, mobile e architettura, con misure e priorità, è in [docs/code-review-2026-09-18.md](docs/code-review-2026-09-18.md). Il [dungeon maker](docs/dungeon-maker.md) si apre dal menu o da `/dungeon-maker.html`.
 
+Il [World Maker locale](docs/world-maker.md) si avvia con `npm run world:studio`: importa PNG/SVG, definisce ingombri e comportamenti per cella, dipinge terreno e asset sul mondo procedurale e gestisce clima, PvP, ingressi arena e popolazione NPC. I dungeon si costruiscono nel Dungeon Maker e si posizionano nel World Maker.
+
 ## Avvio
 
 Serve **Node.js 22.12 o successivo** (verificato con Node 24). Nella cartella del progetto:

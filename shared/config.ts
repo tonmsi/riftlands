@@ -1,4 +1,5 @@
 import type { ClassDef, ClassId } from './types';
+import { WORLD_DOCUMENT } from './world-content';
 export const PROTOCOL_VERSION = 7;
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
@@ -8,7 +9,7 @@ export const CHUNK_TILES = 16;
 export const CHUNK_SIZE = TILE_SIZE * CHUNK_TILES;
 export const INTEREST_RADIUS = 1250;
 export const PLAYER_RADIUS = 15;
-export const WORLD_SEED = 734291;
+export const WORLD_SEED = WORLD_DOCUMENT.seed;
 export const CLASSES: Record<ClassId, ClassDef> = {
  mage: { id: 'mage', name: 'Mago', subtitle: 'Il potere dell’arcano', description: 'Controlla il campo da lontano. Dardi arcani, gelo e una nova per chi si avvicina troppo.', color: '#b3a0ed', resource: 'mana', maxHp: 110, maxResource: 120, speed: 195, armor: 0.04,
  abilities: {

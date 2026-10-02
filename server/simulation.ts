@@ -6,8 +6,7 @@ import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resol
 import { playerSpriteDirectionRow } from '../shared/sprite-direction';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2, RoomMode } from '../shared/types';
 import { World, chunkCoords, chunkKey } from '../shared/world';
-import { OUTPOST, inOutpost } from '../shared/outpost';
-import { insideArenaGate } from '../shared/arena';
+import { OUTPOST } from '../shared/outpost';
 import { BOSS_BY_ID, type BossDefinition } from '../shared/bosses';
 import { DUNGEON_BY_BOSS_ID, type DungeonDefinition } from '../shared/dungeons';
 import { NPC_CATALOG } from '../shared/npcs';
@@ -140,7 +139,7 @@ export class WorldSimulation {
       cooldowns: validSaved ? { ...saved.cooldowns } : EMPTY_COOLDOWNS(),
     };
     if (collidesWorld(player.x, player.y, player.radius, this.world)) Object.assign(player, spawn);
-    if (this.mode === 'world' && !inOutpost(player)) player.spawnProtectedUntil = 0;
+    if (this.mode === 'world' && this.world.pvpAt(player.x, player.y)) player.spawnProtectedUntil = 0;
     if (player.hp <= 0 && player.deadUntil <= 0) player.deadUntil = this.now + 5000;
     this.players.set(player.id, player);
     this.connections.set(player.id, { account, connected: true, removeAt: 0, inputs: [], ack: 0, highestSeq: 0, combatAt: this.now });
@@ -164,7 +163,7 @@ export class WorldSimulation {
   }
 
   isSafeProtected(actor: Actor): boolean {
-    return this.mode === 'world' && actor.kind === 'player' && inOutpost(actor) && (actor.pvpUntil ?? 0) <= this.now;
+    return this.mode === 'world' && actor.kind === 'player' && !this.world.pvpAt(actor.x, actor.y) && (actor.pvpUntil ?? 0) <= this.now;
   }
 
   /** Transfer is distinct from logout: no old body or owned attack may remain. */
@@ -227,8 +226,8 @@ export class WorldSimulation {
         const magnitude = Math.hypot(input.dx, input.dy);
         if (magnitude > 0) Object.assign(actor, moveWithCollisions(actor, input.dx / Math.max(1, magnitude), input.dy / Math.max(1, magnitude), movementSpeed(actor, this.now) * terrainSpeed(actor, this.world) * dt, this.world));
       }
-      actor.hidden = this.world.getTile(Math.floor(actor.x / TILE_SIZE), Math.floor(actor.y / TILE_SIZE)) === 'bush';
-      if (this.mode === 'world' && !inOutpost(actor)) actor.spawnProtectedUntil = 0;
+      actor.hidden = this.world.isHiding(actor.x, actor.y);
+      if (this.mode === 'world' && this.world.pvpAt(actor.x, actor.y)) actor.spawnProtectedUntil = 0;
     }
     this.rebuildCells();
     // Casts use the input consumed this tick, captured independently of queue length.
@@ -241,7 +240,7 @@ export class WorldSimulation {
     for (const encounter of this.bosses.values()) encounter.step(this.now, dt, [...this.players.values()],
       id => !!this.connections.get(id)?.connected, this.world, (target, amount) => this.damage(target, encounter.boss, amount));
     resolveActorCollisions([...this.players.values(), ...this.npcs.values()].filter(actor => actor.hp > 0), this.world);
-    if (this.mode === 'world') for (const actor of this.players.values()) if (!inOutpost(actor)) actor.spawnProtectedUntil = 0;
+    if (this.mode === 'world') for (const actor of this.players.values()) if (this.world.pvpAt(actor.x, actor.y)) actor.spawnProtectedUntil = 0;
     this.rebuildCells();
     this.stepProjectiles(dt);
     this.stepBursts();
@@ -270,10 +269,11 @@ export class WorldSimulation {
     const angle = (hash % 6283) / 1000;
     for (let i = 0; i < 1200; i++) {
       const r = 40 + (Math.floor(i / 12) % 9) * 18;
-      const point = { x: Math.cos(angle + i * 2.4) * r, y: Math.sin(angle + i * 2.4) * r };
-      if (!insideArenaGate(point) && !collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, this.world) && ![...this.players.values()].some(actor => actor.hp > 0 && distance(actor, point) < 40)) return point;
+      const origin = this.world.authoring.document.spawn;
+      const point = { x: origin.x * TILE_SIZE + Math.cos(angle + i * 2.4) * r, y: origin.y * TILE_SIZE + Math.sin(angle + i * 2.4) * r };
+      if (!this.world.arenaAt(point.x, point.y) && !collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, this.world) && ![...this.players.values()].some(actor => actor.hp > 0 && distance(actor, point) < 40)) return point;
     }
-    return { x: TILE_SIZE / 2, y: TILE_SIZE / 2 };
+    return { x: this.world.authoring.document.spawn.x * TILE_SIZE + TILE_SIZE / 2, y: this.world.authoring.document.spawn.y * TILE_SIZE + TILE_SIZE / 2 };
   }
 
   private rebuildCells(): void {

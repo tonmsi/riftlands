@@ -11,6 +11,7 @@ import { BOSS_TEMPLATES } from '../shared/boss-templates';
 import { BOSS_DEFINITIONS } from '../shared/bosses';
 import { DUNGEON_DEFINITIONS } from '../shared/dungeons';
 import installed from '../shared/custom-dungeons.json';
+import { newWorldDocument } from '../shared/world-schema';
 
 test('production catalog contains only installed maps and bosses, independent of reusable templates', () => {
     const catalog = installed as { definition: { id: string }; bosses: { id: string }[] }[];
@@ -51,4 +52,25 @@ test('offline tools cannot acquire a save already held by the server', async t =
     try { assert.throws(() => acquireDataLease(path), /Salvataggio in uso/); }
     finally { release(); }
     acquireDataLease(path)();
+});
+
+test('updating a dungeon preserves its authored world position and validates surrounding manual content', async t => {
+    const dir = await mkdtemp(join(tmpdir(), 'riftlands-world-library-')); t.after(() => rm(dir, { recursive: true, force: true }));
+    const options = { catalogPath: join(dir, 'catalog.json'), dataPath: join(dir, 'accounts.json') }, draft = studioDraft();
+    await writeFile(options.catalogPath, '[]');
+    await installDungeon(draft, options);
+    const document = newWorldDocument(), worldPath = join(dir, 'custom-world.json');
+    for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) document.tiles.push({ x, y, terrain: 'grass' });
+    document.dungeons.push({ dungeonId: draft.id, x: -128, y: 256 });
+    await writeFile(worldPath, JSON.stringify(document));
+    draft.name = 'Updated in authored world';
+    await installDungeon(draft, { ...options, replace: true });
+    const catalog = await readCatalog(options.catalogPath);
+    assert.equal(catalog.bundles[0].definition.layout.bounds.minTx, -128);
+    assert.equal(catalog.bundles[0].definition.layout.bounds.minTy, 256);
+    assert.deepEqual(JSON.parse(await readFile(worldPath, 'utf8')).dungeons, document.dungeons);
+    document.npcs.push({ id: 'inside-dungeon', npcKind: 'slime', level: 1, x: -125, y: 259 });
+    await writeFile(worldPath, JSON.stringify(document));
+    await assert.rejects(installDungeon(draft, { ...options, replace: true }), /dentro un dungeon/);
+    assert.equal((await readCatalog(options.catalogPath)).text, catalog.text);
 });

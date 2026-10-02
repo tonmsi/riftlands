@@ -281,8 +281,19 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     await page.screenshot({ path: 'artifacts/dungeon-scenery-underlay.png' });
     const outpost = await page.evaluate(async () => {
       const { Renderer } = await import('/client/render.ts' as string);
+      const { World } = await import('/shared/world.ts' as string);
+      const { newWorldDocument } = await import('/shared/world-schema.ts' as string);
       const canvas = document.querySelector('canvas')!, renderer = new Renderer(canvas);
       await renderer.spritesReady; renderer.destroy();
+      // Pin the shoreline geometry: World Maker climate/terrain edits may legitimately change
+      // the landscape at these coordinates, but rounded backing must keep each material distinct.
+      const authored = newWorldDocument();
+      for (let y = -18; y <= 5; y++) for (let x = -14; x <= 14; x++) authored.tiles.push({ x, y, terrain: y < -11 ? 'water' : x <= -4 ? 'grass' : 'path' });
+      authored.tiles.find((tile: { x: number; y: number }) => tile.x === -3 && tile.y === -12)!.terrain = 'path';
+      authored.tiles.find((tile: { x: number; y: number }) => tile.x === -5 && tile.y === -12)!.terrain = 'grass';
+      authored.zones.push({ id: 'warm-shore', name: 'Warm shoreline', priority: 0,
+        shape: { kind: 'rect', x: -14, y: -18, width: 29, height: 24 }, temperature: 1, moisture: .3 });
+      renderer.world = new World(734291, 16, 'world', authored, []);
       const centerY = -220;
       renderer.ctx.setTransform(1, 0, 0, 1, 600, 450 - centerY);
       renderer.bounds = { left: -600, top: centerY - 450, right: 600, bottom: centerY + 450 };

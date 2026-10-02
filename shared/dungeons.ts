@@ -2,6 +2,8 @@ import { TILE_SIZE } from './config';
 import type { Pickup, TileKind, Vec2 } from './types';
 import { NPC_CATALOG, type NpcKind } from './npcs';
 import customDungeons from './custom-dungeons.json';
+import { WORLD_DOCUMENT } from './world-content';
+import { relocateDungeon } from './dungeon-relocation';
 
 export interface DungeonTileRect { minTx: number; maxTx: number; minTy: number; maxTy: number; }
 export interface DungeonFlameBarrier extends Vec2 { length: number; thickness: number; angle: number; }
@@ -114,7 +116,10 @@ export function inwardFlameAngle(flame: DungeonFlameBarrier, bounds: DungeonTile
 export const DEFAULT_DUNGEON_THEME: DungeonTheme = { floor: '#918567', wall: '#5c5d52', wallTop: '#92917e', minimap: '#d8bd79', markerStone: '#777864', markerEdge: '#464e42', markerRune: '#d0b97999' };
 
 export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] =
-  (customDungeons as { definition: DungeonDefinition }[]).map(entry => entry.definition);
+  (customDungeons as { definition: DungeonDefinition }[]).filter(entry => WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id)?.enabled !== false).map(entry => {
+    const placement = WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id);
+    return placement ? relocateDungeon(entry.definition, placement) : entry.definition;
+  });
 export function dungeonEncounters(definition: DungeonDefinition): DungeonDefinition[] {
   return [definition, ...(definition.additionalEncounters ?? []).map(encounter => ({ ...definition, ...encounter, additionalEncounters: undefined }))];
 }
@@ -146,8 +151,8 @@ export function dungeonTile(definition: DungeonDefinition, tx: number, ty: numbe
   return definition.layout.floor;
 }
 
-export function configuredDungeonTile(tx: number, ty: number): TileKind | undefined {
-  for (const definition of DUNGEON_DEFINITIONS) {
+export function configuredDungeonTile(tx: number, ty: number, definitions: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS): TileKind | undefined {
+  for (const definition of definitions) {
     const tile = dungeonTile(definition, tx, ty);
     if (tile) return tile;
   }

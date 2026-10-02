@@ -2,7 +2,8 @@ import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../sh
 import type { AbilitySlot, Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec2, RoomMode } from '../shared/types';
 import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
-import { OUTPOST } from '../shared/outpost';
+import { WorldAssetArt } from './world-asset-art';
+import { shapeBounds } from '../shared/world-authoring';
 import type { ArenaGateState } from '../shared/types';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames, inwardFlameAngle } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
@@ -178,6 +179,7 @@ export class Renderer {
   private readonly npcSprites = new Map<string, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
   private readonly environmentArt = new EnvironmentArt();
+  private readonly worldAssetArt = new WorldAssetArt();
   private terrainCache?: {
     canvas: HTMLCanvasElement;
     world: World;
@@ -319,8 +321,8 @@ export class Renderer {
       : frame.self && frame.playing
         ? frame.self
         : {
-            x: 25 + Math.sin(frame.time * 0.000025) * 18,
-            y: 12 + Math.cos(frame.time * 0.000019) * 12,
+            x: this.world.authoring.document.spawn.x * TILE_SIZE + 25 + Math.sin(frame.time * 0.000025) * 18,
+            y: this.world.authoring.document.spawn.y * TILE_SIZE + 12 + Math.cos(frame.time * 0.000019) * 12,
           };
 
     if (!this.hasCamera || (frame.playing && !this.wasPlaying)) {
@@ -357,11 +359,23 @@ export class Renderer {
 
     if (this.world.mode === 'world') {
       if (!this.localDungeons) {
-        this.drawCrossroads(frame.time);
-        this.drawArenaGate(frame.time, frame.arenaGate);
+        this.drawWorldZones(frame.time, frame.arenaGate, frame.self);
       }
       this.drawDungeons();
     }
+    const worldAssets = this.localDungeons ? [] : this.world.assetsIn({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
+      right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE });
+    const groundAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'ground');
+    for (const p of groundAssets) this.worldAssetArt.draw(ctx, this.world.authoring.assets.get(p.assetId)!, p, 1, TILE_SIZE, frame.time);
+    const objectAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'object')
+      .sort((a, b) => (a.y + this.world.authoring.assets.get(a.assetId)!.height * this.world.authoring.assets.get(a.assetId)!.pivot.y)
+        - (b.y + this.world.authoring.assets.get(b.assetId)!.height * this.world.authoring.assets.get(b.assetId)!.pivot.y) || a.id.localeCompare(b.id));
+    const paintObject = (p: typeof objectAssets[number]) => {
+      const a = this.world.authoring.assets.get(p.assetId)!;
+      const cell = frame.self ? this.world.authoring.cell(p, frame.self.x / TILE_SIZE, frame.self.y / TILE_SIZE) : undefined;
+      this.worldAssetArt.draw(ctx, a, p, cell?.visibility === 'fade' ? .28 : 1, TILE_SIZE, frame.time);
+    };
+    let objectIndex = 0;
 
     for (const w of frame.bossWindups ?? []) {
       const progress = Math.max(0, Math.min(1, (frame.time - w.startedAt) / Math.max(1, w.resolvesAt - w.startedAt)));
@@ -488,6 +502,11 @@ export class Renderer {
     actors.sort((a, b) => a.y - b.y);
     for (const actor of actors) {
       if (!this.visible(actor)) continue;
+      while (objectIndex < objectAssets.length) {
+        const p = objectAssets[objectIndex], a = this.world.authoring.assets.get(p.assetId)!;
+        if ((p.y + a.height * a.pivot.y) * TILE_SIZE > actor.y) break;
+        paintObject(p); objectIndex++;
+      }
       const self = actor.id === frame.self?.id || (!frame.playing && actor.id === 'preview');
       const allied = !!frame.self?.teamId && actor.teamId === frame.self.teamId;
       
@@ -508,6 +527,7 @@ export class Renderer {
         actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss'
       );
     }
+    while (objectIndex < objectAssets.length) paintObject(objectAssets[objectIndex++]);
 
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);
@@ -1023,40 +1043,30 @@ export class Renderer {
     return shore;
   }
 
-  private drawArenaGate(time: number, state?: ArenaGateState): void {
-    if (!this.visible(ARENA_GATE)) return;
-    const { ctx } = this;
-    const { x, y, radius } = ARENA_GATE;
-    ctx.save();
-    ctx.fillStyle = 'rgba(80, 88, 95, 0.26)';
-    circle(ctx, x, y, radius);
-    ctx.fill();
-    ctx.strokeStyle = state?.phase === 'countdown' ? '#ffe3a0' : '#a5d9e8';
-    ctx.lineWidth = 3;
-    circle(ctx, x, y, radius);
-    ctx.stroke();
-    ctx.setLineDash([5, 9]);
-    ctx.lineWidth = 1;
-    circle(ctx, x, y, radius - 10);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    if (state?.startsAt) {
-      const progress = Math.max(0, Math.min(1, 1 - (state.startsAt - time) / ARENA_GATE.countdownMs));
-      ctx.strokeStyle = '#ffe3a0';
-      ctx.lineWidth = 7;
-      ctx.beginPath();
-      ctx.arc(x, y, radius + 7, -Math.PI / 2, -Math.PI / 2 + progress * TAU);
-      ctx.stroke();
+  private drawWorldZones(time: number, state?: ArenaGateState, self?: Actor | null): void {
+    const ctx = this.ctx;
+    const zones = this.world.authoring.zones.query({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE, right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE });
+    for (const zone of zones) {
+      if (zone.pvp === undefined && !zone.arenaId) continue;
+      const b = shapeBounds(zone.shape), center = { x: (b.left + b.right) * TILE_SIZE / 2, y: (b.top + b.bottom) * TILE_SIZE / 2 };
+      const active = self && this.world.arenaAt(self.x, self.y) === zone.id ? state : undefined;
+      ctx.save(); ctx.beginPath();
+      if (zone.shape.kind === 'circle') circle(ctx, center.x, center.y, zone.shape.radius * TILE_SIZE);
+      else ctx.rect(b.left * TILE_SIZE, b.top * TILE_SIZE, (b.right - b.left) * TILE_SIZE, (b.bottom - b.top) * TILE_SIZE);
+      ctx.fillStyle = zone.arenaId ? '#89bcca20' : zone.pvp ? '#dc7a6510' : '#a6cd9910';
+      ctx.strokeStyle = active?.phase === 'countdown' ? '#ffe3a0' : zone.arenaId ? '#a5d9e8' : zone.pvp ? '#dc7a65' : '#a6cd99';
+      ctx.lineWidth = zone.arenaId ? 3 : 1; ctx.fill(); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.font = '600 11px system-ui'; ctx.fillStyle = '#e9efd9';
+      ctx.fillText(zone.name, center.x, b.bottom * TILE_SIZE + 18);
+      if (zone.arenaId) {
+        ctx.font = '700 28px system-ui'; ctx.fillText('⚔', center.x, center.y + 9);
+        if (active?.startsAt && zone.shape.kind === 'circle') {
+          const progress = Math.max(0, Math.min(1, 1 - (active.startsAt - time) / ARENA_GATE.countdownMs));
+          ctx.beginPath();ctx.arc(center.x,center.y,zone.shape.radius*TILE_SIZE+7,-Math.PI/2,-Math.PI/2+progress*TAU);ctx.lineWidth=7;ctx.stroke();
+        }
+      }
+      ctx.restore();
     }
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#e5f2f475';
-    ctx.font = '700 15px system-ui';
-    ctx.fillText('ARENA 1 VS 1', x, y - radius - 22);
-    ctx.font = '12px system-ui';
-    ctx.fillText('Entra nel cerchio', x, y + radius + 24);
-    ctx.font = '700 28px system-ui';
-    ctx.fillText('⚔', x, y + 9);
-    ctx.restore();
   }
 
   private drawRain(time: number): void {
@@ -1245,227 +1255,6 @@ export class Renderer {
       polygon(ctx, [x - 10, y + 8, x - 8, y - 26, x + 2, y - 37, x + 11, y - 21, x + 9, y + 8]); ctx.fill(); ctx.stroke();
       ctx.strokeStyle = definition.theme.markerRune; ctx.lineWidth = 1.5; polygon(ctx, [x, y - 26, x + 5, y - 17, x, y - 8, x - 5, y - 17]); ctx.stroke();
     }
-    ctx.restore();
-  }
-
-  private drawCrossroads(time: number): void {
-    const margin = OUTPOST.radius + 70;
-    if (
-      this.bounds.right < OUTPOST.x - margin ||
-      this.bounds.left > OUTPOST.x + margin ||
-      this.bounds.bottom < OUTPOST.y - margin ||
-      this.bounds.top > OUTPOST.y + margin
-    ) {
-      return;
-    }
-
-    const { ctx } = this;
-    ctx.save();
-
-    const drawRealisticFlame = (x: number, y: number, w: number, h: number, seed: number) => {
-      const t = time * 0.0042;
-      const sway1 = Math.sin(t + seed) * 0.5 + Math.sin(t * 2.1 + seed * 1.7) * 0.3 + Math.sin(t * 4.3 + seed * 3.1) * 0.2;
-      const sway2 = Math.cos(t * 0.85 + seed * 2.2) * 0.5 + Math.sin(t * 1.9 + seed * 0.9) * 0.35 + Math.cos(t * 3.7) * 0.15;
-      const breathe = Math.sin(t * 1.3 + seed * 1.5) * 0.12 + 0.88;
-
-      const curH = h * (0.85 + breathe * 0.25);
-      const tipX = sway1 * (w * 0.7);
-      const tipY = -curH;
-
-      const glowR = Math.max(w * 3.2, curH * 1.55);
-      const g = ctx.createRadialGradient(x, y - curH * 0.3, 2, x, y - curH * 0.3, glowR);
-      g.addColorStop(0, 'rgba(255, 175, 45, 0.42)');
-      g.addColorStop(0.45, 'rgba(225, 75, 20, 0.12)');
-      g.addColorStop(1, 'rgba(200, 40, 10, 0)');
-      ctx.fillStyle = g;
-      circle(ctx, x, y - curH * 0.3, glowR);
-      ctx.fill();
-
-      ctx.fillStyle = '#db4716';
-      ctx.beginPath();
-      ctx.moveTo(x - w, y);
-      ctx.bezierCurveTo(x - w * 1.1 + sway2 * 4, y - curH * 0.35, x - w * 0.4 + sway1 * 5, y - curH * 0.75, x + tipX, y + tipY);
-      ctx.bezierCurveTo(x + w * 0.45 + sway2 * 5, y - curH * 0.7, x + w * 1.05 - sway1 * 3, y - curH * 0.35, x + w, y);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = '#f0841f';
-      const midW = w * 0.68;
-      const midH = curH * 0.78;
-      const midTipX = sway2 * (midW * 0.6);
-      ctx.beginPath();
-      ctx.moveTo(x - midW, y);
-      ctx.bezierCurveTo(x - midW * 0.9, y - midH * 0.4, x - midW * 0.3 + sway1 * 3, y - midH * 0.75, x + midTipX, y - midH);
-      ctx.bezierCurveTo(x + midW * 0.3 + sway2 * 3, y - midH * 0.7, x + midW * 0.9, y - midH * 0.4, x + midW, y);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = '#fff194';
-      const coreW = w * 0.36;
-      const coreH = curH * 0.48;
-      const coreTipX = (sway1 + sway2) * 0.5 * (coreW * 0.5);
-      ctx.beginPath();
-      ctx.moveTo(x - coreW, y);
-      ctx.bezierCurveTo(x - coreW * 0.8, y - coreH * 0.4, x - coreW * 0.2, y - coreH * 0.8, x + coreTipX, y - coreH);
-      ctx.bezierCurveTo(x + coreW * 0.2, y - coreH * 0.8, x + coreW * 0.8, y - coreH * 0.4, x + coreW, y);
-      ctx.closePath();
-      ctx.fill();
-
-      const sparkCount = w > 12 ? 5 : 3;
-      for (let s = 0; s < sparkCount; s++) {
-        const sparkSpeed = 0.0016 + (s % 3) * 0.0005;
-        const phase = (time * sparkSpeed + s * 0.35 + seed * 0.22) % 1;
-        const drift = Math.sin(time * 0.0025 + s * 2.1 + seed) * (w * 0.75);
-        const sx = x + tipX * 0.4 + drift * phase;
-        const sy = y - curH * 0.4 - phase * (curH * 1.5);
-        const alpha = Math.sin(phase * Math.PI) * 0.85;
-        const size = (1 - phase * 0.45) * (w > 12 ? 1.7 : 1.2);
-
-        ctx.fillStyle = s % 2 === 0 ? `rgba(255, 235, 140, ${alpha})` : `rgba(255, 140, 50, ${alpha})`;
-        circle(ctx, sx, sy, size);
-        ctx.fill();
-      }
-    };
-
-    const campGlow = ctx.createRadialGradient(OUTPOST.x, OUTPOST.y, 10, OUTPOST.x, OUTPOST.y, OUTPOST.radius);
-    campGlow.addColorStop(0, 'rgba(224, 166, 85, 0.08)');
-    campGlow.addColorStop(0.7, 'rgba(110, 160, 120, 0.04)');
-    campGlow.addColorStop(1, 'rgba(40, 50, 40, 0)');
-    ctx.fillStyle = campGlow;
-    circle(ctx, OUTPOST.x, OUTPOST.y, OUTPOST.radius);
-    ctx.fill();
-
-    const stoneOffsets = [
-      [-50, -20], [-30, -60], [40, -45], [60, 20], [-45, 55], [35, 75],
-      [-110, 5], [120, -10], [10, -120], [-15, 130], [-80, -70], [75, -80]
-    ];
-    ctx.fillStyle = 'rgba(75, 80, 70, 0.35)';
-    for (let i = 0; i < stoneOffsets.length; i++) {
-      const [sx, sy] = stoneOffsets[i];
-      const s = 7 + (i % 5) * 2;
-      polygon(ctx, [sx - s, sy - s * 0.6, sx + s * 0.8, sy - s * 0.5, sx + s, sy + s * 0.7, sx - s * 0.7, sy + s * 0.6]);
-      ctx.fill();
-    }
-
-    ctx.strokeStyle = 'rgba(60, 50, 40, 0.4)';
-    ctx.lineWidth = 6;
-    ctx.setLineDash([20, 35, 10, 25]);
-    circle(ctx, OUTPOST.x, OUTPOST.y, OUTPOST.radius);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    const numMonoliths = 22;
-    for (let i = 0; i < numMonoliths; i++) {
-      const baseAngle = (i * TAU) / numMonoliths;
-      if (baseAngle > 1.3 && baseAngle < 1.84) continue;
-
-      const angle = baseAngle + Math.sin(i * 12.3) * 0.04;
-      const r = OUTPOST.radius + Math.cos(i * 7.1) * 7;
-      const x = OUTPOST.x + Math.cos(angle) * r;
-      const y = OUTPOST.y + Math.sin(angle) * r;
-
-      const rockH = 12 + (i % 4) * 4;
-      const rockW = 8 + (i % 3) * 3;
-      const lean = Math.sin(i * 4.2) * 0.3;
-
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(angle + Math.PI / 2 + lean);
-
-      ctx.fillStyle = 'rgba(20, 25, 20, 0.3)';
-      polygon(ctx, [-rockW, 2, rockW, 2, rockW + 4, 8, -rockW - 4, 8]);
-      ctx.fill();
-
-      ctx.fillStyle = i % 2 === 0 ? '#4c5248' : '#57564d';
-      polygon(ctx, [-rockW, 2, -rockW * 0.7, -rockH, rockW * 0.5, -rockH * 0.9, rockW, 2]);
-      ctx.fill();
-
-      ctx.fillStyle = '#686f62';
-      polygon(ctx, [-rockW * 0.7, -rockH, 0, -rockH * 0.95, rockW * 0.2, 0, -rockW * 0.5, 0]);
-      ctx.fill();
-
-      if (i % 3 === 0) {
-        ctx.strokeStyle = '#93b584';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(0, -rockH * 0.6);
-        ctx.lineTo(0, -2);
-        ctx.moveTo(-3, -rockH * 0.4);
-        ctx.lineTo(3, -rockH * 0.3);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    const brazierAngles = [
-      -Math.PI * 0.75, -Math.PI * 0.5, -Math.PI * 0.25, 0,
-      Math.PI * 0.25, Math.PI * 0.42, Math.PI * 0.58, Math.PI * 0.75, Math.PI
-    ];
-
-    for (let b = 0; b < brazierAngles.length; b++) {
-      const bAngle = brazierAngles[b];
-      const bx = OUTPOST.x + Math.cos(bAngle) * OUTPOST.radius;
-      const by = OUTPOST.y + Math.sin(bAngle) * OUTPOST.radius;
-
-      ctx.save();
-      ctx.translate(bx, by);
-
-      ctx.fillStyle = '#222520';
-      ctx.fillRect(-7, 2, 14, 4);
-      polygon(ctx, [-6, 3, -10, 11, -7, 11, -4, 3]); ctx.fill();
-      polygon(ctx, [6, 3, 10, 11, 7, 11, 4, 3]); ctx.fill();
-      polygon(ctx, [-9, 2, 9, 2, 6, -3, -6, -3]); ctx.fill();
-
-      ctx.fillStyle = '#7a2512';
-      circle(ctx, 0, -1, 5);
-      ctx.fill();
-
-      drawRealisticFlame(0, -2, 6.5, 17, b * 4.3);
-      ctx.restore();
-    }
-
-    const fireX = OUTPOST.x, fireY = OUTPOST.y + 38;
-    ctx.save();
-    ctx.translate(fireX, fireY);
-
-    for (let r = 0; r < 8; r++) {
-      const rockAng = (r * TAU) / 8;
-      ctx.fillStyle = '#545248';
-      circle(ctx, Math.cos(rockAng) * 22, Math.sin(rockAng) * 16, 5);
-      ctx.fill();
-    }
-
-    ctx.strokeStyle = '#3d2516';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(-14, -8); ctx.lineTo(14, 8);
-    ctx.moveTo(-14, 8); ctx.lineTo(14, -8);
-    ctx.stroke();
-
-    ctx.fillStyle = '#b33112';
-    circle(ctx, 0, 0, 11);
-    ctx.fill();
-
-    drawRealisticFlame(0, 0, 12, 30, 99.1);
-    ctx.restore();
-
-    ctx.font = '700 11px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#f5e8c4';
-    ctx.shadowColor = 'rgba(20, 25, 18, 0.8)';
-    ctx.shadowBlur = 4;
-    ctx.fillText('AVAMPOSTO DEL CROCEVIA', OUTPOST.x, OUTPOST.y + 120);
-
-    ctx.font = '600 10px system-ui, sans-serif';
-    ctx.fillStyle = '#c5e2b8';
-    ctx.fillText('ZONA SICURA', OUTPOST.x, OUTPOST.y + 137);
-
-    ctx.fillStyle = '#f59a78';
-    ctx.shadowColor = 'rgba(80, 20, 10, 0.7)';
-    ctx.shadowBlur = 6;
-    ctx.fillText('↓ PVP LIBERO', OUTPOST.x, OUTPOST.y + OUTPOST.radius + 32);
-
-    ctx.shadowBlur = 0;
     ctx.restore();
   }
 
@@ -2033,8 +1822,8 @@ export class Renderer {
       kind: 'player',
       name: 'Viandante',
       classId,
-      x: 0,
-      y: 0,
+      x: this.world.authoring.document.spawn.x * TILE_SIZE,
+      y: this.world.authoring.document.spawn.y * TILE_SIZE,
       radius: PLAYER_RADIUS,
       hp: def.maxHp,
       maxHp: def.maxHp,
@@ -2055,8 +1844,10 @@ export class Renderer {
       cooldowns: { basic: 0, q: 0, e: 0, r: 0 },
     };
     const previews: Actor[] = [actor];
+    const spawnChunkX = Math.floor(this.world.authoring.document.spawn.x * TILE_SIZE / CHUNK_SIZE);
+    const spawnChunkY = Math.floor(this.world.authoring.document.spawn.y * TILE_SIZE / CHUNK_SIZE);
     for (const [cx, cy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) {
-      for (const spawn of this.world.getChunk(cx, cy).npcs) {
+      for (const spawn of this.world.getChunk(spawnChunkX + cx, spawnChunkY + cy).npcs) {
         if (!this.visible(spawn)) continue;
         previews.push({
           ...actor,
@@ -2088,7 +1879,8 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const scale = Math.min(width, height) / visibleSpan;
   canvas.dataset.worldSpan = String(visibleSpan);
-  const center = self ?? { x: 0, y: 0 };
+  const spawn = world.authoring.document.spawn;
+  const center = self ?? { x: spawn.x * TILE_SIZE, y: spawn.y * TILE_SIZE };
   const left = center.x - width / (2 * scale), top = center.y - height / (2 * scale);
 
   ctx.clearRect(0, 0, width, height);
@@ -2132,16 +1924,13 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
       ctx.strokeRect(-5, -5, 10, 10);
       ctx.restore();
     }
-    ctx.fillStyle = '#b6d9b018';
-    ctx.strokeStyle = '#b6d9b0';
-    ctx.lineWidth = 1;
-    circle(ctx, -left * scale, -top * scale, OUTPOST.radius * scale);
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = '#a5d9e8';
-    ctx.lineWidth = 2;
-    circle(ctx, (ARENA_GATE.x - left) * scale, (ARENA_GATE.y - top) * scale, ARENA_GATE.radius * scale);
-    ctx.stroke();
+    for (const zone of world.authoring.document.zones) {
+      if (zone.pvp === undefined && !zone.arenaId) continue;
+      const b = shapeBounds(zone.shape); ctx.beginPath();
+      if (zone.shape.kind === 'circle') circle(ctx, (zone.shape.x * TILE_SIZE - left) * scale, (zone.shape.y * TILE_SIZE - top) * scale, zone.shape.radius * TILE_SIZE * scale);
+      else ctx.rect((b.left * TILE_SIZE - left) * scale, (b.top * TILE_SIZE - top) * scale, (b.right-b.left)*TILE_SIZE*scale, (b.bottom-b.top)*TILE_SIZE*scale);
+      ctx.strokeStyle=zone.arenaId?'#a5d9e8':zone.pvp?'#dc7a65':'#b6d9b0';ctx.lineWidth=1;ctx.stroke();
+    }
   }
 
   for (const actor of actors) {
@@ -2151,7 +1940,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
     ctx.fill();
   }
 
-  const originX = -left * scale, originY = -top * scale;
+  const originX = (spawn.x * TILE_SIZE - left) * scale, originY = (spawn.y * TILE_SIZE - top) * scale;
   ctx.strokeStyle = 'rgba(242,229,181,0.7)';
   ctx.lineWidth = 1;
   circle(ctx, originX, originY, 4);

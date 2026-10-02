@@ -1,6 +1,6 @@
 import { TILE_SIZE } from './config';
 import { segmentCircleHit } from './physics';
-import { World, isSolid } from './world';
+import { World } from './world';
 import type { Vec2 } from './types';
 
 /** Exact sweep against tile rectangles expanded by a circular radius, including rounded corners. */
@@ -20,7 +20,7 @@ export function sweptWorldHit(start: Vec2, end: Vec2, radius: number, world: Wor
   };
   for (let tx = Math.floor((Math.min(start.x, end.x) - radius) / TILE_SIZE); tx <= Math.floor((Math.max(start.x, end.x) + radius) / TILE_SIZE); tx++) {
     for (let ty = Math.floor((Math.min(start.y, end.y) - radius) / TILE_SIZE); ty <= Math.floor((Math.max(start.y, end.y) + radius) / TILE_SIZE); ty++) {
-      if (!isSolid(world.getTile(tx, ty))) continue;
+      if (!world.isBlocked(tx, ty)) continue;
       const left = tx * TILE_SIZE, top = ty * TILE_SIZE, right = left + TILE_SIZE, bottom = top + TILE_SIZE;
       const hits = [rectHit(left - radius, top, right + radius, bottom), rectHit(left, top - radius, right, bottom + radius)];
       for (const x of [left, right]) for (const y of [top, bottom]) hits.push(segmentCircleHit(start, end, { x, y }, radius));

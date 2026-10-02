@@ -59,7 +59,7 @@ export interface BossLockState { bossId: string; locked: boolean; startedAt?: nu
 export interface BossPreparationState { bossId: string; name: string; startedAt: number; endsAt: number; entrants: number; team: boolean; }
 
 export const BOSS_DEFINITIONS: readonly BossDefinition[] =
-  (customDungeons as { bosses: BossDefinition[] }[]).flatMap(entry => entry.bosses);
+  (customDungeons as { bosses: BossDefinition[] }[]).flatMap(entry => entry.bosses).filter(boss => DUNGEON_BY_BOSS_ID.has(boss.id));
 export const BOSS_BY_ID = new Map(BOSS_DEFINITIONS.map(definition => [definition.id, definition]));
 for (const definition of BOSS_DEFINITIONS) {
   const dungeon = DUNGEON_BY_BOSS_ID.get(definition.id);
