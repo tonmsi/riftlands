@@ -8,6 +8,7 @@ import { newWorldDocument } from '../shared/world-schema';
 import { acquireDataLease } from '../server/data-lease';
 import { engineBundle } from './fixtures/dungeon-engine';
 import { worldDungeons } from '../shared/world-validation';
+import { compactWorldFile } from '../scripts/compact-world';
 
 test('image import is immutable, content addressed, and accepts local gradients while rejecting active or external SVG content', async () => {
   const root = await mkdtemp(join(tmpdir(), 'riftlands-world-images-'));
@@ -67,5 +68,22 @@ test('moving a dungeon clears only its saved boss states and retains all unrelat
     assert.deepEqual(JSON.parse(await readFile(join(root, 'dungeon.json'), 'utf8')).bosses, { untouched: { marker: true } });
     d.dungeons[0].enabled = true;
     assert.equal(worldDungeons(d, [bundle.definition])[0].bossId, bundle.definition.bossId);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('format-only migration preserves every cell and accepts the old revision only until a semantic edit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'riftlands-world-format-'));
+  const options = { root, documentPath: join(root, 'world.json'), dungeonPath: join(root, 'catalog.json'), dataPath: join(root, 'accounts.json') };
+  const document = newWorldDocument();
+  for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) document.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
+  try {
+    await writeFile(options.documentPath, JSON.stringify(document)); await writeFile(options.dungeonPath, '[]');
+    const old = await readWorldProject(options.documentPath), result = await compactWorldFile(options.documentPath), migrated = await readWorldProject(options.documentPath);
+    assert.ok(result.after < result.before); assert.equal(result.cells, 49); assert.equal(migrated.document.tiles.length, 0);
+    assert.deepEqual(migrated.compatibleRevisions, [old.revision]);
+    const next = structuredClone(migrated.document); next.seed++;
+    await saveWorldProject(options, next, old.revision);
+    assert.deepEqual((await readWorldProject(options.documentPath)).compatibleRevisions, []);
+    await assert.rejects(saveWorldProject(options, next, old.revision), /altra.*finestra/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

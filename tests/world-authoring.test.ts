@@ -11,6 +11,8 @@ import { assertValidDungeonDefinition } from '../shared/dungeons';
 import { WorldSimulation } from '../server/simulation';
 import { engineBundle } from './fixtures/dungeon-engine';
 import { RoomManager } from '../server/rooms';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 function grass(document: WorldDocument, x = -4, y = -4, width = 16, height = 16): void {
   for (let dy = 0; dy < height; dy++) for (let dx = 0; dx < width; dx++) document.tiles.push({ x: x + dx, y: y + dy, terrain: 'grass' });
@@ -21,6 +23,16 @@ test('animated artwork survives serialization and legacy drafts while explicit i
   const d = newWorldDocument(), a = newWorldAsset('renamed-fire', 'Fuoco', '/world-assets/brazier.svg');
   d.assets.push(a);
   assert.deepEqual(worldAssetVisual(parseWorldDocument(d).assets[0]), { kind: 'fire', style: 'brazier' });
+  for (const style of ['brazier', 'campfire'] as const) {
+    const hash = createHash('sha256').update(readFileSync(`public/world-assets/${style}.svg`)).digest('hex');
+    const legacy = newWorldAsset('renamed', 'Nome personalizzato', `/world-assets/${hash}.svg`), document = newWorldDocument();
+    document.assets.push(legacy);
+    const restored = parseWorldDocument(document).assets[0];
+    assert.deepEqual(restored.visual, { kind: 'fire', style });
+    restored.image = '/world-assets/reimported.svg';
+    assert.deepEqual(worldAssetVisual(restored), { kind: 'fire', style }, 'animation is now explicit and survives subsequent image renaming');
+    legacy.visual = { kind: 'image' }; assert.deepEqual(worldAssetVisual(legacy), { kind: 'image' });
+  }
   a.visual = { kind: 'image' };
   assert.deepEqual(worldAssetVisual(parseWorldDocument(d).assets[0]), { kind: 'image' });
   a.image = '/world-assets/imported.png'; a.visual = { kind: 'fire', style: 'campfire' };
@@ -38,6 +50,8 @@ test('world format rejects malformed masks, dangling references, duplicate cells
   d.zones.push({ id: 'zone', name: 'Zona', priority: 0, shape: { kind: 'rect', x: 0, y: 0, width: 10, height: 10 }, npcs: { density: 1, maxPerChunk: 3, weights: { slime: 40, wisp: 0, sentinel: 0 } } });
   assert.throws(() => parseWorldDocument(d), /percentuali/); d.zones[0].npcs!.weights.slime = 0; assert.doesNotThrow(() => parseWorldDocument(d));
   a.image = 'https://external.example/tree.svg'; assert.throws(() => parseWorldDocument(d), /asset/);
+  a.image = '/world-assets/tree.svg'; a.group = 'Edifici'; assert.equal(parseWorldDocument(d).assets[0].group, 'Edifici');
+  a.group = ' '; assert.throws(() => parseWorldDocument(d), /gruppo/);
 });
 
 test('resize preserves coordinate-specific behavior while adding default cells and tracks fractional footprints', () => {

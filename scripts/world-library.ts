@@ -6,10 +6,18 @@ import { validateWorld } from '../shared/world-validation';
 import type { DungeonDefinition } from '../shared/dungeons';
 import { acquireDataLease } from '../server/data-lease';
 import { worldDungeons } from '../shared/world-validation';
+import { compactWorldTiles, serializeWorldDocument } from '../shared/world-tiles';
 
 export const worldRevision = (text: string): string => createHash('sha256').update(text).digest('hex');
+async function formatCompatibleRevisions(path: string, revision: string): Promise<string[]> {
+  try {
+    const marker = JSON.parse(await readFile(`${path}.format-migration.bak`, 'utf8'));
+    return marker.toRevision === revision && /^[a-f0-9]{64}$/.test(marker.fromRevision) ? [marker.fromRevision] : [];
+  } catch { return []; }
+}
 export async function readWorldProject(path: string) {
-  const text = await readFile(path, 'utf8'); return { document: parseWorldDocument(text), revision: worldRevision(text) };
+  const text = await readFile(path, 'utf8'), revision = worldRevision(text);
+  return { document: compactWorldTiles(parseWorldDocument(text)), revision, compatibleRevisions: await formatCompatibleRevisions(path, revision) };
 }
 export async function readWorldDungeonCatalog(path: string): Promise<DungeonDefinition[]> {
   const bundles = JSON.parse(await readFile(path, 'utf8'));
@@ -23,8 +31,9 @@ export async function saveWorldProject(options: { root: string; documentPath: st
   try {
     releaseWorld = acquireDataLease(options.documentPath);
     const current = await readFile(options.documentPath, 'utf8');
-    if (worldRevision(current) !== revision) throw new Error('Il progetto è stato modificato da un’altra finestra. Esporta la bozza e ricarica prima di applicare.');
-    const next = parseWorldDocument(document), catalog = await readWorldDungeonCatalog(options.dungeonPath);
+    const currentRevision = worldRevision(current);
+    if (currentRevision !== revision && !(await formatCompatibleRevisions(options.documentPath, currentRevision)).includes(revision)) throw new Error('Il progetto è stato modificato da un’altra finestra. Esporta la bozza e ricarica prima di applicare.');
+    const next = compactWorldTiles(parseWorldDocument(document)), catalog = await readWorldDungeonCatalog(options.dungeonPath);
     const issues = validateWorld(next, catalog);
     if (issues.length) throw new Error(issues.slice(0, 12).join('\n'));
     for (const a of next.assets) await access(resolve(options.root, 'public', a.image.slice(1)));
@@ -55,7 +64,7 @@ export async function saveWorldProject(options: { root: string; documentPath: st
         }
       }
     }
-    const text = JSON.stringify(next, null, 2) + '\n';
+    const text = serializeWorldDocument(next);
     await writeFile(temp, text, { flag: 'wx' }); await rename(temp, options.documentPath);
     return { revision: worldRevision(text), backup, backups };
   } finally {

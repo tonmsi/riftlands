@@ -2,6 +2,14 @@ import type { Vec2 } from './types';
 import { DEFAULT_CELL, type WorldDocument, type WorldAsset, type AssetPlacement } from './world-schema';
 import { placementBounds, overlaps, SpatialIndex } from './world-authoring';
 import type { TileOverride } from './world-schema';
+import { EDIT_CHUNK_SIZE, decodeTileChunk, encodeTileChunk, tileCode, tileFromCode, tileChunkKey, worldTileMetrics, setWorldTileMetrics, type WorldTileChunk } from './world-tiles';
+
+/** Copy metadata and compact chunk references; strokes replace only touched chunks. */
+export function forkWorldDocument(document: WorldDocument, tilesOnly = false): WorldDocument {
+  const { tileChunks, ...metadata } = document;
+  const result = { ...(tilesOnly ? metadata : structuredClone(metadata)), ...(tileChunks ? { tileChunks: tileChunks.slice() } : {}) };
+  setWorldTileMetrics(result, { ...worldTileMetrics(document) }); return result;
+}
 
 /** Interpolate pointer events so fast brush strokes cannot leave gaps. */
 export function strokeTiles(from: Vec2, to: Vec2): Vec2[] {
@@ -28,7 +36,7 @@ export function stampAsset(document: WorldDocument, asset: WorldAsset, point: Ve
   if (!canStampAsset(document, asset, point)) return;
   const p = { id, assetId: asset.id, ...point }; document.placements.push(p); return p;
 }
-export function paintAssetCell(asset: WorldAsset, column: number, row: number, mode: 'background' | 'wall' | 'hide' | 'fade'): void {
+export function paintAssetCell(asset: WorldAsset, column: number, row: number, mode: 'background' | 'wall' | 'hide' | 'fade' | 'hide-fade'): void {
   if (column < 0 || row < 0 || column >= asset.columns || row >= asset.rows) return;
   asset.cells[row * asset.columns + column] = mode === 'background' ? { ...DEFAULT_CELL }
     : mode === 'wall' ? { blocked: true, visibility: 'normal' } : { blocked: false, visibility: mode };
@@ -37,22 +45,32 @@ export function paintAssetCell(asset: WorldAsset, column: number, row: number, m
 /** Mutable indices live only for a brush transaction. Per-dab work depends on local density,
  * not the total number of tiles/instances in the authored world. Removed entries are tombstoned. */
 export class WorldBrush {
+  private chunkIndices = new Map<string, number>();
+  private changedChunks = new Map<string, { x: number; y: number; cells: Uint8Array }>();
+  private dirtyChunks = new Set<string>();
+  private visited = new Map<string, Uint8Array>();
   private assets: Map<string, WorldAsset>;
   private tileIndices: Map<string, number>;
   private placementIndices: Map<string, number>;
   private npcIndices: Map<string, number>;
   private placements: SpatialIndex<AssetPlacement>;
   private npcTiles: Map<string, string[]>;
-  constructor(private document: WorldDocument) {
-    this.assets = new Map(document.assets.map(a => [a.id, a]));
+  constructor(private document: WorldDocument, tilesOnly = false) {
+    for (const [i, c] of (document.tileChunks ?? []).entries()) this.chunkIndices.set(tileChunkKey(c[0], c[1]), i);
+    this.assets = new Map(tilesOnly ? [] : document.assets.map(a => [a.id, a]));
     this.tileIndices = new Map(document.tiles.map((t, i) => [`${t.x},${t.y}`, i]));
-    this.placementIndices = new Map(document.placements.map((p, i) => [p.id, i]));
-    this.npcIndices = new Map(document.npcs.map((n, i) => [n.id, i]));
-    this.npcTiles = new Map(); for (const n of document.npcs) { const key = `${n.x},${n.y}`, ids = this.npcTiles.get(key) ?? []; ids.push(n.id); this.npcTiles.set(key, ids); }
+    this.placementIndices = new Map(tilesOnly ? [] : document.placements.map((p, i) => [p.id, i]));
+    this.npcIndices = new Map(tilesOnly ? [] : document.npcs.map((n, i) => [n.id, i]));
+    this.npcTiles = new Map(); for (const n of tilesOnly ? [] : document.npcs) { const key = `${n.x},${n.y}`, ids = this.npcTiles.get(key) ?? []; ids.push(n.id); this.npcTiles.set(key, ids); }
     this.placements = new SpatialIndex(p => placementBounds(p, this.assets.get(p.assetId)!));
-    for (const p of document.placements) this.placements.add(p);
+    for (const p of tilesOnly ? [] : document.placements) this.placements.add(p);
   }
   tile(point: Vec2, value?: Omit<TileOverride, 'x' | 'y'>): void {
+    if (this.document.tileChunks) {
+      const c = this.chunk(point), i = (point.y - c.y * EDIT_CHUNK_SIZE) * EDIT_CHUNK_SIZE + point.x - c.x * EDIT_CHUNK_SIZE, code = tileCode(value);
+      if (c.cells[i] !== code) { c.cells[i] = code; this.dirtyChunks.add(tileChunkKey(c.x, c.y)); }
+      return;
+    }
     const key = `${point.x},${point.y}`, index = this.tileIndices.get(key);
     if (value) {
       if (index !== undefined) this.document.tiles[index] = { ...point, ...value };
@@ -62,9 +80,18 @@ export class WorldBrush {
       if (index < this.document.tiles.length) { this.document.tiles[index] = last; this.tileIndices.set(`${last.x},${last.y}`, index); }
     }
   }
+  visit(point: Vec2): boolean {
+    const x = Math.floor(point.x / EDIT_CHUNK_SIZE), y = Math.floor(point.y / EDIT_CHUNK_SIZE), key = tileChunkKey(x, y);
+    let cells = this.visited.get(key); if (!cells) { cells = new Uint8Array(EDIT_CHUNK_SIZE ** 2); this.visited.set(key, cells); }
+    const index = (point.y - y * EDIT_CHUNK_SIZE) * EDIT_CHUNK_SIZE + point.x - x * EDIT_CHUNK_SIZE;
+    if (cells[index]) return false; cells[index] = 1; return true;
+  }
   erase(point: Vec2): void {
     const current = this.tileIndices.get(`${point.x},${point.y}`);
-    this.tile(point, { suppressAssets: true, ...(current !== undefined && this.document.tiles[current].terrain ? { terrain: this.document.tiles[current].terrain } : {}) });
+    const chunk = this.document.tileChunks ? this.chunk(point) : undefined;
+    const terrain = chunk ? tileFromCode(chunk.cells[(point.y - chunk.y * EDIT_CHUNK_SIZE) * EDIT_CHUNK_SIZE + point.x - chunk.x * EDIT_CHUNK_SIZE], point.x, point.y)?.terrain
+      : current !== undefined ? this.document.tiles[current].terrain : undefined;
+    this.tile(point, { suppressAssets: true, ...(terrain ? { terrain } : {}) });
     for (const p of this.placements.query({ left: point.x, top: point.y, right: point.x + 1, bottom: point.y + 1 })) {
       const index = this.placementIndices.get(p.id); if (index === undefined) continue;
       const last = this.document.placements.pop()!; this.placementIndices.delete(p.id);
@@ -82,5 +109,32 @@ export class WorldBrush {
       .filter(p => this.placementIndices.has(p.id));
     if (!canStampAsset({ ...this.document, placements: candidates }, a, point)) return false;
     const p = { id, assetId: a.id, ...point }; this.placementIndices.set(id, this.document.placements.length); this.document.placements.push(p); this.placements.add(p); return true;
+  }
+  private chunk(point: Vec2) {
+    const x = Math.floor(point.x / EDIT_CHUNK_SIZE), y = Math.floor(point.y / EDIT_CHUNK_SIZE), key = tileChunkKey(x, y);
+    let changed = this.changedChunks.get(key);
+    if (!changed) { const index = this.chunkIndices.get(key); changed = { x, y, cells: index === undefined ? new Uint8Array(EDIT_CHUNK_SIZE ** 2) : decodeTileChunk(this.document.tileChunks![index]) }; this.changedChunks.set(key, changed); }
+    return changed;
+  }
+  /** Once per frame, publish immutable RLE only for changed chunks. */
+  flushTiles(): WorldTileChunk[] {
+    const changed: WorldTileChunk[] = [], chunks = this.document.tileChunks;
+    if (!chunks) return changed;
+    const totals = worldTileMetrics(this.document);
+    for (const key of this.dirtyChunks) {
+      const c = this.changedChunks.get(key)!, encoded = encodeTileChunk(c.x, c.y, c.cells), index = this.chunkIndices.get(key);
+      const old = index !== undefined ? chunks[index] : undefined;
+      if (old) { totals.runs -= (old.length - 2) / 3; for (let i = 2; i < old.length; i += 3) totals.cells -= old[i + 1]; }
+      totals.runs += (encoded.length - 2) / 3; for (let i = 2; i < encoded.length; i += 3) totals.cells += encoded[i + 1];
+      changed.push(encoded);
+      if (encoded.length > 2) {
+        if (index === undefined) { this.chunkIndices.set(key, chunks.length); chunks.push(encoded); } else chunks[index] = encoded;
+      } else if (index !== undefined) {
+        const last = chunks.pop()!; this.chunkIndices.delete(key);
+        if (index < chunks.length) { chunks[index] = last; this.chunkIndices.set(tileChunkKey(last[0], last[1]), index); }
+      }
+    }
+    setWorldTileMetrics(this.document, totals);
+    this.dirtyChunks.clear(); return changed;
   }
 }

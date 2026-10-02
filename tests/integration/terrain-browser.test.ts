@@ -237,9 +237,13 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     await page.screenshot({ path: 'artifacts/water-painterly.png' });
     const dungeon = await page.evaluate(async () => {
       const { Renderer, drawMinimap } = await import('/client/render.ts' as string);
-      const { DUNGEON_DEFINITIONS } = await import('/shared/dungeons.ts' as string);
-      const renderer = new Renderer(document.querySelector('canvas'));
+      const { default: bundles } = await import('/shared/custom-dungeons.json' as string);
+      const DUNGEON_DEFINITIONS = bundles.map((b: any) => b.definition);
+      const { World } = await import('/shared/world.ts' as string);
+      const { newWorldDocument } = await import('/shared/world-schema.ts' as string);
+      const renderer = new Renderer(document.querySelector('canvas'), DUNGEON_DEFINITIONS);
       await renderer.spritesReady; renderer.destroy();
+      renderer.world = new World(734291, 16, 'world', newWorldDocument(), DUNGEON_DEFINITIONS);
       const area = DUNGEON_DEFINITIONS[0].area;
       renderer.ctx.setTransform(1, 0, 0, 1, 600 - area.x, 450 - area.y);
       renderer.bounds = { left: area.x - 600, top: area.y - 450, right: area.x + 600, bottom: area.y + 450 };
@@ -258,9 +262,13 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     await page.screenshot({ path: 'artifacts/dungeon-terrain.png' });
     await page.evaluate(async () => {
       const { Renderer } = await import('/client/render.ts' as string);
-      const { DUNGEON_DEFINITIONS } = await import('/shared/dungeons.ts' as string);
-      const canvas = document.querySelector('canvas')!, renderer = new Renderer(canvas);
+      const { default: bundles } = await import('/shared/custom-dungeons.json' as string);
+      const DUNGEON_DEFINITIONS = bundles.map((b: any) => b.definition);
+      const { World } = await import('/shared/world.ts' as string);
+      const { newWorldDocument } = await import('/shared/world-schema.ts' as string);
+      const canvas = document.querySelector('canvas')!, renderer = new Renderer(canvas, DUNGEON_DEFINITIONS);
       await renderer.spritesReady; renderer.destroy();
+      renderer.world = new World(734291, 16, 'world', newWorldDocument(), DUNGEON_DEFINITIONS);
       const area = DUNGEON_DEFINITIONS[0].area;
       const entranceY = area.y + 500;
       renderer.ctx.setTransform(1, 0, 0, 1, 600 - area.x, 450 - entranceY);
@@ -270,9 +278,13 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     await page.screenshot({ path: 'artifacts/dungeon-entrance.png', clip: { x: 450, y: 90, width: 300, height: 760 } });
     await page.evaluate(async () => {
       const { Renderer } = await import('/client/render.ts' as string);
-      const { DUNGEON_DEFINITIONS } = await import('/shared/dungeons.ts' as string);
-      const canvas = document.querySelector('canvas')!, renderer = new Renderer(canvas);
+      const { default: bundles } = await import('/shared/custom-dungeons.json' as string);
+      const DUNGEON_DEFINITIONS = bundles.map((b: any) => b.definition);
+      const { World } = await import('/shared/world.ts' as string);
+      const { newWorldDocument } = await import('/shared/world-schema.ts' as string);
+      const canvas = document.querySelector('canvas')!, renderer = new Renderer(canvas, DUNGEON_DEFINITIONS);
       await renderer.spritesReady; renderer.destroy();
+      renderer.world = new World(734291, 16, 'world', newWorldDocument(), DUNGEON_DEFINITIONS);
       const area = DUNGEON_DEFINITIONS.at(-1)!.area;
       renderer.ctx.setTransform(1, 0, 0, 1, 600 - area.x, 450 - area.y);
       renderer.bounds = { left: area.x - 600, top: area.y - 450, right: area.x + 600, bottom: area.y + 450 };

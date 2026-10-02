@@ -6,6 +6,7 @@ import { WORLD_DOCUMENT } from './world-content';
 import { WorldAuthoring, type TileBounds, type GenerationEnvironment } from './world-authoring';
 import type { AssetPlacement, WorldDocument } from './world-schema';
 import { coordinateHash } from './coordinate-random';
+import { EDIT_CHUNK_SIZE, type WorldTileChunk } from './world-tiles';
 export { coordinateHash } from './coordinate-random';
 
 export interface NpcSpawn { id: string; x: number; y: number; npcKind: 'slime' | 'sentinel' | 'wisp'; level: number; }
@@ -27,6 +28,7 @@ export class World {
   private cache = new Map<string, Chunk>();
   private readonly lockedBosses = new Set<string>();
   lockRevision = 0;
+  authoringRevision = 0;
   readonly authoring: WorldAuthoring;
   private readonly manualNpcs = new Map<string, NpcSpawn[]>();
   private readonly lockedTiles = new Map<string, ReadonlySet<string>>();
@@ -46,12 +48,19 @@ export class World {
         || this.arenaAt((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE) !== undefined };
   }
   assetsIn(bounds: TileBounds): AssetPlacement[] { return this.mode === 'world' ? this.authoring.assetsIn(bounds, this.generationEnvironment, this.seed) : []; }
+  updateAuthoredTiles(document: WorldDocument, chunks: readonly WorldTileChunk[]): void {
+    this.authoring.document = document;
+    this.authoring.tiles.update(chunks); this.authoring.invalidateTileGeneration(); this.authoringRevision++;
+    for (const c of chunks) for (let y = 0; y < EDIT_CHUNK_SIZE / CHUNK_TILES; y++) for (let x = 0; x < EDIT_CHUNK_SIZE / CHUNK_TILES; x++)
+      this.cache.delete(chunkKey(c[0] * EDIT_CHUNK_SIZE / CHUNK_TILES + x, c[1] * EDIT_CHUNK_SIZE / CHUNK_TILES + y));
+  }
+  locationAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE)[0]?.name : undefined; }
   isBlocked(tx: number, ty: number): boolean {
     return isSolid(this.getTile(tx, ty)) || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }).some(p => this.authoring.cell(p, tx, ty)?.blocked);
   }
   isHiding(x: number, y: number): boolean {
     const tx = Math.floor(x / TILE_SIZE), ty = Math.floor(y / TILE_SIZE);
-    return this.getTile(tx, ty) === 'bush' || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }).some(p => this.authoring.cell(p, tx, ty)?.visibility === 'hide');
+    return this.getTile(tx, ty) === 'bush' || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }).some(p => ['hide', 'hide-fade'].includes(this.authoring.cell(p, tx, ty)?.visibility ?? ''));
   }
   pvpAt(x: number, y: number): boolean { return this.mode !== 'world' || (this.authoring.rule(x / TILE_SIZE, y / TILE_SIZE, 'pvp') ?? true); }
   arenaAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE).find(z => z.arenaId)?.id : undefined; }
@@ -98,7 +107,7 @@ export class World {
     const x = (tx + 0.5) * TILE_SIZE, y = (ty + 0.5) * TILE_SIZE;
     const curatedTile = configuredDungeonTile(tx, ty, this.dungeons);
     if (curatedTile) return curatedTile;
-    const authored = this.authoring.tiles.get(`${tx},${ty}`)?.terrain;
+    const authored = this.authoring.tiles.at(tx, ty)?.terrain;
     if (authored !== undefined) return authored;
     const curatedDungeonApproach = this.dungeons.some(definition => inDungeonApproachCorridor(definition, { x, y }));
     if (this.dungeons.some(definition => onDungeonApproach(definition, { x, y }))) return 'path';

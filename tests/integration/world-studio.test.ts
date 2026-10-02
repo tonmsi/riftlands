@@ -31,13 +31,31 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     await page.locator('#asset-files').setInputFiles([{ name: 'Albero.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg) }, { name: 'Pietra.png', mimeType: 'image/png', buffer: png }]);
     await expect(page.locator('#asset-list button')).toHaveCount(2);
     await page.locator('#asset-list button').first().click();
-    await page.locator('#keep-ratio').uncheck(); await page.locator('#asset-width').fill('2'); await page.locator('#asset-height').fill('2'); await page.locator('#asset-update').click();
+    await page.locator('#keep-ratio').uncheck(); await page.locator('#asset-width').fill('2'); await page.locator('#asset-height').fill('2'); await page.locator('#asset-group').fill('Natura'); await page.locator('#asset-update').click();
+    await page.locator('#assets-collapse').click(); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(0);
+    await page.locator('#asset-list [data-group="Natura"] summary').click(); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(1);
+    await page.locator('#asset-search').fill('Pietra'); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(1);
+    await page.locator('#asset-search').fill(''); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(1);
     await page.locator('#cell-blocked').selectOption('true'); await page.locator('#cell-visibility').selectOption('normal');
     const grid = (await page.locator('#asset-grid').boundingBox())!, cell = Math.min((grid.width - 28) / 2, (grid.height - 28) / 2);
     const left = grid.x + (grid.width - 2 * cell) / 2, top = grid.y + (grid.height - 2 * cell) / 2;
     await page.mouse.click(left + cell / 2, top + cell / 2);
     await page.locator('#cell-blocked').selectOption('false'); await page.locator('#cell-visibility').selectOption('hide'); await page.mouse.click(left + cell * 1.5, top + cell / 2);
     await page.locator('#cell-visibility').selectOption('fade'); await page.mouse.click(left + cell / 2, top + cell * 1.5);
+    await page.locator('#asset-expand').click(); await expect(page.locator('#asset-preview-dialog')).toBeVisible();
+    const large = (await page.locator('#asset-grid').boundingBox())!; assert.ok(large.width > grid.width * 2 && large.height > grid.height);
+    const largeCell = Math.min((large.width - 28) / 2, (large.height - 28) / 2);
+    const target = { x: large.x + (large.width - 2 * largeCell) / 2 + largeCell * 1.5, y: large.y + (large.height - 2 * largeCell) / 2 + largeCell * 1.5 };
+    await page.mouse.move(target.x, target.y); await page.mouse.wheel(0, -300); await expect(page.locator('#asset-zoom-label')).not.toHaveText('100%');
+    await page.locator('#cell-visibility').selectOption('hide-fade'); await page.mouse.click(target.x, target.y);
+    await page.mouse.move(target.x, target.y); await page.mouse.down({ button: 'middle' }); await page.mouse.move(target.x + 35, target.y + 25); await page.mouse.up({ button: 'middle' });
+    await page.mouse.click(target.x + 35, target.y + 25);
+    await page.locator('#asset-fit').click(); await expect(page.locator('#asset-zoom-label')).toHaveText('100%');
+    await page.locator('#fade-opacity').fill('20'); await page.locator('#asset-fade-update').click(); await expect(page.locator('#fade-opacity')).toHaveValue('20');
+    await mkdir(join(root, 'artifacts'), { recursive: true }); await page.screenshot({ path: join(root, 'artifacts/world-asset-review.png') });
+    await page.keyboard.press('Escape'); await expect(page.locator('#asset-preview-dialog')).not.toBeVisible();
+    await expect(page.locator('#asset-preview-home #asset-grid')).toBeVisible();
+    await page.locator('#undo').click(); await page.locator('#redo').click();
     await page.locator('#goto').click(); await page.locator('#goto-x').fill('100'); await page.locator('#goto-y').fill('100'); await page.locator('#goto-confirm').click();
     const at = (x: number, y: number) => point(x - 100, y - 100);
     await page.locator('[data-tool="terrain"]').click(); await page.locator('#terrain').selectOption('grass'); await page.locator('#brush-radius').fill('6');
@@ -53,6 +71,8 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     const saved = JSON.parse(await readFile(options.documentPath, 'utf8'));
     assert.equal(saved.assets.length, 2); assert.equal(saved.assets[0].width, 2); assert.equal(saved.assets[0].cells[0].blocked, true);
     assert.equal(saved.assets[0].cells[1].visibility, 'hide'); assert.equal(saved.assets[0].cells[2].visibility, 'fade');
+    assert.equal(saved.assets[0].cells[3].visibility, 'hide-fade'); assert.equal(saved.assets[0].group, 'Natura'); assert.equal(saved.assets[0].generation.category, 'vegetation');
+    assert.equal(saved.assets[0].fade.opacity, .2);
     assert.ok(saved.placements.length > 3); assert.equal(saved.zones[0].npcs.density, 0); assert.equal(saved.npcs.length, 1);
     const world = new World(saved.seed, 16, 'world', saved, []); assert.equal(world.isBlocked(100, 100), true); assert.equal(world.isHiding(101 * 48 + 24, 100 * 48 + 24), true);
     const download = page.waitForEvent('download'); await page.locator('#export-world').click();
@@ -60,7 +80,9 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     const archive = JSON.parse(await readFile(archivePath, 'utf8')); assert.equal(Object.keys(archive.images).length, 2);
     await page.locator('#world-file').setInputFiles(archivePath); await expect(page.locator('#status')).toContainText('Progetto importato');
     await page.locator('#apply-world').click(); await expect(page.locator('#status')).toContainText('Progetto applicato');
-    await page.reload(); await expect(page.locator('#asset-list button')).toHaveCount(2);
+    await page.reload(); await expect(page.locator('#status')).toContainText('World Studio pronto');
+    await expect(page.locator('#asset-list [data-asset]')).toHaveCount(1);
+    await page.locator('#assets-expand').click(); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(2);
     await page.locator('#show-zones').check(); await page.locator('#home').click(); await page.locator('#zoom-out').click(); await expect(page.locator('#zoom-label')).toHaveText('77%');
     await page.locator('#goto').click(); await page.locator('#goto-x').fill('100'); await page.locator('#goto-y').fill('100'); await page.locator('#goto-confirm').click();
     await mkdir(join(root, 'artifacts'), { recursive: true }); await page.screenshot({ path: join(root, 'artifacts/world-maker-review.png') });
@@ -70,6 +92,19 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     assert.equal((await write({ Origin: origin, 'X-World-Token': state.token }, 'stale')).status, 400);
     const release = acquireDataLease(options.dataPath);
     try { assert.equal((await write({ Origin: origin, 'X-World-Token': state.token })).status, 400); } finally { release(); }
+    const catalog = await page.evaluate(async () => {
+      const { WorldAssetCatalog } = await import('/client/world-asset-catalog.ts' as string), { newWorldAsset } = await import('/shared/world-schema.ts' as string);
+      const root = window.document.createElement('div'); window.document.body.append(root);
+      const assets = Array.from({ length: 1000 }, (_, i) => ({ ...newWorldAsset(`fixture-${i}`, `Pianta ${i}`, '/world-assets/tree.svg'), group: 'Test catalogo' }));
+      const catalog = new WorldAssetCatalog(root, () => {}); catalog.update(assets, assets[0].id, '');
+      const initial = root.querySelectorAll('[data-asset]').length;
+      root.querySelector<HTMLButtonElement>('.asset-more')!.click(); const paged = root.querySelectorAll('[data-asset]').length;
+      catalog.expandAll(false); const collapsed = root.querySelectorAll('img').length;
+      catalog.update(assets, assets[0].id, 'Pianta 999'); const searched = root.querySelectorAll('[data-asset]').length;
+      const item = root.querySelector('[data-asset]'); catalog.update(assets, assets[999].id, 'Pianta 999'); const reused = item === root.querySelector('[data-asset]');
+      root.remove(); return { initial, paged, collapsed, searched, reused };
+    });
+    assert.deepEqual(catalog, { initial: 40, paged: 80, collapsed: 0, searched: 1, reused: true });
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); await studio.close(); await rm(directory, { recursive: true, force: true }); }
 });

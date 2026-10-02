@@ -2,6 +2,7 @@ import { CHUNK_TILES } from './config';
 import { coordinateHash } from './coordinate-random';
 import type { TileKind } from './types';
 import type { AssetCell, AssetPlacement, TileOverride, WorldAsset, WorldDocument, WorldZone, ZoneShape } from './world-schema';
+import { WorldTiles } from './world-tiles';
 
 export interface TileBounds { left: number; top: number; right: number; bottom: number; }
 export function shapeBounds(s: ZoneShape): TileBounds {
@@ -48,16 +49,16 @@ interface Proposal { placement: AssetPlacement; priority: number; band: Generati
 /** Immutable runtime snapshot. Editor mutations create a new snapshot and invalidate all derived caches. */
 export class WorldAuthoring {
   readonly assets: ReadonlyMap<string, WorldAsset>;
-  readonly tiles: ReadonlyMap<string, TileOverride>;
+  readonly tiles: WorldTiles;
   readonly placements: SpatialIndex<AssetPlacement>;
   readonly zones = new SpatialIndex<WorldZone>(z => shapeBounds(z.shape));
   private bands: GenerationBand[];
   private proposals = new Map<string, Proposal | null>();
   private generated = new Map<string, AssetPlacement | null>();
   private zoneCache = new Map<string, WorldZone[]>();
-  constructor(readonly document: WorldDocument) {
+  constructor(public document: WorldDocument) {
     this.assets = new Map(document.assets.map(a => [a.id, a]));
-    this.tiles = new Map(document.tiles.map(t => [`${t.x},${t.y}`, t]));
+    this.tiles = new WorldTiles(document);
     this.placements = new SpatialIndex(p => placementBounds(p, this.assets.get(p.assetId)!));
     for (const p of document.placements) this.placements.add(p);
     for (const z of document.zones) this.zones.add(z);
@@ -148,4 +149,5 @@ export class WorldAuthoring {
     return result;
   }
   get generationCacheSize(): number { return this.generated.size; }
+  invalidateTileGeneration(): void { this.proposals.clear(); this.generated.clear(); }
 }

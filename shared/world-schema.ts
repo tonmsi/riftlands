@@ -1,9 +1,12 @@
 import type { TileKind, Vec2 } from './types';
 import type { NpcKind } from './npcs';
+import { WORLD_TILE_TERRAINS, type WorldTileChunk } from './world-tiles';
 
 /** Coordinates in authored documents are tiles, including fractional visual dimensions.
  * Gameplay positions remain world units. The format contains data only, never scripts. */
-export interface AssetCell { blocked: boolean; visibility: 'normal' | 'hide' | 'fade'; }
+export interface AssetCell { blocked: boolean; visibility: 'normal' | 'hide' | 'fade' | 'hide-fade'; }
+export const DEFAULT_ASSET_FADE = { opacity: .28, feather: .35, durationMs: 180 };
+export const assetCellFades = (cell?: AssetCell): boolean => cell?.visibility === 'fade' || cell?.visibility === 'hide-fade';
 export interface AssetGeneration {
   enabled: boolean; category: string; terrains: TileKind[];
   temperature: [number, number]; moisture: [number, number]; density: number; spacing: number;
@@ -14,6 +17,9 @@ export interface WorldAsset {
   layer: 'ground' | 'object'; pivot: Vec2; generation: AssetGeneration;
   /** Built-in animated artwork is data-selected, never tied to an asset ID or world position. */
   visual?: { kind: 'image' } | { kind: 'fire'; style: 'brazier' | 'campfire' };
+  fade?: { opacity: number; feather: number; durationMs: number };
+  /** Catalog organization only; independent of procedural generation categories. */
+  group?: string;
 }
 export interface AssetPlacement extends Vec2 { id: string; assetId: string; }
 export interface TileOverride extends Vec2 { terrain?: TileKind; suppressAssets?: boolean; }
@@ -29,18 +35,25 @@ export interface WorldNpc extends Vec2 { id: string; npcKind: NpcKind; level: nu
 /** One placement per installed dungeon, preserving encounter/boss identity and persistence. */
 export interface WorldDungeon extends Vec2 { dungeonId: string; enabled?: boolean; }
 export interface WorldDocument {
-  version: 1; generatorVersion: 1; seed: number; spawn: Vec2;
+  version: 1 | 2; generatorVersion: 1; seed: number; spawn: Vec2;
   assets: WorldAsset[]; placements: AssetPlacement[]; tiles: TileOverride[];
   zones: WorldZone[]; npcs: WorldNpc[]; dungeons: WorldDungeon[];
+  tileChunks?: WorldTileChunk[];
 }
-export const WORLD_TERRAINS: readonly TileKind[] = ['grass', 'path', 'water', 'rock', 'bush', 'mud', 'snow', 'ice'];
+export const WORLD_TERRAINS = WORLD_TILE_TERRAINS;
 export const DEFAULT_CELL: AssetCell = { blocked: false, visibility: 'normal' };
+const LEGACY_FIRE_IMAGES: Readonly<Record<string, 'brazier' | 'campfire'>> = {
+  '/world-assets/brazier.svg': 'brazier',
+  '/world-assets/ddbdb1a40dac723ae93c5f978cedc1c19c6f7efae2f819ce09f37d0cbb6fe65b.svg': 'brazier',
+  '/world-assets/campfire.svg': 'campfire',
+  '/world-assets/8be2ee9ad348b9996368c35425c71b666d341cf52382cc4208cf1703b008805e.svg': 'campfire',
+};
 /** Compatibility for drafts/exported projects made before built-in animation metadata existed.
  * An explicit image choice always takes precedence over these legacy built-in sources. */
 export function worldAssetVisual(asset: WorldAsset): NonNullable<WorldAsset['visual']> {
   if (asset.visual) return asset.visual;
-  if (asset.image === '/world-assets/brazier.svg') return { kind: 'fire', style: 'brazier' };
-  if (asset.image === '/world-assets/campfire.svg') return { kind: 'fire', style: 'campfire' };
+  const style = LEGACY_FIRE_IMAGES[asset.image];
+  if (style) return { kind: 'fire', style };
   return { kind: 'image' };
 }
 export function newWorldDocument(seed = 734291): WorldDocument {
@@ -73,16 +86,19 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   const unique = (items: any[], key: (v: any) => string, label: string) => { if (new Set(items.map(key)).size !== items.length) fail(`${label}: duplicati`); };
   const range = (v: any) => Array.isArray(v) && v.length === 2 && v.every(n => finite(n, 0, 1)) && v[0] <= v[1];
   const boolean = (v: any) => typeof v === 'boolean';
-  if (!object(d) || d.version !== 1 || d.generatorVersion !== 1 || !integer(d.seed, -2147483648, 2147483647) || !point(d.spawn)) fail('versione, seed o spawn');
+  if (!object(d) || ![1, 2].includes(d.version) || d.generatorVersion !== 1 || !integer(d.seed, -2147483648, 2147483647) || !point(d.spawn)) fail('versione, seed o spawn');
   list(d.assets, 4096, 'catalogo asset'); list(d.placements, 100_000, 'piazzamenti'); list(d.tiles, 500_000, 'terreno');
   list(d.zones, 10_000, 'zone'); list(d.npcs, 100_000, 'NPC'); list(d.dungeons, 4096, 'dungeon');
+  if (d.version === 2 && (!Array.isArray(d.tileChunks) || d.tiles.length)) fail('versione 2: terreno in chunk');
   for (const a of d.assets) {
     if (!object(a) || !id(a.id) || !name(a.name) || typeof a.image !== 'string' || !/^\/world-assets\/[a-zA-Z0-9_-]+\.(png|svg)$/.test(a.image)
       || !finite(a.width, .25, 32) || !finite(a.height, .25, 32) || a.columns !== Math.ceil(a.width) || a.rows !== Math.ceil(a.height)
       || !['ground', 'object'].includes(a.layer) || !object(a.pivot) || !finite(a.pivot.x, 0, 1) || !finite(a.pivot.y, 0, 1)) fail('definizione asset');
     list(a.cells, 1024, 'celle asset');
+    if (a.group !== undefined && (!name(a.group) || a.group.length > 80)) fail(`gruppo di ${a.id}`);
     if (a.visual !== undefined && (!object(a.visual) || (a.visual.kind !== 'image' && (a.visual.kind !== 'fire' || !['brazier', 'campfire'].includes(a.visual.style))))) fail(`aspetto di ${a.id}`);
-    if (a.cells.length !== a.columns * a.rows || !a.cells.every((c: any) => object(c) && boolean(c.blocked) && ['normal', 'hide', 'fade'].includes(c.visibility))) fail(`celle di ${a.id}`);
+    if (a.cells.length !== a.columns * a.rows || !a.cells.every((c: any) => object(c) && boolean(c.blocked) && ['normal', 'hide', 'fade', 'hide-fade'].includes(c.visibility))) fail(`celle di ${a.id}`);
+    if (a.fade !== undefined && (!object(a.fade) || !finite(a.fade.opacity, 0, 1) || !finite(a.fade.feather, 0, 1) || !integer(a.fade.durationMs, 0, 2000))) fail(`sfumatura di ${a.id}`);
     const g = a.generation;
     if (!object(g) || !boolean(g.enabled) || !id(g.category) || !range(g.temperature) || !range(g.moisture)
       || !finite(g.density, 0, 1) || !integer(g.spacing, 0, 16) || !Array.isArray(g.terrains) || !g.terrains.length
@@ -94,6 +110,21 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   for (const t of d.tiles) if (!point(t) || (t.terrain === undefined && t.suppressAssets !== true)
     || (t.terrain !== undefined && !WORLD_TERRAINS.includes(t.terrain)) || (t.suppressAssets !== undefined && !boolean(t.suppressAssets))) fail('tile');
   unique(d.tiles, t => `${t.x},${t.y}`, 'tile');
+  if (d.tileChunks !== undefined) {
+    list(d.tileChunks, 100_000, 'chunk terreno');
+    let cells = 0, runs = 0;
+    for (const c of d.tileChunks) {
+      if (!Array.isArray(c) || c.length < 5 || (c.length - 2) % 3 || !integer(c[0], -312500, 312500) || !integer(c[1], -312500, 312500)) fail('chunk terreno');
+      let end = 0;
+      for (let i = 2; i < c.length; i += 3) {
+        if (!integer(c[i], end, 1023) || !integer(c[i + 1], 1, 1024 - c[i]) || !integer(c[i + 2], 1, 17)) fail('intervallo terreno');
+        end = c[i] + c[i + 1]; cells += c[i + 1]; runs++;
+      }
+    }
+    if (cells > 20_000_000 || runs > 2_000_000) fail('budget terreno');
+    unique(d.tileChunks, c => `${c[0]},${c[1]}`, 'chunk terreno');
+    if (d.tiles.length) fail('usa celle legacy oppure chunk, senza mescolarli');
+  }
   for (const z of d.zones) {
     if (!object(z) || !id(z.id) || !name(z.name) || !integer(z.priority, -10000, 10000) || !object(z.shape)
       || !finite(z.shape.x, -10_000_000, 10_000_000) || !finite(z.shape.y, -10_000_000, 10_000_000)) fail('zona');
@@ -117,6 +148,9 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   for (const p of d.dungeons) if (!point(p) || !id(p.dungeonId) || (p.enabled !== undefined && !boolean(p.enabled))) fail('piazzamento dungeon');
   unique(d.dungeons, p => p.dungeonId, 'dungeon');
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
-  return structuredClone({ version: 1, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
-    placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons });
+  const result: WorldDocument = structuredClone({ version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
+    placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons, ...(d.tileChunks !== undefined ? { tileChunks: d.tileChunks } : {}) });
+  // Persist recovered animation before an export can rename the image again.
+  for (const asset of result.assets) if (!asset.visual && worldAssetVisual(asset).kind === 'fire') asset.visual = worldAssetVisual(asset);
+  return result;
 }

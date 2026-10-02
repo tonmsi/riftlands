@@ -9,10 +9,13 @@ import { NPC_CATALOG } from '../shared/npcs';
 import { DUNGEON_DEFINITIONS, type DungeonDefinition } from '../shared/dungeons';
 import { worldDungeons, validateWorld } from '../shared/world-validation';
 import { shapeBounds } from '../shared/world-authoring';
-import { newWorldAsset, parseWorldDocument, resizeWorldAsset, worldAssetVisual, WORLD_TERRAINS, type WorldDocument, type WorldAsset, type WorldZone } from '../shared/world-schema';
-import { brushTiles, strokeTiles, WorldBrush } from '../shared/world-editing';
+import { newWorldAsset, parseWorldDocument, resizeWorldAsset, worldAssetVisual, DEFAULT_ASSET_FADE, WORLD_TERRAINS, type WorldDocument, type WorldAsset, type WorldZone, type AssetCell } from '../shared/world-schema';
+import { brushTiles, strokeTiles, WorldBrush, forkWorldDocument } from '../shared/world-editing';
+import { compactWorldTiles, worldTileMetrics, worldDocumentsEqual } from '../shared/world-tiles';
 import { WorldAssetArt } from './world-asset-art';
 import { WorldEditorHistory } from './world-editor-history';
+import { WorldAssetCatalog } from './world-asset-catalog';
+import { AssetGridCamera } from './world-asset-view';
 import { loadWorldCheckpoint, saveWorldCheckpoint } from './world-editor-storage';
 const root = document.getElementById('world-maker')!;
 root.innerHTML = worldMakerLayout;
@@ -21,19 +24,27 @@ const input = (id: string) => el<HTMLInputElement>(id);
 const val = (id: string) => (el(id) as HTMLInputElement | HTMLSelectElement).value;
 const num = (id: string) => Number(val(id));
 const set = (id: string, value: unknown) => { (el(id) as HTMLInputElement | HTMLSelectElement).value = String(value ?? ''); };
-const on = (id: string, action: () => void | Promise<void>) => el(id).addEventListener('click', () => { void Promise.resolve().then(action).catch(report); });
+const on = (id: string, action: () => void | Promise<void>) => el(id).addEventListener('click', () => { void Promise.resolve().then(async () => { await settleGesture(); return action(); }).catch(report); });
 const report = (e: unknown) => { el('status').textContent = e instanceof Error ? e.message : String(e); };
 const status = (s: string) => { el('status').textContent = s; };
 const uid = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
-let draft = structuredClone(WORLD_DOCUMENT), catalog: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS, token = '', revision = '', installedRevision = '', ready = false;
+let draft = forkWorldDocument(compactWorldTiles(WORLD_DOCUMENT)), catalog: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS, token = '', revision = '', installedRevision = '', ready = false;
 let world: World, tool = 'select', activeAsset = draft.assets[0]?.id ?? '', selected: {
     kind: 'placement' | 'npc' | 'dungeon' | 'zone';
     id: string;
 } | null = null;
 let worldDirty = true, framePending = false, dirty = false, checkpointQueue = Promise.resolve();
 let animationTimer: ReturnType<typeof setTimeout> | undefined;
+let checkpointTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingCheckpoint: { document: WorldDocument; revision: string } | undefined;
+let compatibleRevisions: string[] = [];
 const history = new WorldEditorHistory(), canvas = el<HTMLCanvasElement>('map');
 const assetCanvas = el<HTMLCanvasElement>('asset-grid');
+const assetCamera = new AssetGridCamera();
+let cameraAsset = '';
+const assetCatalog = new WorldAssetCatalog(el('asset-list'), id => {
+    void settleGesture().then(() => { activeAsset = id; selected = null; selectTool('asset'); refresh(); }).catch(report);
+});
 const art = new WorldAssetArt(() => schedule());
 let view = { x: 0, y: 0, scale: 24 }, pointerTile: Vec2 | null = null;
 let gesture: {
@@ -43,32 +54,63 @@ let gesture: {
     last: Vec2;
     pan?: Vec2;
     cell?: boolean;
-    painted: Set<string>;
     tool: string;
     mass: boolean;
     brush?: WorldBrush;
+    pending?: Vec2[];
+    cursor?: number;
+    ending?: boolean;
+    settings?: { radius: number; density: number; terrain: TileKind; asset?: WorldAsset };
 } | null = null;
 const keys = new Set<string>();
 set('brush-radius', 1);
 set('brush-density', 100);
-function ensureWorld(): void { if (worldDirty) {
+function ensureWorld(): void {
+  const updated = gesture?.brush?.flushTiles() ?? [];
+  if (updated.length && world && !worldDirty) world.updateAuthoredTiles(draft, updated);
+  if (worldDirty) {
     world = new World(draft.seed, 96, 'world', draft, worldDungeons(draft, catalog));
     worldDirty = false;
 } }
 function schedule(rebuild = false): void { worldDirty ||= rebuild; if (!framePending) {
     framePending = true;
-    requestAnimationFrame(() => { framePending = false; draw(); drawAssetGrid(); });
+    requestAnimationFrame(() => {
+        framePending = false;
+        const g = gesture;
+        if (g?.pending) {
+            const start = performance.now();
+            while ((g.cursor ?? 0) < g.pending.length && performance.now() - start < 6) paint(g.pending[g.cursor!++]);
+            if (g.cursor === g.pending.length) { g.pending = []; g.cursor = 0; if (g.ending) finishGesture(); }
+            else schedule();
+        }
+        draw(); drawAssetGrid();
+    });
 } }
-function checkpoint(): Promise<void> {
-    const snapshot = { document: structuredClone(draft), revision };
+function flushCheckpoint(): Promise<void> {
+    if (checkpointTimer !== undefined) clearTimeout(checkpointTimer);
+    checkpointTimer = undefined;
+    const snapshot = pendingCheckpoint;
+    pendingCheckpoint = undefined;
+    if (!snapshot) return checkpointQueue;
     checkpointQueue = checkpointQueue.catch(() => { }).then(() => saveWorldCheckpoint(snapshot));
     void checkpointQueue.then(() => { if (dirty)
         el('save-state').textContent = 'Bozza salvata · da applicare'; }).catch(() => { el('save-state').textContent = 'Salvataggio fallito · esporta'; });
     return checkpointQueue;
 }
-function commit(before: WorldDocument): void {
+function checkpoint(immediate = false): Promise<void> {
+    pendingCheckpoint = { document: forkWorldDocument(draft), revision };
+    if (immediate) return flushCheckpoint();
+    if (checkpointTimer !== undefined) clearTimeout(checkpointTimer);
+    checkpointTimer = setTimeout(() => { void flushCheckpoint(); }, 350);
+    return checkpointQueue;
+}
+window.addEventListener('pagehide', () => { void flushCheckpoint(); });
+function commit(before: WorldDocument, nativeTiles = false): void {
     try {
-        draft = parseWorldDocument(draft);
+        if (nativeTiles) {
+            const counts = worldTileMetrics(draft);
+            if (counts.cells > 20_000_000 || counts.runs > 2_000_000 || draft.tileChunks!.length > 100_000) throw new Error('Budget terreno raggiunto: annulla o riduci gli interventi.');
+        } else draft = parseWorldDocument(draft);
     }
     catch (e) {
         draft = before;
@@ -88,7 +130,7 @@ function change(action: () => void): void {
     if (!ready)
         return;
     const before = draft;
-    draft = structuredClone(draft);
+    draft = forkWorldDocument(draft);
     try {
         action();
         commit(before);
@@ -104,26 +146,7 @@ function selectTool(next: string): void { tool = next; root.querySelectorAll<HTM
 root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.onclick = () => selectTool(b.dataset.tool!));
 function active(): WorldAsset | undefined { return draft.assets.find(a => a.id === activeAsset); }
 function palette(): void {
-    const search = val('asset-search').toLowerCase();
-    el('asset-list').replaceChildren(...draft.assets.filter(a => `${a.name} ${a.generation.category}`.toLowerCase().includes(search)).map(a => {
-        const b = document.createElement('button');
-        b.className = 'asset-item';
-        b.dataset.asset = a.id;
-        b.setAttribute('aria-pressed', String(a.id === activeAsset));
-        const img = document.createElement('img');
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.src = a.image;
-        img.alt = '';
-        const info = document.createElement('div');
-        info.textContent = a.name;
-        const detail = document.createElement('small');
-        detail.textContent = `${a.width} × ${a.height} · ${a.generation.enabled ? 'genera + manuale' : 'manuale'}`;
-        info.append(detail);
-        b.append(img, info);
-        b.onclick = () => { activeAsset = a.id; selected = null; selectTool('asset'); refresh(); };
-        return b;
-    }));
+    assetCatalog.update(draft.assets, activeAsset, val('asset-search'));
 }
 function refresh(): void {
     if (!active())
@@ -133,7 +156,8 @@ function refresh(): void {
     el<HTMLButtonElement>('undo').disabled = !history.canUndo;
     el<HTMLButtonElement>('redo').disabled = !history.canRedo;
     el<HTMLButtonElement>('apply-world').disabled = !token || !ready;
-    el('map-info').textContent = `${draft.placements.length} asset · ${draft.zones.length} zone`;
+    const cells = worldTileMetrics(draft).cells;
+    el('map-info').textContent = `${cells.toLocaleString('it-IT')} celle · ${draft.placements.length} asset · ${draft.zones.length} zone`;
     const dungeonSelect = el<HTMLSelectElement>('dungeon'), previous = dungeonSelect.value;
     dungeonSelect.replaceChildren(...catalog.map(d => new Option(d.name, d.id)));
     dungeonSelect.value = catalog.some(d => d.id === previous) ? previous : catalog[0]?.id ?? '';
@@ -152,7 +176,12 @@ function refresh(): void {
 function refreshAsset(a: WorldAsset): void {
     const visual = worldAssetVisual(a);
     set('asset-visual', visual.kind === 'fire' ? visual.style : 'image');
+    const fade = a.fade ?? DEFAULT_ASSET_FADE;
+    set('fade-opacity', Math.round(fade.opacity * 100_000) / 1000); set('fade-feather', fade.feather); set('fade-duration', fade.durationMs);
     set('asset-name', a.name);
+    set('asset-group', a.group);
+    el('asset-groups').replaceChildren(...[...new Set(draft.assets.flatMap(a => a.group ? [a.group] : []))].sort().map(group => new Option(group)));
+    el('asset-preview-title').textContent = `Celle · ${a.name}`;
     set('asset-width', a.width);
     set('asset-height', a.height);
     set('asset-layer', a.layer);
@@ -220,9 +249,22 @@ function draw(): void {
         animationTimer = setTimeout(() => { animationTimer = undefined; schedule(); }, 33);
     el('zoom-label').textContent = Math.round(view.scale / 24 * 100) + '%';
 }
-function drawAssetGrid(): void { if (!el('asset-inspector').hidden)
-    renderAssetGrid(assetCanvas, art, active()); }
-function assetView() { return assetGridView(assetCanvas, active()); }
+function drawAssetGrid(): void {
+    if (el('asset-inspector').hidden) return;
+    assetView();
+    renderAssetGrid(assetCanvas, art, active(), input('preview-fade').checked, assetCamera);
+    el('asset-zoom-label').textContent = `${Math.round(assetCamera.zoom * 100)}%`;
+}
+function assetView() {
+    if (cameraAsset !== activeAsset) { assetCamera.fit(); cameraAsset = activeAsset; }
+    return assetGridView(assetCanvas, active(), assetCamera);
+}
+function zoomAsset(factor: number, x?: number, y?: number): void {
+    const v = assetView(); if (!v) return;
+    const r = assetCanvas.getBoundingClientRect();
+    assetCamera.zoomAt(factor, x ?? r.width / 2, y ?? r.height / 2, r.width, r.height, v.a.columns, v.a.rows);
+    schedule();
+}
 function position(event: PointerEvent): Vec2 { const r = canvas.getBoundingClientRect(); return { x: Math.floor((event.clientX - r.left - view.x) / view.scale), y: Math.floor((event.clientY - r.top - view.y) / view.scale) }; }
 function centerAt(x: number, y: number): void { const r = canvas.getBoundingClientRect(); view.x = r.width / 2 - x * view.scale; view.y = r.height / 2 - y * view.scale; schedule(); }
 function zoom(factor: number, x?: number, y?: number): void { const r = canvas.getBoundingClientRect(); x ??= r.width / 2; y ??= r.height / 2; const next = Math.max(.75, Math.min(96, view.scale * factor)); view.x = x - (x - view.x) * next / view.scale; view.y = y - (y - view.y) * next / view.scale; view.scale = next; schedule(); }
@@ -239,28 +281,28 @@ function selectAt(p: Vec2): void {
 function paint(p: Vec2): void {
     if (!gesture)
         return;
-    const radius = Math.max(0, Math.min(16, Math.round(num('brush-radius'))));
+    const radius = gesture.settings?.radius ?? Math.max(0, Math.min(16, Math.round(num('brush-radius'))));
+    const asset = gesture.settings?.asset;
     const points = gesture.tool === 'asset' && !gesture.mass ? [p] : brushTiles(p, radius);
     for (const q of points) {
-        const key = `${q.x},${q.y}`;
-        if (gesture.painted.has(key))
+        if (Math.abs(q.x) > 10_000_000 || Math.abs(q.y) > 10_000_000) continue;
+        if (!gesture.brush!.visit(q))
             continue;
-        gesture.painted.add(key);
-        if (gesture.tool === 'asset' && coordinateHash(q.x, q.y, draft.seed + gesture.before.placements.length + 2001) >= Math.max(0, Math.min(1, num('brush-density') / 100)))
+        if (gesture.tool === 'asset' && coordinateHash(q.x, q.y, draft.seed + gesture.before.placements.length + 2001) >= (gesture.settings?.density ?? 1))
             continue;
         const dungeon = world.dungeons.some(d => q.x >= d.layout.bounds.minTx && q.x <= d.layout.bounds.maxTx && q.y >= d.layout.bounds.minTy && q.y <= d.layout.bounds.maxTy);
         if (dungeon && ['terrain', 'restore', 'asset', 'erase'].includes(gesture.tool))
             continue;
         if (gesture.tool === 'terrain')
-            gesture.brush!.tile(q, { terrain: val('terrain') as TileKind, suppressAssets: true });
+            gesture.brush!.tile(q, { terrain: gesture.settings!.terrain, suppressAssets: true });
         else if (gesture.tool === 'restore')
             gesture.brush!.tile(q);
         else if (gesture.tool === 'erase')
             gesture.brush!.erase(q);
-        else if (gesture.tool === 'asset' && active())
-            gesture.brush!.stamp(active()!, q, uid('asset'));
+        else if (gesture.tool === 'asset' && asset)
+            gesture.brush!.stamp(asset, q, uid('asset'));
     }
-    schedule(true);
+    schedule(gesture.tool === 'asset' || gesture.tool === 'erase');
 }
 canvas.addEventListener('pointerdown', event => {
     if (!ready || gesture)
@@ -269,7 +311,7 @@ canvas.addEventListener('pointerdown', event => {
     const p = position(event);
     ensureWorld();
     if (event.button === 1 || event.button === 2 || keys.has('Space')) {
-        gesture = { pointer: event.pointerId, before: draft, start: p, last: p, pan: { x: event.clientX, y: event.clientY }, painted: new Set(), tool, mass: false };
+        gesture = { pointer: event.pointerId, before: draft, start: p, last: p, pan: { x: event.clientX, y: event.clientY }, tool, mass: false };
         canvas.setPointerCapture(event.pointerId);
         return;
     }
@@ -278,8 +320,10 @@ canvas.addEventListener('pointerdown', event => {
         return;
     }
     const before = draft;
-    draft = structuredClone(draft);
-    gesture = { pointer: event.pointerId, before, start: p, last: p, painted: new Set(), tool, mass: event.ctrlKey || input('mass').checked, brush: new WorldBrush(draft) };
+    const tilesOnly = tool === 'terrain' || tool === 'restore';
+    draft = forkWorldDocument(draft, tilesOnly);
+    gesture = { pointer: event.pointerId, before, start: p, last: p, tool, mass: event.ctrlKey || input('mass').checked, brush: new WorldBrush(draft, tilesOnly) };
+    gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, asset: active() };
     canvas.setPointerCapture(event.pointerId);
     if (tool === 'npc') {
         if (!draft.npcs.some(n => n.x === p.x && n.y === p.y))
@@ -311,6 +355,7 @@ canvas.addEventListener('pointermove', event => {
     }
     if (gesture.pointer !== event.pointerId)
         return;
+    if (gesture.ending) return;
     if (gesture.pan) {
         view.x += event.clientX - gesture.pan.x;
         view.y += event.clientY - gesture.pan.y;
@@ -319,8 +364,7 @@ canvas.addEventListener('pointermove', event => {
         return;
     }
     if (!['zone', 'npc', 'dungeon', 'spawn'].includes(gesture.tool) && (gesture.tool !== 'asset' || gesture.mass))
-        for (const p of strokeTiles(gesture.last, pointerTile))
-            paint(p);
+        { gesture.pending ??= []; gesture.cursor ??= 0; gesture.pending.push(...strokeTiles(gesture.last, pointerTile)); }
     gesture.last = pointerTile;
     schedule();
 });
@@ -328,6 +372,8 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
     if (!gesture || (event && gesture.pointer !== event.pointerId))
         return;
     const g = gesture;
+    if (!cancel && g.pending && (g.cursor ?? 0) < g.pending.length) { g.ending = true; schedule(); return; }
+    g.brush?.flushTiles();
     if (cancel) {
         draft = g.before;
         gesture = null;
@@ -355,31 +401,62 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
     }
     gesture = null;
     if (!g.pan)
-        commit(g.before);
+        commit(g.before, !!draft.tileChunks && (g.tool === 'terrain' || g.tool === 'restore'));
     else
         schedule();
+}
+async function settleGesture(): Promise<void> {
+    if (gesture) finishGesture();
+    while (gesture?.ending) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 }
 canvas.addEventListener('pointerup', event => finishGesture(event));
 canvas.addEventListener('pointercancel', event => finishGesture(event, true));
 canvas.addEventListener('lostpointercapture', event => { if (gesture && !gesture.cell && gesture.pointer === event.pointerId)
-    finishGesture(event, true); });
+    { if (!gesture.ending) finishGesture(event, true); } });
 canvas.addEventListener('pointerleave', () => { pointerTile = null; schedule(); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
-canvas.addEventListener('wheel', event => { event.preventDefault(); const r = canvas.getBoundingClientRect(); zoom(Math.exp(-event.deltaY * .0015), event.clientX - r.left, event.clientY - r.top); }, { passive: false });
-function paintCell(event: PointerEvent): void { const v = assetView(); if (!v || !gesture?.cell)
+canvas.addEventListener('wheel', event => { event.preventDefault(); if (gesture && !gesture.pan) return; const r = canvas.getBoundingClientRect(); zoom(Math.exp(-event.deltaY * .0015), event.clientX - r.left, event.clientY - r.top); }, { passive: false });
+function paintCell(event: PointerEvent): void { const v = assetView(); if (!v || !gesture?.cell || gesture.pan || gesture.pointer !== event.pointerId)
     return; const r = assetCanvas.getBoundingClientRect(), col = Math.floor((event.clientX - r.left - v.x) / v.s), row = Math.floor((event.clientY - r.top - v.y) / v.s); if (col < 0 || row < 0 || col >= v.a.columns || row >= v.a.rows)
-    return; v.a.cells[row * v.a.columns + col] = { blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as 'normal' | 'hide' | 'fade' }; schedule(true); }
-assetCanvas.addEventListener('pointerdown', e => { if (!ready || gesture)
-    return; const before = draft; draft = structuredClone(draft); gesture = { pointer: e.pointerId, before, start: { x: 0, y: 0 }, last: { x: 0, y: 0 }, painted: new Set(), tool: 'cell', mass: false, cell: true }; assetCanvas.setPointerCapture(e.pointerId); paintCell(e); });
-assetCanvas.addEventListener('pointermove', paintCell);
+    return; v.a.cells[row * v.a.columns + col] = { blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as AssetCell['visibility'] }; schedule(true); }
+assetCanvas.addEventListener('pointerdown', e => {
+    if (!ready || gesture) return;
+    assetCanvas.focus();
+    const before = draft, pan = e.button === 1 || e.button === 2 || keys.has('Space');
+    if (!pan) draft = forkWorldDocument(draft);
+    gesture = { pointer: e.pointerId, before, start: { x: 0, y: 0 }, last: { x: 0, y: 0 }, tool: 'cell', mass: false, cell: true, ...(pan ? { pan: { x: e.clientX, y: e.clientY } } : {}) };
+    assetCanvas.setPointerCapture(e.pointerId); paintCell(e);
+});
+assetCanvas.addEventListener('pointermove', e => {
+    if (gesture?.cell && gesture.pan && gesture.pointer === e.pointerId) {
+        assetCamera.pan(e.clientX - gesture.pan.x, e.clientY - gesture.pan.y);
+        gesture.pan = { x: e.clientX, y: e.clientY }; schedule();
+    } else paintCell(e);
+});
 assetCanvas.addEventListener('pointerup', e => finishGesture(e));
 assetCanvas.addEventListener('pointercancel', e => finishGesture(e, true));
-on('asset-update', () => change(() => { const a = active()!; resizeWorldAsset(a, num('asset-width'), num('asset-height')); a.name = val('asset-name').trim(); a.layer = val('asset-layer') as 'ground' | 'object'; a.pivot.y = num('asset-pivot'); a.visual = val('asset-visual') === 'image' ? { kind: 'image' } : { kind: 'fire', style: val('asset-visual') as 'brazier' | 'campfire' }; }));
+assetCanvas.addEventListener('lostpointercapture', e => { if (gesture?.cell) finishGesture(e, true); });
+assetCanvas.addEventListener('contextmenu', e => e.preventDefault());
+assetCanvas.addEventListener('wheel', e => { e.preventDefault(); if (gesture) return; const r = assetCanvas.getBoundingClientRect(); zoomAsset(Math.exp(-e.deltaY * .0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+on('asset-zoom-in', () => zoomAsset(1.3));
+on('asset-zoom-out', () => zoomAsset(1 / 1.3));
+on('asset-fit', () => { assetCamera.fit(); schedule(); });
+const previewDialog = el<HTMLDialogElement>('asset-preview-dialog');
+on('asset-expand', () => {
+    if (previewDialog.open) { previewDialog.close(); return; }
+    el('asset-preview-slot').append(el('asset-preview')); el('asset-expand').textContent = 'Riduci';
+    previewDialog.showModal(); schedule();
+});
+on('asset-preview-close', () => previewDialog.close());
+previewDialog.addEventListener('cancel', () => finishGesture(undefined, true));
+previewDialog.addEventListener('close', () => { finishGesture(undefined, true); el('asset-preview-home').append(el('asset-preview')); el('asset-expand').textContent = 'Ingrandisci'; schedule(); });
+on('asset-update', () => change(() => { const a = active()!; resizeWorldAsset(a, num('asset-width'), num('asset-height')); a.name = val('asset-name').trim(); const group = val('asset-group').trim(); if (group) a.group = group; else delete a.group; assetCatalog.reveal(a); a.layer = val('asset-layer') as 'ground' | 'object'; a.pivot.y = num('asset-pivot'); a.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') }; a.visual = val('asset-visual') === 'image' ? { kind: 'image' } : { kind: 'fire', style: val('asset-visual') as 'brazier' | 'campfire' }; }));
 input('asset-width').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
     set('asset-height', Math.round(num('asset-width') * a.height / a.width * 1000) / 1000); });
 input('asset-height').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
     set('asset-width', Math.round(num('asset-height') * a.width / a.height * 1000) / 1000); });
-on('fill-cells', () => change(() => { const a = active()!; a.cells = a.cells.map(() => ({ blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as 'normal' | 'hide' | 'fade' })); }));
+on('fill-cells', () => change(() => { const a = active()!; a.cells = a.cells.map(() => ({ blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as AssetCell['visibility'] })); }));
+on('asset-fade-update', () => change(() => { active()!.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') }; }));
 on('gen-update', () => change(() => { const a = active()!; a.generation = { enabled: input('gen-enabled').checked, category: val('gen-category').trim(), temperature: [num('gen-temp-min'), num('gen-temp-max')], moisture: [num('gen-moist-min'), num('gen-moist-max')], density: num('gen-density') / 100, spacing: num('gen-spacing'), terrains: [...el('gen-terrains').querySelectorAll<HTMLInputElement>('input:checked')].map(c => c.value as TileKind) }; }));
 on('asset-delete', () => change(() => { const a = active()!; draft.placements = draft.placements.filter(p => p.assetId !== a.id); draft.assets = draft.assets.filter(other => other.id !== a.id); activeAsset = ''; }));
 on('zone-update', () => change(() => { const z = draft.zones.find(z => z.id === selected?.id)!; z.name = val('zone-name').trim(); z.priority = num('zone-priority'); z.shape = val('zone-shape') === 'circle' ? { kind: 'circle', x: num('zone-x'), y: num('zone-y'), radius: num('zone-width') } : { kind: 'rect', x: num('zone-x'), y: num('zone-y'), width: num('zone-width'), height: num('zone-height') }; for (const [key, id] of [['temperature', 'zone-temperature'], ['moisture', 'zone-moisture']] as const) {
@@ -425,7 +502,10 @@ on('goto-confirm', () => { const x = num('goto-x'), y = num('goto-y'); if (!Numb
 on('properties-toggle', () => { root.querySelector('.inspector')!.classList.toggle('collapsed'); schedule(); });
 for (const id of ['show-grid', 'show-zones', 'show-cells', 'show-npcs'])
     input(id).addEventListener('change', () => schedule());
+input('preview-fade').addEventListener('change', () => schedule());
 input('asset-search').addEventListener('input', palette);
+on('assets-expand', () => assetCatalog.expandAll(true));
+on('assets-collapse', () => assetCatalog.expandAll(false));
 on('validate', () => { const issues = validateWorld(parseWorldDocument(draft), catalog); el('issues').replaceChildren(...issues.map(message => { const li = document.createElement('li'); li.textContent = message; return li; })); status(issues.length ? `${issues.length} problemi da correggere.` : 'Progetto valido: ingombri e riferimenti verificati.'); });
 document.addEventListener('keydown', e => { if ((e.target as HTMLElement).matches('input,select,textarea'))
     return; keys.add(e.code); if (e.code === 'Space')
@@ -458,20 +538,21 @@ input('asset-files').addEventListener('change', () => { void (async () => { cons
     const mime = file.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/png';
     const image = await upload(file, mime), size = await imageSize(image);
     const a = newWorldAsset(uid('asset'), file.name.replace(/\.(png|svg)$/i, ''), image);
+    a.group = 'Importati'; a.visual = { kind: 'image' };
     const ratio = size.height / size.width;
     resizeWorldAsset(a, ratio > 32 ? Math.max(.25, 32 / ratio) : 1, Math.min(32, Math.max(.25, ratio)));
     imported.push(a);
-} change(() => { draft.assets.push(...imported); activeAsset = imported.at(-1)?.id ?? activeAsset; selected = null; selectTool('asset'); }); status(`Importati ${imported.length} asset. Imposta dimensioni e proprietà delle celle.`); })().catch(report).finally(() => { input('asset-files').value = ''; }); });
+} await settleGesture(); change(() => { draft.assets.push(...imported); activeAsset = imported.at(-1)?.id ?? activeAsset; if (imported.length) assetCatalog.reveal(imported.at(-1)!); selected = null; selectTool('asset'); }); status(`Importati ${imported.length} asset. Imposta dimensioni e proprietà delle celle.`); })().catch(report).finally(() => { input('asset-files').value = ''; }); });
 on('apply-world', async () => { if (gesture)
-    finishGesture(); const document = parseWorldDocument(draft); const issues = validateWorld(document, catalog); if (issues.length) {
+    finishGesture(); while (gesture?.ending) await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); const document = parseWorldDocument(draft); const issues = validateWorld(document, catalog); if (issues.length) {
     el('validate').click();
     throw new Error('Correggi i problemi del progetto prima di applicare.');
 } el<HTMLButtonElement>('apply-world').disabled = true; try {
     const result = await api('/__world/project', { document, revision });
     revision = result.revision;
     installedRevision = revision;
-    dirty = JSON.stringify(draft) !== JSON.stringify(document);
-    await checkpoint();
+    dirty = !worldDocumentsEqual(draft, document);
+    await checkpoint(true);
     el('save-state').textContent = dirty ? 'Bozza salvata · da applicare' : 'Applicato al progetto';
     status('Progetto applicato con backup. Ricompila e riavvia il gioco.');
 }
@@ -484,11 +565,11 @@ on('export-world', async () => { status('Preparazione esportazione con immagini�
         throw new Error(`Immagine mancante: ${src}`);
     const blob = await response.blob();
     images[src] = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
-} const blob = new Blob([JSON.stringify({ format: 'riftlands-world-project', version: 1, document: parseWorldDocument(draft), images }, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'riftlands-world.project.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); status('Progetto esportato con tutte le immagini. I dungeon fanno riferimento al catalogo installato.'); });
+} const blob = new Blob([JSON.stringify({ format: 'riftlands-world-project', version: 1, document: parseWorldDocument(draft), images })], { type: 'application/json' }); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'riftlands-world.project.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); status('Progetto esportato con tutte le immagini. I dungeon fanno riferimento al catalogo installato.'); });
 on('import-world', () => input('world-file').click());
 input('world-file').addEventListener('change', () => { void (async () => { const file = input('world-file').files?.[0]; if (!file)
     return; if (file.size > 50000000)
-    throw new Error('Progetto oltre 50 MB.'); const payload = JSON.parse(await file.text()); const document = parseWorldDocument(payload.format === 'riftlands-world-project' ? payload.document : payload); if (payload.images) {
+    throw new Error('Progetto oltre 50 MB.'); const payload = JSON.parse(await file.text()); const document = compactWorldTiles(parseWorldDocument(payload.format === 'riftlands-world-project' ? payload.document : payload)); if (payload.images) {
     if (!token)
         throw new Error('Importa il progetto da World Studio per ripristinare le immagini.');
     for (const a of document.assets) {
@@ -507,24 +588,27 @@ async function load(reload = false): Promise<void> {
         const response = await fetch('/__world/project');
         if (response.ok) {
             const project = await response.json();
-            draft = parseWorldDocument(project.document);
+            draft = compactWorldTiles(parseWorldDocument(project.document));
             token = project.token;
             revision = project.revision;
             installedRevision = revision;
+            compatibleRevisions = project.compatibleRevisions ?? [];
             catalog = project.dungeons;
         }
         if (!reload) {
             const local = await loadWorldCheckpoint();
             if (local) {
                 const installedDocument = draft;
-                draft = local.document;
+                draft = compactWorldTiles(local.document);
                 revision = local.revision;
-                dirty = revision !== installedRevision || JSON.stringify(draft) !== JSON.stringify(installedDocument);
+                if (compatibleRevisions.includes(revision)) revision = installedRevision;
+                dirty = revision !== installedRevision || !worldDocumentsEqual(draft, installedDocument);
                 if (token && revision !== installedRevision)
                     status('Bozza recuperata da una versione precedente: esportala o ricarica il progetto prima di applicare.');
                 else
                     status(dirty ? 'Bozza locale recuperata.' : 'World Studio pronto · progetto applicato.');
                 el('save-state').textContent = dirty ? 'Bozza salvata · da applicare' : 'Applicato al progetto';
+                if (local.migrated) await checkpoint(true);
             }
             else
                 status(token ? 'World Studio pronto.' : 'Anteprima: avvia npm run world:studio per importare e applicare.');

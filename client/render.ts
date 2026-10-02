@@ -4,6 +4,7 @@ import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
 import { WorldAssetArt } from './world-asset-art';
 import { shapeBounds } from '../shared/world-authoring';
+import { assetCellFades } from '../shared/world-schema';
 import type { ArenaGateState } from '../shared/types';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonAtTile, dungeonFlames, inwardFlameAngle } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
@@ -366,15 +367,16 @@ export class Renderer {
     const worldAssets = this.localDungeons ? [] : this.world.assetsIn({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
       right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE });
     const groundAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'ground');
-    for (const p of groundAssets) this.worldAssetArt.draw(ctx, this.world.authoring.assets.get(p.assetId)!, p, 1, TILE_SIZE, frame.time);
     const objectAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'object')
       .sort((a, b) => (a.y + this.world.authoring.assets.get(a.assetId)!.height * this.world.authoring.assets.get(a.assetId)!.pivot.y)
         - (b.y + this.world.authoring.assets.get(b.assetId)!.height * this.world.authoring.assets.get(b.assetId)!.pivot.y) || a.id.localeCompare(b.id));
     const paintObject = (p: typeof objectAssets[number]) => {
       const a = this.world.authoring.assets.get(p.assetId)!;
       const cell = frame.self ? this.world.authoring.cell(p, frame.self.x / TILE_SIZE, frame.self.y / TILE_SIZE) : undefined;
-      this.worldAssetArt.draw(ctx, a, p, cell?.visibility === 'fade' ? .28 : 1, TILE_SIZE, frame.time);
+      const fade = this.worldAssetArt.fadeAmount(a, p, assetCellFades(cell), frame.time);
+      this.worldAssetArt.draw(ctx, a, p, 1, TILE_SIZE, frame.time, fade);
     };
+    for (const p of groundAssets) paintObject(p);
     let objectIndex = 0;
 
     for (const w of frame.bossWindups ?? []) {
@@ -1047,7 +1049,7 @@ export class Renderer {
     const ctx = this.ctx;
     const zones = this.world.authoring.zones.query({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE, right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE });
     for (const zone of zones) {
-      if (zone.pvp === undefined && !zone.arenaId) continue;
+      if (!zone.arenaId) continue;
       const b = shapeBounds(zone.shape), center = { x: (b.left + b.right) * TILE_SIZE / 2, y: (b.top + b.bottom) * TILE_SIZE / 2 };
       const active = self && this.world.arenaAt(self.x, self.y) === zone.id ? state : undefined;
       ctx.save(); ctx.beginPath();
@@ -1867,6 +1869,7 @@ export class Renderer {
 }
 
 /** Mappa locale limitata del terreno procedurale noto. */
+const minimapTerrainViews = new WeakMap<HTMLCanvasElement, { world: World; key: string; canvas: HTMLCanvasElement; width: number; height: number }>();
 export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -1887,16 +1890,27 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   ctx.fillStyle = '#525f46';
   ctx.fillRect(0, 0, width, height);
 
-  for (let ty = Math.floor(top / TILE_SIZE); ty <= Math.ceil((top + height / scale) / TILE_SIZE); ty++) {
-    for (let tx = Math.floor(left / TILE_SIZE); tx <= Math.ceil((left + width / scale) / TILE_SIZE); tx++) {
+  const startX = Math.floor(left / TILE_SIZE), startY = Math.floor(top / TILE_SIZE);
+  const cols = Math.ceil(width / scale / TILE_SIZE) + 2, rows = Math.ceil(height / scale / TILE_SIZE) + 2;
+  const terrainKey = `${world.lockRevision}:${world.authoringRevision}:${startX}:${startY}:${width}:${height}:${visibleSpan}:${dpr}`;
+  let cached = minimapTerrainViews.get(canvas);
+  if (!cached || cached.world !== world || cached.key !== terrainKey) {
+    const bitmap = document.createElement('canvas'), bitmapWidth = cols * TILE_SIZE * scale, bitmapHeight = rows * TILE_SIZE * scale;
+    bitmap.width = Math.ceil(bitmapWidth * dpr); bitmap.height = Math.ceil(bitmapHeight * dpr);
+    const paint = bitmap.getContext('2d')!; paint.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (let ty = startY; ty < startY + rows; ty++) {
+      for (let tx = startX; tx < startX + cols; tx++) {
       const tile = world.getTile(tx, ty);
       const dungeon = world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
-      ctx.fillStyle = dungeon && tile === 'rock' ? dungeon.theme.wallTop
+      paint.fillStyle = dungeon && tile === 'rock' ? dungeon.theme.wallTop
         : dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor
         : mapTerrainColor(tile, world.getMoisture((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE), noise(tx, ty));
-      ctx.fillRect((tx * TILE_SIZE - left) * scale, (ty * TILE_SIZE - top) * scale, TILE_SIZE * scale + 0.5, TILE_SIZE * scale + 0.5);
+      paint.fillRect((tx - startX) * TILE_SIZE * scale, (ty - startY) * TILE_SIZE * scale, TILE_SIZE * scale + 0.5, TILE_SIZE * scale + 0.5);
+      }
     }
+    cached = { world, key: terrainKey, canvas: bitmap, width: bitmap.width / dpr, height: bitmap.height / dpr }; minimapTerrainViews.set(canvas, cached);
   }
+  ctx.drawImage(cached.canvas, (startX * TILE_SIZE - left) * scale, (startY * TILE_SIZE - top) * scale, cached.width, cached.height);
 
   ctx.strokeStyle = 'rgba(235,227,192,0.1)';
   ctx.lineWidth = 1;
@@ -1925,7 +1939,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
       ctx.restore();
     }
     for (const zone of world.authoring.document.zones) {
-      if (zone.pvp === undefined && !zone.arenaId) continue;
+      if (!zone.arenaId) continue;
       const b = shapeBounds(zone.shape); ctx.beginPath();
       if (zone.shape.kind === 'circle') circle(ctx, (zone.shape.x * TILE_SIZE - left) * scale, (zone.shape.y * TILE_SIZE - top) * scale, zone.shape.radius * TILE_SIZE * scale);
       else ctx.rect((b.left * TILE_SIZE - left) * scale, (b.top * TILE_SIZE - top) * scale, (b.right-b.left)*TILE_SIZE*scale, (b.bottom-b.top)*TILE_SIZE*scale);

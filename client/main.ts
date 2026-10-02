@@ -173,7 +173,7 @@ const connection = new GameConnection({
       }
       const biome = renderer.world.getBiome(message.self.x, message.self.y);
       const dungeon = dungeonAt(message.self, 150);
-      ui.setLocation(renderer.world.mode === 'world' ? message.sanctuary !== 'outside' ? 'Avamposto del Crocevia' : dungeon?.name ?? ({ meadow: 'Praterie di Soglia', forest: 'Selva dei Sussurri', marsh: 'Acquitrini Velati' })[biome] : renderer.world.mode === 'arena' ? 'Arena del Crocevia' : 'Battleground di prova');
+      ui.setLocation(renderer.world.mode === 'world' ? renderer.world.locationAt(message.self.x, message.self.y) ?? dungeon?.name ?? ({ meadow: 'Praterie di Soglia', forest: 'Selva dei Sussurri', marsh: 'Acquitrini Velati' })[biome] : renderer.world.mode === 'arena' ? 'Arena del Crocevia' : 'Battleground di prova');
     } else if (message.type === 'social') ui.setSocial(message.state);
     else if (message.type === 'notice') ui.toast(message.message, message.tone);
     else if (message.type === 'error') ui.toast(message.message, 'error');

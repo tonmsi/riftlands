@@ -7,7 +7,10 @@ import { worldAssetVisual } from '../shared/world-schema';
 import { NPC_CATALOG } from '../shared/npcs';
 import { canStampAsset } from '../shared/world-editing';
 import { WorldAssetArt } from './world-asset-art';
+import { AssetGridCamera } from './world-asset-view';
 import { terrains } from './world-maker-layout';
+import type { AssetPlacement } from '../shared/world-schema';
+const terrainViews = new WeakMap<HTMLCanvasElement, { key: string; world: World; canvas: HTMLCanvasElement; placements: AssetPlacement[] }>();
 export interface EditorView {
     x: number;
     y: number;
@@ -58,13 +61,22 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
     ctx.translate(view.x, view.y);
     // At distant zoom, bounded sampling shows landforms rather than generating millions of tiles.
     const step = Math.max(1, Math.ceil(Math.sqrt((b.right - b.left) * (b.bottom - b.top) / 16000)));
-    for (let y = Math.floor(b.top / step) * step; y < b.bottom; y += step)
-        for (let x = Math.floor(b.left / step) * step; x < b.right; x += step) {
-            ctx.fillStyle = terrains[world.getTile(x, y)].color;
-            ctx.fillRect(x * s, y * s, step * s + .5, step * s + .5);
-        }
-    const placements = step === 1 ? world.assetsIn(b) : world.authoring.placements.query(b);
-    placements.sort((p, q) => { const a = world.authoring.assets.get(p.assetId)!, c = world.authoring.assets.get(q.assetId)!; return (a.layer === 'ground' ? -1 : 1) - (c.layer === 'ground' ? -1 : 1) || p.y + a.height * a.pivot.y - q.y - c.height * c.pivot.y; });
+    const key = `${world.authoringRevision}:${world.lockRevision}:${view.x}:${view.y}:${s}:${width}:${height}:${dpr}`;
+    let cached = terrainViews.get(canvas);
+    if (!cached || cached.world !== world || cached.key !== key) {
+        const bitmap = document.createElement('canvas'); bitmap.width = canvas.width; bitmap.height = canvas.height;
+        const paint = bitmap.getContext('2d')!; paint.setTransform(dpr, 0, 0, dpr, view.x * dpr, view.y * dpr);
+        for (let y = Math.floor(b.top / step) * step; y < b.bottom; y += step)
+            for (let x = Math.floor(b.left / step) * step; x < b.right; x += step) {
+                paint.fillStyle = terrains[world.getTile(x, y)].color;
+                paint.fillRect(x * s, y * s, step * s + .5, step * s + .5);
+            }
+        const placements = step === 1 ? world.assetsIn(b) : world.authoring.placements.query(b);
+        placements.sort((p, q) => { const a = world.authoring.assets.get(p.assetId)!, c = world.authoring.assets.get(q.assetId)!; return (a.layer === 'ground' ? -1 : 1) - (c.layer === 'ground' ? -1 : 1) || p.y + a.height * a.pivot.y - q.y - c.height * c.pivot.y; });
+        cached = { key, world, canvas: bitmap, placements }; terrainViews.set(canvas, cached);
+    }
+    ctx.drawImage(cached.canvas, -view.x, -view.y, width, height);
+    const placements = cached.placements;
     for (const p of placements) {
         const a = world.authoring.assets.get(p.assetId)!;
         art.draw(ctx, a, p, 1, s, time);
@@ -78,7 +90,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
             for (let y = 0; y < a.rows; y++)
                 for (let x = 0; x < a.columns; x++) {
                     const c = a.cells[y * a.columns + x];
-                    ctx.fillStyle = c.blocked ? '#db806a88' : c.visibility === 'hide' ? '#b0d77977' : c.visibility === 'fade' ? '#79ccdd77' : '#ffffff08';
+                    ctx.fillStyle = c.blocked ? '#db806a88' : c.visibility === 'hide-fade' ? '#c3a9e877' : c.visibility === 'hide' ? '#b0d77977' : c.visibility === 'fade' ? '#79ccdd77' : '#ffffff08';
                     ctx.fillRect((p.x + x) * s, (p.y + y) * s, s, s);
                 }
     }
@@ -183,23 +195,25 @@ function drawZone(ctx: CanvasRenderingContext2D, z: WorldZone, view: EditorView,
     ctx.fillText(z.name, b.left * s + 4, b.top * s + 14);
     ctx.restore();
 }
-export function assetView(assetCanvas: HTMLCanvasElement, a: WorldAsset | undefined) { const r = assetCanvas.getBoundingClientRect(); if (!a)
-    return; const s = Math.min((r.width - 28) / a.columns, (r.height - 28) / a.rows); return { a, s, x: (r.width - a.columns * s) / 2, y: (r.height - a.rows * s) / 2 }; }
-export function drawAssetGrid(assetCanvas: HTMLCanvasElement, art: WorldAssetArt, a: WorldAsset | undefined): void {
+export function assetView(assetCanvas: HTMLCanvasElement, a: WorldAsset | undefined, camera = new AssetGridCamera()) {
+    if (!a) return;
+    const r = assetCanvas.getBoundingClientRect(); return { a, ...camera.layout(r.width, r.height, a.columns, a.rows) };
+}
+export function drawAssetGrid(assetCanvas: HTMLCanvasElement, art: WorldAssetArt, a: WorldAsset | undefined, previewFade = false, camera?: AssetGridCamera): void {
     const assetCtx = assetCanvas.getContext('2d')!;
     const { width, height, dpr } = sizeCanvas(assetCanvas);
     assetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     assetCtx.clearRect(0, 0, width, height);
-    const v = assetView(assetCanvas, a);
+    const v = assetView(assetCanvas, a, camera);
     if (!v)
         return;
     assetCtx.save();
     assetCtx.translate(v.x, v.y);
-    art.draw(assetCtx, v.a, { id: '', assetId: v.a.id, x: 0, y: 0 }, 1, v.s, performance.now());
+    art.draw(assetCtx, v.a, { id: '', assetId: v.a.id, x: 0, y: 0 }, 1, v.s, performance.now(), previewFade ? 1 : 0);
     for (let y = 0; y < v.a.rows; y++)
         for (let x = 0; x < v.a.columns; x++) {
             const c = v.a.cells[y * v.a.columns + x];
-            assetCtx.fillStyle = c.visibility === 'hide' ? '#b0d77955' : c.visibility === 'fade' ? '#79ccdd55' : '#ffffff05';
+            assetCtx.fillStyle = c.visibility === 'hide-fade' ? '#c3a9e855' : c.visibility === 'hide' ? '#b0d77955' : c.visibility === 'fade' ? '#79ccdd55' : '#ffffff05';
             assetCtx.fillRect(x * v.s, y * v.s, v.s, v.s);
             assetCtx.strokeStyle = c.blocked ? '#ee927a' : '#b4c6a866';
             assetCtx.lineWidth = c.blocked ? 3 : 1;

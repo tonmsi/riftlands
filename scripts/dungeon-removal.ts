@@ -4,6 +4,7 @@ import { constants } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DungeonBundle } from '../shared/dungeon-install';
 import { parseWorldDocument } from '../shared/world-schema';
+import { serializeWorldDocument } from '../shared/world-tiles';
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const parse = (text: string): unknown => JSON.parse(text.replace(/^\uFEFF/, ''));
@@ -72,7 +73,7 @@ export async function changeCatalog(options: { id: string; catalogPath: string; 
         const placements = document.dungeons.filter(d => ids.has(d.dungeonId));
         if (placements.length !== document.dungeons.length) {
             document.dungeons = placements;
-            files.push({ path: worldPath, before: worldText, after: JSON.stringify(document, null, 2) + '\n' });
+            files.push({ path: worldPath, before: worldText, after: serializeWorldDocument(document) });
         }
     }
     // Save cleanup first: if interrupted, the old catalog can still load the cleaned save.
