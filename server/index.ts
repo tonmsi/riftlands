@@ -11,6 +11,7 @@ import { RoomManager } from './rooms';
 import { AuthBudget } from './auth-budget';
 import { NetworkMetrics } from './metrics';
 import { acquireDataLease } from './data-lease';
+import { SnapshotEncoder, type SnapshotPacket } from '../shared/snapshot-stream';
 import { newNarrativeProgress } from '../shared/narrative';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -116,7 +117,7 @@ if (!production) {
 } else if (!existsSync(resolve(dist, 'index.html'))) throw new Error('Build frontend assente. Esegui npm run build prima di npm start.');
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
-type Session = { ws: WebSocket; id?: string; authenticating?: boolean; roomEpoch?: number; narrativeRevision?: number; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; interactionTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
+type Session = { ws: WebSocket; snapshots: SnapshotEncoder; id?: string; authenticating?: boolean; roomEpoch?: number; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; interactionTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
 const sessions = new Map<WebSocket, Session>();
 const byAccount = new Map<string, Session>();
 const ipConnections = new Map<string, number>();
@@ -160,7 +161,7 @@ server.on('upgrade', (request, socket, head) => {
   wss.handleUpgrade(request, socket, head, ws => wss.emit('connection', ws, request));
 });
 
-function send(session: Session, message: ServerMessage): boolean {
+function send(session: Session, message: ServerMessage | SnapshotPacket): boolean {
   if (session.ws.readyState !== WebSocket.OPEN) return false;
   if (session.ws.bufferedAmount > 1024 * 1024) { session.ws.close(1008, 'Connessione troppo lenta'); return false; }
   if (message.type === 'snapshot' && session.ws.bufferedAmount > 0) return false;
@@ -185,18 +186,15 @@ function sendSnapshot(session: Session): void {
   const started = performance.now();
   const state = rooms.stateFor(session.id!);
   if (session.roomEpoch !== state.epoch) {
-    send(session, { type: 'room', room: state });
+    if (!send(session, { type: 'room', room: state })) return;
     session.roomEpoch = state.epoch;
   }
   const notice = rooms.takeNotice(session.id!);
   if (notice) send(session, { type: 'notice', message: notice, tone: 'info' });
   const snapshot = rooms.snapshotFor(session.id!);
   if (snapshot) {
-    const narrative = store.accounts.get(session.id!)?.narrative ?? newNarrativeProgress();
-    const revision = narrative.revision ?? 0;
-    // Private journal state travels on connect/reconnect and when changed, never every tick.
-    if (session.narrativeRevision !== revision) snapshot.narrative = structuredClone(narrative);
-    if (send(session, snapshot)) session.narrativeRevision = revision;
+    const prepared = session.snapshots.prepare(snapshot, state);
+    if (send(session, prepared.packet)) prepared.commit();
   }
   metrics.snapshot(performance.now() - started);
 }
@@ -204,7 +202,7 @@ function sendSnapshot(session: Session): void {
 wss.on('connection', (ws, request) => {
   const ip = request.socket.remoteAddress ?? 'unknown';
   ipConnections.set(ip, (ipConnections.get(ip) ?? 0) + 1);
-  const session: Session = { ws, ip, alive: true, receivedAt: performance.now(), tokens: 100, socialTokens: 8, interactionTokens: 12, badPackets: 0, helloDeadline: setTimeout(() => fatal(session, 'Accesso scaduto.'), 5000) };
+  const session: Session = { ws, snapshots: new SnapshotEncoder(), ip, alive: true, receivedAt: performance.now(), tokens: 100, socialTokens: 8, interactionTokens: 12, badPackets: 0, helloDeadline: setTimeout(() => fatal(session, 'Accesso scaduto.'), 5000) };
   sessions.set(ws, session);
   ws.on('pong', () => { session.alive = true; });
   ws.on('error', () => { /* close callback owns lifecycle; malformed clients are isolated. */ });

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot } from '../../shared/types';
+import { SnapshotObserver } from '../fixtures/snapshot-observer';
 
 async function register(page: Page, name: string): Promise<void> {
   await page.goto('/');
@@ -25,17 +26,19 @@ test('team popup consent, live health, scrollable mobile roster and automatic di
   let leaderSnapshot: Snapshot | undefined;
   let sentInvites = 0;
   leader.on('websocket', socket => {
+    const observer = new SnapshotObserver();
     socket.on('framesent', frame => { const message = JSON.parse(String(frame.payload)); if (message.type === 'social' && message.action === 'team-invite') sentInvites++; });
     socket.on('framereceived', frame => {
-    const message = JSON.parse(String(frame.payload));
+    const message = observer.read(String(frame.payload));
     if (message.type === 'snapshot') leaderSnapshot = message;
     });
   });
   let injured = false;
   await mobile.routeWebSocket('**/ws', socket => {
     const server = socket.connectToServer();
+    const observer = new SnapshotObserver();
     server.onMessage(data => {
-      const message = JSON.parse(String(data));
+      const message = observer.read(String(data));
       if (injured && message.type === 'snapshot') {
         const actor = message.actors.find((actor: { id: string }) => actor.id === leaderSnapshot?.self.id);
         if (actor) actor.hp = 37;

@@ -16,6 +16,8 @@ import { newInventory } from '../shared/items';
 import { newNarrativeProgress } from '../shared/narrative';
 import { BossEncounter } from './boss-encounter';
 import type { Account, AccountStore } from './store';
+import { SnapshotBuilder } from './snapshot-builder';
+import { actorVisibleTo } from './actor-visibility';
 
 const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -36,6 +38,7 @@ export type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
 
 /** Single authoritative simulation. Time fields are milliseconds; step delta is seconds. */
 export class WorldSimulation {
+  private readonly snapshots = new SnapshotBuilder(this);
   readonly interactions: InteractionSystem;
   readonly bosses = new Map<string, BossEncounter>();
   readonly world: World;
@@ -110,6 +113,7 @@ export class WorldSimulation {
   }
 
   addPlayer(account: Account, classId: ClassId): Actor {
+    this.snapshots.invalidate();
     account.inventory ??= newInventory(); account.narrative ??= newNarrativeProgress();
     const current = this.players.get(account.id);
     this.accounts.set(account.id, account);
@@ -295,6 +299,7 @@ export class WorldSimulation {
   }
 
   private rebuildCells(): void {
+    this.snapshots.invalidate();
     this.cells.clear();
     this.largestActorRadius = PLAYER_RADIUS;
     for (const actor of [...this.players.values(), ...this.npcs.values()]) {
@@ -323,8 +328,7 @@ export class WorldSimulation {
   }
 
   private visibleTo(observer: Actor, target: Actor): boolean {
-    return target.id === observer.id || (!!observer.teamId && target.teamId === observer.teamId)
-      || !target.hidden || target.revealedUntil > this.now || distance(observer, target) < 120;
+    return actorVisibleTo(observer, target, this.now);
   }
 
   private nearestEnemy(actor: Actor): Actor | undefined {
@@ -437,6 +441,7 @@ export class WorldSimulation {
 
   /** May be used directly by deterministic combat tests; input validation precedes this in transport. */
   cast(actor: Actor, slot: AbilitySlot, autoAim = false, targetId?: string, inputSeq?: number): boolean {
+    this.snapshots.invalidate();
     const ability = CLASSES[actor.classId].abilities[slot];
     if (this.isSafeProtected(actor) && ability.kind !== 'heal' && ability.kind !== 'shield') return false;
     if (actor.hp <= 0 || actor.cooldowns[slot] > this.now || actor.resource < ability.cost) return false;
@@ -794,30 +799,7 @@ export class WorldSimulation {
   }
 
   snapshotFor(id: string): Snapshot | undefined {
-    const self = this.players.get(id), connection = this.connections.get(id);
-    if (!self || !connection) return undefined;
-    const visible = (actor: Actor) => this.visibleTo(self, actor);
-    // I compagni restano sincronizzati anche quando sono molto lontani: il client
-    // può così mostrarli sul bordo dello schermo invece di perderne la posizione.
-    const actors = [...this.players.values(), ...this.npcs.values()].filter(actor =>
-      (actor.id === id || (!!self.teamId && actor.teamId === self.teamId) || distance(self, actor) < INTEREST_RADIUS) && visible(actor)
-    ).map(actor => ({ ...copyActor(actor), ...(actor.dialogueId ? { questMarker: this.interactions.marker(id, actor.dialogueId, this.now) } : {}) }));
-    const visibleIds = new Set(actors.map(actor => actor.id));
-    return {
-      type: 'snapshot', tick: this.tick, time: this.now, ack: connection.ack, self: copyActor(self), actors,
-      gold: this.accounts.get(id)?.gold ?? 0,
-      inventory: structuredClone(this.accounts.get(id)?.inventory ?? newInventory()),
-      ...(this.mode === 'world' ? { groundItems: this.interactions.visibleDrops(id, this.now, INTEREST_RADIUS), dialogue: this.interactions.view(id, this.now) } : { groundItems: [], dialogue: null }),
-      goldDrops: [...this.bosses.values()].flatMap(encounter => encounter.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > this.now && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop }))),
-      bossWindups: [...this.bosses.values()].flatMap(encounter => encounter.windup && distance(self, encounter.windup) < INTEREST_RADIUS ? [{ ...encounter.windup }] : []),
-      bossLocks: [...this.bosses.values()].map(encounter => encounter.lockState(self)),
-      bossPreparations: [...this.bosses.values()].flatMap(encounter => encounter.preparationFor(self) ?? []),
-      projectiles: [...this.projectiles.values()].filter(projectile => distance(self, projectile) < INTEREST_RADIUS).map(projectile => ({ ...projectile })),
-      pickups: [...this.pickups.values()].filter(pickup => distance(self, pickup) < INTEREST_RADIUS).map(pickup => ({ ...pickup })),
-      traps: [...this.traps.values()].filter(trap => distance(self, trap) < INTEREST_RADIUS).map(trap => ({ ...trap })),
-      events: this.events.filter(event => distance(self, event) < INTEREST_RADIUS && (!event.actorId || visibleIds.has(event.actorId)) && (!event.targetId || visibleIds.has(event.targetId))).map(event => ({ ...event })),
-      online: this.online, activeChunks: this.activeChunks.size,
-    };
+    return this.snapshots.build(id);
   }
 
   private teamFor(id: string): Team | undefined { return [...this.teams.values()].find(team => team.members.has(id)); }
@@ -863,6 +845,7 @@ export class WorldSimulation {
   }
 
   socialAction(id: string, action: SocialAction, targetId?: string): string {
+    this.snapshots.invalidate();
     const account = this.accounts.get(id);
     if (!account) throw new Error('Account sconosciuto.');
     const target = targetId ? this.accounts.get(targetId) : undefined;

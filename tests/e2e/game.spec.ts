@@ -1,13 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { ServerMessage, Snapshot } from '../../shared/types';
+import { SnapshotObserver } from '../fixtures/snapshot-observer';
 
 function observe(page: Page): { snapshot?: Snapshot; messages: ServerMessage[]; errors: string[] } {
   const state: { snapshot?: Snapshot; messages: ServerMessage[]; errors: string[] } = { messages: [], errors: [] };
   page.on('pageerror', error => state.errors.push(error.message));
   page.on('websocket', socket => {
     if (!socket.url().includes('/ws')) return;
+    const observer = new SnapshotObserver();
     socket.on('framereceived', event => {
-      const message = JSON.parse(String(event.payload)) as ServerMessage;
+      const message = observer.read(String(event.payload));
       if (message.type === 'snapshot') state.snapshot = message;
       state.messages.push(message);
       if (state.messages.length > 500) state.messages.shift();

@@ -11,6 +11,7 @@ import { AccountStore, publicAccount } from '../../server/store';
 import { WorldSimulation } from '../../server/simulation';
 import type { RoomState, ServerMessage, Snapshot } from '../../shared/types';
 import { ARENA_GATE } from '../../shared/arena';
+import { SnapshotObserver } from '../fixtures/snapshot-observer';
 
 test('two browsers: gate cancellation, 1v1 transfer, obstacles and opponent abandonment', { timeout: 60_000 }, async () => {
   const directory = mkdtempSync(join(tmpdir(), 'riftlands-arena-browser-'));
@@ -47,9 +48,10 @@ test('two browsers: gate cancellation, 1v1 transfer, obstacles and opponent aban
       }, { token: user.token, profile: publicAccount(user.account) });
       const page = await context.newPage();
       const state: { snapshot?: Snapshot; room?: RoomState } = {};
+      const observer = new SnapshotObserver();
       page.on('pageerror', error => errors.push(error.message));
       page.on('websocket', socket => socket.on('framereceived', event => {
-        const message = JSON.parse(String(event.payload)) as ServerMessage;
+        const message = observer.read(String(event.payload));
         if (message.type === 'room') state.room = message.room;
         if (message.type === 'snapshot') state.snapshot = message;
       }));

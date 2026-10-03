@@ -9,6 +9,7 @@ import { once } from 'node:events';
 import { WebSocket } from 'ws';
 import { PROTOCOL_VERSION } from '../../shared/config';
 import type { ServerMessage } from '../../shared/types';
+import { SnapshotObserver } from '../fixtures/snapshot-observer';
 
 test('real transport: room handshake, reconnect, duplicate session ownership and voluntary leave', { timeout: 30_000 }, async () => {
   const probe = createServer();
@@ -35,7 +36,8 @@ test('real transport: room handshake, reconnect, duplicate session ownership and
       const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
       sockets.push(ws);
       const messages: ServerMessage[] = [];
-      ws.on('message', raw => messages.push(JSON.parse(String(raw))));
+      const observer = new SnapshotObserver();
+      ws.on('message', raw => messages.push(observer.read(String(raw))));
       await once(ws, 'open');
       async function next<T extends ServerMessage['type']>(type: T): Promise<Extract<ServerMessage, { type: T }>> {
         const existing = messages.findIndex(message => message.type === type);

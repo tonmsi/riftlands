@@ -1,3 +1,5 @@
+import { loadImage, rasterizeSpriteSheet, type RasterSpriteSheet } from './sprite-sheet';
+import { PICKUP_COLORS, circle, noise } from './render-primitives';
 import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../shared/config';
 import type { AbilitySlot, Actor, ClassId, GameEvent, Pickup, Projectile, TileKind, Trap, Vec2, RoomMode } from '../shared/types';
 import { World } from '../shared/world';
@@ -15,7 +17,7 @@ import { playerSpriteDirectionRow, spriteDirectionRow } from './sprite-direction
 import { EnvironmentArt } from './environment-art';
 import { renderDpr } from './frame-budget';
 import { NPC_DEFINITIONS } from '../shared/npcs';
-import { TERRAIN, groundColor, shorelineMask, sceneryGroups, mapTerrainColor, pathColor } from './terrain-style';
+import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor } from './terrain-style';
 
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
@@ -56,56 +58,8 @@ const NPC_DRAW_SIZE = 48;
 const BOSS_DRAW_SIZE = 84;
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;
-const SPRITE_RASTER_DPR = 2;
 const MAX_LOGICAL_VIEWPORT = { width: 2200, height: 1400 };
 
-interface RasterSpriteSheet {
-  frames: HTMLCanvasElement[];
-}
-
-async function loadImage(url: string): Promise<HTMLImageElement> {
-  const image = new Image();
-  image.decoding = 'async';
-  const loaded = new Promise<void>((resolve, reject) => {
-    image.addEventListener('load', () => resolve(), { once: true });
-    image.addEventListener('error', () => reject(new Error(`Impossibile caricare la risorsa ${url}`)), { once: true });
-  });
-  image.src = url;
-  await loaded;
-  try { await image.decode(); } catch { /* onload verifica già la validità dell'immagine */ }
-  return image;
-}
-
-/** Rasterizza il foglio vettoriale all'avvio: il loop di animazione vede solo bitmap pronte. */
-// Aggiungi parametri per colonne e righe, con default a 4x4
-async function rasterizeSpriteSheet(url: string, frameSize: number, drawSize: number, columns = 4, rows = 4): Promise<RasterSpriteSheet> {
-  const image = await loadImage(url);
-  const atlas = document.createElement('canvas');
-  atlas.width = image.naturalWidth;
-  atlas.height = image.naturalHeight;
-  const atlasContext = atlas.getContext('2d');
-  if (!atlasContext) throw new Error('Canvas 2D non disponibile per la cache delle sprite.');
-  atlasContext.imageSmoothingEnabled = true;
-  atlasContext.imageSmoothingQuality = 'high';
-  atlasContext.drawImage(image, 0, 0);
-
-  const cachedSize = Math.ceil(drawSize * SPRITE_RASTER_DPR);
-  const frames: HTMLCanvasElement[] = [];
-  for (let row = 0; row < rows; row++) {
-    for (let column = 0; column < columns; column++) {
-      const frame = document.createElement('canvas');
-      frame.width = cachedSize;
-      frame.height = cachedSize;
-      const frameContext = frame.getContext('2d');
-      if (!frameContext) throw new Error('Canvas 2D non disponibile per un frame della sprite.');
-      frameContext.imageSmoothingEnabled = true;
-      frameContext.imageSmoothingQuality = 'high';
-      frameContext.drawImage(atlas, column * frameSize, row * frameSize, frameSize, frameSize, 0, 0, cachedSize, cachedSize);
-      frames.push(frame);
-    }
-  }
-  return { frames };
-}
 export interface RenderFrame {
   goldDrops?: BossDrop[];
   groundItems?: GroundItem[];
@@ -128,24 +82,6 @@ export interface RenderFrame {
 }
 
 const TAU = Math.PI * 2;
-const PICKUP_COLORS: Record<Pickup['kind'], string> = {
-  heal: '#b6e5aa',
-  haste: '#a5dbe2',
-  power: '#e5cc81',
-  weakness: '#bb99cb',
-};
-
-function noise(x: number, y: number, offset = 0): number {
-  let n = Math.imul(x ^ (offset * 713), 374761393) + Math.imul(y, 668265263);
-  n = Math.imul(n ^ (n >>> 13), 1274126177);
-  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
-}
-
-function circle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  ctx.beginPath();
-  ctx.arc(x, y, Math.max(0, r), 0, TAU);
-}
-
 function polygon(ctx: CanvasRenderingContext2D, points: number[]): void {
   ctx.beginPath();
   for (let i = 0; i < points.length; i += 2) {
@@ -1898,107 +1834,4 @@ export class Renderer {
   }
 }
 
-/** Mappa locale limitata del terreno procedurale noto. */
-const minimapTerrainViews = new WeakMap<HTMLCanvasElement, { world: World; key: string; canvas: HTMLCanvasElement; width: number; height: number }>();
-export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600): void {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const rect = canvas.getBoundingClientRect(), dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
-  const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
-  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const scale = Math.min(width, height) / visibleSpan;
-  canvas.dataset.worldSpan = String(visibleSpan);
-  const spawn = world.authoring.document.spawn;
-  const center = self ?? { x: spawn.x * TILE_SIZE, y: spawn.y * TILE_SIZE };
-  const left = center.x - width / (2 * scale), top = center.y - height / (2 * scale);
-
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#525f46';
-  ctx.fillRect(0, 0, width, height);
-
-  const startX = Math.floor(left / TILE_SIZE), startY = Math.floor(top / TILE_SIZE);
-  const cols = Math.ceil(width / scale / TILE_SIZE) + 2, rows = Math.ceil(height / scale / TILE_SIZE) + 2;
-  const terrainKey = `${world.lockRevision}:${world.authoringRevision}:${startX}:${startY}:${width}:${height}:${visibleSpan}:${dpr}`;
-  let cached = minimapTerrainViews.get(canvas);
-  if (!cached || cached.world !== world || cached.key !== terrainKey) {
-    const bitmap = document.createElement('canvas'), bitmapWidth = cols * TILE_SIZE * scale, bitmapHeight = rows * TILE_SIZE * scale;
-    bitmap.width = Math.ceil(bitmapWidth * dpr); bitmap.height = Math.ceil(bitmapHeight * dpr);
-    const paint = bitmap.getContext('2d')!; paint.setTransform(dpr, 0, 0, dpr, 0, 0);
-    for (let ty = startY; ty < startY + rows; ty++) {
-      for (let tx = startX; tx < startX + cols; tx++) {
-      const tile = world.getTile(tx, ty);
-      const dungeon = world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
-      paint.fillStyle = dungeon && tile === 'rock' ? dungeon.theme.wallTop
-        : dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor
-        : mapTerrainColor(tile, world.getMoisture((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE), noise(tx, ty));
-      paint.fillRect((tx - startX) * TILE_SIZE * scale, (ty - startY) * TILE_SIZE * scale, TILE_SIZE * scale + 0.5, TILE_SIZE * scale + 0.5);
-      }
-    }
-    cached = { world, key: terrainKey, canvas: bitmap, width: bitmap.width / dpr, height: bitmap.height / dpr }; minimapTerrainViews.set(canvas, cached);
-  }
-  ctx.drawImage(cached.canvas, (startX * TILE_SIZE - left) * scale, (startY * TILE_SIZE - top) * scale, cached.width, cached.height);
-
-  ctx.strokeStyle = 'rgba(235,227,192,0.1)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(width / 2, 0); ctx.lineTo(width / 2, height);
-  ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2);
-  ctx.stroke();
-
-  for (const pickup of pickups) {
-    ctx.fillStyle = PICKUP_COLORS[pickup.kind];
-    ctx.fillRect((pickup.x - left) * scale - 1, (pickup.y - top) * scale - 1, 2, 2);
-  }
-
-  if (world.mode === 'world') {
-    for (const dungeon of DUNGEON_DEFINITIONS) {
-      const dx = Math.max(10, Math.min(width - 10, (dungeon.area.x - left) * scale));
-      const dy = Math.max(10, Math.min(height - 10, (dungeon.area.y - top) * scale));
-      ctx.save();
-      ctx.translate(dx, dy);
-      ctx.rotate(Math.PI / 4);
-      ctx.fillStyle = dungeon.theme.minimap;
-      ctx.strokeStyle = '#423f32';
-      ctx.lineWidth = 1.5;
-      ctx.fillRect(-5, -5, 10, 10);
-      ctx.strokeRect(-5, -5, 10, 10);
-      ctx.restore();
-    }
-    for (const zone of world.authoring.document.zones) {
-      if (!zone.arenaId) continue;
-      const b = shapeBounds(zone.shape); ctx.beginPath();
-      if (zone.shape.kind === 'circle') circle(ctx, (zone.shape.x * TILE_SIZE - left) * scale, (zone.shape.y * TILE_SIZE - top) * scale, zone.shape.radius * TILE_SIZE * scale);
-      else ctx.rect((b.left * TILE_SIZE - left) * scale, (b.top * TILE_SIZE - top) * scale, (b.right-b.left)*TILE_SIZE*scale, (b.bottom-b.top)*TILE_SIZE*scale);
-      ctx.strokeStyle=zone.arenaId?'#a5d9e8':zone.pvp?'#dc7a65':'#b6d9b0';ctx.lineWidth=1;ctx.stroke();
-    }
-  }
-
-  for (const actor of actors) {
-    if (actor.id === self?.id || actor.hp <= 0) continue;
-    ctx.fillStyle = actor.kind === 'npc' ? '#ccbb8d' : actor.teamId && actor.teamId === self?.teamId ? '#a6dcb4' : '#e6a08c';
-    circle(ctx, (actor.x - left) * scale, (actor.y - top) * scale, actor.kind === 'npc' ? 1.6 : 2.5);
-    ctx.fill();
-  }
-
-  const originX = (spawn.x * TILE_SIZE - left) * scale, originY = (spawn.y * TILE_SIZE - top) * scale;
-  ctx.strokeStyle = 'rgba(242,229,181,0.7)';
-  ctx.lineWidth = 1;
-  circle(ctx, originX, originY, 4);
-  ctx.stroke();
-
-  if (self) {
-    ctx.save();
-    ctx.translate(width / 2, height / 2);
-    circle(ctx, 0, 0, 4);
-    ctx.fillStyle = '#fbefd2';
-    ctx.fill();
-    ctx.strokeStyle = '#384537';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.restore();
-  }
-}
+export { drawMinimap } from './minimap';

@@ -17,6 +17,8 @@ Sequenza tecnica consigliata:
 
 Per queste modifiche servono verifiche dedicate a sincronizzazione, visibilità, transizioni di stanza e comportamento preservato; il riallineamento di tutta la vecchia suite alla mappa personale resta fuori dalle priorità correnti.
 
+Implementazione successiva: proiezioni esplicite, builder con indici dedicati, delta/keyframe e ricostruzione client sono ora presenti nel protocollo 9. Sono stati estratti anche minimappa, rasterizzazione sprite e risorse grafiche UI. Risultati, verifiche e limiti residui sono riportati in [snapshot-replication.md](snapshot-replication.md); i rilievi e benchmark sotto restano la fotografia precedente all'intervento.
+
 ## Valutazione e decisione proposta
 
 Riftlands ha una base tecnica valida per un gioco multiplayer in evoluzione: autorità server, regole condivise, predizione client, istanze separate, authoring con validazione, cache limitate e test estesi. Il problema principale è il disallineamento fra contenuti modificabili, test e alcuni presupposti storici. Non serve riscrivere il progetto.

@@ -89,11 +89,16 @@ client/
   prediction.ts    Previsione locale, riconciliazione e interpolazione
   motion.ts        Interpolazione grafica locale fra tick della simulazione
   snapshots.ts     Buffer remoto adattivo agli arrivi dei pacchetti
-  render.ts        Rendering geometrico e minimappa sostituibili con asset
+  render.ts        Rendering del mondo e degli attori
+  minimap.ts       Minimap con cache del terreno
+  sprite-sheet.ts  Caricamento e rasterizzazione delle sprite
   ui.ts            Menu, HUD e relazioni sociali
+  ui-art.ts        Ritratti e icone condivisi dall'interfaccia
   style.css        Stili dell’interfaccia
 shared/
   types.ts         Contratto del protocollo e modelli dati
+  snapshot-actor.ts Proiezione esplicita degli attori per la rete
+  snapshot-stream.ts Delta, keyframe e ricostruzione degli snapshot
   config.ts        Classi, abilità, bilanciamento e frequenze
   dungeons.ts      Catalogo data-driven di geografia, accessi, barriere e temi dei dungeon
   world.ts         Generazione deterministica e cache limitata
@@ -101,6 +106,8 @@ shared/
 server/
   index.ts         HTTP, WebSocket, validazione, clock e ciclo di vita
   simulation.ts    Stato autorevole, combattimento, NPC, chunk e socialità
+  snapshot-builder.ts Selezione spaziale e costruzione delle viste per destinatario
+  snapshot-private-state.ts Cache delle viste private di inventario e narrativa
   store.ts         Identità e archivio account
 tests/             Test della logica e test browser con due client
 ```
@@ -133,7 +140,9 @@ Il server simula a **30 Hz** e invia snapshot a **15 Hz** (ogni 66,7 ms), filtra
 
 Gli altri personaggi e i loro proiettili usano un buffer adattivo di **100–250 ms rispetto agli arrivi dei pacchetti**, indipendente dalle correzioni dell’orologio del ping. Il tempo di riproduzione avanza continuamente e non torna indietro al ricevimento di uno snapshot. Se la rete si interrompe, conserva l’ultima posizione nota anziché inventare movimento attraverso gli ostacoli. Vita, proiettili, risorse, cooldown e raccolte restano autorevoli. C'è rilevamento dei proiettili lungo il segmento percorso fra tick e controllo di visibilità per gli attacchi attraverso ostacoli.
 
-I cast locali melee e a proiettile hanno predizione cosmetica: partono dalla posizione disegnata del personaggio e si collegano alla conferma tramite la sequenza input. Un rifiuto elimina il feedback speculativo; impatti e danni restano server-side. Il melee segue il corpo durante l'animazione; il proiettile vola indipendentemente e viene corretto verso lo stato autorevole senza un secondo spawn. I proiettili del proprietario non passano dal buffer remoto; l'estrapolazione è limitata a 100 ms e rispetta i muri. Aree a terra, trappole e dash non hanno predizione di gameplay. Client e server vanno aggiornati insieme (protocollo 7).
+I cast locali melee e a proiettile hanno predizione cosmetica: partono dalla posizione disegnata del personaggio e si collegano alla conferma tramite la sequenza input. Un rifiuto elimina il feedback speculativo; impatti e danni restano server-side. Il melee segue il corpo durante l'animazione; il proiettile vola indipendentemente e viene corretto verso lo stato autorevole senza un secondo spawn. I proiettili del proprietario non passano dal buffer remoto; l'estrapolazione è limitata a 100 ms e rispetta i muri. Aree a terra, trappole e dash non hanno predizione di gameplay. Client e server vanno aggiornati insieme (protocollo 9).
+
+Gli snapshot trasmessi usano delta per gli attori remoti e mantengono completo il giocatore locale. Metadati, inventario, narrativa e gold viaggiano quando cambiano, con keyframe periodici e reset su cambio stanza o riconnessione. Prima di predizione, interpolazione e UI, il client ricostruisce la vista completa degli attori. Architettura, garanzie e misure sono descritte in [snapshot-replication.md](docs/snapshot-replication.md).
 
 Le code sono limitate; input accumulati troppo vecchi vengono scartati. Rate limit, limiti di payload, heartbeat, backpressure e gestione delle sessioni duplicate evitano alcuni abusi e accumuli. Gli NPC sono attivi nei chunk circostanti, le zone abbandonate vengono scaricate dopo 20 s, le cache hanno limiti e scadenze. Gli scontri usano celle spaziali per ridurre il numero di confronti.
 

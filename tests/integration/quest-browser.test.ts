@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { SnapshotObserver } from '../fixtures/snapshot-observer';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -48,7 +49,10 @@ test('real multiplayer quest: accept, deliver via slot, touch hold to discard, a
       await context.addInitScript(({ token, profile }) => { localStorage.setItem('riftlands.jwt', token); localStorage.setItem('riftlands.profile', JSON.stringify(profile)); }, { token: user.token, profile: publicAccount(user.account) });
       const page = await context.newPage(), errors: string[] = []; let latest: Snapshot | undefined, narrative: NarrativeProgress | undefined, narrativeFrames = 0;
       page.on('pageerror', error => errors.push(error.message));
-      page.on('websocket', socket => socket.on('framereceived', frame => { const message = JSON.parse(String(frame.payload)); if (message.type === 'snapshot') { latest = message; if (message.narrative) { narrative = message.narrative; narrativeFrames++; } } }));
+      page.on('websocket', socket => {
+        const observer = new SnapshotObserver();
+        socket.on('framereceived', frame => { const message = observer.read(String(frame.payload)); if (message.type === 'snapshot') { latest = message; if (message.narrative) { narrative = message.narrative; narrativeFrames++; } } });
+      });
       await page.goto(`http://127.0.0.1:${port}`); await page.locator('[data-ref=join]').click();
       await expect(page.locator('[data-ref="world-entrance"]')).toBeHidden(); await expect(page.locator('.game-hud')).toBeVisible();
       await expect(page.locator('.inventory-slot')).toHaveCount(1);

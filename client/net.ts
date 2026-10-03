@@ -1,5 +1,6 @@
 import { PROTOCOL_VERSION } from '../shared/config';
 import type { ClassId, ClientMessage, ServerMessage, RoomState, InputCommand } from '../shared/types';
+import { SnapshotDecoder, type SnapshotPacket } from '../shared/snapshot-stream';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline';
 export interface NetworkCallbacks {
@@ -16,6 +17,7 @@ type JoinRequest =
   | { type: 'credentials'; mode: 'login' | 'register'; name: string; password: string; classId: ClassId };
 
 export class GameConnection {
+  private readonly snapshots = new SnapshotDecoder();
   private socket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -137,7 +139,7 @@ export class GameConnection {
 
     socket.onmessage = event => {
       if (generation !== this.generation) return;
-      let message: ServerMessage;
+      let message: ServerMessage | SnapshotPacket;
       try {
         message = JSON.parse(String(event.data));
       } catch {
@@ -171,6 +173,7 @@ export class GameConnection {
         this.callbacks.status('online');
       } else if (message.type === 'room') {
         this.room = message.room;
+        this.snapshots.reset(message.room);
         this.callbacks.reset();
       } else if (message.type === 'pong') {
         const rtt = Math.max(0, performance.now() - message.at);
@@ -187,7 +190,12 @@ export class GameConnection {
         this.stop(generation, message.message);
       }
 
-      this.callbacks.message(message);
+      if (message.type === 'snapshot' && 'encoding' in message) {
+        let snapshot;
+        try { snapshot = this.snapshots.decode(message); }
+        catch { this.retry(generation, 'Sincronizzazione interrotta. Riconnessione in corso.'); return; }
+        this.callbacks.message(snapshot);
+      } else this.callbacks.message(message);
     };
 
     socket.onerror = () => { /* gestito da onclose e watchdog */ };
@@ -203,6 +211,7 @@ export class GameConnection {
   }
 
   private retireSocket(): void {
+    this.snapshots.reset();
     this.generation++;
     this.welcomed = false;
     this.room = null;

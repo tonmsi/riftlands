@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { RenderFrame } from '../../client/render';
 import type { Snapshot } from '../../shared/types';
+import { SnapshotObserver } from '../fixtures/snapshot-observer';
 
 type Sample = { at: number; x: number; y: number; cameraX: number; cameraY: number };
 type ProbeWindow = Window & { movementSamples: Sample[] };
@@ -28,9 +29,10 @@ test('local movement is smooth between simulation ticks with delayed server snap
   // Keep WebSocket ordering but add an actual 120 ms inbound delivery delay to the client.
   await page.routeWebSocket('**/ws', route => {
     const upstream = route.connectToServer();
+    const observer = new SnapshotObserver();
     const timers = new Set<ReturnType<typeof setTimeout>>();
     upstream.onMessage(data => {
-      const message = JSON.parse(String(data));
+      const message = observer.read(String(data));
       if (message.type === 'snapshot') snapshot = message;
       const timer = setTimeout(() => { timers.delete(timer); route.send(data); }, 120);
       timers.add(timer);
@@ -71,9 +73,10 @@ test('another player moves smoothly through delayed and uneven snapshot arrivals
   let packet = 0, deliveryTime = 0;
   await observer.routeWebSocket('**/ws', route => {
     const upstream = route.connectToServer();
+    const snapshots = new SnapshotObserver();
     const timers = new Set<ReturnType<typeof setTimeout>>();
     upstream.onMessage(data => {
-      const message = JSON.parse(String(data));
+      const message = snapshots.read(String(data));
       if (message.type === 'snapshot') observerSnapshot = message;
       const now = performance.now();
       deliveryTime = Math.max(deliveryTime + 1, now + 120 + [0, 25, -10, 40, 5, -15][packet++ % 6]);
@@ -85,8 +88,9 @@ test('another player moves smoothly through delayed and uneven snapshot arrivals
   });
   mover.on('websocket', socket => {
     if (!socket.url().endsWith('/ws')) return;
+    const snapshots = new SnapshotObserver();
     socket.on('framereceived', event => {
-      const message = JSON.parse(String(event.payload));
+      const message = snapshots.read(String(event.payload));
       if (message.type === 'snapshot') moverSnapshot = message;
     });
   });
