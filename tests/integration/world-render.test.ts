@@ -55,10 +55,55 @@ test('game renderer draws authored layers around players and fades overhead cell
       const alpha = (x: number, y: number) => ctx.getImageData(x, y, 1, 1).data[3];
       const center = alpha(48, 24), seam = alpha(48, 46), opaque = alpha(48, 50), trunk = alpha(48, 72);
       art.fadeAmount(a, p, false, 1300); const restored = art.fadeAmount(a, p, false, 1500);
-      return { start, middle, end, center, seam, opaque, trunk, restored };
+      a.cells[2].visibility = 'hide-fade';
+      ctx.clearRect(0, 0, 96, 96); art.draw(ctx, a, p, 1, 48, 1600, 1, 0);
+      const publicFade = { traversable: alpha(24, 24), hiding: alpha(24, 72) };
+      ctx.clearRect(0, 0, 96, 96); art.draw(ctx, a, p, 1, 48, 1600, 0, 1);
+      const privateFade = { traversable: alpha(24, 24), hiding: alpha(24, 72) };
+      return { start, middle, end, center, seam, opaque, trunk, restored, publicFade, privateFade };
     });
     assert.equal(partial.start, 0); assert.ok(partial.middle > 0 && partial.middle < 1); assert.equal(partial.end, 1);
     assert.ok(partial.center < 90); assert.ok(partial.seam > partial.center + 40); assert.equal(partial.opaque, 255); assert.equal(partial.trunk, 255); assert.equal(partial.restored, 0);
+    assert.ok(partial.publicFade.traversable < 90); assert.equal(partial.publicFade.hiding, 255);
+    assert.equal(partial.privateFade.traversable, 255); assert.ok(partial.privateFade.hiding < 90);
+    const coverage = await page.evaluate(async () => {
+      const { Renderer } = await import('/client/render.ts' as string), { World } = await import('/shared/world.ts' as string);
+      const { newWorldDocument, newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
+      const results: { layer: string; visibility: string; pvp: boolean; local: boolean; covered: boolean; hiding: boolean }[] = [];
+      for (const layer of ['ground', 'object']) for (const visibility of ['normal', 'fade', 'hide', 'hide-fade']) for (const pvp of [false, true]) for (const local of [false, true]) {
+        const doc = newWorldDocument(), asset = newWorldAsset('cover', 'Copertura', '/world-assets/fade-test.svg');
+        resizeWorldAsset(asset, 3, 3); asset.layer = layer; asset.cells.forEach((c: any) => c.visibility = visibility);
+        asset.fade = { opacity: .2, feather: 0, durationMs: 0 }; doc.assets.push(asset);
+        doc.placements.push({ id: 'cover-1', assetId: asset.id, x: 0, y: 0 });
+        doc.zones.push({ id: 'area', name: 'Area', priority: 1, shape: { kind: 'rect', x: -10, y: -10, width: 20, height: 20 }, pvp });
+        for (let y = -10; y < 10; y++) for (let x = -10; x < 10; x++) doc.tiles.push({ x, y, terrain: 'grass' });
+        const canvas = window.document.createElement('canvas'); canvas.style.cssText = 'width:900px;height:700px'; window.document.body.append(canvas);
+        const renderer = new Renderer(canvas); renderer.world = new World(42, 16, 'world', doc, []);
+        const self = { id: 'owner', kind: 'player', x: local ? 72 : -72, y: 72, hp: 100, teamId: null };
+        const other = { id: 'other', kind: 'player', x: 72, y: 72, hp: 100, teamId: null };
+        renderer.characters.drawActor = (actor: any) => { renderer.ctx.fillStyle = '#ff00ff'; renderer.ctx.fillRect(actor.x - 10, actor.y - 10, 20, 20); };
+        renderer.characters.retainMotion = () => {};
+        renderer.worldAssetArt.image(asset);
+        await new Promise<void>((resolve, reject) => {
+          const deadline = performance.now() + 5000;
+          const check = () => { if (renderer.worldAssetArt.image(asset)) resolve(); else if (performance.now() > deadline) reject(new Error('Asset load timeout')); else setTimeout(check, 20); }; check();
+        });
+        renderer.lastWeatherCheck = 1000; renderer.weather = 'clear';
+        renderer.render({ time: 1000, self, actors: local ? [self] : [self, other], projectiles: [], pickups: [], traps: [], events: [], selectedId: null, previewClass: 'mage', playing: true });
+        const pixel = renderer.ctx.getImageData(Math.round((450 + (72 - self.x) * .95) * renderer.dpr), Math.round(350 * renderer.dpr), 1, 1).data;
+        results.push({ layer, visibility, pvp, local, covered: pixel[0] < 150 && pixel[1] > 100, hiding: renderer.world.isHiding(72, 72) });
+        renderer.destroy(); canvas.remove();
+      }
+      return results;
+    });
+    for (const c of coverage) {
+      const expected = c.visibility === 'normal' ? c.layer === 'object'
+        : c.visibility === 'hide' ? true
+        : c.visibility === 'hide-fade' ? !c.local
+        : !c.local && !c.pvp;
+      assert.equal(c.covered, expected, JSON.stringify(c));
+      assert.equal(c.hiding, c.visibility === 'hide' || c.visibility === 'hide-fade');
+    }
     const fires = await page.evaluate(async () => {
       const { WorldAssetArt } = await import('/client/world-asset-art.ts' as string);
       const { newWorldAsset } = await import('/shared/world-schema.ts' as string);

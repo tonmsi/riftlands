@@ -7,7 +7,8 @@ import { ARENA_GATE } from '../shared/arena';
 import { WorldAssetArt } from './world-asset-art';
 import { drawItemArt } from './item-art';
 import { shapeBounds } from '../shared/world-authoring';
-import { assetCellFades } from '../shared/world-schema';
+import { activeAssetFades } from './asset-visibility';
+import { clipAssetCells } from './asset-cell-regions';
 import type { ArenaGateState } from '../shared/types';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonFlames, inwardFlameAngle } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
@@ -165,11 +166,26 @@ export class Renderer {
     const objectAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'object')
       .sort((a, b) => (a.y + this.world.authoring.assets.get(a.assetId)!.height * this.world.authoring.assets.get(a.assetId)!.pivot.y)
         - (b.y + this.world.authoring.assets.get(b.assetId)!.height * this.world.authoring.assets.get(b.assetId)!.pivot.y) || a.id.localeCompare(b.id));
-    const paintObject = (p: typeof objectAssets[number]) => {
+    const publicPlayers = [...frame.actors.filter(actor => actor.id !== frame.self?.id), ...(frame.self ? [frame.self] : [])]
+      .filter(actor => actor.kind === 'player' && actor.hp > 0 && this.world.pvpAt(actor.x, actor.y));
+    const assetFades = new Map(worldAssets.map(p => {
       const a = this.world.authoring.assets.get(p.assetId)!;
-      const cell = frame.self ? this.world.authoring.cell(p, frame.self.x / TILE_SIZE, frame.self.y / TILE_SIZE) : undefined;
-      const fade = this.worldAssetArt.fadeAmount(a, p, assetCellFades(cell), frame.time);
-      this.worldAssetArt.draw(ctx, a, p, 1, TILE_SIZE, frame.time, fade);
+      const active = activeAssetFades(this.world, p, frame.self, publicPlayers);
+      return [p.id, {
+        traversable: this.worldAssetArt.fadeAmount(a, p, active.traversable, frame.time, 'traversable'),
+        hiding: this.worldAssetArt.fadeAmount(a, p, active.hiding, frame.time, 'hiding'),
+        annotated: a.cells.some(cell => cell.visibility !== 'normal'),
+      }] as const;
+    }));
+    const paintObject = (p: typeof objectAssets[number], overhead = false) => {
+      const a = this.world.authoring.assets.get(p.assetId)!, fade = assetFades.get(p.id)!;
+      if (overhead && !fade.annotated) return;
+      ctx.save();
+      if (fade.annotated) {
+        clipAssetCells(ctx, a, p, TILE_SIZE, cell => (cell.visibility !== 'normal') === overhead);
+      }
+      this.worldAssetArt.draw(ctx, a, p, 1, TILE_SIZE, frame.time, fade.traversable, fade.hiding);
+      ctx.restore();
     };
     for (const p of groundAssets) paintObject(p);
     let objectIndex = 0;
@@ -332,6 +348,8 @@ export class Renderer {
       );
     }
     while (objectIndex < objectAssets.length) paintObject(objectAssets[objectIndex++]);
+    // Explicitly annotated cells cover actors on both layers; unannotated cells keep their original depth.
+    for (const p of worldAssets) if (assetFades.get(p.id)!.annotated) paintObject(p, true);
 
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);

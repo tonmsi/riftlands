@@ -28,11 +28,11 @@ const BOSS_SPRITE_URLS: Record<string, string> = {
 const BOSS_ATTACK_SPRITES: Record<string, { url: string; cols: number; rows: number }> = {
   'stone-warden:charge': { url: new URL('../assets/boss-warden-charge.svg', import.meta.url).href, cols: 4, rows: 1 },
   // Puoi aggiungere in futuro: 'stone-waarden:slam': { ... }
-  'stone-warden:slam': { url: new URL('../assets/boss-warden-slam.svg', import.meta.url).href, cols: 4, rows: 2 },
+  'stone-warden:slam': { url: new URL('../assets/boss-warden-nova.svg', import.meta.url).href, cols: 4, rows: 2 },
 
   // Aggiungi qui la Nova (es. 5 frame per farlo caricare di energia)
-  'stone-warden:nova': { url: new URL('../assets/boss-warden-nova.svg', import.meta.url).href, cols: 4, rows: 2 },
-  'stone-warden:prep': { url: new URL('../assets/boss-warden-prep.svg', import.meta.url).href, cols: 4, rows: 1 },
+  'stone-warden:nova': { url: new URL('../assets/boss-warden-slam.svg', import.meta.url).href, cols: 4, rows: 2 },
+  'stone-warden:prep': { url: new URL('../assets/boss-warden-prep.svg', import.meta.url).href, cols: 4, rows: 2 },
 
 };
 
