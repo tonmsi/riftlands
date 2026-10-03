@@ -13,6 +13,8 @@ export { PROFILE_URLS } from './ui-art';
 
 /** Public presentation API. Views own their state; this facade coordinates transitions. */
 export class GameUI {
+  private readonly matchResultStatus = document.createElement('div');
+  announceMatchResult(text: string): void { this.hud.dismissPopups(); this.matchResultStatus.textContent = text; }
   private readonly hud: HudUI;
   private readonly lobby: LobbyUI;
   private readonly entrance: WorldEntrance;
@@ -21,6 +23,11 @@ export class GameUI {
   private status: ConnectionStatus = 'idle';
   constructor(root: HTMLElement, actions: UIActions) {
     mountGameLayout(root);
+    this.matchResultStatus.className = 'match-result-status';
+    this.matchResultStatus.setAttribute('role', 'status');
+    this.matchResultStatus.setAttribute('aria-live', 'assertive');
+    this.matchResultStatus.setAttribute('aria-atomic', 'true');
+    root.append(this.matchResultStatus);
     const popups = new PopupManager(root);
     this.entrance = new WorldEntrance(root, {
       prepare: () => { this.options.close(); actions.releaseControls?.(); },

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DT, WORLD_SEED } from '../shared/config';
 import { ARENA_GATE, ARENA_DURATION_SECONDS } from '../shared/arena';
-import type { ClassId, InputCommand, RoomMode, RoomState, SocialState, ArenaGateState } from '../shared/types';
+import type { ClassId, InputCommand, RoomMode, RoomState, SocialState, ArenaGateState, MatchResult } from '../shared/types';
 import type { Account } from './store';
 import type { GameplayPersistence } from './gameplay-persistence';
 import { WorldSimulation, type SocialAction } from './simulation';
@@ -14,6 +14,7 @@ export interface MatchRoom {
   simulation: WorldSimulation;
   members: Set<string>;
   endsAt: number;
+  roster: Map<string, string>;
 }
 
 /** One owner for routing and persistent characters. Match accounts are disposable copies. */
@@ -28,6 +29,7 @@ export class RoomManager {
   private pendingMatches = 0;
   private transfersStopped = false;
   private readonly notices = new Map<string, string>();
+  private readonly matchResults = new Map<string, MatchResult>();
   constructor(private readonly store?: GameplayPersistence, seed = WORLD_SEED, now = Date.now()) {
     this.global = new WorldSimulation(seed, now, store);
   }
@@ -50,7 +52,7 @@ export class RoomManager {
 
   connect(account: Account, classId: ClassId) {
     let member = this.memberships.get(account.id);
-    if (member?.roomId !== 'world' && member?.expiresAt !== undefined && member.expiresAt <= this.global.now) this.returnToWorld(account.id);
+    if (member?.roomId !== 'world' && member?.expiresAt !== undefined && member.expiresAt <= this.global.now) this.returnToWorld(account.id, true);
     member = this.memberships.get(account.id);
     const sim = member ? this.simulationFor(account.id) : this.global;
     const actor = sim.addPlayer(member && member.roomId !== 'world' ? sim.accounts.get(account.id)! : account,
@@ -80,7 +82,7 @@ export class RoomManager {
       this.global.disconnectPlayer(id);
       member.expiresAt = this.global.now + 20_000;
     } else if (voluntary) {
-      this.returnToWorld(id);
+      this.returnToWorld(id, true);
     } else {
       member.expiresAt = this.global.now + 20_000;
       this.simulationFor(id).disconnectPlayer(id);
@@ -139,13 +141,15 @@ export class RoomManager {
         actor.y = mode === 'arena' ? (teamIndex === 0 ? -240 : 240) : slot * 70 - 140;
         actor.aim = mode === 'arena' ? (teamIndex === 0 ? Math.PI / 2 : -Math.PI / 2) : teamIndex === 0 ? 0 : Math.PI;
       }
-      this.rooms.set(id, { id, mode, simulation, members: new Set(ids), endsAt: this.global.now + durationSeconds * 1000 });
+      this.rooms.set(id, { id, mode, simulation, members: new Set(ids), endsAt: this.global.now + durationSeconds * 1000,
+        roster: new Map([...simulation.players.values()].map(actor => [actor.id, actor.teamId!])) });
       for (const playerId of ids) {
         this.global.detachPlayer(playerId);
         this.global.awayPlayers.add(playerId);
         const member = this.membership(playerId);
         member.roomId = id;
         member.epoch++;
+        this.matchResults.delete(playerId);
         this.gateEntries.delete(playerId);
       }
       return id;
@@ -157,10 +161,11 @@ export class RoomManager {
 
   stopTransfers(): void { this.transfersStopped = true; }
 
-  returnToWorld(id: string): void {
+  returnToWorld(id: string, forfeit = false): void {
     const member = this.membership(id);
     if (member.roomId === 'world') return;
     const room = this.rooms.get(member.roomId)!;
+    if (forfeit) this.matchResults.set(id, { roomId: room.id, mode: room.mode, outcome: 'loss', reason: 'forfeit' });
     this.mustExitGate.add(id);
     // Reserve return capacity: create the global body before discarding the instance body.
     if (member.connected) this.global.addPlayer(member.account, member.classId);
@@ -178,8 +183,14 @@ export class RoomManager {
     const room = this.rooms.get(id);
     if (!room) return;
     const survivingTeams = new Set([...room.simulation.players.values()].filter(actor => actor.hp > 0).map(actor => actor.teamId));
-    for (const playerId of room.members) if (this.membership(playerId).connected) {
-      const winner = survivingTeams.size === 1 && survivingTeams.has(room.simulation.players.get(playerId)?.teamId ?? null);
+    const remainingTeams = new Set([...room.simulation.players.values()].map(actor => actor.teamId));
+    const resultReason = reason === 'elimination' && remainingTeams.size < 2 ? 'forfeit' : reason;
+    for (const playerId of room.members) {
+      const winner = survivingTeams.size === 1 && survivingTeams.has(room.roster.get(playerId)!);
+      this.matchResults.set(playerId, { roomId: room.id, mode: room.mode,
+        outcome: reason === 'timeout' || (reason === 'elimination' && survivingTeams.size === 0) ? 'draw' : reason === 'closed' ? 'closed' : winner ? 'win' : 'loss',
+        reason: resultReason });
+      if (!this.memberships.get(playerId)?.connected) continue;
       this.notices.set(playerId, reason === 'timeout' ? 'Tempo scaduto: pareggio. Ritorno nel mondo.' : reason === 'elimination' ? (winner ? 'Vittoria! Ritorno nel mondo.' : 'Duello terminato. Ritorno nel mondo.') : 'Partita conclusa. Ritorno nel mondo.');
     }
     for (const playerId of [...room.members]) this.returnToWorld(playerId);
@@ -190,7 +201,7 @@ export class RoomManager {
     this.global.step(dt);
     for (const room of this.rooms.values()) room.simulation.step(dt);
     for (const [id, member] of this.memberships) if (!member.connected && member.expiresAt !== undefined && member.expiresAt <= this.global.now) {
-      if (member.roomId !== 'world') this.returnToWorld(id);
+      if (member.roomId !== 'world') this.returnToWorld(id, true);
       else { this.memberships.delete(id); this.mustExitGate.delete(id); }
     }
     for (const room of [...this.rooms.values()]) {
@@ -260,6 +271,11 @@ export class RoomManager {
     const notice = this.notices.get(id);
     this.notices.delete(id);
     return notice;
+  }
+  takeMatchResult(id: string): MatchResult | undefined {
+    const result = this.matchResults.get(id);
+    this.matchResults.delete(id);
+    return result;
   }
 
   socialFor(id: string): SocialState {

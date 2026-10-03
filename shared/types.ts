@@ -65,9 +65,17 @@ export type ClientMessage =
       targetId?: string;
     };
 
+export interface MatchResult {
+  roomId: string;
+  mode: Exclude<RoomMode, 'world'>;
+  outcome: 'win' | 'loss' | 'draw' | 'closed';
+  reason: 'elimination' | 'forfeit' | 'timeout' | 'closed';
+}
+
 export type ServerMessage =
   | { type: 'welcome'; token: string; account: PublicAccount; playerId: string; seed: number; tickRate: number; time: number; social: SocialState }
   | { type: 'room'; room: RoomState }
+  | { type: 'match-result'; result: MatchResult }
   | Snapshot
   | { type: 'social'; state: SocialState }
   | { type: 'pong'; at: number; time: number }

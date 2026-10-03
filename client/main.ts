@@ -22,6 +22,7 @@ import { FrameBudget } from './frame-budget';
 import { prepareLobbyArt } from './lobby-assets';
 import { CAMERA_STORAGE_KEY, parseCameraSettings } from './camera-settings';
 import { CameraOptions } from './camera-options';
+import { matchResultText } from './transition-overlay';
 
 let playing = false;
 let latest: Snapshot | null = null;
@@ -84,6 +85,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
     ui.toast('Disconnessione completata.');
   },
   leave: () => {
+    renderer.clearMatchResult();
     joinGeneration++;
     connection.leave(); playing = false; latest = null; predicted = null; selectedId = null; localMovement.reset();
     releaseControls(); snapshotBuffer.clear(); renderedActors = []; effects.clear(); localCombat.reset(); audio.setActive(false);
@@ -122,7 +124,7 @@ renderer.setCameraSettings(cameraSettings);
 new CameraOptions(document.querySelector<HTMLElement>('#app')!, cameraSettings, settings => renderer.setCameraSettings(settings));
 const menuAssetsReady = prepareLobbyArt(renderer.spritesReady, (done, total, failed) => ui.setAssetProgress(done, total, failed), Object.values(PROFILE_URLS)).then(art => ui.setLobbyArt(art));
 const connection = new GameConnection({
-  reset: () => { releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
+  reset: () => { renderer.clearMatchResult(); releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
   status: (status, detail) => {
     ui.setConnection(status, detail);
     if (status === 'offline' || status === 'reconnecting') { releaseControls(); localCombat.reset(); }
@@ -185,6 +187,12 @@ const connection = new GameConnection({
       const dungeon = dungeonAt(message.self, 150);
       ui.setLocation(renderer.world.mode === 'world' ? renderer.world.locationAt(message.self.x, message.self.y) ?? dungeon?.name ?? ({ meadow: 'Praterie di Soglia', forest: 'Selva dei Sussurri', marsh: 'Acquitrini Velati' })[biome] : renderer.world.mode === 'arena' ? 'Arena del Crocevia' : 'Battleground di prova');
     } else if (message.type === 'social') ui.setSocial(message.state);
+    else if (message.type === 'match-result') {
+      releaseControls();
+      renderer.showMatchResult(message.result);
+      const text = matchResultText(message.result);
+      ui.announceMatchResult(`${text.title}. ${text.detail}`);
+    }
     else if (message.type === 'notice') ui.toast(message.message, message.tone);
     else if (message.type === 'error') ui.toast(message.message, 'error');
   }

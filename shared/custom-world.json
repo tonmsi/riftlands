@@ -1308,7 +1308,7 @@
           "visibility": "normal"
         }
       ],
-      "layer": "ground",
+      "layer": "object",
       "pivot": {
         "x": 0.5,
         "y": 1
@@ -1641,66 +1641,6 @@
         "feather": 0.35,
         "durationMs": 180
       }
-    },
-    {
-      "id": "asset-cd80462d-42aa-4c5f-a280-71d49aeb782e",
-      "name": "Monumento dei Marinai Perduti",
-      "image": "/world-assets/33e09dd4d35da7d65af96224b4ab93a9a8092484497e63865feb759297c4bed7.png",
-      "width": 2,
-      "height": 2,
-      "columns": 2,
-      "rows": 2,
-      "cells": [
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        }
-      ],
-      "layer": "object",
-      "pivot": {
-        "x": 0.5,
-        "y": 1
-      },
-      "generation": {
-        "enabled": false,
-        "category": "vegetation",
-        "terrains": [
-          "grass",
-          "bush",
-          "mud"
-        ],
-        "temperature": [
-          0,
-          1
-        ],
-        "moisture": [
-          0,
-          1
-        ],
-        "density": 0.2,
-        "spacing": 1
-      },
-      "group": "Importati",
-      "visual": {
-        "kind": "image"
-      },
-      "fade": {
-        "opacity": 0.28,
-        "feather": 0.35,
-        "durationMs": 180
-      }
     }
   ],
   "placements": [
@@ -1805,12 +1745,6 @@
       "assetId": "asset-ca4ceec7-606d-4869-b14a-42bbf02f0fce",
       "x": -11,
       "y": 97
-    },
-    {
-      "id": "asset-961d434b-f163-4645-a785-46dd3f1e120b",
-      "assetId": "asset-cd80462d-42aa-4c5f-a280-71d49aeb782e",
-      "x": 14,
-      "y": 111
     }
   ],
   "tiles": [],

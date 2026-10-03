@@ -29,6 +29,40 @@ test('arena spawns oppose each other on the horizontal axis of reflection', asyn
   assert.equal(manager.simulationFor(ids[0]).world.mode, 'arena');
 });
 
+test('match results distinguish elimination, forfeit, timeout and simultaneous defeat', async () => {
+  for (const scenario of ['elimination', 'forfeit', 'timeout', 'draw'] as const) {
+    const { manager, ids, accounts } = setup(2);
+    const room = await manager.createMatch('arena', [[ids[0]], [ids[1]]]);
+    if (scenario === 'forfeit') manager.disconnect(ids[1], true);
+    else if (scenario === 'timeout') manager.closeMatch(room, 'timeout');
+    else {
+      manager.simulationFor(ids[0]).players.get(ids[1])!.hp = 0;
+      if (scenario === 'draw') manager.simulationFor(ids[0]).players.get(ids[0])!.hp = 0;
+    }
+    manager.step();
+    const result = manager.takeMatchResult(ids[0])!;
+    assert.equal(result.roomId, room);
+    assert.equal(result.outcome, scenario === 'timeout' || scenario === 'draw' ? 'draw' : 'win');
+    assert.equal(result.reason, scenario === 'draw' ? 'elimination' : scenario);
+    assert.equal(manager.takeMatchResult(ids[0]), undefined);
+    if (scenario === 'forfeit') manager.connect(accounts[1], 'mage');
+    assert.equal(manager.takeMatchResult(ids[1])!.outcome, scenario === 'timeout' || scenario === 'draw' ? 'draw' : 'loss');
+  }
+});
+
+test('network grace allows recovery; expiration reports forfeit to both players', async () => {
+  const { manager, ids, accounts } = setup(2);
+  await manager.createMatch('arena', [[ids[0]], [ids[1]]]);
+  manager.disconnect(ids[1]); advance(manager, 1);
+  assert.equal(manager.takeMatchResult(ids[0]), undefined);
+  manager.connect(accounts[1], 'mage');
+  assert.equal(manager.takeMatchResult(ids[1]), undefined);
+  manager.disconnect(ids[1]); advance(manager, 21);
+  assert.equal(manager.takeMatchResult(ids[0])!.reason, 'forfeit');
+  manager.connect(accounts[1], 'mage');
+  assert.deepEqual(manager.takeMatchResult(ids[1])?.outcome, 'loss');
+});
+
 test('voluntary logout immediately dissolves a pair without removing the combat body', () => {
   const { manager, ids } = setup(2);
   manager.socialAction(ids[0], 'team-invite', ids[1]);

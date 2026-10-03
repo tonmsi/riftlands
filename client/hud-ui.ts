@@ -175,6 +175,7 @@ export class HudUI {
   setSocial(state: SocialState): void { this.social.setSocial(state); }
   get minimapVisible(): boolean { return this.mapVisible; }
   get inputBlocked(): boolean { return this.hooks.entranceVisible() || this.exitDialog.open; }
+  dismissPopups(): void { this.popups.dismiss(); }
   get touch(): boolean { return this.display.touch; }
   enterFullscreen(): void { if (this.display.touch) void this.display.enterFullscreen(); }
   resetJournal(): void { this.journal.reset(); }

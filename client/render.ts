@@ -1,6 +1,7 @@
 import { PICKUP_COLORS, circle, noise, polygon } from './render-primitives';
 import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../shared/config';
-import type { Actor, ClassId, GameEvent, Pickup, Projectile, Trap, Vec2, RoomMode } from '../shared/types';
+import type { Actor, ClassId, GameEvent, Pickup, Projectile, Trap, Vec2, RoomMode, MatchResult } from '../shared/types';
+import { drawTransitionOverlay, matchResultText, MATCH_RESULT_DURATION_MS } from './transition-overlay';
 import { World } from '../shared/world';
 import { ARENA_GATE } from '../shared/arena';
 import { WorldAssetArt } from './world-asset-art';
@@ -21,6 +22,9 @@ import type { RenderFrame } from './render-types';
 export type { RenderFrame } from './render-types';
 const TAU = Math.PI * 2;
 export class Renderer {
+  private matchResult: { result: MatchResult; elapsed: number } | null = null;
+  showMatchResult(result: MatchResult): void { this.matchResult = { result, elapsed: 0 }; }
+  clearMatchResult(): void { this.matchResult = null; }
   private readonly terrain: TerrainRenderer;
   private readonly characters: ActorRenderer;
   world = new World(WORLD_SEED);
@@ -354,6 +358,14 @@ export class Renderer {
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawDungeonEntry(frame, true);
+    if (this.matchResult) {
+      const elapsed = this.matchResult.elapsed += delta;
+      if (elapsed >= MATCH_RESULT_DURATION_MS) this.matchResult = null;
+      else {
+        const opacity = Math.min(1, elapsed / 250, (MATCH_RESULT_DURATION_MS - elapsed) / 700);
+        drawTransitionOverlay(ctx, this.width, this.height, { ...matchResultText(this.matchResult.result), opacity, veil: opacity * .82, position: .42 });
+      }
+    }
   }
 
   private drawDungeonEntry(frame: RenderFrame, overlay: boolean): void {
@@ -392,31 +404,14 @@ export class Renderer {
         ctx.restore();
       }
     } else {
-      const veil = preparation ? progress * 0.82 : 0.82 * Math.max(0, 1 - arrival / 550);
-      ctx.fillStyle = `rgba(12,18,18,${veil})`;
-      ctx.fillRect(0, 0, this.width, this.height);
-      ctx.globalAlpha = opacity;
-      const y = Math.max(100, this.height * 0.22);
-      const width = Math.min(520, this.width - 32);
-      const gradient = ctx.createLinearGradient(this.width / 2 - width / 2, 0, this.width / 2 + width / 2, 0);
-      gradient.addColorStop(0, '#101b1b00');
-      gradient.addColorStop(0.2, '#101b1be8');
-      gradient.addColorStop(0.8, '#101b1be8');
-      gradient.addColorStop(1, '#101b1b00');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(this.width / 2 - width / 2, y - 34, width, 100);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#efcf87';
-      ctx.font = '600 13px system-ui';
-      ctx.fillText(preparation ? 'IL DUNGEON SI RISVEGLIA' : 'DUNGEON INIZIATO', this.width / 2, y, width - 24);
-      ctx.fillStyle = '#fff3d5';
-      ctx.font = '600 23px Georgia';
       const dungeon = this.localDungeons?.flatMap(dungeonEncounters).find(d => d.bossId === (preparation?.bossId ?? lock?.bossId))
         ?? DUNGEON_BY_BOSS_ID.get((preparation?.bossId ?? lock?.bossId)!);
-      ctx.fillText(dungeon?.name ?? preparation?.name ?? 'La sfida ha inizio', this.width / 2, y + 29, width - 24);
-      ctx.font = '13px system-ui';
-      ctx.fillStyle = '#c5c7b8';
-      ctx.fillText(preparation ? `Preparati · ${(remaining / 1000).toFixed(1)} s` : 'I passaggi della stanza sono chiusi', this.width / 2, y + 53, width - 24);
+      drawTransitionOverlay(ctx, this.width, this.height, {
+        heading: preparation ? 'IL DUNGEON SI RISVEGLIA' : 'DUNGEON INIZIATO',
+        title: dungeon?.name ?? preparation?.name ?? 'La sfida ha inizio',
+        detail: preparation ? `Preparati · ${(remaining / 1000).toFixed(1)} s` : 'I passaggi della stanza sono chiusi',
+        opacity, veil: preparation ? progress * .82 : .82 * Math.max(0, 1 - arrival / 550),
+      });
     }
     ctx.restore();
   }

@@ -47,6 +47,7 @@ test('arena shares world zoom, reflects controls and keeps labels upright for bo
         (window as any).arenaLabels = labels;
         const original = CanvasRenderingContext2D.prototype.fillText;
         CanvasRenderingContext2D.prototype.fillText = function(text, x, y, maxWidth) {
+          if ((text === 'Hai vinto' || text === 'Hai perso') && this.globalAlpha > .8) (window as any).resultOverlay = text;
           if (text.startsWith('View')) {
             const t = this.getTransform();
             labels[text] = { x: t.a * x + t.c * y + t.e, y: t.b * x + t.d * y + t.f, scale: t.a, upright: t.d > 0 };
@@ -109,6 +110,10 @@ test('arena shares world zoom, reflects controls and keeps labels upright for bo
     await leaving.locator('[data-ref=leave]').click();
     await leaving.locator('[data-exit]').click();
     await expect.poll(() => clients[0].state.room?.mode).toBe('world');
+    await expect(page.locator('.match-result-status')).toContainText('Hai vinto');
+    await expect(page.locator('.match-result-status')).toContainText('Forfait');
+    await expect.poll(() => page.evaluate(() => (window as any).resultOverlay)).toBe('Hai vinto');
+    await page.screenshot({ path: resolve('test-results/arena-win-forfeit.png') });
     await expect(page.locator('.compact-minimap')).toHaveAttribute('data-view-sign', '1');
     await page.locator('.world-canvas').click();
     const before = clients[0].state.snapshot!.self.y;
@@ -118,6 +123,12 @@ test('arena shares world zoom, reflects controls and keeps labels upright for bo
     await page.reload();
     await expect(page.locator('[data-hub-panel=settings] [data-camera-zoom]')).toHaveValue('150');
     await expect(page.locator('[data-hub-panel=settings] [data-camera-limit]')).toHaveValue('compact');
+    await leaving.locator('[data-ref=join]').click();
+    await expect(leaving.locator('[data-ref="world-entrance"]')).toBeHidden();
+    await expect(leaving.locator('.match-result-status')).toContainText('Hai perso');
+    await expect(leaving.locator('.match-result-status')).toContainText('Forfait');
+    await expect.poll(() => leaving.evaluate(() => (window as any).resultOverlay)).toBe('Hai perso');
+    await leaving.screenshot({ path: resolve('test-results/arena-loss-forfeit.png') });
     assert.deepEqual(errors, []);
   } finally {
     await browser?.close(); child.kill(); await ended;

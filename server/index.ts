@@ -197,6 +197,8 @@ function sendSnapshot(session: Session): void {
   }
   const notice = rooms.takeNotice(session.id!);
   if (notice) send(session, { type: 'notice', message: notice, tone: 'info' });
+  const result = rooms.takeMatchResult(session.id!);
+  if (result) send(session, { type: 'match-result', result });
   const snapshot = rooms.snapshotFor(session.id!);
   if (snapshot) {
     const prepared = session.snapshots.prepare(snapshot, state);
