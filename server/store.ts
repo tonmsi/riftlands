@@ -6,6 +6,8 @@ import { CLASSES } from '../shared/config';
 import { validBossStates, type BossState } from '../shared/bosses';
 import { newInventory, validInventory, type Inventory } from '../shared/items';
 import { newNarrativeProgress, validNarrativeProgress, type NarrativeProgress } from '../shared/narrative';
+import { SynchronousSaveWriter, type SaveWriter } from './save-writer';
+import type { GameplayPersistence } from './gameplay-persistence';
 
 export interface Account {
   inventory?: Inventory;
@@ -68,7 +70,7 @@ function getJwtSecret(baseDir: string): string {
   return generated;
 }
 
-export class AccountStore {
+export class AccountStore implements GameplayPersistence {
   bossStates: Record<string, BossState> = {};
   readonly accounts = new Map<string, Account>();
   private readonly accountsByName = new Map<string, string>(); // nameLower -> account.id
@@ -77,7 +79,7 @@ export class AccountStore {
   readonly dungeonPath: string;
   private readonly jwtSecret: string;
 
-  constructor(path = resolve('data/accounts.json')) {
+  constructor(path = resolve('data/accounts.json'), private readonly writer: SaveWriter = new SynchronousSaveWriter()) {
     this.path = path;
     this.dungeonPath = join(dirname(path), 'dungeon.json');
     this.jwtSecret = getJwtSecret(dirname(path));
@@ -149,20 +151,26 @@ export class AccountStore {
   }
 
   /** Live transport uses the worker pool; synchronous methods are for offline fixtures. */
-  async registerAsync(name: string, password: string): Promise<{ account: Account; token: string }> {
+  async registerAsync(name: string, password: string, signal?: AbortSignal): Promise<{ account: Account; token: string }> {
+    signal?.throwIfAborted();
     this.validateRegistration(name, password);
     const salt = randomBytes(16).toString('hex');
     const passwordHash = await this.hashPasswordAsync(password, salt);
+    signal?.throwIfAborted();
     // Recheck uniqueness after awaiting: two sockets may race for the same name.
-    return this.createAccount(name, password, salt, passwordHash);
+    const created = this.createAccount(name, password, salt, passwordHash);
+    await this.drain();
+    return created;
   }
 
-  async loginAsync(name: string, password: string): Promise<{ account: Account; token: string }> {
+  async loginAsync(name: string, password: string, signal?: AbortSignal): Promise<{ account: Account; token: string }> {
+    signal?.throwIfAborted();
     if (typeof password !== 'string' || password.length > 100) throw new Error('Nome personaggio o password non validi.');
     const id = this.accountsByName.get(cleanName(name).toLowerCase());
     const account = id ? this.accounts.get(id) : undefined;
     // Unknown users still pay the same hash cost, under the transport's bounded budget.
     const computed = await this.hashPasswordAsync(password, account?.salt ?? 'riftlands-unknown-account');
+    signal?.throwIfAborted();
     if (!account) throw new Error('Nome personaggio o password non validi.');
     return this.finishLogin(account, computed);
   }
@@ -289,17 +297,13 @@ export class AccountStore {
 
   flush(): void {
     if (!this.dirty) return;
-    mkdirSync(dirname(this.path), { recursive: true });
-    const next = `${this.path}.tmp`;
-    writeFileSync(next, JSON.stringify({ version: 2, accounts: [...this.accounts.values()] }), { mode: 0o600 });
-    renameSync(next, this.path);
+    this.writer.write(this.path, { version: 2, accounts: [...this.accounts.values()] });
     this.dirty = false;
   }
 
   flushBosses(): void {
-    mkdirSync(dirname(this.dungeonPath), { recursive: true });
-    const next = `${this.dungeonPath}.tmp`;
-    writeFileSync(next, JSON.stringify({ version: 1, bosses: this.bossStates }), { mode: 0o600 });
-    renameSync(next, this.dungeonPath);
+    this.writer.write(this.dungeonPath, { version: 1, bosses: this.bossStates });
   }
+
+  drain(): Promise<void> { return this.writer.drain(); }
 }

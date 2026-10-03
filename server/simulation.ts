@@ -15,7 +15,8 @@ import { validInteractionCommand, type InteractionCommand } from '../shared/inte
 import { newInventory } from '../shared/items';
 import { newNarrativeProgress } from '../shared/narrative';
 import { BossEncounter } from './boss-encounter';
-import type { Account, AccountStore } from './store';
+import type { Account } from './store';
+import type { GameplayPersistence } from './gameplay-persistence';
 import { SnapshotBuilder } from './snapshot-builder';
 import { actorVisibleTo } from './actor-visibility';
 
@@ -74,11 +75,11 @@ export class WorldSimulation {
   private readonly cells = new Map<string, Actor[]>();
   private largestActorRadius = PLAYER_RADIUS;
   private readonly projectileTeams = new Map<string, string | null>();
-  private readonly store?: AccountStore;
+  private readonly store?: GameplayPersistence;
   tick = 0;
   now: number;
 
-  constructor(seed = WORLD_SEED, now = Date.now(), store?: AccountStore, readonly mode: RoomMode = 'world', private readonly environment?: SimulationEnvironment) {
+  constructor(seed = WORLD_SEED, now = Date.now(), store?: GameplayPersistence, readonly mode: RoomMode = 'world', private readonly environment?: SimulationEnvironment) {
     this.seed = seed;
     this.world = environment?.world ?? new World(seed, 160, mode);
     this.now = now;

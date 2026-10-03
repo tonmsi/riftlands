@@ -13,6 +13,7 @@ import { NetworkMetrics } from './metrics';
 import { acquireDataLease } from './data-lease';
 import { SnapshotEncoder, type SnapshotPacket } from '../shared/snapshot-stream';
 import { newNarrativeProgress } from '../shared/narrative';
+import { OrderedSaveWriter } from './save-writer';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
@@ -21,11 +22,14 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT d
 const dataPath = process.env.DATA_FILE ? resolve(process.env.DATA_FILE) : resolve(ROOT, 'data/accounts.json');
 const releaseData = acquireDataLease(dataPath);
 process.once('exit', releaseData);
-const store = new AccountStore(dataPath);
+const saves = new OrderedSaveWriter();
+const store = new AccountStore(dataPath, saves);
+await store.drain(); // Finish migrations before exposing the server or world.
 const rooms = new RoomManager(store, WORLD_SEED);
 const simulation = rooms.global;
 let healthy = true;
 let closing = false;
+const authLifetime = new AbortController();
 let tickCostMs = 0;
 const metrics = new NetworkMetrics();
 const dist = resolve(ROOT, 'dist');
@@ -35,6 +39,7 @@ const server = createServer((request, response) => {
   const path = (request.url ?? '/').split('?')[0];
   response.setHeader('X-Content-Type-Options', 'nosniff');
   if (path === '/api/auth' && request.method === 'POST') {
+    if (!healthy || closing) { response.writeHead(503); response.end(); return; }
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('Content-Type', 'application/json');
     const origin = request.headers.origin;
@@ -125,6 +130,7 @@ const registrations = new Map<string, { count: number; until: number }>();
 const authBudget = new AuthBudget();
 
 async function authenticateCredentials(ip: string, mode: unknown, rawName: unknown, rawPassword: unknown): Promise<{ account: Account; token: string }> {
+  if (!healthy || closing) throw new Error('Server in chiusura.');
   const name = typeof rawName === 'string' ? rawName.trim() : '';
   const password = typeof rawPassword === 'string' ? rawPassword : '';
   if (!name || !password) throw new Error('Inserisci sia il nome sia la password.');
@@ -138,9 +144,9 @@ async function authenticateCredentials(ip: string, mode: unknown, rawName: unkno
       if (!entry || entry.until < Date.now()) { entry = { count: 0, until: Date.now() + 600_000 }; registrations.set(ip, entry); }
       if (entry.count >= 20) throw new Error('Troppi nuovi personaggi creati di recente. Riprova tra poco.');
       entry.count++;
-      return await store.registerAsync(name, password);
+      return await store.registerAsync(name, password, authLifetime.signal);
     }
-    return await store.loginAsync(name, password);
+    return await store.loginAsync(name, password, authLifetime.signal);
   } finally { release(); }
 }
 
@@ -207,6 +213,7 @@ wss.on('connection', (ws, request) => {
   ws.on('pong', () => { session.alive = true; });
   ws.on('error', () => { /* close callback owns lifecycle; malformed clients are isolated. */ });
   ws.on('message', async (raw, binary) => {
+    if (closing) return;
     const at = performance.now();
     const elapsed = Math.max(0, (at - session.receivedAt) / 1000);
     session.tokens = Math.min(100, session.tokens + elapsed * 75);
@@ -223,6 +230,7 @@ wss.on('connection', (ws, request) => {
     } catch { fatal(session, 'Messaggio non valido.'); return; }
 
     if (message.type === 'hello') {
+      if (!healthy || closing) { fatal(session, 'Server in chiusura.'); return; }
       if (session.id || session.authenticating) { fatal(session, 'Accesso già in corso o completato.'); return; }
       if (message.protocol !== PROTOCOL_VERSION || typeof message.classId !== 'string' || !Object.hasOwn(CLASSES, message.classId)) {
         fatal(session, 'Client non compatibile o dati non validi.');
@@ -280,7 +288,10 @@ wss.on('connection', (ws, request) => {
       session.interactionTokens--;
       if (typeof message.roomId !== 'string' || !Number.isSafeInteger(message.epoch)) { fatal(session, 'Interazione non valida.'); return; }
       try {
-        if (rooms.interact(session.id, message.command, message.roomId, message.epoch)) { store.flush(); sendSnapshot(session); }
+        if (rooms.interact(session.id, message.command, message.roomId, message.epoch)) {
+          store.flush(); await store.drain();
+          if (!closing && byAccount.get(session.id) === session) sendSnapshot(session);
+        }
       } catch (error) { send(session, { type: 'notice', message: error instanceof Error ? error.message : 'Interazione non riuscita.', tone: 'error' }); }
     } else if (message.type === 'ping') {
       if (!Number.isFinite(message.at) || Math.abs(message.at) > 1e15) { fatal(session, 'Ping non valido.'); return; }
@@ -292,6 +303,8 @@ wss.on('connection', (ws, request) => {
       try {
         const notice = rooms.socialAction(session.id, message.action, message.targetId);
         store.flush();
+        await store.drain();
+        if (closing || byAccount.get(session.id) !== session) return;
         if (notice) send(session, { type: 'notice', message: notice, tone: 'success' });
         socialBroadcast();
       } catch (error) { send(session, { type: 'notice', message: error instanceof Error ? error.message : 'Azione non riuscita.', tone: 'error' }); }
@@ -352,11 +365,16 @@ const heartbeatTimer = setInterval(() => {
 async function shutdown(exitCode = 0): Promise<void> {
   if (closing) return;
   closing = true;
+  authLifetime.abort();
   healthy = false;
+  rooms.stopTransfers();
   for (const timer of [stepTimer, socialTimer, persistTimer, heartbeatTimer]) clearInterval(timer);
   for (const session of sessions.values()) { clearTimeout(session.helloDeadline); session.ws.close(1001, 'Server in riavvio'); }
-  try { rooms.checkpoint(); store.flush(); } catch (error) { console.error('Salvataggio finale fallito:', error); exitCode = 1; }
-  await vite?.close();
+  let saveError: unknown;
+  try { rooms.checkpoint(); store.flush(); } catch (error) { saveError = error; }
+  try { await store.drain(); } catch (error) { saveError ??= error; }
+  if (saveError) { console.error('Salvataggio finale fallito:', saveError); exitCode = 1; }
+  try { await vite?.close(); } catch (error) { console.error('Chiusura frontend fallita:', error); exitCode = 1; }
   wss.close();
   server.close(() => process.exit(exitCode));
   setTimeout(() => process.exit(exitCode), 1500).unref();
@@ -364,4 +382,5 @@ async function shutdown(exitCode = 0): Promise<void> {
 
 process.on('SIGINT', () => void shutdown());
 process.on('SIGTERM', () => void shutdown());
+saves.onFailure(error => { console.error('Persistenza non disponibile:', error); healthy = false; void shutdown(1); });
 server.listen(port, process.env.HOST ?? '0.0.0.0', () => console.log(`Riftlands: http://localhost:${port} · ${production ? 'production' : 'development'} · authoritative ${TICK_RATE} Hz`));

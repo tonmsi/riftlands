@@ -19,6 +19,8 @@ Per queste modifiche servono verifiche dedicate a sincronizzazione, visibilità,
 
 Implementazione successiva: proiezioni esplicite, builder con indici dedicati, delta/keyframe e ricostruzione client sono ora presenti nel protocollo 9. Sono stati estratti anche minimappa, rasterizzazione sprite e risorse grafiche UI. Risultati, verifiche e limiti residui sono riportati in [snapshot-replication.md](snapshot-replication.md); i rilievi e benchmark sotto restano la fotografia precedente all'intervento.
 
+La persistenza live usa ora un'interfaccia e una coda ordinata con scritture asincrone, errori espliciti e drain finale. Registrazioni e trasferimenti di stanza attendono le rispettive scritture. La serializzazione JSON rimane nel thread principale; dettagli in [persistence.md](persistence.md).
+
 ## Valutazione e decisione proposta
 
 Riftlands ha una base tecnica valida per un gioco multiplayer in evoluzione: autorità server, regole condivise, predizione client, istanze separate, authoring con validazione, cache limitate e test estesi. Il problema principale è il disallineamento fra contenuti modificabili, test e alcuni presupposti storici. Non serve riscrivere il progetto.

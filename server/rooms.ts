@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { DT, WORLD_SEED } from '../shared/config';
 import { ARENA_GATE, ARENA_DURATION_SECONDS } from '../shared/arena';
 import type { ClassId, InputCommand, RoomMode, RoomState, SocialState, ArenaGateState } from '../shared/types';
-import type { Account, AccountStore } from './store';
+import type { Account } from './store';
+import type { GameplayPersistence } from './gameplay-persistence';
 import { WorldSimulation, type SocialAction } from './simulation';
 import type { InteractionCommand } from '../shared/interactions';
 
@@ -22,9 +23,12 @@ export class RoomManager {
   private readonly memberships = new Map<string, Membership>();
   private readonly gateEntries = new Map<string, number>();
   private readonly mustExitGate = new Set<string>();
-  private gatePairs = new Map<string, { ids: [string, string]; startsAt: number }>();
+  private gatePairs = new Map<string, { ids: [string, string]; startsAt: number; saving?: boolean }>();
+  private readonly pendingPlayers = new Set<string>();
+  private pendingMatches = 0;
+  private transfersStopped = false;
   private readonly notices = new Map<string, string>();
-  constructor(private readonly store?: AccountStore, seed = WORLD_SEED, now = Date.now()) {
+  constructor(private readonly store?: GameplayPersistence, seed = WORLD_SEED, now = Date.now()) {
     this.global = new WorldSimulation(seed, now, store);
   }
 
@@ -96,42 +100,62 @@ export class RoomManager {
   }
 
   /** Trusted server API; a future queue/invitation service supplies a validated roster. */
-  createMatch(mode: MatchRoom['mode'], teams: [string[], string[]], durationSeconds = 600): string {
+  createMatch(mode: MatchRoom['mode'], teams: [string[], string[]], durationSeconds = 600): Promise<string> {
+    return this.startMatch(mode, teams, durationSeconds);
+  }
+
+  private async startMatch(mode: MatchRoom['mode'], teams: [string[], string[]], durationSeconds: number, admission = () => true): Promise<string> {
     if (!['arena', 'battleground'].includes(mode) || !Number.isFinite(durationSeconds) || durationSeconds < 10 || durationSeconds > 1800) throw new Error('Configurazione partita non valida.');
     const maxTeam = mode === 'arena' ? 3 : 5;
     if (teams.length !== 2 || teams.some(team => !team.length || team.length > maxTeam) || teams[0].length !== teams[1].length) throw new Error('Servono due squadre valide della stessa dimensione.');
-    const ids = teams.flat();
-    if (new Set(ids).size !== ids.length || this.rooms.size >= 16) throw new Error('Partecipanti duplicati o limite stanze raggiunto.');
+    const roster = teams.map(team => [...team]);
+    const ids = roster.flat();
+    if (this.transfersStopped || new Set(ids).size !== ids.length || this.rooms.size + this.pendingMatches >= 16 || ids.some(id => this.pendingPlayers.has(id))) throw new Error('Partecipanti duplicati o limite stanze raggiunto.');
     for (const id of ids) {
       const member = this.membership(id);
       if (!member.connected || member.roomId !== 'world' || !this.global.canTransfer(id)) throw new Error('I partecipanti devono essere online nel mondo, vivi e fuori combattimento da 10 secondi.');
     }
-    const id = randomUUID();
-    const simulation = new WorldSimulation(this.global.seed, this.global.now, undefined, mode);
-    // Prepare everything before removing any character from the global world.
-    for (const [teamIndex, team] of teams.entries()) for (const [slot, playerId] of team.entries()) {
-      const member = this.membership(playerId);
-      const temporary: Account = { ...member.account, inventory: structuredClone(member.account.inventory), narrative: structuredClone(member.account.narrative), body: undefined, friends: [], requests: [] };
-      const actor = simulation.addPlayer(temporary, member.classId);
-      actor.teamId = `${id}:${teamIndex}`;
-      actor.x = (teamIndex === 0 ? -1 : 1) * (mode === 'arena' ? 300 : 700);
-      actor.y = mode === 'arena' ? (slot - (team.length - 1) / 2) * 70 : slot * 70 - 140;
-      actor.aim = teamIndex === 0 ? 0 : Math.PI;
+    const epochs = ids.map(id => this.membership(id).epoch);
+    this.pendingMatches++;
+    for (const playerId of ids) this.pendingPlayers.add(playerId);
+    try {
+      this.global.checkpoint();
+      // Persist return positions before entering a transient instance (also on crash/restart).
+      this.store?.flush();
+      if (this.store) await this.store.drain();
+      if (this.transfersStopped || !admission() || ids.some((playerId, i) => {
+        const member = this.memberships.get(playerId);
+        return !member?.connected || member.roomId !== 'world' || member.epoch !== epochs[i] || !this.global.canTransfer(playerId);
+      })) throw new Error('Ingresso annullato: i partecipanti non sono più disponibili.');
+      const id = randomUUID();
+      const simulation = new WorldSimulation(this.global.seed, this.global.now, undefined, mode);
+      // Prepare everything before removing any character from the global world.
+      for (const [teamIndex, team] of roster.entries()) for (const [slot, playerId] of team.entries()) {
+        const member = this.membership(playerId);
+        const temporary: Account = { ...member.account, inventory: structuredClone(member.account.inventory), narrative: structuredClone(member.account.narrative), body: undefined, friends: [], requests: [] };
+        const actor = simulation.addPlayer(temporary, member.classId);
+        actor.teamId = `${id}:${teamIndex}`;
+        actor.x = (teamIndex === 0 ? -1 : 1) * (mode === 'arena' ? 300 : 700);
+        actor.y = mode === 'arena' ? (slot - (team.length - 1) / 2) * 70 : slot * 70 - 140;
+        actor.aim = teamIndex === 0 ? 0 : Math.PI;
+      }
+      this.rooms.set(id, { id, mode, simulation, members: new Set(ids), endsAt: this.global.now + durationSeconds * 1000 });
+      for (const playerId of ids) {
+        this.global.detachPlayer(playerId);
+        this.global.awayPlayers.add(playerId);
+        const member = this.membership(playerId);
+        member.roomId = id;
+        member.epoch++;
+        this.gateEntries.delete(playerId);
+      }
+      return id;
+    } finally {
+      this.pendingMatches--;
+      for (const playerId of ids) this.pendingPlayers.delete(playerId);
     }
-    this.global.checkpoint();
-    // Persist return positions before entering a transient instance (also on crash/restart).
-    this.store?.flush();
-    this.rooms.set(id, { id, mode, simulation, members: new Set(ids), endsAt: this.global.now + durationSeconds * 1000 });
-    for (const playerId of ids) {
-      this.global.detachPlayer(playerId);
-      this.global.awayPlayers.add(playerId);
-      const member = this.membership(playerId);
-      member.roomId = id;
-      member.epoch++;
-      this.gateEntries.delete(playerId);
-    }
-    return id;
   }
+
+  stopTransfers(): void { this.transfersStopped = true; }
 
   returnToWorld(id: string): void {
     const member = this.membership(id);
@@ -190,13 +214,21 @@ export class RoomManager {
     const entranceFor = (id: string) => { const actor = this.global.players.get(id)!; return this.global.world.arenaAt(actor.x, actor.y)!; };
     for (const [entrance, pair] of this.gatePairs) if (this.rooms.size >= 16 || !pair.ids.every(id => eligible(id) && entranceFor(id) === entrance)) this.gatePairs.delete(entrance);
     const queues = new Map<string, [string, number][]>();
-    for (const entry of this.gateEntries) { const entrance = entranceFor(entry[0]), queue = queues.get(entrance) ?? []; queue.push(entry); queues.set(entrance, queue); }
+    for (const entry of this.gateEntries) {
+      if (this.pendingPlayers.has(entry[0])) continue;
+      const entrance = entranceFor(entry[0]), queue = queues.get(entrance) ?? []; queue.push(entry); queues.set(entrance, queue);
+    }
     for (const [entrance, queue] of queues) if (!this.gatePairs.has(entrance) && queue.length >= 2 && this.rooms.size + this.gatePairs.size < 16) {
       const ids = queue.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).slice(0, 2).map(([id]) => id) as [string, string];
       this.gatePairs.set(entrance, { ids, startsAt: this.global.now + ARENA_GATE.countdownMs });
     }
-    for (const [entrance, pair] of this.gatePairs) if (this.global.now >= pair.startsAt && this.rooms.size < 16) {
-      this.gatePairs.delete(entrance); this.createMatch('arena', [[pair.ids[0]], [pair.ids[1]]], ARENA_DURATION_SECONDS);
+    for (const [entrance, pair] of this.gatePairs) if (!pair.saving && this.global.now >= pair.startsAt && this.rooms.size + this.pendingMatches < 16) {
+      pair.saving = true;
+      void this.startMatch('arena', [[pair.ids[0]], [pair.ids[1]]], ARENA_DURATION_SECONDS,
+        () => this.gatePairs.get(entrance) === pair && pair.ids.every(id => eligible(id) && entranceFor(id) === entrance))
+        .catch(error => {
+          for (const id of pair.ids) if (this.memberships.get(id)?.connected) this.notices.set(id, error instanceof Error ? error.message : 'Ingresso non riuscito.');
+        }).finally(() => { if (this.gatePairs.get(entrance) === pair) this.gatePairs.delete(entrance); });
     }
   }
 

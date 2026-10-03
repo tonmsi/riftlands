@@ -7,7 +7,8 @@ import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, segme
 import type { World } from '../shared/world';
 import { DUNGEON_BY_BOSS_ID, clampToDungeonRegion, insideDungeonRegion, insideDungeonVisitorArea, touchesDungeonFlame, atDungeonActivation } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
-import type { Account, AccountStore } from './store';
+import type { Account } from './store';
+import type { GameplayPersistence } from './gameplay-persistence';
 
 /** Verifica se il volume fisico del boss (con margine di sicurezza) può passare in linea retta senza ostacoli. */
 export function canWalkDirectly(from: Vec2, to: Vec2, radius: number, world: World, dungeon: DungeonDefinition): boolean {
@@ -62,7 +63,7 @@ export class BossEncounter {
   private unstuckAngle = 0;
   private lastUnstuckSector = -1;
 
-  constructor(readonly definition: BossDefinition, now: number, state: BossState | undefined, private readonly store?: AccountStore, dungeon = DUNGEON_BY_BOSS_ID.get(definition.id)) {
+  constructor(readonly definition: BossDefinition, now: number, state: BossState | undefined, private readonly store?: GameplayPersistence, dungeon = DUNGEON_BY_BOSS_ID.get(definition.id)) {
     if (!dungeon || dungeon.bossId !== definition.id) throw new Error(`Configurazione dungeon assente per ${definition.id}.`);
     this.dungeon = dungeon;
     const spawn = dungeon.spawnPoints.boss;

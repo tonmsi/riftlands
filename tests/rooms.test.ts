@@ -29,24 +29,24 @@ test('voluntary logout immediately dissolves a pair without removing the combat 
   assert.ok(manager.global.players.has(ids[1]), 'combat logout grace still keeps the body');
 });
 
-test('an expired instance disconnect removes global party membership', () => {
+test('an expired instance disconnect removes global party membership', async () => {
   const { manager, ids } = setup(3);
   manager.socialAction(ids[0], 'team-invite', ids[1]);
   manager.socialAction(ids[1], 'team-accept', ids[0]);
-  manager.createMatch('arena', [[ids[1]], [ids[2]]]);
+  await manager.createMatch('arena', [[ids[1]], [ids[2]]]);
   manager.disconnect(ids[1]);
   advance(manager, 21);
   assert.equal(manager.socialFor(ids[0]).team, null);
   assert.equal(manager.global.players.get(ids[0])!.teamId, null);
 });
 
-test('rooms isolate actors and terrain; transfers remove owned projectiles and old bodies', () => {
+test('rooms isolate actors and terrain; transfers remove owned projectiles and old bodies', async () => {
   const { manager, ids } = setup();
   const old = manager.stateFor(ids[0]);
   manager.global.projectiles.set('old-shot', { id: 'old-shot', ownerId: ids[0], x: 0, y: 0, vx: 1, vy: 0, radius: 5, damage: 5, expiresAt: manager.global.now + 1000, color: '#fff' });
   assert.ok(manager.global.projectiles.size);
-  const a = manager.createMatch('arena', [[ids[0]], [ids[1]]]);
-  const b = manager.createMatch('battleground', [[ids[2]], [ids[3]]]);
+  const a = await manager.createMatch('arena', [[ids[0]], [ids[1]]]);
+  const b = await manager.createMatch('battleground', [[ids[2]], [ids[3]]]);
   assert.equal(manager.global.players.size, 0);
   assert.equal(manager.global.projectiles.size, 0);
   assert.deepEqual(manager.rooms.get(a)!.simulation.snapshotFor(ids[0])!.actors.map(actor => actor.id).sort(), ids.slice(0, 2));
@@ -68,9 +68,9 @@ test('rooms isolate actors and terrain; transfers remove owned projectiles and o
   }
 });
 
-test('network reconnect resumes exact match body and locked class with a new input epoch', () => {
+test('network reconnect resumes exact match body and locked class with a new input epoch', async () => {
   const { manager, ids, accounts } = setup(2);
-  const roomId = manager.createMatch('arena', [[ids[0]], [ids[1]]]);
+  const roomId = await manager.createMatch('arena', [[ids[0]], [ids[1]]]);
   const sim = manager.simulationFor(ids[0]), actor = sim.players.get(ids[0])!;
   actor.hp = 43;
   actor.resource = 12;
@@ -87,9 +87,9 @@ test('network reconnect resumes exact match body and locked class with a new inp
   assert.ok(manager.stateFor(ids[0]).epoch > epoch);
 });
 
-test('voluntary exit abandons immediately; network grace lasts 20 seconds and then closes an empty team', () => {
+test('voluntary exit abandons immediately; network grace lasts 20 seconds and then closes an empty team', async () => {
   const voluntary = setup(2);
-  const id = voluntary.manager.createMatch('arena', [[voluntary.ids[0]], [voluntary.ids[1]]]);
+  const id = await voluntary.manager.createMatch('arena', [[voluntary.ids[0]], [voluntary.ids[1]]]);
   voluntary.manager.disconnect(voluntary.ids[0], true);
   assert.equal(voluntary.manager.rooms.get(id)!.members.has(voluntary.ids[0]), false);
   voluntary.manager.step();
@@ -99,7 +99,7 @@ test('voluntary exit abandons immediately; network grace lasts 20 seconds and th
   assert.equal(voluntary.manager.stateFor(voluntary.ids[0]).id, 'world');
 
   const { manager, ids, accounts } = setup(2);
-  manager.createMatch('battleground', [[ids[0]], [ids[1]]]);
+  await manager.createMatch('battleground', [[ids[0]], [ids[1]]]);
   manager.disconnect(ids[0]);
   advance(manager, 19);
   assert.equal(manager.rooms.size, 1);
@@ -109,13 +109,13 @@ test('voluntary exit abandons immediately; network grace lasts 20 seconds and th
   assert.equal(manager.stateFor(ids[0]).id, 'world');
 });
 
-test('match progress is temporary and return restores global health, position and cooldowns', () => {
+test('match progress is temporary and return restores global health, position and cooldowns', async () => {
   const { manager, ids, accounts } = setup(2);
   const original = manager.global.players.get(ids[0])!;
   original.hp = 37;
   original.cooldowns.q = manager.global.now + 60_000;
   const before = structuredClone(original);
-  const room = manager.createMatch('arena', [[ids[0]], [ids[1]]]);
+  const room = await manager.createMatch('arena', [[ids[0]], [ids[1]]]);
   Object.assign(manager.simulationFor(ids[0]).players.get(ids[0])!, { hp: 1, xp: 9999, kills: 100, x: 400 });
   manager.simulationFor(ids[0]).checkpoint();
   manager.checkpoint();
@@ -131,14 +131,14 @@ test('match progress is temporary and return restores global health, position an
   manager.closeMatch(room); // Idempotent closure.
 });
 
-test('arena elimination closes the instance; BG respawns and expires at its deadline', () => {
+test('arena elimination closes the instance; BG respawns and expires at its deadline', async () => {
   const arena = setup(2);
-  arena.manager.createMatch('arena', [[arena.ids[0]], [arena.ids[1]]]);
+  await arena.manager.createMatch('arena', [[arena.ids[0]], [arena.ids[1]]]);
   arena.manager.simulationFor(arena.ids[0]).players.get(arena.ids[0])!.hp = 0;
   arena.manager.step();
   assert.equal(arena.manager.rooms.size, 0);
   const { manager, ids } = setup(2);
-  const id = manager.createMatch('battleground', [[ids[0]], [ids[1]]], 10);
+  const id = await manager.createMatch('battleground', [[ids[0]], [ids[1]]], 10);
   const sim = manager.simulationFor(ids[1]), actor = sim.players.get(ids[1])!;
   actor.hp = 0;
   actor.deadUntil = sim.now + 1000;
@@ -150,15 +150,15 @@ test('arena elimination closes the instance; BG respawns and expires at its dead
   assert.equal(manager.global.players.size, 2);
 });
 
-test('invalid rosters, dead players, combat and duplicate memberships fail without partial transfer', () => {
+test('invalid rosters, dead players, combat and duplicate memberships fail without partial transfer', async () => {
   const { manager, ids } = setup(2);
-  assert.throws(() => manager.createMatch('arena', [[ids[0]], [ids[0]]]));
-  assert.throws(() => manager.createMatch('arena', [[ids[0]], ['missing']]));
+  await assert.rejects(() => manager.createMatch('arena', [[ids[0]], [ids[0]]]));
+  await assert.rejects(() => manager.createMatch('arena', [[ids[0]], ['missing']]));
   manager.global.players.get(ids[0])!.hp = 0;
-  assert.throws(() => manager.createMatch('arena', [[ids[0]], [ids[1]]]));
+  await assert.rejects(() => manager.createMatch('arena', [[ids[0]], [ids[1]]]));
   manager.global.players.get(ids[0])!.hp = 50;
   manager.global.connections.get(ids[0])!.combatAt = manager.global.now;
-  assert.throws(() => manager.createMatch('arena', [[ids[0]], [ids[1]]]));
+  await assert.rejects(() => manager.createMatch('arena', [[ids[0]], [ids[1]]]));
   assert.equal(manager.global.players.size, 2);
   assert.equal(manager.rooms.size, 0);
 });
@@ -175,12 +175,12 @@ test('global logout retains the vulnerable body for the existing grace period', 
   assert.equal(manager.global.players.has(ids[0]), false);
 });
 
-test('parties survive instance absence, retain online presence and cannot change match teams', () => {
+test('parties survive instance absence, retain online presence and cannot change match teams', async () => {
   const { manager, ids } = setup(2);
   manager.socialAction(ids[0], 'team-invite', ids[1]);
   manager.socialAction(ids[1], 'team-accept', ids[0]);
   const teamId = manager.global.players.get(ids[0])!.teamId;
-  const room = manager.createMatch('arena', [[ids[0]], [ids[1]]]);
+  const room = await manager.createMatch('arena', [[ids[0]], [ids[1]]]);
   advance(manager, 16);
   assert.equal(manager.socialFor(ids[0]).team!.members.every(member => member.online), true);
   assert.throws(() => manager.socialAction(ids[0], 'team-leave'));
@@ -188,9 +188,9 @@ test('parties survive instance absence, retain online presence and cannot change
   assert.equal(manager.global.players.get(ids[0])!.teamId, teamId);
 });
 
-test('return slots are reserved while players are in matches', () => {
+test('return slots are reserved while players are in matches', async () => {
   const { manager, ids } = setup(2);
-  const room = manager.createMatch('arena', [[ids[0]], [ids[1]]]);
+  const room = await manager.createMatch('arena', [[ids[0]], [ids[1]]]);
   // Populate the capacity accounting without running 128 clients.
   for (let i = 0; i < 126; i++) manager.global.awayPlayers.add(`reserved${i}`);
   assert.throws(() => manager.connect(account('overflow'), 'mage'));
@@ -198,7 +198,7 @@ test('return slots are reserved while players are in matches', () => {
   assert.equal(manager.global.players.size, 2);
 });
 
-test('restart restores global return data, never match coordinates or temporary XP', () => {
+test('restart restores global return data, never match coordinates or temporary XP', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'riftlands-rooms-'));
   try {
     const path = join(directory, 'accounts.json'), store = new AccountStore(path);
@@ -207,7 +207,7 @@ test('restart restores global return data, never match coordinates or temporary 
     const manager = new RoomManager(store);
     manager.connect(a, 'mage'); manager.connect(b, 'mage'); advance(manager, 11);
     const x = manager.global.players.get(a.id)!.x;
-    manager.createMatch('arena', [[a.id], [b.id]]);
+    await manager.createMatch('arena', [[a.id], [b.id]]);
     manager.simulationFor(a.id).players.get(a.id)!.xp = 9000;
     manager.checkpoint(); store.flush();
     const restoredStore = new AccountStore(path), restarted = new RoomManager(restoredStore);

@@ -180,14 +180,14 @@ test('legacy accounts gain empty inventory without resetting progress; quests an
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test('room epochs reject stale interactions and arena accounts cannot mutate world inventory', () => {
+test('room epochs reject stale interactions and arena accounts cannot mutate world inventory', async () => {
   const manager = new RoomManager(undefined, 734291, 1_000_000), a = account('alice'), b = account('bob');
   manager.connect(a, 'mage'); manager.connect(b, 'mage');
   insertItem(a.inventory!, 'slime-innards', 4);
   const old = manager.stateFor(a.id), command = { kind: 'drop-item', slot: 0, itemId: 'slime-innards', quantity: 1 } as const;
   assert.equal(manager.interact(a.id, command, old.id, old.epoch - 1), false); assert.equal(a.inventory!.slots[0]!.quantity, 4);
   manager.global.now += 11_000;
-  manager.createMatch('arena', [[a.id], [b.id]]); const room = manager.stateFor(a.id);
+  await manager.createMatch('arena', [[a.id], [b.id]]); const room = manager.stateFor(a.id);
   assert.equal(manager.interact(a.id, command, old.id, old.epoch), false);
   assert.throws(() => manager.interact(a.id, command, room.id, room.epoch), /istanza/);
   manager.simulationFor(a.id).accounts.get(a.id)!.inventory!.slots[0]!.quantity = 1;

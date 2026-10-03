@@ -42,7 +42,7 @@ npm run benchmark:server -- --moving --players=128 --layout=crowded
 
 La build e i 48 test mirati passano. Le cinque verifiche browser/trasporto passano: HUD desktop e touch, input dopo interazioni con mappa e team, rendering dei livelli del mondo, sessioni e movimento locale/remoto con due browser. I server temporanei vengono chiusi nei blocchi di cleanup.
 
-La suite generale ha 236 test: 219 passano e restano i 17 fallimenti già presenti nella review. Riguardano i presupposti storici di arena, sanctuary, geometria, generazione e formato di persistenza. Il loro riallineamento resta rinviato secondo le priorità concordate. La verifica browser storica del combattimento continua a usare una posizione oggi dentro una zona sicura e non supera l'aspettativa sui cast ripetuti.
+Alla conclusione del refactor degli snapshot, la suite generale aveva 236 test: 219 passati e i 17 fallimenti già presenti nella review. Riguardano i presupposti storici di arena, sanctuary, geometria, generazione e formato di persistenza. Il loro riallineamento resta rinviato secondo le priorità concordate. I risultati aggiornati dopo l'intervento sulla persistenza sono in [persistence.md](persistence.md). La verifica browser storica del combattimento continua a usare una posizione oggi dentro una zona sicura e non supera l'aspettativa sui cast ripetuti.
 
 Benchmark locale in memoria: 360 tick, 60 di riscaldamento, frequenza snapshot 15 Hz. La misura include costruzione, codifica, serializzazione e commit, senza socket, TLS o disco. Il confronto serializza separatamente la vista completa dello stesso scenario, fuori dal timer di broadcast. Keyframe inclusi.
 
@@ -60,4 +60,4 @@ Proiettili, pickup, trappole, eventi e stato dei boss conservano il formato comp
 
 Il renderer ora importa minimappa, rasterizzazione sprite e primitive grafiche da moduli dedicati. La UI importa ritratti e icone da `client/ui-art.ts`. La scomposizione completa di terreno, attori, HUD e lobby resta progressiva: i due orchestratori sono ancora grandi.
 
-La persistenza conserva il comportamento precedente, incluse serializzazione e scritture sincrone. Una coda ordinata con interfaccia e gestione degli errori è un intervento successivo distinto dalla replicazione. NPC, world builder, dungeon, regole delle ricompense e coordinate dei test storici non sono stati modificati.
+La persistenza è stata successivamente portata dietro un'interfaccia con coda ordinata e I/O asincrono nel server live; garanzie e limiti sono descritti in [persistence.md](persistence.md). La serializzazione JSON resta sincrona. NPC, world builder, dungeon, regole delle ricompense e coordinate dei test storici non sono stati modificati.

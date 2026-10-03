@@ -78,7 +78,7 @@ Mana: rigenerazione di 7/s. Rabbia: generata infliggendo/subendo danni, decade f
 
 Il login usa nome e password, derivate con scrypt e salt. Il trasporto calcola le password in modo asincrono, con massimo quattro derivazioni simultanee e un budget per IP condiviso tra connessioni. Il browser conserva un JWT di 30 giorni in `localStorage`, chiave `riftlands.jwt`. Una riconnessione usa quel token senza ripetere la registrazione.
 
-Conserva la cartella `data`: `accounts.json` contiene account, personaggi, progressi e gold; `dungeon.json` contiene solo gli stati dei boss; `jwt.secret` contiene il segreto di firma (oppure impostare `JWT_SECRET`). Al primo avvio dopo l'aggiornamento, i boss vengono trasferiti automaticamente dal vecchio `accounts.json` a `dungeon.json`. Se lo stato boss non è compatibile con il nuovo catalogo, viene azzerato; un `dungeon.json` incompatibile viene salvato come `.invalid-…bak` prima dell'azzeramento. Per azzerare manualmente i boss, ferma il server e cancella solo `data/dungeon.json`: sarà ricreato all'avvio. Non cancellare `accounts.json` né `jwt.secret`. La mancanza di database è voluta per questa fase. Le sostituzioni dei JSON sono atomiche; scrittura e serializzazione restano sincrone. I personaggi vengono salvati ogni cinque secondi e alla chiusura regolare. Un crash può perdere gli ultimi secondi. Il vecchio formato account v1 viene azzerato all'apertura: conservarne un backup prima dell'aggiornamento. Il logout elimina il token dal dispositivo, senza revocare un token già copiato. Non esiste recupero password. Usare HTTPS/WSS in pubblico.
+Conserva la cartella `data`: `accounts.json` contiene account, personaggi, progressi e gold; `dungeon.json` contiene solo gli stati dei boss; `jwt.secret` contiene il segreto di firma (oppure impostare `JWT_SECRET`). Al primo avvio dopo l'aggiornamento, i boss vengono trasferiti automaticamente dal vecchio `accounts.json` a `dungeon.json`. Se lo stato boss non è compatibile con il nuovo catalogo, viene azzerato; un `dungeon.json` incompatibile viene salvato come `.invalid-…bak` prima dell'azzeramento. Per azzerare manualmente i boss, ferma il server e cancella solo `data/dungeon.json`: sarà ricreato all'avvio. Non cancellare `accounts.json` né `jwt.secret`. La mancanza di database è voluta per questa fase. Le sostituzioni dei JSON sono atomiche per singolo file. Nel server live le scritture sono asincrone e ordinate; la serializzazione JSON resta nel thread principale. Registrazioni, trasferimenti in partita e chiusura regolare attendono i salvataggi richiesti. Dettagli in [persistence.md](docs/persistence.md). I personaggi vengono salvati ogni cinque secondi e alla chiusura regolare. Un crash può perdere gli ultimi secondi. Il vecchio formato account v1 viene azzerato all'apertura: conservarne un backup prima dell'aggiornamento. Il logout elimina il token dal dispositivo, senza revocare un token già copiato. Non esiste recupero password. Usare HTTPS/WSS in pubblico.
 
 ## Struttura
 
@@ -108,7 +108,9 @@ server/
   simulation.ts    Stato autorevole, combattimento, NPC, chunk e socialità
   snapshot-builder.ts Selezione spaziale e costruzione delle viste per destinatario
   snapshot-private-state.ts Cache delle viste private di inventario e narrativa
-  store.ts         Identità e archivio account
+  store.ts         Identità, caricamento e documenti account
+  gameplay-persistence.ts Contratto dei salvataggi per simulazione, boss e stanze
+  save-writer.ts   Coda ordinata e sostituzione atomica dei file
 tests/             Test della logica e test browser con due client
 ```
 

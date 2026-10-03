@@ -21,8 +21,8 @@ Al ritorno bisogna uscire dal cerchio e rientrare per iscriversi nuovamente. Anc
 La creazione resta un'API **interna al server**, utilizzata dall'ingresso fisico e disponibile per i futuri accessi 2v2/BG. Non è un messaggio che un client può inviare per trasferire arbitrariamente altri giocatori.
 
 ```ts
-const roomId = rooms.createMatch('arena', [[playerA], [playerB]]);
-// oppure: rooms.createMatch('battleground', [[a, b], [c, d]], 600);
+const roomId = await rooms.createMatch('arena', [[playerA], [playerB]]);
+// oppure: await rooms.createMatch('battleground', [[a, b], [c, d]], 600);
 rooms.closeMatch(roomId);
 ```
 
