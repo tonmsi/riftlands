@@ -91,7 +91,8 @@ export class ActorRenderer {
     hitTargets: ReadonlySet<string>,
     moveDirection?: Vec2 | null,
     windup?: BossWindup,
-    detailed = true
+    detailed = true,
+    viewSign = 1
   ): void {
     const { ctx } = this;
     const dead = actor.hp <= 0;
@@ -99,6 +100,12 @@ export class ActorRenderer {
     const r = actor.radius || PLAYER_RADIUS;
     ctx.save();
     ctx.translate(actor.x, actor.y);
+    ctx.scale(1, viewSign);
+    if (viewSign === -1) {
+      actor = { ...actor, y: -actor.y, aim: -actor.aim,
+        spriteRow: actor.spriteRow === 0 ? 1 : actor.spriteRow === 1 ? 0 : actor.spriteRow };
+      if (moveDirection) moveDirection = { x: moveDirection.x, y: -moveDirection.y };
+    }
 
     if (actor.hidden) ctx.globalAlpha = self || allied ? 0.58 : 0.32;
     if (actor.dialogueId) {

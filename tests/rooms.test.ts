@@ -19,6 +19,16 @@ function advance(manager: RoomManager, seconds: number) {
   for (let i = 0; i < seconds * 10; i++) manager.step(0.1);
 }
 
+test('arena spawns oppose each other on the horizontal axis of reflection', async () => {
+  const { manager, ids } = setup(2);
+  await manager.createMatch('arena', [[ids[0]], [ids[1]]]);
+  const self = manager.snapshotFor(ids[0])!.self;
+  const opponent = manager.snapshotFor(ids[1])!.self;
+  assert.equal(self.x, 0); assert.equal(self.y, -240); assert.equal(self.aim, Math.PI / 2);
+  assert.equal(opponent.x, 0); assert.equal(opponent.y, 240); assert.equal(opponent.aim, -Math.PI / 2);
+  assert.equal(manager.simulationFor(ids[0]).world.mode, 'arena');
+});
+
 test('voluntary logout immediately dissolves a pair without removing the combat body', () => {
   const { manager, ids } = setup(2);
   manager.socialAction(ids[0], 'team-invite', ids[1]);

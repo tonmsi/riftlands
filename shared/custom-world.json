@@ -185,193 +185,6 @@
       }
     },
     {
-      "id": "asset-64df1a80-72b4-464d-b9b0-5b3708e6a231",
-      "name": "relitto",
-      "image": "/world-assets/5b25533e4a294d28ad3971b8ee02c7afd362dbdeeac511b6de677fb94ad591ff.png",
-      "width": 6,
-      "height": 6,
-      "columns": 6,
-      "rows": 6,
-      "cells": [
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        }
-      ],
-      "layer": "object",
-      "pivot": {
-        "x": 0.5,
-        "y": 0
-      },
-      "generation": {
-        "enabled": false,
-        "category": "vegetation",
-        "terrains": [
-          "grass",
-          "bush",
-          "mud"
-        ],
-        "temperature": [
-          0,
-          1
-        ],
-        "moisture": [
-          0,
-          1
-        ],
-        "density": 0.2,
-        "spacing": 1
-      },
-      "fade": {
-        "opacity": 0.28,
-        "feather": 0.35,
-        "durationMs": 180
-      },
-      "visual": {
-        "kind": "image"
-      }
-    },
-    {
       "id": "asset-db8c6bf2-9a6b-4711-9610-d7dc26ec41d9",
       "name": "Immagine ChatGPT 2 ott 2026, 19_32_20-1",
       "image": "/world-assets/4049586a6848a67f1240a22a640e933cc07ad45b202f07550c6cb33f37f217f1.png",
@@ -757,1649 +570,6 @@
         },
         {
           "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        }
-      ],
-      "layer": "object",
-      "pivot": {
-        "x": 0.5,
-        "y": 1
-      },
-      "generation": {
-        "enabled": false,
-        "category": "vegetation",
-        "terrains": [
-          "grass",
-          "bush",
-          "mud"
-        ],
-        "temperature": [
-          0,
-          1
-        ],
-        "moisture": [
-          0,
-          1
-        ],
-        "density": 0.2,
-        "spacing": 1
-      },
-      "fade": {
-        "opacity": 0.28,
-        "feather": 0.35,
-        "durationMs": 180
-      },
-      "visual": {
-        "kind": "image"
-      }
-    },
-    {
-      "id": "asset-c5e3e287-b3a7-4e6a-9cb8-d2df75d02cc2",
-      "name": "Altopiano roccioso sfaccettato",
-      "image": "/world-assets/6ac284222f1b82944bd33cca86841cc06798bf7532ae85d7ad09b4370b64ce7d.png",
-      "width": 20,
-      "height": 20,
-      "columns": 20,
-      "rows": 20,
-      "cells": [
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "fade"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
           "visibility": "normal"
         },
         {
@@ -3171,6 +1341,366 @@
         "feather": 0.35,
         "durationMs": 180
       }
+    },
+    {
+      "id": "asset-32f59352-ac6d-4f94-84ae-f6a192dd7a16",
+      "name": "Immagine ChatGPT 3 ott 2026, 15_18_56-1",
+      "image": "/world-assets/95a67bb6205591376fb650b9fbd1eb108c42571a9c8c1af8d8109741d568cbec.png",
+      "width": 8,
+      "height": 8,
+      "columns": 8,
+      "rows": 8,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "asset-cd80462d-42aa-4c5f-a280-71d49aeb782e",
+      "name": "Monumento dei Marinai Perduti",
+      "image": "/world-assets/33e09dd4d35da7d65af96224b4ab93a9a8092484497e63865feb759297c4bed7.png",
+      "width": 2,
+      "height": 2,
+      "columns": 2,
+      "rows": 2,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
     }
   ],
   "placements": [
@@ -3275,6 +1805,12 @@
       "assetId": "asset-ca4ceec7-606d-4869-b14a-42bbf02f0fce",
       "x": -11,
       "y": 97
+    },
+    {
+      "id": "asset-961d434b-f163-4645-a785-46dd3f1e120b",
+      "assetId": "asset-cd80462d-42aa-4c5f-a280-71d49aeb782e",
+      "x": 14,
+      "y": 111
     }
   ],
   "tiles": [],

@@ -20,6 +20,8 @@ import { MobileControls } from './mobile-controls';
 import { GameAudio } from './audio';
 import { FrameBudget } from './frame-budget';
 import { prepareLobbyArt } from './lobby-assets';
+import { CAMERA_STORAGE_KEY, parseCameraSettings } from './camera-settings';
+import { CameraOptions } from './camera-options';
 
 let playing = false;
 let latest: Snapshot | null = null;
@@ -114,6 +116,10 @@ window.addEventListener('pointerdown', audio.unlock);
 window.addEventListener('keydown', audio.unlock);
 
 const renderer = new Renderer(ui.canvas);
+let cameraSettings = parseCameraSettings(null);
+try { cameraSettings = parseCameraSettings(localStorage.getItem(CAMERA_STORAGE_KEY)); } catch { /* Storage may be unavailable. */ }
+renderer.setCameraSettings(cameraSettings);
+new CameraOptions(document.querySelector<HTMLElement>('#app')!, cameraSettings, settings => renderer.setCameraSettings(settings));
 const menuAssetsReady = prepareLobbyArt(renderer.spritesReady, (done, total, failed) => ui.setAssetProgress(done, total, failed), Object.values(PROFILE_URLS)).then(art => ui.setLobbyArt(art));
 const connection = new GameConnection({
   reset: () => { releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
@@ -264,7 +270,7 @@ function inputTick(): void {
   if (pending.length > 120) { releaseControls(); return; }
   const { dx, dy, aim, cast, autoAim } = isTyping() || ui.inputBlocked || predicted.hp <= 0
     ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined, autoAim: false })
-    : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
+    : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation);
   const castTime = connection.serverTime(), castLead = Math.min(150, connection.ping / 2);
   const readyCast = cast === 'basic' && !localCombat.basicReady(predicted, castTime + castLead) ? undefined : cast;
   const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, analogMovement: matchMedia('(pointer: coarse)').matches || controls.settings.movement !== 'keyboard', ...(readyCast ? { cast: readyCast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
@@ -334,16 +340,16 @@ function frame(now: number): void {
     selectedId,
     previewClass: ui.selectedClass,
     playing,
-    aimPreview: mobileControls?.aimPreview ?? (playing && !ui.inputBlocked && !isTyping() && predicted && predicted.hp > 0 && controls.manualPointerAim && CLASSES[predicted.classId].abilities[controls.previewSlot].targeting === 'directional'
-      ? { slot: controls.previewSlot, angle: controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y)).aim } : null),
+    aimPreview: mobileControls?.aimPreview ? { ...mobileControls.aimPreview, angle: mobileControls.aimPreview.angle * renderer.orientation } : (playing && !ui.inputBlocked && !isTyping() && predicted && predicted.hp > 0 && controls.manualPointerAim && CLASSES[predicted.classId].abilities[controls.previewSlot].targeting === 'directional'
+      ? { slot: controls.previewSlot, angle: controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation).aim } : null),
     moveDirection: playing && !isTyping() && predicted ? (() => {
-      const input = controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y));
+      const input = controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation);
       return { x: input.dx, y: input.dy };
     })() : null,
   });
   if (self && playing && now - lastMinimap > 250) {
-    drawMinimap(ui.compactMinimap, renderer.world, self, actors, latest?.pickups ?? []);
-    if (ui.minimapVisible) drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? [], 4800);
+    drawMinimap(ui.compactMinimap, renderer.world, self, actors, latest?.pickups ?? [], 1600, renderer.orientation);
+    if (ui.minimapVisible) drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? [], 4800, renderer.orientation);
     lastMinimap = now;
   }
 }

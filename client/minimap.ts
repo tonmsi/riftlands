@@ -9,7 +9,7 @@ import { PICKUP_COLORS, circle, noise } from './render-primitives';
 
 /** Mappa locale limitata del terreno procedurale noto. */
 const minimapTerrainViews = new WeakMap<HTMLCanvasElement, { world: World; key: string; canvas: HTMLCanvasElement; width: number; height: number }>();
-export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600): void {
+export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600, viewSign = 1): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const rect = canvas.getBoundingClientRect(), dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
@@ -19,8 +19,12 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
     canvas.height = Math.round(height * dpr);
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.translate(0, height / 2);
+  ctx.scale(1, viewSign);
+  ctx.translate(0, -height / 2);
   const scale = Math.min(width, height) / visibleSpan;
   canvas.dataset.worldSpan = String(visibleSpan);
+  canvas.dataset.viewSign = String(viewSign);
   const spawn = world.authoring.document.spawn;
   const center = self ?? { x: spawn.x * TILE_SIZE, y: spawn.y * TILE_SIZE };
   const left = center.x - width / (2 * scale), top = center.y - height / (2 * scale);

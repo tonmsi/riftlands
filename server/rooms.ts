@@ -135,9 +135,9 @@ export class RoomManager {
         const temporary: Account = { ...member.account, inventory: structuredClone(member.account.inventory), narrative: structuredClone(member.account.narrative), body: undefined, friends: [], requests: [] };
         const actor = simulation.addPlayer(temporary, member.classId);
         actor.teamId = `${id}:${teamIndex}`;
-        actor.x = (teamIndex === 0 ? -1 : 1) * (mode === 'arena' ? 300 : 700);
-        actor.y = mode === 'arena' ? (slot - (team.length - 1) / 2) * 70 : slot * 70 - 140;
-        actor.aim = teamIndex === 0 ? 0 : Math.PI;
+        actor.x = mode === 'arena' ? (slot - (team.length - 1) / 2) * 70 : (teamIndex === 0 ? -1 : 1) * 700;
+        actor.y = mode === 'arena' ? (teamIndex === 0 ? -240 : 240) : slot * 70 - 140;
+        actor.aim = mode === 'arena' ? (teamIndex === 0 ? Math.PI / 2 : -Math.PI / 2) : teamIndex === 0 ? 0 : Math.PI;
       }
       this.rooms.set(id, { id, mode, simulation, members: new Set(ids), endsAt: this.global.now + durationSeconds * 1000 });
       for (const playerId of ids) {

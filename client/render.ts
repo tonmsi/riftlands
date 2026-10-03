@@ -13,12 +13,12 @@ import type { DungeonDefinition } from '../shared/dungeons';
 import { DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossLockState } from '../shared/bosses';
 import { renderDpr } from './frame-budget';
 import { TERRAIN } from './terrain-style';
+import { arenaViewSign, cameraZoom, parseCameraSettings, viewVector, type CameraSettings } from './camera-settings';
 
 import { TerrainRenderer } from './terrain-renderer';
 import { ActorRenderer } from './actor-renderer';
 import type { RenderFrame } from './render-types';
 export type { RenderFrame } from './render-types';
-const MAX_LOGICAL_VIEWPORT = { width: 2200, height: 1400 };
 const TAU = Math.PI * 2;
 export class Renderer {
   private readonly terrain: TerrainRenderer;
@@ -32,6 +32,10 @@ export class Renderer {
   private height = 1;
   private dpr = 1;
   private zoom = 1;
+  private cameraSettings = parseCameraSettings(null);
+  private viewSign = 1;
+  get orientation(): number { return this.viewSign; }
+  setCameraSettings(settings: CameraSettings): void { this.cameraSettings = settings; this.resize(); }
   private lastTime = 0;
   private wasPlaying = false;
   private hasCamera = false;
@@ -62,15 +66,18 @@ export class Renderer {
     this.world = new World(seed, 160, mode);
     this.terrain.invalidate();
     this.hasCamera = false;
+    this.viewSign = 1;
     this.characters.reset();
     this.resize();
   }
 
   screenToWorld(clientX: number, clientY: number): Vec2 {
     const rect = this.canvas.getBoundingClientRect();
+    const offset = viewVector({ x: (clientX - rect.left - this.width / 2) / this.zoom,
+      y: (clientY - rect.top - this.height / 2) / this.zoom }, this.viewSign);
     return {
-      x: (clientX - rect.left - this.width / 2) / this.zoom + this.camera.x,
-      y: (clientY - rect.top - this.height / 2) / this.zoom + this.camera.y,
+      x: offset.x + this.camera.x,
+      y: offset.y + this.camera.y,
     };
   }
 
@@ -92,14 +99,7 @@ export class Renderer {
       this.canvas.width = Math.round(this.width * this.dpr);
       this.canvas.height = Math.round(this.height * this.dpr);
     }
-    const baseZoom = (this.width < 680 ? 0.8 : 0.95) * (this.touchQuery.matches ? 0.8 : 1);
-    const viewportScale = Math.max(1, this.width / MAX_LOGICAL_VIEWPORT.width, this.height / MAX_LOGICAL_VIEWPORT.height);
-    this.zoom = baseZoom * viewportScale;
-    if (this.world.mode === 'arena') {
-      this.zoom = this.touchQuery.matches
-        ? Math.max(0.8, Math.min(this.width / 960, this.height / 768)) * 0.8
-        : Math.max(0.3, Math.min((this.width - 40) / 960, (this.height - 230) / 768));
-    }
+    this.zoom = cameraZoom(this.width, this.height, this.touchQuery.matches, this.cameraSettings);
   }
 
   render(frame: RenderFrame): void {
@@ -109,9 +109,8 @@ export class Renderer {
     this.lastTime = now;
     if (this.dpr !== renderDpr(window.devicePixelRatio, this.width, this.height)) this.resize();
 
-    const target = this.world.mode === 'arena' && frame.playing && !this.touchQuery.matches
-      ? { x: 0, y: 0 }
-      : frame.self && frame.playing
+    this.viewSign = arenaViewSign(this.world.mode, frame.playing ? frame.self?.teamId : null);
+    const target = frame.self && frame.playing
         ? frame.self
         : {
             x: this.world.authoring.document.spawn.x * TILE_SIZE + 25 + Math.sin(frame.time * 0.000025) * 18,
@@ -144,7 +143,7 @@ export class Renderer {
     ctx.fillRect(0, 0, this.width, this.height);
 
     ctx.translate(this.width / 2, this.height / 2);
-    ctx.scale(this.zoom, this.zoom);
+    ctx.scale(this.zoom, this.zoom * this.viewSign);
     ctx.translate(-this.camera.x, -this.camera.y);
 
     this.terrain.drawCachedTerrain(this.world, { camera: this.camera, width: this.width, height: this.height, dpr: this.dpr, zoom: this.zoom }, frame.time);
@@ -299,7 +298,7 @@ export class Renderer {
     const hitTargets = new Set<string>();
     for (const event of events) if (event.kind === 'hit' && event.targetId && frame.time - event.at < 130) hitTargets.add(event.targetId);
 
-    actors.sort((a, b) => a.y - b.y);
+    actors.sort((a, b) => (a.y - b.y) * this.viewSign);
     for (const actor of actors) {
       if (!this.visible(actor)) continue;
       while (objectIndex < objectAssets.length) {
@@ -324,7 +323,8 @@ export class Renderer {
         hitTargets,
         self ? frame.moveDirection : undefined,
         activeWindup,
-        actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss'
+        actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss',
+        this.viewSign
       );
     }
     while (objectIndex < objectAssets.length) paintObject(objectAssets[objectIndex++]);
@@ -469,7 +469,7 @@ export class Renderer {
     for (const teammate of frame.actors) {
       if (teammate.id === frame.self.id || teammate.teamId !== frame.self.teamId || this.visible(teammate)) continue;
       const dx = (teammate.x - this.camera.x) * this.zoom;
-      const dy = (teammate.y - this.camera.y) * this.zoom;
+      const dy = (teammate.y - this.camera.y) * this.zoom * this.viewSign;
       if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) continue;
       const scale = Math.min((this.width / 2 - edge) / Math.abs(dx || 1), (this.height / 2 - edge) / Math.abs(dy || 1));
       const x = centerX + dx * Math.min(1, scale);
@@ -855,15 +855,17 @@ export class Renderer {
     if (!label) return;
 
     ctx.save();
+    ctx.translate(event.x, event.y);
+    ctx.scale(1, this.viewSign);
     ctx.globalAlpha = Math.min(1, (1 - progress) * 2.5);
     ctx.font = `${amount !== undefined ? '700 14px' : '600 10px'} Inter, system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(30,37,28,0.75)';
     ctx.fillStyle = event.color;
-    const y = event.y - 27 - progress * 35;
-    ctx.strokeText(label, event.x, y);
-    ctx.fillText(label, event.x, y);
+    const y = -27 - progress * 35;
+    ctx.strokeText(label, 0, y);
+    ctx.fillText(label, 0, y);
     ctx.restore();
   }
 

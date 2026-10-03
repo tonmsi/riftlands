@@ -87,12 +87,12 @@ export class GameControls {
   get manualPointerAim(): boolean { return this.pressed.has('Mouse0') && this.pointer !== null; }
   get previewSlot(): AbilitySlot { return this.pendingCast ?? (['q', 'e', 'r', 'basic'] as const).find(slot => this.settings.bindings[slot].some(code => this.pressed.has(code))) ?? 'basic'; }
   clear(): void { this.pressed.clear(); this.touchMovement = { x: 0, y: 0 }; this.pointer = null; this.touchAim = null; this.consumeCast(); }
-  sample(position: Vec2, previousAim: number, screenToWorld: (x: number, y: number) => Vec2): { dx: number; dy: number; aim: number; cast?: AbilitySlot; autoAim: boolean } {
+  sample(position: Vec2, previousAim: number, screenToWorld: (x: number, y: number) => Vec2, viewSign = 1): { dx: number; dy: number; aim: number; cast?: AbilitySlot; autoAim: boolean } {
     const held = (action: ControlAction): boolean => this.settings.bindings[action].some(code => this.pressed.has(code));
     const target = this.pointer ? screenToWorld(this.pointer.x, this.pointer.y) : null;
-    let dx = this.touchMovement.x, dy = this.touchMovement.y;
+    let dx = this.touchMovement.x, dy = this.touchMovement.y * viewSign;
     if (this.settings.movement === 'keyboard') {
-      dx += Number(held('right')) - Number(held('left')); dy += Number(held('down')) - Number(held('up'));
+      dx += Number(held('right')) - Number(held('left')); dy += (Number(held('down')) - Number(held('up'))) * viewSign;
     } else if (held('movePointer') && target) {
       const x = target.x - position.x, y = target.y - position.y, distance = Math.hypot(x, y);
       if (distance > 12) { dx += x / distance; dy += y / distance; }
@@ -101,7 +101,7 @@ export class GameControls {
     if (length > 1) { dx /= length; dy /= length; }
     const touchAngle = this.pendingTouchAim ?? this.touchAim;
     const aim = this.manualPointerAim && target && Math.hypot(target.x - position.x, target.y - position.y) > 1
-      ? Math.atan2(target.y - position.y, target.x - position.x) : touchAngle ?? previousAim;
+      ? Math.atan2(target.y - position.y, target.x - position.x) : touchAngle !== null ? touchAngle * viewSign : previousAim;
     return { dx, dy, aim, autoAim: !this.manualPointerAim && touchAngle === null, cast: this.pendingCast ?? (held('basic') ? 'basic' : undefined) };
   }
 }

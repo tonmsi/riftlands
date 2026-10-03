@@ -82,7 +82,7 @@
 .rift-app .target-actions>button { min-height:36px; border-radius:9px; border:1px solid #bbd7fa28; background:#badbff12; font-size:11px; color:#eef5ff }
 .rift-app .right-hud-column { display:contents }
 .rift-app .game-top-right { position:absolute; top:calc(var(--safe-top) + 18px); right:calc(var(--safe-right) + 134px); gap:6px; width:82px; max-width:82px; align-items:flex-end }
-.rift-app .settings-toggle { display:none }
+.rift-app .settings-toggle { display:inline-flex }
 .rift-app .menu-buttons { max-width:none; gap:6px; flex-wrap:nowrap }
 .rift-app .game-top-right .menu-buttons { order:-1 }
 .rift-app .game-hud .hud-menu-button { width:38px; height:38px; min-width:38px; min-height:38px; padding:8px; justify-content:center; border-radius:12px }
@@ -90,7 +90,7 @@
 .rift-app .menu-buttons svg { width:18px; height:18px }
 .rift-app .gold-counter { padding:6px 10px; border-radius:10px; font-size:12px }
 .rift-app .gold-counter b { color:#ffdc73; font-size:12px }
-.rift-app .settings-panel { top:calc(var(--safe-top) + 224px); right:calc(var(--safe-right) + 18px); width:190px; padding:6px; max-height:calc(var(--game-height,100dvh) - 244px) }
+.rift-app .settings-panel { top:calc(var(--safe-top) + 132px); right:calc(var(--safe-right) + 18px); width:250px; max-width:calc(100% - 24px); padding:6px; max-height:calc(var(--game-height,100dvh) - 152px) }
 .rift-app .settings-actions { gap:3px }
 .rift-app .settings-actions .hud-menu-button { width:100%; justify-content:flex-start; min-height:40px; font-size:12px; border:0; box-shadow:none; background:none; backdrop-filter:none }
 .rift-app .settings-actions .hud-menu-button:hover { background:#d6e7ff12 }
@@ -126,6 +126,7 @@
 .rift-app .effect-chip { background:#283d2ab3; border:1px solid #a2ad7d88; padding:3px 5px; color:#e0e8c5 }
 .rift-app .compact-map { position:absolute; top:calc(var(--safe-top) + 18px); right:calc(var(--safe-right) + 18px); width:104px; height:104px; border-radius:50%; padding:0; overflow:hidden; border:2px solid #c3ddff66; background:#142535; box-shadow:0 6px 20px #020b1740; pointer-events:auto; z-index:18 }
 .rift-app .compact-map::after { content:'N'; position:absolute; top:5px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:800; color:#fff; text-shadow:0 1px 3px #000 }
+.rift-app .compact-map:has([data-view-sign="-1"])::after { content:'S' }
 .rift-app .compact-minimap { display:block; width:100%; height:100% }
 .rift-app .minimap-panel { top:50%; left:50%; right:auto; bottom:auto; transform:translate(-50%,-50%); width:min(520px,calc(100% - 48px),calc(var(--game-height,100dvh) - 160px)); padding:14px; max-height:calc(var(--game-height,100dvh) - 24px); z-index:32 }
 .rift-app .minimap-panel .map-actions { display:flex; justify-content:center; gap:10px; margin-top:10px }
@@ -201,3 +202,9 @@
   .rift-app.touch-layout .player-details { top:calc(var(--safe-top) + 186px); left:calc(var(--safe-left) + 4px); width:176px; max-height:calc(var(--game-height,100dvh) - 378px) }
   .rift-app.touch-layout .game-hud:has(.target-panel.is-expanded:not([hidden])) .player-details { top:calc(var(--safe-top) + 330px); max-height:calc(var(--game-height,100dvh) - 522px) }
 }
+.camera-options { display:flex; flex-direction:column; gap:10px; padding:12px; color:#e8eadc; }
+.camera-options label { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:12px; }
+.camera-options output { margin-left:auto; }
+.camera-options input,.camera-options select { width:100%; min-width:0; accent-color:#c7d59d; }
+.camera-options select { padding:7px; background:#1c2928; color:#e8eadc; border:1px solid #8da39855; border-radius:6px; }
+.camera-options small { font-size:11px; line-height:1.5; color:#b8c4b4; }

@@ -285,7 +285,9 @@ export class WorldSimulation {
       const teamId = this.players.get(id)?.teamId;
       const side = teamId?.endsWith(':1') ? 1 : -1;
       const members = [...this.players.values()].filter(player => player.teamId === teamId);
-      return { x: side * (this.mode === 'arena' ? 300 : 700), y: Math.max(0, members.findIndex(player => player.id === id)) * 70 - 140 };
+      const slot = Math.max(0, members.findIndex(player => player.id === id));
+      return this.mode === 'arena' ? { x: (slot - (members.length - 1) / 2) * 70, y: side * 240 }
+        : { x: side * 700, y: slot * 70 - 140 };
     }
     let hash = 0;
     for (const char of id) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
