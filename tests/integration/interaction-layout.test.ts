@@ -33,8 +33,8 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
         const renderer = new Renderer(ui.canvas, new World()); await renderer.spritesReady;
         // A configured sheet must take precedence over the round neutral fallback.
         const frame = document.createElement('canvas'); frame.width = frame.height = 48; const ctx = frame.getContext('2d')!; ctx.fillStyle = '#fa00df'; ctx.fillRect(0, 0, 48, 48);
-        (renderer as any).npcSprites.set('old-fisher', { frames: Array(16).fill(frame) });
-        const draw = (renderer as any).drawNpc.bind(renderer); renderer.ctx.save(); renderer.ctx.translate(24, 24); draw(npc, Date.now(), '#fff'); renderer.ctx.restore();
+        (renderer as any).characters.npcSprites.set('old-fisher', { frames: Array(16).fill(frame) });
+        const draw = (renderer as any).characters.drawNpc.bind((renderer as any).characters); renderer.ctx.save(); renderer.ctx.translate(24, 24); draw(npc, Date.now(), '#fff'); renderer.ctx.restore();
         const pixel = [...renderer.ctx.getImageData(24, 24, 1, 1).data];
         (window as any).interactionFixture = { ui, mobile, snapshot, commands, initialReleases: releases, releases: () => releases, movement: () => movement, pixel };
       });

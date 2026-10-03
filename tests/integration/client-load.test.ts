@@ -67,10 +67,10 @@ test('HUD settings on desktop/mobile and renderer entity churn', { timeout: 90_0
             frame.actors = Array.from({ length: 2000 }, (_, i) => ({ ...self, id: `crowd-${batch}-${i}`, kind: i % 2 ? 'npc' : 'player', npcKind: i % 2 ? 'slime' : undefined, x: i < visibleCount ? (i % 40) * 22 - 440 : 10000, y: i < visibleCount ? Math.floor(i / 40) * 10 - 250 : 10000 }));
             frame.time += 16;
             const start = performance.now(); renderer.render(frame); (batch < 40 ? timings : crowdedTimings).push(performance.now() - start);
-            maxCache = Math.max(maxCache, renderer.classMotion.size);
+            maxCache = Math.max(maxCache, renderer.characters.classMotion.size);
           }
           frame.actors = []; renderer.render(frame);
-          const retained = renderer.classMotion.size;
+          const retained = renderer.characters.classMotion.size;
           renderer.destroy(); canvas.remove();
           timings.sort((a, b) => a - b); crowdedTimings.sort((a, b) => a - b);
           return { medianMs: timings[20], p95Ms: timings[38], crowdedMedianMs: crowdedTimings[20], crowdedP95Ms: crowdedTimings[38], maxCache, retained };

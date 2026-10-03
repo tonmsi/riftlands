@@ -12,3 +12,12 @@ export function circle(ctx: CanvasRenderingContext2D, x: number, y: number, r: n
   ctx.beginPath();
   ctx.arc(x, y, Math.max(0, r), 0, Math.PI * 2);
 }
+
+export function polygon(ctx: CanvasRenderingContext2D, points: number[]): void {
+  ctx.beginPath();
+  for (let i = 0; i < points.length; i += 2) {
+    if (!i) ctx.moveTo(points[i], points[i + 1]);
+    else ctx.lineTo(points[i], points[i + 1]);
+  }
+  ctx.closePath();
+}

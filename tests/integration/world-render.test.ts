@@ -23,9 +23,9 @@ test('game renderer draws authored layers around players and fades overhead cell
       const renderer = new Renderer(window.document.querySelector('canvas')!); await renderer.spritesReady; renderer.weather = 'clear';
       renderer.world = new World(42, 16, 'world', document, []);
       const player = { id: 'self', kind: 'player', x: 24, y: 72, name: 'Prova', classId: 'warrior', radius: 15, hp: 100, maxHp: 100, resource: 100, maxResource: 100, aim: 0, speed: 200, level: 1, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 } };
-      const trace: { id: string; opacity?: number; time?: number; fade?: number }[] = [], assetDraw = renderer.worldAssetArt.draw.bind(renderer.worldAssetArt), actorDraw = renderer.drawActor.bind(renderer);
+      const trace: { id: string; opacity?: number; time?: number; fade?: number }[] = [], assetDraw = renderer.worldAssetArt.draw.bind(renderer.worldAssetArt), actorDraw = renderer.characters.drawActor.bind(renderer.characters);
       renderer.worldAssetArt.draw = (...args: any[]) => { trace.push({ id: args[2].id, opacity: args[3] ?? 1, time: args[5], fade: args[6] }); assetDraw(...args); };
-      renderer.drawActor = (...args: any[]) => { trace.push({ id: args[0].id }); actorDraw(...args); };
+      renderer.characters.drawActor = (...args: any[]) => { trace.push({ id: args[0].id }); actorDraw(...args); };
       const frame = { time: 1000, self: player, actors: [player], projectiles: [], pickups: [], traps: [], events: [], selectedId: null, previewClass: 'warrior', playing: true };
       renderer.render(frame); trace.length = 0; renderer.render({ ...frame, time: 1300 }); const faded = [...trace];
       trace.length = 0; Object.assign(player, { x: 72, y: 24, hidden: true }); renderer.render({ ...frame, time: 1400 }); const hiding = [...trace];

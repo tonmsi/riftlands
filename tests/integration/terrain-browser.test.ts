@@ -65,17 +65,17 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       const ctx = renderer.ctx;
       ctx.setTransform(.95, 0, 0, .95, -2500.25, -2700.75);
       renderer.bounds = { left: 2500 / .95, top: 2700 / .95, right: 3700 / .95, bottom: 3600 / .95 };
-      renderer.drawTerrain(1200);
-      const sprites = new Set(renderer.environmentArt.cache.values());
+      renderer.terrain.drawTerrain(renderer.world, 1200, renderer.ctx, renderer.bounds);
+      const sprites = new Set(renderer.terrain.environmentArt.cache.values());
       const stillFrame = canvas.toDataURL();
       const frames: number[] = [];
       for (let i = 0; i < 30; i++) {
         const start = window.performance.now();
-        renderer.drawTerrain(1200 + i * 16);
+        renderer.terrain.drawTerrain(renderer.world, 1200 + i * 16, renderer.ctx, renderer.bounds);
         frames.push(window.performance.now() - start);
       }
-      const rebuilt = [...renderer.environmentArt.cache.values()].filter(sprite => !sprites.has(sprite)).length;
-      renderer.drawTerrain(12000);
+      const rebuilt = [...renderer.terrain.environmentArt.cache.values()].filter(sprite => !sprites.has(sprite)).length;
+      renderer.terrain.drawTerrain(renderer.world, 12000, renderer.ctx, renderer.bounds);
       return {
         rebuilt, still: stillFrame === canvas.toDataURL(), maxMs: Math.max(...frames),
         meanMs: frames.reduce((a, b) => a + b, 0) / frames.length,
@@ -93,13 +93,13 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       // Let the initial ResizeObserver delivery complete before measuring reuse.
       await new Promise(requestAnimationFrame);
       let builds = 0;
-      const original = renderer.drawTerrain.bind(renderer);
-      renderer.drawTerrain = (...args: unknown[]) => { builds++; original(...args); };
+      const original = renderer.terrain.drawTerrain.bind(renderer.terrain);
+      renderer.terrain.drawTerrain = (...args: unknown[]) => { builds++; original(...args); };
       const draw = () => {
         renderer.ctx.setTransform(renderer.dpr * renderer.zoom, 0, 0,
           renderer.dpr * renderer.zoom, 600 - renderer.camera.x * renderer.zoom,
           450 - renderer.camera.y * renderer.zoom);
-        renderer.drawCachedTerrain(1200);
+        renderer.terrain.drawCachedTerrain(renderer.world, { camera: renderer.camera, width: renderer.width, height: renderer.height, dpr: renderer.dpr, zoom: renderer.zoom }, 1200);
       };
       draw();
       const start = window.performance.now();
@@ -117,7 +117,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       for (let i = 3; i < pixels.length; i += 4) if (pixels[i] !== 255) transparent++;
       renderer.destroy();
       return { warmBuilds, movedBuilds, seededBuilds, resizedBuilds, transparent, meanMs,
-        released: renderer.terrainCache === undefined, dpr: renderer.dpr };
+        released: renderer.terrain.terrainCache === undefined, dpr: renderer.dpr };
     });
     assert.equal(cachedTerrain.warmBuilds, 1, 'small camera movements reuse the terrain bitmap');
     assert.equal(cachedTerrain.movedBuilds, 2, 'leaving cached bounds rebuilds terrain');
@@ -135,20 +135,20 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       const renderer = new Renderer(canvas);
       await renderer.spritesReady;
       await new Promise(requestAnimationFrame);
-      renderer.drawCachedTerrain(1200);
+      renderer.terrain.drawCachedTerrain(renderer.world, { camera: renderer.camera, width: renderer.width, height: renderer.height, dpr: renderer.dpr, zoom: renderer.zoom }, 1200);
       const results = [];
       for (const [dx, dy] of [[230, 0], [0, 230], [-230, -230], [230, -230], [2400, 0]]) {
         renderer.camera.x += dx; renderer.camera.y += dy;
         const started = window.performance.now();
-        renderer.drawCachedTerrain(1200);
+        renderer.terrain.drawCachedTerrain(renderer.world, { camera: renderer.camera, width: renderer.width, height: renderer.height, dpr: renderer.dpr, zoom: renderer.zoom }, 1200);
         const scrollMs = window.performance.now() - started;
-        const cache = renderer.terrainCache.canvas;
+        const cache = renderer.terrain.terrainCache.canvas;
         const actual = cache.getContext('2d').getImageData(0, 0, cache.width, cache.height).data;
-        renderer.terrainCache = undefined;
+        renderer.terrain.invalidate();
         const fullStarted = window.performance.now();
-        renderer.drawCachedTerrain(1200);
+        renderer.terrain.drawCachedTerrain(renderer.world, { camera: renderer.camera, width: renderer.width, height: renderer.height, dpr: renderer.dpr, zoom: renderer.zoom }, 1200);
         const fullMs = window.performance.now() - fullStarted;
-        const rebuilt = renderer.terrainCache.canvas;
+        const rebuilt = renderer.terrain.terrainCache.canvas;
         const expected = rebuilt.getContext('2d').getImageData(0, 0, rebuilt.width, rebuilt.height).data;
         let differences = 0;
         for (let i = 0; i < actual.length; i++) if (Math.abs(actual[i] - expected[i]) > 2) differences++;
@@ -156,7 +156,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       }
       const dpr = renderer.dpr;
       canvas.dispatchEvent(new Event('contextrestored'));
-      const restored = renderer.terrainCache === undefined;
+      const restored = renderer.terrain.terrainCache === undefined;
       const viewports = [];
       for (const [width, height] of [[390, 844], [1920, 1080], [3840, 2160]]) {
         canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
@@ -247,14 +247,14 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       const area = DUNGEON_DEFINITIONS[0].area;
       renderer.ctx.setTransform(1, 0, 0, 1, 600 - area.x, 450 - area.y);
       renderer.bounds = { left: area.x - 600, top: area.y - 450, right: area.x + 600, bottom: area.y + 450 };
-      renderer.drawTerrain(1200);
+      renderer.terrain.drawTerrain(renderer.world, 1200, renderer.ctx, renderer.bounds);
       const map = document.createElement('canvas');
       map.style.cssText = 'position:fixed;right:12px;bottom:12px;width:240px;height:240px;border:2px solid #ddd';
       document.body.append(map);
       drawMinimap(map, renderer.world, { x: area.x, y: area.y }, []);
       return {
-        stoneWash: renderer.environmentArt.washes.has('stone'),
-        sharedRock: [...renderer.environmentArt.cache.keys()].some(key => key.startsWith('rock:')),
+        stoneWash: renderer.terrain.environmentArt.washes.has('stone'),
+        sharedRock: [...renderer.terrain.environmentArt.cache.keys()].some(key => key.startsWith('rock:')),
       };
     });
     assert.ok(dungeon.stoneWash, 'dungeon floors receive the neutral painterly wash');
@@ -273,7 +273,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       const entranceY = area.y + 500;
       renderer.ctx.setTransform(1, 0, 0, 1, 600 - area.x, 450 - entranceY);
       renderer.bounds = { left: area.x - 600, top: entranceY - 450, right: area.x + 600, bottom: entranceY + 450 };
-      renderer.drawTerrain(1200);
+      renderer.terrain.drawTerrain(renderer.world, 1200, renderer.ctx, renderer.bounds);
     });
     await page.screenshot({ path: 'artifacts/dungeon-entrance.png', clip: { x: 450, y: 90, width: 300, height: 760 } });
     await page.evaluate(async () => {
@@ -288,7 +288,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       const area = DUNGEON_DEFINITIONS.at(-1)!.area;
       renderer.ctx.setTransform(1, 0, 0, 1, 600 - area.x, 450 - area.y);
       renderer.bounds = { left: area.x - 600, top: area.y - 450, right: area.x + 600, bottom: area.y + 450 };
-      renderer.drawTerrain(1200);
+      renderer.terrain.drawTerrain(renderer.world, 1200, renderer.ctx, renderer.bounds);
     });
     await page.screenshot({ path: 'artifacts/dungeon-scenery-underlay.png' });
     const outpost = await page.evaluate(async () => {
@@ -309,7 +309,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       const centerY = -220;
       renderer.ctx.setTransform(1, 0, 0, 1, 600, 450 - centerY);
       renderer.bounds = { left: -600, top: centerY - 450, right: 600, bottom: centerY + 450 };
-      renderer.drawTerrain(1200);
+      renderer.terrain.drawTerrain(renderer.world, 1200, renderer.ctx, renderer.bounds);
       return {
         grassBank: [...renderer.ctx.getImageData(409, 141, 1, 1).data],
         pathBank: [...renderer.ctx.getImageData(451, 141, 1, 1).data],

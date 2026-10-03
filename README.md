@@ -89,10 +89,19 @@ client/
   prediction.ts    Previsione locale, riconciliazione e interpolazione
   motion.ts        Interpolazione grafica locale fra tick della simulazione
   snapshots.ts     Buffer remoto adattivo agli arrivi dei pacchetti
-  render.ts        Rendering del mondo e degli attori
+  render.ts        Camera, viewport e ordine dei passaggi di rendering
+  terrain-renderer.ts Terreno e cache scorrevole del mondo
+  actor-renderer.ts Sprite, fallback e stato delle animazioni
+  render-types.ts  Dati del frame e geometria del viewport
   minimap.ts       Minimap con cache del terreno
   sprite-sheet.ts  Caricamento e rasterizzazione delle sprite
-  ui.ts            Menu, HUD e relazioni sociali
+  ui.ts            API della presentazione e coordinamento delle transizioni
+  lobby-ui.ts      Accesso, selezione della classe e profilo
+  hud-ui.ts        HUD di gioco, bersaglio, mappa e pannelli
+  social-ui.ts     Amici, inviti e membri del team
+  world-entrance.ts Transizione d'ingresso e relativi timer
+  ui-layout.ts     Struttura HTML iniziale
+  ui-actions.ts    Contratti delle azioni per ogni vista
   ui-art.ts        Ritratti e icone condivisi dall'interfaccia
   style.css        Stili dell’interfaccia
 shared/
@@ -115,6 +124,8 @@ tests/             Test della logica e test browser con due client
 ```
 
 Le grafie Canvas sono placeholder: per aggiungere sprite, tilemap, animazioni o audio si interviene sul livello di presentazione, mantenendo hitbox e regole nella simulazione. Per aggiungere classi si estendono i tipi e le definizioni condivise; per nuovi effetti/comportamenti si aggiungono sistemi alla simulazione. La versione del protocollo impedisce accessi di client incompatibili.
+
+I confini tra lobby, HUD e renderer e le verifiche della presentazione sono descritti in [client-presentation.md](docs/client-presentation.md).
 
 ### Architettura dei dungeon
 

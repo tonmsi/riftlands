@@ -29,7 +29,8 @@ test('HUD: centered map, circular portraits and non-blocking overlays on desktop
         const noop = () => {};
         let releases = 0;
         let leaves = 0;
-        ui = new GameUI(root, { joinCredentials: noop, joinSaved: noop, logout: noop, leave: () => leaves++, social: noop, select: () => ui.setSelected(null), cast: noop, releaseControls: () => releases++ });
+        const socialCommands: { action: string; targetId?: string }[] = [];
+        ui = new GameUI(root, { joinCredentials: noop, joinSaved: noop, logout: noop, leave: () => leaves++, social: (action: string, targetId?: string) => socialCommands.push({ action, targetId }), select: () => ui.setSelected(null), cast: noop, releaseControls: () => releases++ });
         ui.setAssetProgress(1, 1, 0);
         ui.setPlaying(true);
         const self = { id: 'self', name: 'LongCharacterName1234', kind: 'player', classId: 'paladin', level: 12, xp: 1255, kills: 4, deaths: 0, teamId: 'team', x: 0, y: 72, aim: 0, speed: 180, radius: 15, hp: 120, maxHp: 155, resource: 60, maxResource: 100, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 } };
@@ -52,7 +53,7 @@ test('HUD: centered map, circular portraits and non-blocking overlays on desktop
         document.querySelector('.map-toggle')!.addEventListener('click', () => requestAnimationFrame(draw));
         // Show terrain behind the HUD so transparency and contrast can be reviewed.
         drawMinimap(ui.canvas, world, self, [player], [], 1600);
-        (window as any).hudFixture = { ui, npc, snapshot, releases: () => releases, leaves: () => leaves };
+        (window as any).hudFixture = { ui, npc, snapshot, socialCommands, releases: () => releases, leaves: () => leaves };
       });
       await expect(page.locator('.compact-map')).toBeVisible();
       await expect(page.locator('.minimap-panel')).toBeHidden();
@@ -148,6 +149,31 @@ test('HUD: centered map, circular portraits and non-blocking overlays on desktop
       await page.locator('[data-ref="leave"]').click();
       await page.locator('[data-exit]').click();
       assert.equal(await page.evaluate(() => (window as any).hudFixture.leaves()), 1);
+      if (!touch) {
+        const reset = await page.evaluate(() => {
+          const { ui, snapshot, socialCommands } = (window as any).hudFixture;
+          const visitor = { ...snapshot.actors[1], id: 'visitor', name: 'Altro viaggiatore', teamId: null };
+          ui.setSelected(visitor);
+          const invite = document.querySelector<HTMLButtonElement>('[data-ref="target-team"]')!;
+          invite.click(); invite.click();
+          const beforeReset = socialCommands.length;
+          ui.setSocial({ friends: [], requests: [], teamInvites: [{ id: 'visitor', name: visitor.name }], nearby: [], team: null });
+          ui.setPlaying(false);
+          const cleared = ['target', 'team-roster', 'team-invite', 'social-dot'].every(ref => document.querySelector<HTMLElement>(`[data-ref="${ref}"]`)!.hidden);
+          const unblocked = !ui.inputBlocked && !ui.minimapVisible;
+          ui.setPlaying(true);
+          ui.setSnapshot(snapshot, 24);
+          ui.setSelected(visitor);
+          const enabled = !invite.disabled;
+          invite.click();
+          ui.setPlaying(false);
+          return { beforeReset, commands: socialCommands, cleared, unblocked, enabled };
+        });
+        assert.equal(reset.beforeReset, 1, 'a pending invite cannot be sent twice');
+        assert.ok(reset.cleared && reset.unblocked, 'returning to the menu clears gameplay panels and locks');
+        assert.ok(reset.enabled, 'a new session does not inherit the previous invite timer');
+        assert.deepEqual(reset.commands, Array(2).fill({ action: 'team-invite', targetId: 'visitor' }));
+      }
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       assert.deepEqual(errors, []);
       await context.close();
