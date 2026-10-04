@@ -6,9 +6,9 @@ import { BOSS_WAKE_MS, type BossWindup } from '../shared/bosses';
 import { playerSpriteDirectionRow } from './sprite-direction';
 import { NPC_DEFINITIONS } from '../shared/npcs';
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
-  paladin: new URL('../assets/paladino256.svg', import.meta.url).href,
-  mage: new URL('../assets/mage256.svg', import.meta.url).href,
-  warrior: new URL('../assets/warrior256.svg', import.meta.url).href,
+  paladin: new URL('../assets/paladino256.png', import.meta.url).href,
+  mage: new URL('../assets/mage256.png', import.meta.url).href,
+  warrior: new URL('../assets/warrior256.png', import.meta.url).href,
 };
 // Optional character sheets use the same 4x4 raster cache and animation as hostile NPCs.
 const optionalNpcSprites = import.meta.glob<string>('../assets/npc-*.{svg,png}', { eager: true, query: '?url', import: 'default' });
