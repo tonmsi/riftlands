@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { newWorldAsset, newWorldDocument, parseWorldDocument, resizeWorldAsset, worldAssetVisual, type WorldDocument } from '../shared/world-schema';
+import { newWorldAsset, newWorldDocument, parseWorldDocument, resizeWorldAsset, worldAssetVisual, worldAssetImageBounds, type WorldDocument } from '../shared/world-schema';
 import { WorldAuthoring, type GenerationEnvironment } from '../shared/world-authoring';
 import { World } from '../shared/world';
 import { collidesWorld, hasLineOfSight } from '../shared/physics';
@@ -18,6 +18,40 @@ function grass(document: WorldDocument, x = -4, y = -4, width = 16, height = 16)
   for (let dy = 0; dy < height; dy++) for (let dx = 0; dx < width; dx++) document.tiles.push({ x: x + dx, y: y + dy, terrain: 'grass' });
 }
 const environment: GenerationEnvironment = { tile: () => 'grass', temperature: () => .5, moisture: () => .5, reserved: () => false };
+
+test('artwork overflow survives serialization and viewport culling without extending collisions or hiding', () => {
+  const d = newWorldDocument(); grass(d);
+  const a = newWorldAsset('overflow', 'Ciuffo', '/world-assets/bush.svg');
+  a.cells[0] = { blocked: true, visibility: 'hide-fade' };
+  a.imageTransform = { x: -.5, y: -.75, scale: 2 }; d.assets.push(a);
+  d.placements.push({ id: 'grass', assetId: a.id, x: 0, y: 0 });
+  const restored = parseWorldDocument(JSON.stringify(d));
+  assert.deepEqual(restored.assets[0].imageTransform, a.imageTransform);
+  assert.deepEqual(worldAssetImageBounds(a), { x: -.5, y: -.75, width: 2, height: 2 });
+  const world = new World(42, 16, 'world', restored, []);
+  assert.equal(world.assetsIn({ left: -.5, top: -.5, right: -.1, bottom: -.1 })[0].id, 'grass');
+  assert.deepEqual(world.assetsIn({ left: -.5, top: -.5, right: -.1, bottom: -.1 }, false), []);
+  assert.equal(world.isBlocked(0, 0), true); assert.equal(world.isHiding(24, 24), true);
+  for (const [x, y] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+    assert.equal(world.isBlocked(x, y), false); assert.equal(world.isHiding(x * 48 + 24, y * 48 + 24), false);
+  }
+  for (const t of [{ x: Infinity, y: 0, scale: 1 }, { x: 0, y: 0, scale: 0 }, { x: 33, y: 0, scale: 1 }, { x: 0, y: 0, scale: 9 }]) {
+    a.imageTransform = t; assert.throws(() => parseWorldDocument(d), /trasformazione/);
+  }
+});
+
+test('procedural overflow is visible across generation slots without changing generation or grid semantics', () => {
+  const d = newWorldDocument(), a = newWorldAsset('generated-overflow', 'Erba', '/world-assets/bush.svg');
+  a.generation.enabled = true; a.generation.density = 1; d.assets.push(a);
+  const area = { left: -16, top: -16, right: 16, bottom: 16 }, baseline = new WorldAuthoring(d).assetsIn(area, environment, 42);
+  a.imageTransform = { x: -3, y: -3, scale: 7 };
+  const index = new WorldAuthoring(d);
+  assert.deepEqual(index.assetsIn(area, environment, 42, false), baseline);
+  for (const p of baseline) {
+    const overflow = index.assetsIn({ left: p.x - 2, top: p.y - 2, right: p.x - 1, bottom: p.y - 1 }, environment, 42);
+    assert.ok(overflow.some(q => q.id === p.id)); assert.equal(index.cell(p, p.x - 1, p.y), undefined);
+  }
+});
 
 test('animated artwork survives serialization and legacy drafts while explicit imported images stay static', () => {
   const d = newWorldDocument(), a = newWorldAsset('renamed-fire', 'Fuoco', '/world-assets/brazier.svg');

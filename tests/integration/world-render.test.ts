@@ -66,6 +66,33 @@ test('game renderer draws authored layers around players and fades overhead cell
     assert.ok(partial.center < 90); assert.ok(partial.seam > partial.center + 40); assert.equal(partial.opaque, 255); assert.equal(partial.trunk, 255); assert.equal(partial.restored, 0);
     assert.ok(partial.publicFade.traversable < 90); assert.equal(partial.publicFade.hiding, 255);
     assert.equal(partial.privateFade.traversable, 255); assert.ok(partial.privateFade.hiding < 90);
+    const overflow = await page.evaluate(async () => {
+      const { WorldAssetArt } = await import('/client/world-asset-art.ts' as string);
+      const { clipAssetCells } = await import('/client/asset-cell-regions.ts' as string);
+      const { newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
+      const a = newWorldAsset('overflow', 'Trasformata', '/world-assets/fade-test.svg'); resizeWorldAsset(a, 2, 2);
+      a.imageTransform = { x: -.5, y: -.5, scale: 1.5 };
+      a.cells[0].visibility = 'fade'; a.cells[2].visibility = 'fade'; a.fade = { opacity: .2, feather: 0, durationMs: 0 };
+      const art = new WorldAssetArt(); art.image(a);
+      await new Promise<void>((resolve, reject) => {
+        const deadline = performance.now() + 5000;
+        const check = () => { if (art.image(a)) resolve(); else if (performance.now() > deadline) reject(new Error('Transformed image timeout')); else setTimeout(check, 20); }; check();
+      });
+      const canvas = window.document.createElement('canvas'); canvas.width = canvas.height = 192;
+      const ctx = canvas.getContext('2d')!, p = { id: 'overflow-1', assetId: a.id, x: 1, y: 1 };
+      for (const overhead of [false, true]) {
+        ctx.save(); clipAssetCells(ctx, a, p, 48, (cell: any) => (cell.visibility !== 'normal') === overhead);
+        art.draw(ctx, a, p, 1, 48, 0, 1); ctx.restore();
+      }
+      const alpha = (x: number, y: number) => ctx.getImageData(x, y, 1, 1).data[3];
+      const first = { left: alpha(30, 80), topLeft: alpha(30, 30), right: alpha(160, 80), bottomLeft: alpha(30, 160), bottomRight: alpha(160, 160), outside: alpha(10, 10) };
+      // Translation changes which source pixels lie in each cell; mask caches must follow it.
+      a.imageTransform.x = .5; ctx.clearRect(0, 0, 192, 192); art.draw(ctx, a, p, 1, 48, 0, 1);
+      return { first, shiftedOutside: alpha(30, 80), shiftedOpaque: alpha(100, 80), shiftedFade: alpha(80, 80) };
+    });
+    for (const value of [overflow.first.left, overflow.first.topLeft, overflow.first.bottomLeft, overflow.shiftedFade]) assert.ok(value >= 49 && value <= 53);
+    assert.equal(overflow.first.right, 255); assert.equal(overflow.first.bottomRight, 255); assert.equal(overflow.first.outside, 0);
+    assert.equal(overflow.shiftedOutside, 0); assert.equal(overflow.shiftedOpaque, 255);
     const coverage = await page.evaluate(async () => {
       const { Renderer } = await import('/client/render.ts' as string), { World } = await import('/shared/world.ts' as string);
       const { newWorldDocument, newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);

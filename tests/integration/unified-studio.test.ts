@@ -8,7 +8,7 @@ import { startWorldStudio } from '../../scripts/world-studio-server';
 import { newWorldAsset, newWorldDocument, resizeWorldAsset } from '../../shared/world-schema';
 import { studioDraft } from '../fixtures/studio-draft';
 
-test('one Studio shares assets, installs unplaced dungeons, preserves world edits across tabs and moves every selection with right drag', { timeout: 120_000 }, async () => {
+test('one Studio shares assets, installs unplaced dungeons, preserves world edits across tabs and moves every selection with left drag after selection', { timeout: 120_000 }, async () => {
     const directory = await mkdtemp(join(tmpdir(), 'riftlands-unified-studio-'));
     const options = { root: resolve('.'), port: 0, documentPath: join(directory, 'world.json'), dungeonPath: join(directory, 'dungeons.json'), dataPath: join(directory, 'accounts.json') };
     const document = newWorldDocument(), asset = newWorldAsset('shared-fixture', 'Asset condiviso di prova', '/world-assets/bush.svg');
@@ -59,13 +59,19 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
         const position = at(500, -500, 500, -500); await world.mouse.click(position.x, position.y);
         await world.locator('[data-tool="select"]').click();
         const grab = at(502, -498, 500, -500), drop = at(505, -496, 500, -500);
-        await world.mouse.move(grab.x, grab.y); await world.mouse.down({ button: 'right' }); await world.mouse.move(drop.x, drop.y, { steps: 3 }); await world.mouse.up({ button: 'right' });
+        await world.mouse.click(grab.x, grab.y); await world.mouse.move(grab.x, grab.y); await world.mouse.down({ button: 'left' }); await world.mouse.move(drop.x, drop.y, { steps: 3 }); await world.mouse.up({ button: 'left' });
         await expect(world.locator('#entity-x')).toHaveValue('503'); await expect(world.locator('#entity-y')).toHaveValue('-498');
         await world.locator('#undo').click(); await world.locator('#redo').click(); await world.locator('#undo').click();
         await world.locator('#apply-world').click(); await expect(world.locator('#status')).toContainText('Progetto applicato');
         await go(100, 100); await world.locator('[data-tool="select"]').click();
+        const panStart = at(100, 100), panEnd = at(102, 101);
+        await world.mouse.click(panStart.x, panStart.y); await expect(world.locator('#entity-x')).toHaveValue('100');
+        await world.mouse.move(panStart.x, panStart.y); await world.mouse.down({ button: 'right' }); await world.mouse.move(panEnd.x, panEnd.y); await world.mouse.up({ button: 'right' });
+        await expect(world.locator('#entity-x')).toHaveValue('100'); await expect(world.locator('#entity-y')).toHaveValue('100');
+        await world.mouse.move(panEnd.x, panEnd.y); await expect(world.locator('#coordinates')).toHaveText('X 100 · Y 100');
+        await go(100, 100);
         const drag = async (page: Page, from: { x: number; y: number }, to: { x: number; y: number }) => {
-            await page.mouse.move(from.x, from.y); await page.mouse.down({ button: 'right' }); await page.mouse.move(to.x, to.y, { steps: 3 }); await page.mouse.up({ button: 'right' });
+            await page.mouse.click(from.x, from.y); await page.mouse.move(from.x, from.y); await page.mouse.down({ button: 'left' }); await page.mouse.move(to.x, to.y, { steps: 3 }); await page.mouse.up({ button: 'left' });
         };
         await drag(world, at(101, 101), at(104, 102)); await expect(world.locator('#entity-x')).toHaveValue('103'); await expect(world.locator('#entity-y')).toHaveValue('101');
         await world.locator('#undo').click(); await world.locator('#redo').click();
@@ -73,7 +79,7 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
         await drag(world, at(95, 105), at(97, 106)); await expect(world.locator('#zone-x')).toHaveValue('96'); await expect(world.locator('#zone-y')).toHaveValue('105');
         await world.locator('#undo').click(); await world.locator('#redo').click();
         await drag(world, at(108, 105), at(110, 106)); await expect(world.locator('#zone-shape')).toHaveValue('circle'); await expect(world.locator('#zone-x')).toHaveValue('110');
-        await world.mouse.move(at(110, 106).x, at(110, 106).y); await world.mouse.down({ button: 'right' }); await world.mouse.move(at(111, 107).x, at(111, 107).y); await world.keyboard.press('Escape'); await world.mouse.up({ button: 'right' });
+        await world.mouse.move(at(110, 106).x, at(110, 106).y); await world.mouse.down({ button: 'left' }); await world.mouse.move(at(111, 107).x, at(111, 107).y); await world.keyboard.press('Escape'); await world.mouse.up({ button: 'left' });
         await world.locator('#apply-world').click(); await expect(world.locator('#status')).toContainText('Progetto applicato');
         const saved = JSON.parse(await readFile(options.documentPath, 'utf8'));
         assert.deepEqual(saved.placements[0], { id: 'manual', assetId: asset.id, x: 103, y: 101 });

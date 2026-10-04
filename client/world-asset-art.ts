@@ -1,6 +1,6 @@
 import { TILE_SIZE } from '../shared/config';
 import type { AssetPlacement, WorldAsset } from '../shared/world-schema';
-import { worldAssetVisual, DEFAULT_ASSET_FADE } from '../shared/world-schema';
+import { worldAssetVisual, worldAssetImageBounds, DEFAULT_ASSET_FADE } from '../shared/world-schema';
 import { AssetFadeTransitions, makeAssetFadeMask } from './world-asset-fade';
 import { drawWorldFire } from './world-fire-art';
 import { coordinateHash } from '../shared/coordinate-random';
@@ -23,7 +23,8 @@ export class WorldAssetArt {
     return bitmap;
   }
   image(a: WorldAsset): HTMLCanvasElement | undefined {
-    const key = `${a.image}:${a.width}:${a.height}`, cached = this.cache.get(key);
+    const b = worldAssetImageBounds(a);
+    const key = `${a.image}:${b.width}:${b.height}`, cached = this.cache.get(key);
     if (cached) { this.cache.delete(key); this.cache.set(key, cached); return cached; }
     if (!this.pending.has(key) && !this.failed.has(key) && this.pending.size < 8) {
       this.pending.add(key);
@@ -31,8 +32,8 @@ export class WorldAssetArt {
       image.onload = () => {
         try {
           const bitmap = document.createElement('canvas');
-          const factor = Math.min(2, 1024 / (Math.max(a.width, a.height) * TILE_SIZE));
-          bitmap.width = Math.max(1, Math.ceil(a.width * TILE_SIZE * factor)); bitmap.height = Math.max(1, Math.ceil(a.height * TILE_SIZE * factor));
+          const factor = Math.min(2, 1024 / (Math.max(b.width, b.height) * TILE_SIZE));
+          bitmap.width = Math.max(1, Math.ceil(b.width * TILE_SIZE * factor)); bitmap.height = Math.max(1, Math.ceil(b.height * TILE_SIZE * factor));
           bitmap.getContext('2d')!.drawImage(image, 0, 0, bitmap.width, bitmap.height);
           this.remember(key, bitmap);
         } catch { this.failed.add(key); }
@@ -47,7 +48,7 @@ export class WorldAssetArt {
     const fade = a.fade ?? DEFAULT_ASSET_FADE, bucket = Math.round(Math.max(0, Math.min(1, strength)) * 16);
     const hidingBucket = Math.round(Math.max(0, Math.min(1, hidingStrength)) * 16);
     if (!bucket && !hidingBucket) return image;
-    const maskKey = `mask:${image.width}:${image.height}:${a.width}:${a.height}:${a.cells.map(c => c.visibility).join(',')}:${fade.feather}`;
+    const maskKey = `mask:${image.width}:${image.height}:${a.width}:${a.height}:${JSON.stringify(a.imageTransform)}:${a.cells.map(c => c.visibility).join(',')}:${fade.feather}`;
     const key = `${a.image}:${maskKey}:${fade.opacity}:${bucket}:${hidingBucket}`;
     const cached = !dynamic && this.cache.get(key); if (cached) return cached;
     const bitmap = dynamic ? (this.fadeSurface ??= document.createElement('canvas')) : document.createElement('canvas');
@@ -63,24 +64,24 @@ export class WorldAssetArt {
     return dynamic ? bitmap : this.remember(key, bitmap);
   }
   draw(ctx: CanvasRenderingContext2D, a: WorldAsset, p: AssetPlacement, opacity = 1, unit = TILE_SIZE, time = 0, fade = 0, hidingFade = fade): void {
-    const visual = worldAssetVisual(a);
+    const visual = worldAssetVisual(a), b = worldAssetImageBounds(a);
     if (visual.kind === 'fire' && fade <= 0 && hidingFade <= 0) {
       ctx.save(); ctx.globalAlpha *= opacity;
-      ctx.translate(p.x * unit, p.y * unit); ctx.scale(a.width * unit / TILE_SIZE, a.height * unit / TILE_SIZE);
+      ctx.translate((p.x + b.x) * unit, (p.y + b.y) * unit); ctx.scale(b.width * unit / TILE_SIZE, b.height * unit / TILE_SIZE);
       drawWorldFire(ctx, visual.style, time, coordinateHash(p.x, p.y, 941) * 100);
       ctx.restore(); return;
     }
     let image: HTMLCanvasElement | undefined;
     if (visual.kind === 'fire') {
       image = this.fireSurface ??= document.createElement('canvas');
-      const factor = Math.min(2, 1024 / (Math.max(a.width, a.height) * TILE_SIZE));
-      image.width = Math.ceil(a.width * TILE_SIZE * factor); image.height = Math.ceil(a.height * TILE_SIZE * factor);
+      const factor = Math.min(2, 1024 / (Math.max(b.width, b.height) * TILE_SIZE));
+      image.width = Math.max(1, Math.ceil(b.width * TILE_SIZE * factor)); image.height = Math.max(1, Math.ceil(b.height * TILE_SIZE * factor));
       const paint = image.getContext('2d')!; paint.scale(image.width / TILE_SIZE, image.height / TILE_SIZE); drawWorldFire(paint, visual.style, time, coordinateHash(p.x, p.y, 941) * 100);
     } else image = this.image(a);
     if (image && (fade > 0 || hidingFade > 0)) image = this.faded(a, image, fade, visual.kind === 'fire', hidingFade);
     ctx.save(); ctx.globalAlpha *= opacity;
-    if (image) ctx.drawImage(image, p.x * unit, p.y * unit, a.width * unit, a.height * unit);
-    else { ctx.fillStyle = '#86ab8544'; ctx.fillRect(p.x * unit, p.y * unit, a.width * unit, a.height * unit); }
+    if (image) ctx.drawImage(image, (p.x + b.x) * unit, (p.y + b.y) * unit, b.width * unit, b.height * unit);
+    else { ctx.fillStyle = '#86ab8544'; ctx.fillRect((p.x + b.x) * unit, (p.y + b.y) * unit, b.width * unit, b.height * unit); }
     ctx.restore();
   }
 }

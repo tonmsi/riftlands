@@ -3,7 +3,7 @@ import type { Vec2 } from '../shared/types';
 import type { World } from '../shared/world';
 import { shapeBounds } from '../shared/world-authoring';
 import type { WorldDocument, WorldAsset, WorldZone } from '../shared/world-schema';
-import { worldAssetVisual } from '../shared/world-schema';
+import { worldAssetVisual, worldAssetImageBounds } from '../shared/world-schema';
 import { NPC_DEFINITIONS } from '../shared/npcs';
 import { canStampAsset } from '../shared/world-editing';
 import { WorldAssetArt } from './world-asset-art';
@@ -71,7 +71,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
                 paint.fillStyle = terrains[world.getTile(x, y)].color;
                 paint.fillRect(x * s, y * s, step * s + .5, step * s + .5);
             }
-        const placements = step === 1 ? world.assetsIn(b) : world.authoring.placements.query(b);
+        const placements = step === 1 ? world.assetsIn(b) : world.authoring.visibleAssetsIn(b);
         placements.sort((p, q) => { const a = world.authoring.assets.get(p.assetId)!, c = world.authoring.assets.get(q.assetId)!; return (a.layer === 'ground' ? -1 : 1) - (c.layer === 'ground' ? -1 : 1) || p.y + a.height * a.pivot.y - q.y - c.height * c.pivot.y; });
         cached = { key, world, canvas: bitmap, placements }; terrainViews.set(canvas, cached);
     }
@@ -197,9 +197,9 @@ function drawZone(ctx: CanvasRenderingContext2D, z: WorldZone, view: EditorView,
 }
 export function assetView(assetCanvas: HTMLCanvasElement, a: WorldAsset | undefined, camera = new AssetGridCamera()) {
     if (!a) return;
-    const r = assetCanvas.getBoundingClientRect(); return { a, ...camera.layout(r.width, r.height, a.columns, a.rows) };
+    const r = assetCanvas.getBoundingClientRect(); return { a, ...camera.layout(r.width, r.height, a.columns, a.rows, worldAssetImageBounds(a)) };
 }
-export function drawAssetGrid(assetCanvas: HTMLCanvasElement, art: WorldAssetArt, a: WorldAsset | undefined, previewFade = false, camera?: AssetGridCamera): void {
+export function drawAssetGrid(assetCanvas: HTMLCanvasElement, art: WorldAssetArt, a: WorldAsset | undefined, previewFade = false, camera?: AssetGridCamera, editImage = false): void {
     const assetCtx = assetCanvas.getContext('2d')!;
     const { width, height, dpr } = sizeCanvas(assetCanvas);
     assetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -225,5 +225,10 @@ export function drawAssetGrid(assetCanvas: HTMLCanvasElement, art: WorldAssetArt
                 assetCtx.stroke();
             }
         }
+    if (editImage) {
+        const b = worldAssetImageBounds(v.a);
+        assetCtx.strokeStyle = '#ffe5a4'; assetCtx.lineWidth = 2; assetCtx.setLineDash([6, 4]);
+        assetCtx.strokeRect(b.x * v.s, b.y * v.s, b.width * v.s, b.height * v.s);
+    }
     assetCtx.restore();
 }

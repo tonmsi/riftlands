@@ -8,8 +8,8 @@ import type { TileKind, Vec2 } from '../shared/types';
 import { NPC_DEFINITIONS } from '../shared/npcs';
 import { DUNGEON_DEFINITIONS, type DungeonDefinition } from '../shared/dungeons';
 import { worldDungeons, validateWorld } from '../shared/world-validation';
-import { shapeBounds } from '../shared/world-authoring';
-import { newWorldAsset, parseWorldDocument, resizeWorldAsset, worldAssetVisual, DEFAULT_ASSET_FADE, WORLD_TERRAINS, type WorldDocument, type WorldAsset, type WorldZone, type AssetCell } from '../shared/world-schema';
+import { shapeBounds, insideShape, placementVisualBounds, overlaps } from '../shared/world-authoring';
+import { newWorldAsset, parseWorldDocument, resizeWorldAsset, worldAssetVisual, worldAssetImageBounds, DEFAULT_ASSET_FADE, WORLD_TERRAINS, type WorldDocument, type WorldAsset, type WorldZone, type AssetCell, type AssetPlacement } from '../shared/world-schema';
 import { brushTiles, strokeTiles, WorldBrush, forkWorldDocument } from '../shared/world-editing';
 import { compactWorldTiles, worldTileMetrics, worldDocumentsEqual } from '../shared/world-tiles';
 import { WorldAssetArt } from './world-asset-art';
@@ -58,6 +58,7 @@ let gesture: {
     pan?: Vec2;
     move?: { kind: 'placement' | 'npc' | 'dungeon' | 'zone'; id: string; x: number; y: number };
     cell?: boolean;
+    image?: { x: number; y: number; scale: number; unit: number };
     tool: string;
     mass: boolean;
     brush?: WorldBrush;
@@ -67,6 +68,7 @@ let gesture: {
     settings?: { radius: number; density: number; terrain: TileKind; asset?: WorldAsset };
 } | null = null;
 const keys = new Set<string>();
+let selectedGenerated: AssetPlacement | undefined;
 set('brush-radius', 1);
 set('brush-density', 100);
 function ensureWorld(): void {
@@ -192,6 +194,8 @@ function refreshAsset(a: WorldAsset): void {
     el('asset-preview-title').textContent = `Celle · ${a.name}`;
     set('asset-width', a.width);
     set('asset-height', a.height);
+    set('asset-image-x', Math.round((a.imageTransform?.x ?? 0) * 10000) / 10000); set('asset-image-y', Math.round((a.imageTransform?.y ?? 0) * 10000) / 10000);
+    set('asset-image-scale', (a.imageTransform?.scale ?? 1) * 100);
     set('asset-layer', a.layer);
     set('asset-pivot', a.pivot.y);
     input('gen-enabled').checked = a.generation.enabled;
@@ -226,7 +230,7 @@ function refreshZone(z: WorldZone): void {
 function selectionEntity(): any {
     if (!selected)
         return;
-    return selected.kind === 'placement' ? draft.placements.find(p => p.id === selected!.id) : selected.kind === 'npc' ? draft.npcs.find(n => n.id === selected!.id)
+    return selected.kind === 'placement' ? draft.placements.find(p => p.id === selected!.id) ?? (selectedGenerated?.id === selected.id ? selectedGenerated : undefined) : selected.kind === 'npc' ? draft.npcs.find(n => n.id === selected!.id)
         : selected.kind === 'dungeon' ? draft.dungeons.find(d => d.dungeonId === selected!.id) ?? (() => { const d = worldDungeons(draft, catalog).find(d => d.id === selected!.id); return d ? { dungeonId: d.id, x: d.layout.bounds.minTx, y: d.layout.bounds.minTy } : undefined; })() : draft.zones.find(z => z.id === selected!.id);
 }
 function refreshSelection(): void {
@@ -260,7 +264,7 @@ function draw(): void {
 function drawAssetGrid(): void {
     if (el('asset-inspector').hidden) return;
     assetView();
-    renderAssetGrid(assetCanvas, art, active(), input('preview-fade').checked, assetCamera);
+    renderAssetGrid(assetCanvas, art, active(), input('preview-fade').checked, assetCamera, input('edit-asset-image').checked);
     el('asset-zoom-label').textContent = `${Math.round(assetCamera.zoom * 100)}%`;
 }
 function assetView() {
@@ -270,7 +274,7 @@ function assetView() {
 function zoomAsset(factor: number, x?: number, y?: number): void {
     const v = assetView(); if (!v) return;
     const r = assetCanvas.getBoundingClientRect();
-    assetCamera.zoomAt(factor, x ?? r.width / 2, y ?? r.height / 2, r.width, r.height, v.a.columns, v.a.rows);
+    assetCamera.zoomAt(factor, x ?? r.width / 2, y ?? r.height / 2, r.width, r.height, v.a.columns, v.a.rows, worldAssetImageBounds(v.a));
     schedule();
 }
 function position(event: PointerEvent): Vec2 { const r = canvas.getBoundingClientRect(); return { x: Math.floor((event.clientX - r.left - view.x) / view.scale), y: Math.floor((event.clientY - r.top - view.y) / view.scale) }; }
@@ -279,12 +283,30 @@ function zoom(factor: number, x?: number, y?: number): void { const r = canvas.g
 function selectAt(p: Vec2): void {
     ensureWorld();
     const n = draft.npcs.find(n => n.x === p.x && n.y === p.y);
-    const placements = world.authoring.placements.query({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 });
+    const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 });
     const asset = placements.filter(p => draft.placements.some(a => a.id === p.id)).at(-1), dungeon = world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
     const zone = world.authoring.zonesAt(p.x + .5, p.y + .5)[0];
-    selected = n ? { kind: 'npc', id: n.id } : asset ? { kind: 'placement', id: asset.id } : dungeon ? { kind: 'dungeon', id: dungeon.id } : zone ? { kind: 'zone', id: zone.id } : null;
+    selectedGenerated = placements.filter(a => a.id.startsWith('generated:')).at(-1);
+    selected = n ? { kind: 'npc', id: n.id } : asset ? { kind: 'placement', id: asset.id } : dungeon ? { kind: 'dungeon', id: dungeon.id }
+        : selectedGenerated ? { kind: 'placement', id: selectedGenerated.id } : zone ? { kind: 'zone', id: zone.id } : null;
     refresh();
     schedule();
+}
+function materializeSelection(): void {
+    if (selected?.kind !== 'placement' || selectedGenerated?.id !== selected.id) return;
+    const generated = selectedGenerated, brush = new WorldBrush(draft, true), terrain = world.authoring.tiles.at(generated.x, generated.y)?.terrain;
+    brush.tile(generated, { suppressAssets: true, ...(terrain ? { terrain } : {}) }); brush.flushTiles();
+    const placement = { ...generated, id: uid('asset') }; draft.placements.push(placement);
+    selected = { kind: 'placement', id: placement.id }; selectedGenerated = undefined;
+}
+function selectionContains(p: Vec2): boolean {
+    const entity = selectionEntity(); if (!selected || !entity) return false;
+    if (selected.kind === 'zone') return insideShape(entity.shape, p.x + .5, p.y + .5);
+    if (selected.kind === 'npc') return entity.x === p.x && entity.y === p.y;
+    if (selected.kind === 'placement') return overlaps(placementVisualBounds(entity, world.authoring.assets.get(entity.assetId)!),
+        { left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 });
+    const b = world.dungeons.find(d => d.id === selected!.id)?.layout.bounds;
+    return !!b && p.x >= b.minTx && p.x <= b.maxTx && p.y >= b.minTy && p.y <= b.maxTy;
 }
 function paint(p: Vec2): void {
     if (!gesture)
@@ -318,19 +340,12 @@ canvas.addEventListener('pointerdown', event => {
     canvas.focus();
     const p = position(event);
     ensureWorld();
-    if (event.button === 2 && tool === 'select' && !keys.has('Space')) {
-        selectAt(p);
-        const generated = (!selected || selected.kind === 'zone') ? world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 }).filter(a => a.id.startsWith('generated:')).at(-1) : undefined;
-        if (generated) selected = { kind: 'placement', id: generated.id };
+    if (event.button === 0 && tool === 'select' && !keys.has('Space')) {
+        if (!selectionContains(p)) { selectAt(p); return; }
         if (selected) {
             const before = draft;
             draft = forkWorldDocument(draft);
-            if (generated) {
-                const brush = new WorldBrush(draft, true), terrain = world.authoring.tiles.at(generated.x, generated.y)?.terrain;
-                brush.tile(generated, { suppressAssets: true, ...(terrain ? { terrain } : {}) }); brush.flushTiles();
-                const placement = { ...generated, id: uid('asset') }; draft.placements.push(placement);
-                selected = { kind: 'placement', id: placement.id };
-            }
+            materializeSelection();
             let entity = selectionEntity();
             if (selected.kind === 'dungeon' && !draft.dungeons.some(d => d.dungeonId === selected!.id)) {
                 draft.dungeons.push(entity);
@@ -342,6 +357,7 @@ canvas.addEventListener('pointerdown', event => {
             event.preventDefault();
             return;
         }
+        return;
     }
     if (event.button === 1 || event.button === 2 || keys.has('Space')) {
         gesture = { pointer: event.pointerId, before: draft, start: p, last: p, pan: { x: event.clientX, y: event.clientY }, tool, mass: false };
@@ -458,21 +474,38 @@ canvas.addEventListener('lostpointercapture', event => { if (gesture && !gesture
 canvas.addEventListener('pointerleave', () => { pointerTile = null; schedule(); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('wheel', event => { event.preventDefault(); if (gesture && !gesture.pan) return; const r = canvas.getBoundingClientRect(); zoom(Math.exp(-event.deltaY * .0015), event.clientX - r.left, event.clientY - r.top); }, { passive: false });
-function paintCell(event: PointerEvent): void { const v = assetView(); if (!v || !gesture?.cell || gesture.pan || gesture.pointer !== event.pointerId)
+function paintCell(event: PointerEvent): void { const v = assetView(); if (!v || !gesture?.cell || gesture.pan || gesture.image || gesture.pointer !== event.pointerId)
     return; const r = assetCanvas.getBoundingClientRect(), col = Math.floor((event.clientX - r.left - v.x) / v.s), row = Math.floor((event.clientY - r.top - v.y) / v.s); if (col < 0 || row < 0 || col >= v.a.columns || row >= v.a.rows)
     return; v.a.cells[row * v.a.columns + col] = { blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as AssetCell['visibility'] }; schedule(true); }
 assetCanvas.addEventListener('pointerdown', e => {
     if (!ready || gesture) return;
     assetCanvas.focus();
     const before = draft, pan = e.button === 1 || e.button === 2 || keys.has('Space');
+    const v = assetView(); if (!v) return;
+    const image = input('edit-asset-image').checked && !pan;
+    if (image) {
+        const r = assetCanvas.getBoundingClientRect(), b = worldAssetImageBounds(v.a);
+        const x = (e.clientX - r.left - v.x) / v.s, y = (e.clientY - r.top - v.y) / v.s;
+        if (x < b.x || x >= b.x + b.width || y < b.y || y >= b.y + b.height) return;
+    }
     if (!pan) draft = forkWorldDocument(draft);
     gesture = { pointer: e.pointerId, before, start: { x: 0, y: 0 }, last: { x: 0, y: 0 }, tool: 'cell', mass: false, cell: true, ...(pan ? { pan: { x: e.clientX, y: e.clientY } } : {}) };
+    if (image) {
+        gesture.start = { x: e.clientX, y: e.clientY };
+        gesture.image = { x: v.a.imageTransform?.x ?? 0, y: v.a.imageTransform?.y ?? 0, scale: v.a.imageTransform?.scale ?? 1, unit: v.s };
+    }
+    e.preventDefault();
     assetCanvas.setPointerCapture(e.pointerId); paintCell(e);
 });
 assetCanvas.addEventListener('pointermove', e => {
     if (gesture?.cell && gesture.pan && gesture.pointer === e.pointerId) {
         assetCamera.pan(e.clientX - gesture.pan.x, e.clientY - gesture.pan.y);
         gesture.pan = { x: e.clientX, y: e.clientY }; schedule();
+    } else if (gesture?.image && gesture.pointer === e.pointerId) {
+        const g = gesture, image = g.image!;
+        active()!.imageTransform = { x: Math.round(Math.max(-32, Math.min(32, image.x + (e.clientX - g.start.x) / image.unit)) * 10000) / 10000,
+            y: Math.round(Math.max(-32, Math.min(32, image.y + (e.clientY - g.start.y) / image.unit)) * 10000) / 10000, scale: image.scale };
+        schedule(true);
     } else paintCell(e);
 });
 assetCanvas.addEventListener('pointerup', e => finishGesture(e));
@@ -483,6 +516,9 @@ assetCanvas.addEventListener('wheel', e => { e.preventDefault(); if (gesture) re
 on('asset-zoom-in', () => zoomAsset(1.3));
 on('asset-zoom-out', () => zoomAsset(1 / 1.3));
 on('asset-fit', () => { assetCamera.fit(); schedule(); });
+input('edit-asset-image').addEventListener('change', () => { finishGesture(undefined, true); schedule(); });
+on('asset-image-update', () => change(() => { active()!.imageTransform = { x: num('asset-image-x'), y: num('asset-image-y'), scale: num('asset-image-scale') / 100 }; }));
+on('asset-image-reset', () => change(() => { delete active()!.imageTransform; assetCamera.fit(); }));
 const previewDialog = el<HTMLDialogElement>('asset-preview-dialog');
 on('asset-expand', () => {
     if (previewDialog.open) { previewDialog.close(); return; }
@@ -519,11 +555,11 @@ else
 else
     delete z.npcs; }));
 on('zone-delete', () => change(() => { draft.zones = draft.zones.filter(z => z.id !== selected?.id); selected = null; }));
-on('selection-update', () => change(() => { const e = selectionEntity(); if (!e)
+on('selection-update', () => change(() => { materializeSelection(); const e = selectionEntity(); if (!e)
     return; if (selected?.kind === 'dungeon' && !draft.dungeons.some(d => d.dungeonId === selected!.id))
     draft.dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'npc')
     e.level = num('entity-level'); }));
-on('selection-delete', () => change(() => { if (selected?.kind === 'placement')
+on('selection-delete', () => change(() => { materializeSelection(); if (selected?.kind === 'placement')
     draft.placements = draft.placements.filter(p => p.id !== selected!.id); if (selected?.kind === 'npc')
     draft.npcs = draft.npcs.filter(n => n.id !== selected!.id); if (selected?.kind === 'dungeon') {
     const existing = draft.dungeons.find(d => d.dungeonId === selected!.id);

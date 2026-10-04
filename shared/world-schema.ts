@@ -20,6 +20,12 @@ export interface WorldAsset {
   fade?: { opacity: number; feather: number; durationMs: number };
   /** Catalog organization only; independent of procedural generation categories. */
   group?: string;
+  /** Artwork moves and scales independently of the annotated tile grid. */
+  imageTransform?: { x: number; y: number; scale: number };
+}
+export function worldAssetImageBounds(asset: WorldAsset) {
+  const { x = 0, y = 0, scale = 1 } = asset.imageTransform ?? {};
+  return { x, y, width: asset.width * scale, height: asset.height * scale };
 }
 export interface AssetPlacement extends Vec2 { id: string; assetId: string; }
 export interface TileOverride extends Vec2 { terrain?: TileKind; suppressAssets?: boolean; }
@@ -96,6 +102,8 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       || !['ground', 'object'].includes(a.layer) || !object(a.pivot) || !finite(a.pivot.x, 0, 1) || !finite(a.pivot.y, 0, 1)) fail('definizione asset');
     list(a.cells, 1024, 'celle asset');
     if (a.group !== undefined && (!name(a.group) || a.group.length > 80)) fail(`gruppo di ${a.id}`);
+    if (a.imageTransform !== undefined && (!object(a.imageTransform) || !finite(a.imageTransform.x, -32, 32)
+      || !finite(a.imageTransform.y, -32, 32) || !finite(a.imageTransform.scale, .1, 8))) fail(`trasformazione immagine di ${a.id}`);
     if (a.visual !== undefined && (!object(a.visual) || (a.visual.kind !== 'image' && (a.visual.kind !== 'fire' || !['brazier', 'campfire'].includes(a.visual.style))))) fail(`aspetto di ${a.id}`);
     if (a.cells.length !== a.columns * a.rows || !a.cells.every((c: any) => object(c) && boolean(c.blocked) && ['normal', 'hide', 'fade', 'hide-fade'].includes(c.visibility))) fail(`celle di ${a.id}`);
     if (a.fade !== undefined && (!object(a.fade) || !finite(a.fade.opacity, 0, 1) || !finite(a.fade.feather, 0, 1) || !integer(a.fade.durationMs, 0, 2000))) fail(`sfumatura di ${a.id}`);

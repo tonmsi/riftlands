@@ -52,6 +52,23 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     await page.mouse.click(target.x + 35, target.y + 25);
     await page.locator('#asset-fit').click(); await expect(page.locator('#asset-zoom-label')).toHaveText('100%');
     await page.locator('#fade-opacity').fill('20'); await page.locator('#asset-fade-update').click(); await expect(page.locator('#fade-opacity')).toHaveValue('20');
+    await page.locator('#asset-image-x').fill('-.25'); await page.locator('#asset-image-y').fill('-.5'); await page.locator('#asset-image-scale').fill('175');
+    await page.locator('#asset-image-update').click(); await page.locator('#asset-fit').click(); await page.locator('#edit-asset-image').check();
+    const transformed = (await page.locator('#asset-grid').boundingBox())!, imageUnit = Math.min((transformed.width - 28) / 3.5, (transformed.height - 28) / 3.5);
+    const imageCenter = { x: transformed.x + transformed.width / 2, y: transformed.y + transformed.height / 2 };
+    const moveImage = async () => { await page.mouse.move(imageCenter.x, imageCenter.y); await page.mouse.down(); await page.mouse.move(imageCenter.x + imageUnit * .25, imageCenter.y + imageUnit * .25, { steps: 3 }); };
+    await moveImage(); await page.keyboard.press('Escape'); await page.mouse.up();
+    await expect(page.locator('#asset-image-x')).toHaveValue('-0.25'); await expect(page.locator('#asset-image-y')).toHaveValue('-0.5');
+    // Escape cancels the gesture and closes the preview; reopen before committing a drag.
+    await page.locator('#asset-expand').click(); await page.locator('#asset-fit').click();
+    await moveImage(); await page.mouse.up();
+    assert.ok(Math.abs(Number(await page.locator('#asset-image-x').inputValue())) < .01);
+    assert.ok(Math.abs(Number(await page.locator('#asset-image-y').inputValue()) + .25) < .01);
+    await page.keyboard.press('Control+z'); await expect(page.locator('#asset-image-x')).toHaveValue('-0.25');
+    await page.keyboard.press('Control+Shift+z'); await expect(page.locator('#asset-image-scale')).toHaveValue('175');
+    await page.locator('#asset-image-reset').click(); await expect(page.locator('#asset-image-scale')).toHaveValue('100'); await expect(page.locator('#asset-image-y')).toHaveValue('0');
+    await page.keyboard.press('Control+z'); await expect(page.locator('#asset-image-scale')).toHaveValue('175');
+    await page.locator('#edit-asset-image').uncheck();
     await mkdir(join(root, 'artifacts'), { recursive: true }); await page.screenshot({ path: join(root, 'artifacts/world-asset-review.png') });
     await page.keyboard.press('Escape'); await expect(page.locator('#asset-preview-dialog')).not.toBeVisible();
     await expect(page.locator('#asset-preview-home #asset-grid')).toBeVisible();
@@ -73,6 +90,8 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     assert.equal(saved.assets[0].cells[1].visibility, 'hide'); assert.equal(saved.assets[0].cells[2].visibility, 'fade');
     assert.equal(saved.assets[0].cells[3].visibility, 'hide-fade'); assert.equal(saved.assets[0].group, 'Natura'); assert.equal(saved.assets[0].generation.category, 'vegetation');
     assert.equal(saved.assets[0].fade.opacity, .2);
+    assert.equal(saved.assets[0].imageTransform.scale, 1.75);
+    assert.ok(Math.abs(saved.assets[0].imageTransform.x) < .01); assert.ok(Math.abs(saved.assets[0].imageTransform.y + .25) < .01);
     assert.ok(saved.placements.length > 3); assert.equal(saved.zones[0].npcs.density, 0); assert.equal(saved.npcs.length, 1);
     const world = new World(saved.seed, 16, 'world', saved, []); assert.equal(world.isBlocked(100, 100), true); assert.equal(world.isHiding(101 * 48 + 24, 100 * 48 + 24), true);
     const download = page.waitForEvent('download'); await page.locator('#export-world').click();

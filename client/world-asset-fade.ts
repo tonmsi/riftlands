@@ -1,4 +1,4 @@
-import { assetCellFades, DEFAULT_ASSET_FADE, type WorldAsset } from '../shared/world-schema';
+import { assetCellFades, DEFAULT_ASSET_FADE, worldAssetImageBounds, type WorldAsset } from '../shared/world-schema';
 import { assetCellRegions } from './asset-cell-regions';
 
 /** A small bounded per-instance transition cache; render time, never frame rate, controls fading. */
@@ -21,11 +21,12 @@ export class AssetFadeTransitions {
 /** Blur is clipped back to fade cells: opaque cells retain their exact alpha, including at seams. */
 export function makeAssetFadeMask(asset: WorldAsset, width: number, height: number, visibility?: 'fade' | 'hide-fade'): HTMLCanvasElement {
   const crisp = document.createElement('canvas'); crisp.width = width; crisp.height = height;
-  const paint = crisp.getContext('2d')!, sx = width / asset.width, sy = height / asset.height;
+  const image = worldAssetImageBounds(asset);
+  const paint = crisp.getContext('2d')!, sx = width / image.width, sy = height / image.height;
   paint.fillStyle = '#fff';
   for (const r of assetCellRegions(asset, cell => visibility ? cell.visibility === visibility : assetCellFades(cell))) {
-    const left = Math.round(r.x * sx), top = Math.round(r.y * sy);
-    paint.fillRect(left, top, Math.round((r.x + r.width) * sx) - left, Math.round((r.y + r.height) * sy) - top);
+    const left = Math.round((r.x - image.x) * sx), top = Math.round((r.y - image.y) * sy);
+    paint.fillRect(left, top, Math.round((r.x + r.width - image.x) * sx) - left, Math.round((r.y + r.height - image.y) * sy) - top);
   }
   const mask = document.createElement('canvas'); mask.width = width; mask.height = height;
   const ctx = mask.getContext('2d')!, feather = asset.fade?.feather ?? DEFAULT_ASSET_FADE.feather;

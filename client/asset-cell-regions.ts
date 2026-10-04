@@ -1,7 +1,11 @@
 import type { AssetCell, AssetPlacement, WorldAsset } from '../shared/world-schema';
+import { worldAssetImageBounds } from '../shared/world-schema';
 
 /** Merge adjacent cells before rasterization, so shared tile edges never become image seams. */
 export function assetCellRegions(asset: WorldAsset, include: (cell: AssetCell) => boolean): { x: number; y: number; width: number; height: number }[] {
+  const image = worldAssetImageBounds(asset);
+  const left = Math.min(0, image.x), top = Math.min(0, image.y);
+  const right = Math.max(asset.width, image.x + image.width), bottom = Math.max(asset.height, image.y + image.height);
   const regions: { x: number; y: number; width: number; height: number }[] = [];
   let previous = new Map<string, typeof regions[number]>();
   for (let y = 0; y < asset.rows; y++) {
@@ -11,8 +15,10 @@ export function assetCellRegions(asset: WorldAsset, include: (cell: AssetCell) =
       const start = x;
       while (x < asset.columns && include(asset.cells[y * asset.columns + x])) x++;
       const key = `${start}:${x}`, prior = previous.get(key);
-      const height = Math.min(1, asset.height - y);
-      const region = prior ?? { x: start, y, width: Math.min(x, asset.width) - start, height: 0 };
+      const rowTop = y === 0 ? top : y, rowBottom = y === asset.rows - 1 ? bottom : y + 1;
+      const regionLeft = start === 0 ? left : start, regionRight = x === asset.columns ? right : x;
+      const height = rowBottom - rowTop;
+      const region = prior ?? { x: regionLeft, y: rowTop, width: regionRight - regionLeft, height: 0 };
       region.height += height;
       if (!prior) regions.push(region);
       current.set(key, region);

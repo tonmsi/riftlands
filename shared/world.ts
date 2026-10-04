@@ -37,7 +37,7 @@ export class World {
     document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS) {
     this.authoring = new WorldAuthoring(document);
     for (const d of dungeons) for (const p of d.assetPlacements ?? []) {
-      if (this.authoring.assets.has(p.assetId)) this.authoring.placements.add({ ...p, id: `dungeon:${d.id}:${p.id}` });
+      if (this.authoring.assets.has(p.assetId)) this.authoring.addPlacement({ ...p, id: `dungeon:${d.id}:${p.id}` });
     }
     for (const n of document.npcs) {
       const x = (n.x + .5) * TILE_SIZE, y = (n.y + .5) * TILE_SIZE, c = chunkCoords(x, y), key = chunkKey(c.cx, c.cy);
@@ -50,7 +50,8 @@ export class World {
         || this.dungeons.some(d => onDungeonApproach(d, { x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE }))
         || this.arenaAt((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE) !== undefined };
   }
-  assetsIn(bounds: TileBounds): AssetPlacement[] { return this.mode === 'world' ? this.authoring.assetsIn(bounds, this.generationEnvironment, this.seed) : []; }
+  /** Rendering includes image overflow; movement and concealment query only the tile grid. */
+  assetsIn(bounds: TileBounds, includeArtwork = true): AssetPlacement[] { return this.mode === 'world' ? this.authoring.assetsIn(bounds, this.generationEnvironment, this.seed, includeArtwork) : []; }
   updateAuthoredTiles(document: WorldDocument, chunks: readonly WorldTileChunk[]): void {
     this.authoring.document = document;
     this.authoring.tiles.update(chunks); this.authoring.invalidateTileGeneration(); this.authoringRevision++;
@@ -59,11 +60,11 @@ export class World {
   }
   locationAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE)[0]?.name : undefined; }
   isBlocked(tx: number, ty: number): boolean {
-    return isSolid(this.getTile(tx, ty)) || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }).some(p => this.authoring.cell(p, tx, ty)?.blocked);
+    return isSolid(this.getTile(tx, ty)) || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false).some(p => this.authoring.cell(p, tx, ty)?.blocked);
   }
   isHiding(x: number, y: number): boolean {
     const tx = Math.floor(x / TILE_SIZE), ty = Math.floor(y / TILE_SIZE);
-    return this.getTile(tx, ty) === 'bush' || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }).some(p => ['hide', 'hide-fade'].includes(this.authoring.cell(p, tx, ty)?.visibility ?? ''));
+    return this.getTile(tx, ty) === 'bush' || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false).some(p => ['hide', 'hide-fade'].includes(this.authoring.cell(p, tx, ty)?.visibility ?? ''));
   }
   pvpAt(x: number, y: number): boolean { return this.mode !== 'world' || (this.authoring.rule(x / TILE_SIZE, y / TILE_SIZE, 'pvp') ?? true); }
   arenaAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE).find(z => z.arenaId)?.id : undefined; }

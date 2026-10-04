@@ -2,6 +2,7 @@ import { CHUNK_TILES } from './config';
 import { coordinateHash } from './coordinate-random';
 import type { TileKind } from './types';
 import type { AssetCell, AssetPlacement, TileOverride, WorldAsset, WorldDocument, WorldZone, ZoneShape } from './world-schema';
+import { worldAssetImageBounds } from './world-schema';
 import { WorldTiles } from './world-tiles';
 
 export interface TileBounds { left: number; top: number; right: number; bottom: number; }
@@ -18,6 +19,11 @@ export function overlaps(a: TileBounds, b: TileBounds): boolean {
 }
 export function placementBounds(p: AssetPlacement, a: WorldAsset): TileBounds {
   return { left: p.x, top: p.y, right: p.x + a.columns, bottom: p.y + a.rows };
+}
+export function placementVisualBounds(p: AssetPlacement, a: WorldAsset): TileBounds {
+  const image = worldAssetImageBounds(a);
+  return { left: p.x + Math.min(0, image.x), top: p.y + Math.min(0, image.y),
+    right: p.x + Math.max(a.columns, image.x + image.width), bottom: p.y + Math.max(a.rows, image.y + image.height) };
 }
 /** Bounded bucket expansion; enormous zones use a separate coarse list rather than millions of entries. */
 export class SpatialIndex<T> {
@@ -44,13 +50,14 @@ export interface GenerationEnvironment {
   tile(x: number, y: number): TileKind; temperature(x: number, y: number): number; moisture(x: number, y: number): number;
   reserved(x: number, y: number): boolean;
 }
-interface GenerationBand { stride: number; assets: WorldAsset[]; density: number; maxSpacing: number; }
+interface GenerationBand { stride: number; assets: WorldAsset[]; density: number; maxSpacing: number; overhang: number; }
 interface Proposal { placement: AssetPlacement; priority: number; band: GenerationBand; }
 /** Immutable runtime snapshot. Editor mutations create a new snapshot and invalidate all derived caches. */
 export class WorldAuthoring {
   readonly assets: ReadonlyMap<string, WorldAsset>;
   readonly tiles: WorldTiles;
   readonly placements: SpatialIndex<AssetPlacement>;
+  private visiblePlacements: SpatialIndex<AssetPlacement>;
   readonly zones = new SpatialIndex<WorldZone>(z => shapeBounds(z.shape));
   private bands: GenerationBand[];
   private proposals = new Map<string, Proposal | null>();
@@ -60,17 +67,22 @@ export class WorldAuthoring {
     this.assets = new Map(document.assets.map(a => [a.id, a]));
     this.tiles = new WorldTiles(document);
     this.placements = new SpatialIndex(p => placementBounds(p, this.assets.get(p.assetId)!));
-    for (const p of document.placements) this.placements.add(p);
+    this.visiblePlacements = new SpatialIndex(p => placementVisualBounds(p, this.assets.get(p.assetId)!));
+    for (const p of document.placements) this.addPlacement(p);
     for (const z of document.zones) this.zones.add(z);
     const bands = new Map<number, GenerationBand>();
     for (const a of document.assets.filter(a => a.generation.enabled && a.generation.density > 0).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
       const stride = 2 ** Math.ceil(Math.log2(Math.max(a.columns, a.rows) + 2 * a.generation.spacing));
-      const band = bands.get(stride) ?? { stride, assets: [], density: 0, maxSpacing: 0 };
+      const band = bands.get(stride) ?? { stride, assets: [], density: 0, maxSpacing: 0, overhang: 0 };
+      const b = placementVisualBounds({ x: 0, y: 0, id: '', assetId: a.id }, a);
+      band.overhang = Math.max(band.overhang, -b.left, -b.top, b.right - a.columns, b.bottom - a.rows);
       band.assets.push(a); band.density += a.generation.density; band.maxSpacing = Math.max(band.maxSpacing, a.generation.spacing); bands.set(stride, band);
     }
     // Size bands keep small vegetation dense when a large asset is added to the catalog.
     this.bands = [...bands.values()].sort((a, b) => a.stride - b.stride);
   }
+  addPlacement(p: AssetPlacement): void { this.placements.add(p); this.visiblePlacements.add(p); }
+  visibleAssetsIn(bounds: TileBounds): AssetPlacement[] { return this.visiblePlacements.query(bounds); }
   zonesAt(x: number, y: number): WorldZone[] {
     const key = `${x},${y}`, cached = this.zoneCache.get(key);
     if (cached) return cached;
@@ -139,13 +151,16 @@ export class WorldAuthoring {
     while (this.generated.size > 2048) this.generated.delete(this.generated.keys().next().value!);
     return result;
   }
-  assetsIn(bounds: TileBounds, env: GenerationEnvironment, seed: number): AssetPlacement[] {
-    const result = this.placements.query(bounds);
-    for (const band of this.bands) for (let sy = Math.floor(bounds.top / band.stride); sy < Math.ceil(bounds.bottom / band.stride); sy++)
-      for (let sx = Math.floor(bounds.left / band.stride); sx < Math.ceil(bounds.right / band.stride); sx++) {
+  assetsIn(bounds: TileBounds, env: GenerationEnvironment, seed: number, includeArtwork = true): AssetPlacement[] {
+    const result = (includeArtwork ? this.visiblePlacements : this.placements).query(bounds);
+    for (const band of this.bands) {
+      const padding = includeArtwork ? band.overhang : 0;
+      for (let sy = Math.floor((bounds.top - padding) / band.stride); sy < Math.ceil((bounds.bottom + padding) / band.stride); sy++)
+      for (let sx = Math.floor((bounds.left - padding) / band.stride); sx < Math.ceil((bounds.right + padding) / band.stride); sx++) {
         const p = this.candidate(band, sx, sy, env, seed);
-        if (p && overlaps(bounds, placementBounds(p, this.assets.get(p.assetId)!))) result.push(p);
+        if (p && overlaps(bounds, (includeArtwork ? placementVisualBounds : placementBounds)(p, this.assets.get(p.assetId)!))) result.push(p);
       }
+    }
     return result;
   }
   get generationCacheSize(): number { return this.generated.size; }
