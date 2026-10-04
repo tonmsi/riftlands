@@ -141,5 +141,5 @@ test('authored NPCs use real combat and preview rejects entrances disconnected f
   for (let i = 0; i < 35; i++) p.step(1 / 30, { dx: 0, dy: 0, aim: Math.atan2(npc.y - p.player.y, npc.x - p.player.x), cast: 'basic' });
   assert.ok(npc.hp < npc.maxHp);
   const closed = studioDraft(); closed.tiles[3 * closed.width] = 'rock'; closed.tiles[0] = 'grass';
-  assert.throws(() => createDungeonPlaytest(closed), /collegalo agli spawn/);
+  assert.throws(() => createDungeonPlaytest(closed), /collegalo alla stanza/);
 });

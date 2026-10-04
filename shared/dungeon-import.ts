@@ -1,8 +1,9 @@
 import { TILE_SIZE } from './config';
 import { compileDungeonDraft, draftFromDungeon, newDungeonDraft, parseDungeonDraft, type DungeonDraft } from './dungeon-draft';
 import { assertValidDungeonDefinition, dungeonEncounters, onDungeonBoundary, type DungeonDefinition } from './dungeons';
+import type { WorldAsset } from './world-schema';
 /** Accept both files emitted by the editor, never treating imported JSON as executable behavior. */
-export function parseDungeonFile(raw: string): {
+export function parseDungeonFile(raw: string, assets?: readonly WorldAsset[]): {
     draft: DungeonDraft;
     warnings: string[];
 } {
@@ -57,10 +58,10 @@ export function parseDungeonFile(raw: string): {
             entity.radius = placement.radius;
         }
         const parsed = parseDungeonDraft(JSON.stringify(draft));
-        const normalized = compileDungeonDraft(parsed).definition;
+        const normalized = compileDungeonDraft(parsed, assets).definition;
         const warnings = ['Esportazione runtime riconosciuta e recuperata come bozza; posizione derivata dai tile della mappa.'];
         if (definition.area.x !== normalized.area.x || definition.area.y !== normalized.area.y || definition.area.radius !== normalized.area.radius) {
-            warnings.push(`area non coerente con il terreno: centro ricalcolato (${normalized.area.x}, ${normalized.area.y}). Per spostare il dungeon scegli la posizione nel maker; modificare area non sposta terreno e spawn.`);
+            warnings.push(`area non coerente con il terreno: centro ricalcolato (${normalized.area.x}, ${normalized.area.y}). La posizione del dungeon è gestita dal World Maker.`);
         }
         return { draft: parsed, warnings };
     }

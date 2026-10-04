@@ -161,7 +161,7 @@ export class Renderer {
       }
       this.drawDungeons();
     }
-    const worldAssets = this.localDungeons ? [] : this.world.assetsIn({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
+    const worldAssets = this.world.assetsIn({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
       right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE });
     const groundAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'ground');
     const objectAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'object')
@@ -430,7 +430,7 @@ export class Renderer {
         heading: preparation ? 'IL DUNGEON SI RISVEGLIA' : 'DUNGEON INIZIATO',
         title: dungeon?.name ?? preparation?.name ?? 'La sfida ha inizio',
         detail: preparation ? `Preparati · ${(remaining / 1000).toFixed(1)} s` : 'I passaggi della stanza sono chiusi',
-        opacity, veil: preparation ? progress * .82 : .82 * Math.max(0, 1 - arrival / 550),
+        opacity, veil: preparation ? .18 : 0, vignette: true,
       });
     }
     ctx.restore();

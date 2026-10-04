@@ -141,11 +141,11 @@ I punti di modifica principali sono volutamente concentrati: la forma della mapp
 
 Per aggiungere un dungeon:
 
-1. avviare `npm run dungeon:studio` e creare terreno, NPC, boss, incontri e fiamme nel maker;
-2. scegliere la posizione sulla mappa del mondo e premere **Installa bozza** a server di gioco fermo;
+1. avviare `npm run world:studio`, aprire **Dungeon Maker ↗** e creare terreno, asset condivisi, NPC, boss, incontri e fiamme;
+2. premere **Installa bozza** a server di gioco fermo, poi posizionare il dungeon nel World Maker e premere **Applica al gioco**;
 3. ricompilare con `npm run build` e riavviare. Per le modifiche usare **Apri nel maker** e **Aggiorna bozza installata**; per la rimozione usare **Elimina dungeon selezionato**.
 
-La [guida del maker](docs/dungeon-maker.md) descrive anche i comandi CLI, i backup e il reset dello stato dei boss durante gli aggiornamenti. I test usano piccole mappe sintetiche create con il maker. I punti di attivazione e l’aggro del boss avviano subito il solo o 5 secondi di preparazione per i gruppi. Gli spawn gruppo sono separati: alla partenza ricevono i partecipanti. Ogni boss ha un raggio di aggro configurabile nel maker e può restare inattivo anche con le fiamme accese. Il pennello blu Zona visitatori consente accesso limitato ai non partecipanti durante lo scontro. Lo Studio gestisce anche la cancellazione dei backup per dungeon e delle copie storiche condivise.
+La [guida del maker](docs/dungeon-maker.md) descrive anche i comandi CLI, i backup e il reset dello stato dei boss durante gli aggiornamenti. I test usano piccole mappe sintetiche create con il maker. Attivazione, aggro e preparazione conservano i tempi del gioco. Gli spawn per solo e gruppo sono opzionali: se assenti, ogni partecipante resta nella posizione raggiunta all’ingresso. Nome e informazioni del dungeon restano visibili con una vignettatura leggera, senza oscuramento completo. Ogni boss ha un raggio di aggro configurabile nel maker e può restare inattivo anche con le fiamme accese. Il pennello blu Zona visitatori consente accesso limitato ai non partecipanti durante lo scontro. Lo Studio gestisce anche la cancellazione dei backup per dungeon e delle copie storiche condivise.
 
 Combattimento, team, aggro, lock, eliminazione, respawn, ricompense, terreno, esclusione degli spawn e indicatori non vanno duplicati per dungeon.
 

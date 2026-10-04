@@ -453,7 +453,7 @@ export class BossEncounter {
     }
     for (const member of this.group) world.setBossLocked(member.definition.id, true);
     const spawns = this.dungeon.spawnPoints.party;
-    const partySpawns = entrants.map((entrant, index) => this.safeSpawn(spawns[index % spawns.length], entrant.radius, world));
+    const partySpawns = entrants.map((entrant, index) => this.safeSpawn(spawns.length ? spawns[index % spawns.length] : entrant, entrant.radius, world));
     const bossSpawns = this.group.map(member => member.safeSpawn(member.boss, member.boss.radius, world));
     if (partySpawns.some(spawn => !spawn) || bossSpawns.some(spawn => !spawn)) { this.fail(world); return; }
     entrants.forEach((entrant, index) => Object.assign(entrant, partySpawns[index]));

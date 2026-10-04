@@ -38,6 +38,9 @@ let animationTimer: ReturnType<typeof setTimeout> | undefined;
 let checkpointTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingCheckpoint: { document: WorldDocument; revision: string } | undefined;
 let compatibleRevisions: string[] = [];
+let installedDocument = draft;
+let lastAssetPublication = '';
+const studioChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('riftlands.studio') : undefined;
 const history = new WorldEditorHistory(), canvas = el<HTMLCanvasElement>('map');
 const assetCanvas = el<HTMLCanvasElement>('asset-grid');
 const assetCamera = new AssetGridCamera();
@@ -53,6 +56,7 @@ let gesture: {
     start: Vec2;
     last: Vec2;
     pan?: Vec2;
+    move?: { kind: 'placement' | 'npc' | 'dungeon' | 'zone'; id: string; x: number; y: number };
     cell?: boolean;
     tool: string;
     mass: boolean;
@@ -93,6 +97,10 @@ function flushCheckpoint(): Promise<void> {
     pendingCheckpoint = undefined;
     if (!snapshot) return checkpointQueue;
     checkpointQueue = checkpointQueue.catch(() => { }).then(() => saveWorldCheckpoint(snapshot));
+    void checkpointQueue.then(() => {
+        const signature = JSON.stringify(snapshot.document.assets);
+        if (signature !== lastAssetPublication) { lastAssetPublication = signature; studioChannel?.postMessage({ type: 'assets', assets: snapshot.document.assets }); }
+    }).catch(() => {});
     void checkpointQueue.then(() => { if (dirty)
         el('save-state').textContent = 'Bozza salvata · da applicare'; }).catch(() => { el('save-state').textContent = 'Salvataggio fallito · esporta'; });
     return checkpointQueue;
@@ -219,7 +227,7 @@ function selectionEntity(): any {
     if (!selected)
         return;
     return selected.kind === 'placement' ? draft.placements.find(p => p.id === selected!.id) : selected.kind === 'npc' ? draft.npcs.find(n => n.id === selected!.id)
-        : selected.kind === 'dungeon' ? draft.dungeons.find(d => d.dungeonId === selected!.id) ?? (() => { const d = worldDungeons(draft, catalog).find(d => d.id === selected!.id); return d ? { dungeonId: d.id, x: d.layout.bounds.minTx, y: d.layout.bounds.minTy } : undefined; })() : undefined;
+        : selected.kind === 'dungeon' ? draft.dungeons.find(d => d.dungeonId === selected!.id) ?? (() => { const d = worldDungeons(draft, catalog).find(d => d.id === selected!.id); return d ? { dungeonId: d.id, x: d.layout.bounds.minTx, y: d.layout.bounds.minTy } : undefined; })() : draft.zones.find(z => z.id === selected!.id);
 }
 function refreshSelection(): void {
     const e = selectionEntity();
@@ -272,7 +280,7 @@ function selectAt(p: Vec2): void {
     ensureWorld();
     const n = draft.npcs.find(n => n.x === p.x && n.y === p.y);
     const placements = world.authoring.placements.query({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 });
-    const asset = placements.at(-1), dungeon = world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
+    const asset = placements.filter(p => draft.placements.some(a => a.id === p.id)).at(-1), dungeon = world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
     const zone = world.authoring.zonesAt(p.x + .5, p.y + .5)[0];
     selected = n ? { kind: 'npc', id: n.id } : asset ? { kind: 'placement', id: asset.id } : dungeon ? { kind: 'dungeon', id: dungeon.id } : zone ? { kind: 'zone', id: zone.id } : null;
     refresh();
@@ -310,6 +318,31 @@ canvas.addEventListener('pointerdown', event => {
     canvas.focus();
     const p = position(event);
     ensureWorld();
+    if (event.button === 2 && tool === 'select' && !keys.has('Space')) {
+        selectAt(p);
+        const generated = (!selected || selected.kind === 'zone') ? world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 }).filter(a => a.id.startsWith('generated:')).at(-1) : undefined;
+        if (generated) selected = { kind: 'placement', id: generated.id };
+        if (selected) {
+            const before = draft;
+            draft = forkWorldDocument(draft);
+            if (generated) {
+                const brush = new WorldBrush(draft, true), terrain = world.authoring.tiles.at(generated.x, generated.y)?.terrain;
+                brush.tile(generated, { suppressAssets: true, ...(terrain ? { terrain } : {}) }); brush.flushTiles();
+                const placement = { ...generated, id: uid('asset') }; draft.placements.push(placement);
+                selected = { kind: 'placement', id: placement.id };
+            }
+            let entity = selectionEntity();
+            if (selected.kind === 'dungeon' && !draft.dungeons.some(d => d.dungeonId === selected!.id)) {
+                draft.dungeons.push(entity);
+                entity = selectionEntity();
+            }
+            const position = selected.kind === 'zone' ? entity.shape : entity;
+            gesture = { pointer: event.pointerId, before, start: p, last: p, tool: 'move', mass: false, move: { ...selected, x: position.x, y: position.y } };
+            canvas.setPointerCapture(event.pointerId);
+            event.preventDefault();
+            return;
+        }
+    }
     if (event.button === 1 || event.button === 2 || keys.has('Space')) {
         gesture = { pointer: event.pointerId, before: draft, start: p, last: p, pan: { x: event.clientX, y: event.clientY }, tool, mass: false };
         canvas.setPointerCapture(event.pointerId);
@@ -361,6 +394,15 @@ canvas.addEventListener('pointermove', event => {
         view.y += event.clientY - gesture.pan.y;
         gesture.pan = { x: event.clientX, y: event.clientY };
         schedule();
+        return;
+    }
+    if (gesture.move) {
+        const move = gesture.move;
+        selected = { kind: move.kind, id: move.id };
+        const entity = selectionEntity(), position = move.kind === 'zone' ? entity.shape : entity;
+        position.x = move.x + pointerTile.x - gesture.start.x;
+        position.y = move.y + pointerTile.y - gesture.start.y;
+        refresh(); schedule(true);
         return;
     }
     if (!['zone', 'npc', 'dungeon', 'spawn'].includes(gesture.tool) && (gesture.tool !== 'asset' || gesture.mass))
@@ -547,10 +589,11 @@ on('apply-world', async () => { if (gesture)
     finishGesture(); while (gesture?.ending) await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); const document = parseWorldDocument(draft); const issues = validateWorld(document, catalog); if (issues.length) {
     el('validate').click();
     throw new Error('Correggi i problemi del progetto prima di applicare.');
-} el<HTMLButtonElement>('apply-world').disabled = true; try {
+} el<HTMLButtonElement>('apply-world').disabled = true; status('Applicazione del progetto…'); try {
     const result = await api('/__world/project', { document, revision });
     revision = result.revision;
     installedRevision = revision;
+    installedDocument = document;
     dirty = !worldDocumentsEqual(draft, document);
     await checkpoint(true);
     el('save-state').textContent = dirty ? 'Bozza salvata · da applicare' : 'Applicato al progetto';
@@ -589,6 +632,7 @@ async function load(reload = false): Promise<void> {
         if (response.ok) {
             const project = await response.json();
             draft = compactWorldTiles(parseWorldDocument(project.document));
+            installedDocument = draft;
             token = project.token;
             revision = project.revision;
             installedRevision = revision;
@@ -631,6 +675,40 @@ async function load(reload = false): Promise<void> {
     }
 }
 on('reload', () => load(true));
+function openDungeonMaker(id?: string): void {
+    const tab = window.open('about:blank', 'riftlands-dungeon-maker');
+    void settleGesture().then(() => checkpoint(true)).then(() => {
+        const url = `/dungeon-maker.html${id ? `?dungeon=${encodeURIComponent(id)}` : ''}`;
+        if (tab) { tab.location.href = url; tab.focus(); }
+        else status('Consenti l’apertura della scheda Dungeon Maker nel browser.');
+    }).catch(report);
+}
+el('open-dungeon-maker').onclick = event => { event.preventDefault(); openDungeonMaker(); };
+el('edit-dungeon').onclick = () => openDungeonMaker(val('dungeon'));
+async function refreshDungeonCatalog(): Promise<void> {
+    if (!ready || !token) return;
+    await settleGesture();
+    const response = await fetch('/__world/project');
+    if (!response.ok) return;
+    const project = await response.json(), document = compactWorldTiles(parseWorldDocument(project.document));
+    const known = new Set(catalog.map(d => d.id));
+    catalog = project.dungeons;
+    const ids = new Set(catalog.map(d => d.id));
+    const before = draft.dungeons;
+    draft = forkWorldDocument(draft);
+    draft.dungeons = draft.dungeons.filter(p => ids.has(p.dungeonId));
+    for (const p of document.dungeons) if (!known.has(p.dungeonId) && !draft.dungeons.some(d => d.dungeonId === p.dungeonId)) draft.dungeons.push(p);
+    if (project.revision !== installedRevision) {
+        if (revision === installedRevision && worldDocumentsEqual({ ...document, dungeons: [] }, { ...installedDocument, dungeons: [] })) revision = project.revision;
+        else status('Il progetto è cambiato in un’altra scheda: esporta la bozza e ricarica prima di applicare.');
+        installedRevision = project.revision; installedDocument = document;
+    }
+    if (JSON.stringify(before) !== JSON.stringify(draft.dungeons)) history.clear();
+    await checkpoint(true);
+    refresh(); schedule(true);
+}
+if (studioChannel) studioChannel.onmessage = event => { if (event.data?.type === 'dungeons') void refreshDungeonCatalog().catch(report); };
+window.addEventListener('focus', () => { void refreshDungeonCatalog().catch(report); });
 new ResizeObserver(() => schedule()).observe(canvas);
 new ResizeObserver(() => schedule()).observe(assetCanvas);
 selectTool('select');

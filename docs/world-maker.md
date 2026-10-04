@@ -2,6 +2,8 @@
 
 Avvia `npm run world:studio` e apri `http://127.0.0.1:3002/world-maker.html`. `WORLD_STUDIO_PORT` cambia la porta. L’editor è un processo locale separato dal server del gioco: non aggiunge API di amministrazione al gioco e non apre il server multiplayer.
 
+Lo stesso Studio include il Dungeon Maker: **Dungeon Maker ↗** apre una scheda dedicata, mentre **Modifica dungeon ↗** apre il dungeon selezionato. `npm run dungeon:studio` è un accesso allo stesso World Studio (`STUDIO_PORT` resta supportata). Catalogo installato, backup e API locali sono condivisi nello stesso processo.
+
 Per applicare il progetto, ferma il server del gioco. La stessa esclusione usata dal Dungeon Studio impedisce modifiche mentre il salvataggio è in uso. Dopo **Applica al gioco**, esegui `npm run build` e riavvia il gioco. Se il gioco usa `DATA_FILE`, avvia lo Studio con lo stesso `DATA_FILE`. `Ctrl+C` chiude lo Studio, compresi i suoi socket.
 
 ## Asset e griglia
@@ -36,7 +38,7 @@ Il mondo non ha larghezza o altezza iniziali. La vista esplora coordinate positi
 - **Asset**: piazzamento singolo. Ctrl + trascina, oppure **Asset con pennello continuo**, usa raggio e densità del pennello. La distanza minima evita accumuli; i passaggi veloci interpolano le celle attraversate.
 - **Cancella**: rimuove asset manuali e NPC nell’area e impedisce che gli asset generati ricompaiano. Conserva il terreno dipinto.
 - **Procedurale**: elimina l’intervento sul terreno e il blocco alla rigenerazione, lasciando nuovamente lavorare il generatore. Non rimuove le istanze manuali.
-- **Seleziona**: modifica coordinate di asset, NPC o dungeon. Le zone possono essere selezionate anche dal loro elenco.
+- **Seleziona**: modifica coordinate di asset, NPC o dungeon. Tieni premuto il tasto destro sull’oggetto per trascinarlo mantenendo il punto di presa; funziona anche con zone rettangolari e circolari. Il gesto si annulla con Escape ed è una sola modifica nella cronologia. Trascinare un asset procedurale lo converte in un’istanza manuale e ne impedisce la ricomparsa nella posizione originale. Tasto destro sullo spazio libero, Spazio + trascina e tasto centrale spostano la vista. Le zone possono essere selezionate anche dal loro elenco.
 - **Spawn player**: imposta il centro dello spawn globale. Chi rientra con una posizione salvata diventata bloccata viene riportato a uno spawn libero, conservando progressi e salute.
 
 Una pennellata è una singola operazione annullabile. Ctrl+Z annulla; Ctrl+Shift+Z ripete. La cronologia è limitata sia nel numero di transazioni sia nella memoria. Le proprietà di collisione e visibilità possono essere mostrate sopra la mappa.
@@ -68,6 +70,8 @@ Gli ingressi arena indicano il profilo `arena-1`, quello attualmente implementat
 ## Dungeon e crocevia
 
 Il catalogo installato è letto dal Dungeon Maker. Il World Maker colloca una sola istanza per dungeon installato, mantenendo gli ID di boss e incontri. Spostare trasla insieme terreno, ingressi, fiamme, regioni, punti di attivazione, NPC, pickup e spawn. Rimuovere dalla mappa disabilita l’istanza e conserva il dungeon nel catalogo; riposizionarlo lo riabilita.
+
+I nuovi dungeon installati nello Studio restano fuori dalla mappa finché non li posizioni qui con lo strumento **Dungeon** e applichi il progetto. Il Dungeon Maker usa lo stesso catalogo asset del mondo, comprese dimensioni, collisioni, nascondigli, trasparenza e aspetti animati; i suoi piazzamenti si spostano insieme al dungeon. Importa e modifica gli asset nel World Maker. Le schede condividono il catalogo della bozza; applicalo prima di installare un dungeon che usa nuovi asset. I cambiamenti del catalogo dungeon vengono riletti senza perdere le modifiche alla bozza del mondo.
 
 Spostare o disabilitare un dungeon ripulisce **soltanto gli stati dei suoi boss**: cooldown di respawn e loot non raccolto di quel dungeon vengono azzerati. Gli altri dungeon e gli account restano conservati. La pulizia viene salvata prima del nuovo mondo, con backup: un’interruzione può lasciare i boss interessati azzerati nel vecchio mondo, che resta caricabile. Per ripristinare stato e posizione insieme, ripristina entrambi i backup a server fermo.
 

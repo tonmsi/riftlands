@@ -1,0 +1,145 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { chromium, expect, type Page } from '@playwright/test';
+import { startWorldStudio } from '../../scripts/world-studio-server';
+import { newWorldAsset, newWorldDocument, resizeWorldAsset } from '../../shared/world-schema';
+import { studioDraft } from '../fixtures/studio-draft';
+
+test('one Studio shares assets, installs unplaced dungeons, preserves world edits across tabs and moves every selection with right drag', { timeout: 120_000 }, async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'riftlands-unified-studio-'));
+    const options = { root: resolve('.'), port: 0, documentPath: join(directory, 'world.json'), dungeonPath: join(directory, 'dungeons.json'), dataPath: join(directory, 'accounts.json') };
+    const document = newWorldDocument(), asset = newWorldAsset('shared-fixture', 'Asset condiviso di prova', '/world-assets/bush.svg');
+    asset.group = 'Test condivisi'; resizeWorldAsset(asset, 2, 2); asset.cells[0].blocked = true;
+    const generatedAsset = newWorldAsset('generated-fixture', 'Asset procedurale di prova', '/world-assets/bush.svg');
+    generatedAsset.generation.enabled = true; generatedAsset.generation.density = 1;
+    document.assets = [asset, generatedAsset]; document.placements = [{ id: 'manual', assetId: asset.id, x: 100, y: 100 }];
+    document.npcs = [{ id: 'npc', npcKind: 'slime', level: 2, x: 106, y: 100 }];
+    document.zones = [
+        { id: 'rect', name: 'Zona rettangolare', priority: 20, pvp: false, shape: { kind: 'rect', x: 94, y: 104, width: 4, height: 3 } },
+        { id: 'circle', name: 'Zona circolare', priority: 20, shape: { kind: 'circle', x: 108, y: 105, radius: 2 } },
+    ];
+    for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) document.tiles.push({ x, y, terrain: 'grass' });
+    for (let y = 90; y <= 112; y++) for (let x = 90; x <= 112; x++) document.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
+    await writeFile(options.documentPath, JSON.stringify(document)); await writeFile(options.dungeonPath, '[]');
+    const studio = await startWorldStudio(options);
+    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+    try {
+        browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL ?? 'chrome', headless: true });
+        const context = await browser.newContext({ viewport: { width: 1640, height: 1100 } }), world = await context.newPage(), errors: string[] = [];
+        context.on('page', page => page.on('pageerror', e => errors.push(e.message))); world.on('pageerror', e => errors.push(e.message));
+        await world.goto(studio.url); await expect(world.locator('#status')).toContainText('World Studio pronto');
+        const popup = world.waitForEvent('popup'); await world.locator('#open-dungeon-maker').click(); const dungeon = await popup;
+        dungeon.on('dialog', dialog => dialog.accept());
+        await expect(dungeon.locator('#dungeon-library')).toBeVisible();
+        await expect(dungeon.locator('#dungeon-assets [data-asset="shared-fixture"]')).toBeVisible();
+        assert.equal(await dungeon.locator('#world-placement, #origin-x, #origin-y').count(), 0);
+        const draft = studioDraft(); draft.entities = draft.entities.filter(e => e.kind !== 'party');
+        await dungeon.locator('#file').setInputFiles({ name: 'optional.draft.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(draft)) });
+        await expect(dungeon.locator('#issues')).toHaveText('Terreno e posizioni validi.');
+        const box = (await dungeon.locator('#map').boundingBox())!, scale = Math.max(4, Math.min(46, (box.width - 60) / draft.width, (box.height - 60) / draft.height));
+        const atDungeon = (x: number, y: number) => ({ x: box.x + (box.width - draft.width * scale) / 2 + (x + .5) * scale, y: box.y + (box.height - draft.height * scale) / 2 + (y + .5) * scale });
+        await dungeon.locator('#dungeon-assets [data-asset="shared-fixture"]').click();
+        const p = atDungeon(6, 6); await dungeon.mouse.click(p.x, p.y);
+        await expect(dungeon.locator('#asset-placement-properties')).toBeVisible();
+        await expect(dungeon.locator('#issues')).toHaveText('Terreno e posizioni validi.');
+        await dungeon.locator('#preview').click(); await expect(dungeon.locator('#playtest-dialog')).toBeVisible();
+        await dungeon.locator('#playtest-close').click();
+        await dungeon.locator('[data-action="install"]').click(); await expect(dungeon.locator('#status')).toContainText('Dungeon installato');
+        const unplaced = JSON.parse(await readFile(options.documentPath, 'utf8')); assert.equal(unplaced.dungeons[0].enabled, false);
+        await world.bringToFront(); await expect(world.locator('#dungeon option')).toHaveCount(1);
+        const go = async (x: number, y: number) => {
+            await world.locator('#goto').click(); await world.locator('#goto-x').fill(String(x)); await world.locator('#goto-y').fill(String(y)); await world.locator('#goto-confirm').click();
+        };
+        const worldBox = (await world.locator('#map').boundingBox())!;
+        const at = (x: number, y: number, cx = 100, cy = 100) => ({ x: worldBox.x + worldBox.width / 2 + (x - cx + .5) * 24, y: worldBox.y + worldBox.height / 2 + (y - cy + .5) * 24 });
+        await go(500, -500); await world.locator('[data-tool="dungeon"]').click();
+        const position = at(500, -500, 500, -500); await world.mouse.click(position.x, position.y);
+        await world.locator('[data-tool="select"]').click();
+        const grab = at(502, -498, 500, -500), drop = at(505, -496, 500, -500);
+        await world.mouse.move(grab.x, grab.y); await world.mouse.down({ button: 'right' }); await world.mouse.move(drop.x, drop.y, { steps: 3 }); await world.mouse.up({ button: 'right' });
+        await expect(world.locator('#entity-x')).toHaveValue('503'); await expect(world.locator('#entity-y')).toHaveValue('-498');
+        await world.locator('#undo').click(); await world.locator('#redo').click(); await world.locator('#undo').click();
+        await world.locator('#apply-world').click(); await expect(world.locator('#status')).toContainText('Progetto applicato');
+        await go(100, 100); await world.locator('[data-tool="select"]').click();
+        const drag = async (page: Page, from: { x: number; y: number }, to: { x: number; y: number }) => {
+            await page.mouse.move(from.x, from.y); await page.mouse.down({ button: 'right' }); await page.mouse.move(to.x, to.y, { steps: 3 }); await page.mouse.up({ button: 'right' });
+        };
+        await drag(world, at(101, 101), at(104, 102)); await expect(world.locator('#entity-x')).toHaveValue('103'); await expect(world.locator('#entity-y')).toHaveValue('101');
+        await world.locator('#undo').click(); await world.locator('#redo').click();
+        await drag(world, at(106, 100), at(108, 102)); await expect(world.locator('#entity-x')).toHaveValue('108');
+        await drag(world, at(95, 105), at(97, 106)); await expect(world.locator('#zone-x')).toHaveValue('96'); await expect(world.locator('#zone-y')).toHaveValue('105');
+        await world.locator('#undo').click(); await world.locator('#redo').click();
+        await drag(world, at(108, 105), at(110, 106)); await expect(world.locator('#zone-shape')).toHaveValue('circle'); await expect(world.locator('#zone-x')).toHaveValue('110');
+        await world.mouse.move(at(110, 106).x, at(110, 106).y); await world.mouse.down({ button: 'right' }); await world.mouse.move(at(111, 107).x, at(111, 107).y); await world.keyboard.press('Escape'); await world.mouse.up({ button: 'right' });
+        await world.locator('#apply-world').click(); await expect(world.locator('#status')).toContainText('Progetto applicato');
+        const saved = JSON.parse(await readFile(options.documentPath, 'utf8'));
+        assert.deepEqual(saved.placements[0], { id: 'manual', assetId: asset.id, x: 103, y: 101 });
+        assert.equal(saved.npcs[0].x, 108); assert.equal(saved.zones[0].shape.x, 96); assert.equal(saved.zones[1].shape.x, 110);
+        assert.deepEqual(saved.dungeons[0], { dungeonId: draft.id, x: 500, y: -500, enabled: true });
+        await world.locator('#asset-list [data-asset="shared-fixture"]').click(); await world.locator('#asset-name').fill('Nome condiviso aggiornato'); await world.locator('#asset-update').click();
+        await expect(dungeon.locator('#dungeon-assets')).toContainText('Nome condiviso aggiornato');
+        await world.locator('#apply-world').click(); await expect(world.locator('#status')).toContainText('Progetto applicato');
+        await world.locator('#edit-dungeon').click(); await dungeon.waitForURL('**/dungeon-maker.html?dungeon=studio-test');
+        await expect(dungeon.locator('#status')).toContainText('Dungeon aperto dal catalogo');
+        await dungeon.locator('#name').fill('Dungeon aggiornato dal World Studio'); await dungeon.locator('#name').press('Tab');
+        await dungeon.locator('[data-action="update"]').click(); await expect(dungeon.locator('#status')).toContainText('Dungeon aggiornato');
+        const catalog = JSON.parse(await readFile(options.dungeonPath, 'utf8'));
+        assert.equal(catalog[0].definition.layout.bounds.minTx, 500); assert.equal(catalog[0].definition.assetPlacements[0].x, 506);
+        await world.bringToFront(); await expect(world.locator('#dungeon')).toContainText('Dungeon aggiornato dal World Studio');
+        await dungeon.evaluate('window.__name = (func) => func;');
+        const entry = await dungeon.evaluate(async () => {
+            const { Renderer } = await import('/client/render.ts' as string), { createDungeonPlaytest } = await import('/client/dungeon-playtest.ts' as string);
+            const draft = JSON.parse(localStorage.getItem('riftlands.dungeon-draft.v2')!);
+            const { WORLD_DOCUMENT } = await import('/shared/world-content.ts' as string);
+            const assets = WORLD_DOCUMENT.assets;
+            // This visual probe does not need the authored decoration to exercise entry UI.
+            delete draft.assetPlacements;
+            const p = createDungeonPlaytest(draft, 'warrior', assets), canvas = window.document.createElement('canvas');
+            canvas.style.width = '480px'; canvas.style.height = '320px'; window.document.body.append(canvas);
+            const renderer = new Renderer(canvas, [p.definition]) as any; renderer.world = p.world; renderer.width = 480; renderer.height = 320;
+            canvas.width = 480; canvas.height = 320; const ctx = canvas.getContext('2d')!, labels: string[] = [];
+            const original = ctx.fillText.bind(ctx); ctx.fillText = (label, x, y, max) => { labels.push(label); original(label, x, y, max); };
+            const background = () => { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#b6a17b'; ctx.fillRect(0, 0, 480, 320); };
+            const frame = { playing: true, self: p.player, time: 1000, bossPreparations: [{ bossId: p.definition.bossId, name: p.definition.name, startedAt: 500, endsAt: 1500 }] };
+            background(); renderer.drawDungeonEntry(frame, true);
+            const center = [...ctx.getImageData(240, 230, 1, 1).data], edge = [...ctx.getImageData(1, 230, 1, 1).data];
+            background(); renderer.drawDungeonEntry({ ...frame, bossPreparations: [], bossLocks: [{ bossId: p.definition.bossId, locked: true, relation: 'participant', startedAt: 1000 }] }, true);
+            const arrival = [...ctx.getImageData(1, 230, 1, 1).data];
+            renderer.destroy(); canvas.remove(); return { center, edge, arrival, labels };
+        });
+        assert.deepEqual(entry.center, [182, 161, 123, 255]);
+        assert.deepEqual(entry.arrival, [182, 161, 123, 255]);
+        assert.ok(entry.edge[0] < 182 && entry.edge[0] > 150, 'only the edges receive a light vignette');
+        assert.ok(entry.labels.includes('IL DUNGEON SI RISVEGLIA') && entry.labels.includes('DUNGEON INIZIATO'));
+        assert.ok(entry.labels.includes('Dungeon aggiornato dal World Studio'));
+        await world.screenshot({ path: resolve('.tmp/unified-world-studio.png') }); await dungeon.screenshot({ path: resolve('.tmp/unified-dungeon-maker.png') });
+        const generated = await world.evaluate(async () => {
+            const { World } = await import('/shared/world.ts' as string), { loadWorldCheckpoint } = await import('/client/world-editor-storage.ts' as string);
+            const { worldDungeons } = await import('/shared/world-validation.ts' as string);
+            const { document } = (await loadWorldCheckpoint())!, project = await (await fetch('/__world/project')).json();
+            const model = new World(document.seed, 16, 'world', document, worldDungeons(document, project.dungeons));
+            return model.assetsIn({ left: -32, top: -32, right: 32, bottom: 32 }).find((p: { id: string }) => p.id.startsWith('generated:'));
+        });
+        assert.ok(generated);
+        await go(generated.x, generated.y); await world.locator('[data-tool="select"]').click();
+        await drag(world, at(generated.x, generated.y, generated.x, generated.y), at(generated.x + 2, generated.y + 1, generated.x, generated.y));
+        await expect(world.locator('#entity-x')).toHaveValue(String(generated.x + 2));
+        await world.locator('#apply-world').click(); await expect(world.locator('#status')).toContainText('Progetto applicato');
+        const afterGeneration = JSON.parse(await readFile(options.documentPath, 'utf8'));
+        assert.ok(afterGeneration.placements.some((p: { assetId: string; x: number; y: number }) => p.assetId === generated.assetId && p.x === generated.x + 2 && p.y === generated.y + 1));
+        assert.deepEqual(errors, []);
+        // Ordinary client hosting keeps its editor and reads the published world asset catalog.
+        const client = await context.newPage();
+        await client.route('**/__world/project', route => route.fulfill({ status: 404, body: '' }));
+        await client.route('**/__studio/library', route => route.fulfill({ status: 404, body: '' }));
+        await client.goto(new URL('/dungeon-maker.html', studio.url).href);
+        const published = await client.evaluate(async () => { const { WORLD_DOCUMENT } = await import('/shared/world-content.ts' as string); return WORLD_DOCUMENT.assets[0]; });
+        await client.locator('#dungeon-asset-search').fill(published.name);
+        await expect(client.locator(`#dungeon-assets [data-asset="${published.id}"]`)).toBeVisible();
+        await expect(client.locator('#dungeon-library')).toBeHidden();
+        assert.deepEqual(errors, []);
+    } finally { await browser?.close(); await studio.close(); await rm(directory, { recursive: true, force: true }); }
+});

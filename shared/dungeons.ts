@@ -4,6 +4,7 @@ import { NPC_DEFINITIONS, type NpcTemplateId } from './npcs';
 import customDungeons from './custom-dungeons.json';
 import { WORLD_DOCUMENT } from './world-content';
 import { relocateDungeon } from './dungeon-relocation';
+import type { AssetPlacement } from './world-schema';
 
 export interface DungeonTileRect { minTx: number; maxTx: number; minTy: number; maxTy: number; }
 export interface DungeonFlameBarrier extends Vec2 { length: number; thickness: number; angle: number; }
@@ -83,10 +84,12 @@ export interface DungeonDefinition {
     tiles?: readonly (Vec2 & { kind: TileKind })[];
   };
   passages: readonly DungeonPassage[];
-  /** Players are placed at these positions when the encounter starts. */
+  /** An empty party list keeps entrants at their current position. */
   spawnPoints: { boss: Vec2; party: readonly Vec2[] };
   npcSpawns?: readonly (Vec2 & { id: string; npcKind: NpcTemplateId; level: number })[];
   pickupSpawns?: readonly Pickup[];
+  /** Shared world catalog references, positioned in world tile coordinates. */
+  assetPlacements?: readonly AssetPlacement[];
   encounter: DungeonEncounterDefinition;
   spawnExclusionMargin: number;
   approach: DungeonApproach;
@@ -356,7 +359,17 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   if (![bounds.minTx, bounds.maxTx, bounds.minTy, bounds.maxTy].every(Number.isInteger)
     || bounds.minTx > bounds.maxTx || bounds.minTy > bounds.maxTy) fail('limiti della mappa non validi.');
   if (!finitePoint(definition.area) || !Number.isFinite(definition.area.radius) || definition.area.radius <= 0) fail('area mondo non valida.');
-  if (!finitePoint(definition.spawnPoints.boss) || !definition.spawnPoints.party.length
+  if (definition.assetPlacements !== undefined) {
+    if (!Array.isArray(definition.assetPlacements) || definition.assetPlacements.length > 4096) fail('piazzamenti asset non validi.');
+    const ids = new Set<string>();
+    for (const p of definition.assetPlacements) {
+      if (!p || typeof p.id !== 'string' || !/^[a-zA-Z0-9:-]{1,100}$/.test(p.id) || ids.has(p.id)
+        || typeof p.assetId !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(p.assetId)
+        || !Number.isInteger(p.x) || !Number.isInteger(p.y) || !insideRect(p.x, p.y, bounds)) fail('piazzamento asset fuori mappa o riferimento non valido.');
+      ids.add(p.id);
+    }
+  }
+  if (!finitePoint(definition.spawnPoints.boss) || !Array.isArray(definition.spawnPoints.party)
     || definition.spawnPoints.party.some(point => !finitePoint(point))) fail('spawn boss/party non validi.');
   for (const [name, point] of [['boss', definition.spawnPoints.boss], ...definition.spawnPoints.party.map((point, index) => [`party ${index}`, point] as const)] as const) {
     const tx = Math.floor(point.x / TILE_SIZE), ty = Math.floor(point.y / TILE_SIZE);

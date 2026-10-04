@@ -7,17 +7,17 @@ Apri `/dungeon-maker.html` o **Dungeon maker** nel menu. Nessun login o WebSocke
 Per creare, riaprire, aggiornare ed eliminare dungeon senza modificare JSON a mano:
 
 ```sh
-npm run dungeon:studio
+npm run world:studio
 ```
 
-Apri l'indirizzo stampato (normalmente `http://127.0.0.1:3001/dungeon-maker.html`). Nel pannello **Catalogo installato**:
+Apri l'indirizzo stampato (normalmente `http://127.0.0.1:3002/world-maker.html`) e premi **Dungeon Maker ↗**. Il maker si apre in una scheda dedicata dello stesso Studio. **Modifica dungeon ↗** apre direttamente il dungeon selezionato nel World Maker. `npm run dungeon:studio` avvia lo stesso Studio. Nel pannello **Catalogo installato**:
 
-- **Installa bozza** aggiunge la mappa corrente, dopo la validazione.
+- **Installa bozza** aggiunge la mappa corrente al catalogo, dopo la validazione. I nuovi dungeon restano disabilitati nel mondo finché non li posizioni nel World Maker e applichi il progetto.
 - **Apri nel maker** recupera la bozza originale conservata nel catalogo, con ID, entità e incontri.
 - **Aggiorna bozza installata** sostituisce la mappa con lo stesso ID e azzera soltanto gli stati dei suoi boss, compreso il loot non raccolto. Account e ricompense già raccolte restano invariati.
 - **Elimina dungeon selezionato** rimuove la voce scelta e gli stati dei boss associati.
 
-Ferma il server di gioco prima delle scritture. Studio, CLI e server condividono un lock sul salvataggio: un'operazione viene rifiutata se quel file è in uso. Lo Studio usa `DATA_FILE` oppure `data/accounts.json`; `STUDIO_PORT` cambia la porta. Il processo resta in ascolto solo sul computer locale, controlla origine e token delle richieste e non aggiunge API amministrative al server di gioco. I pulsanti di gestione sono disponibili solo in questa modalità.
+Ferma il server di gioco prima delle scritture. Studio, CLI e server condividono un lock sul salvataggio: un'operazione viene rifiutata se quel file è in uso. Lo Studio usa `DATA_FILE` oppure `data/accounts.json`; `WORLD_STUDIO_PORT` cambia la porta (`STUDIO_PORT` è supportata dall’accesso dungeon). Il processo resta in ascolto solo sul computer locale, controlla origine e token delle richieste e non aggiunge API amministrative al server di gioco. I pulsanti di gestione sono disponibili solo in questa modalità.
 
 Ogni modifica crea backup; il messaggio indica i percorsi. Dopo aver finito, chiudi lo Studio con Ctrl+C, esegui `npm run build` e riavvia il gioco. Le modifiche non sono applicate a una partita già aperta.
 
@@ -46,13 +46,14 @@ Per ripristinare tutto: ferma gioco e Studio, copia i due file con lo stesso suf
 - Tutti gli NPC attuali: gelatina, fuoco fatuo, guardiano; livello individuale. Tutti i boss del catalogo sono selezionabili, anche più copie dello stesso modello.
 - Boss futuri come segnaposto con nome, posizione e raggio; nessuna logica di combattimento richiesta per salvare la bozza.
 - Incontri: nome e regione rettangolare, modificabile dall'ispettore e visibile sulla mappa. Assegna ogni boss, spawn, attivatore e barriera al suo incontro.
-- **Spawn gruppo**: da 1 a 5 posizioni in cui vengono collocati i partecipanti all'avvio. Per un team completo posiziona 5 spawn distinti; se ne metti meno, vengono riutilizzati in ordine. Passare su uno spawn non attiva il dungeon.
+- **Spawn solo / gruppo · opzionale**: da 0 a 5 destinazioni per incontro. Senza spawn, i partecipanti conservano la posizione raggiunta all’ingresso; soltanto una posizione occupata dai passaggi chiusi viene corretta verso la casella libera più vicina. Se presenti, gli spawn valgono anche per il singolo e vengono riutilizzati in ordine quando sono meno dei partecipanti. Passare su uno spawn non attiva il dungeon. Tempi, ammissione, aggro, morte e chiusura conservano il comportamento del gioco. Il client mostra nome e informazioni con una vignettatura leggera durante la preparazione, rimossa all’avvio.
+- **Asset condivisi**: stessi asset del World Maker, con piazzamenti indipendenti nel dungeon. Importa e modifica dimensioni, collisioni e visibilità nel World Maker e applica il catalogo prima di installare nuovi riferimenti. I piazzamenti restano nella bozza e nelle esportazioni come riferimenti al catalogo; la prova locale e il gioco usano gli stessi comportamenti. Anche il maker pubblicato nel client legge questo catalogo.
 - **Punto di attivazione**: marcatore invisibile nel gioco, distinto da spawn e fiamme. Puoi piazzarne più di 5 e dipingerli trascinando; resta il limite generale di 500 entità per bozza. Ogni punto copre un cerchio di raggio 24 unità più il raggio del player, dentro la regione dell'incontro.
 - Il contatto con un punto **oppure l'ingresso nell'aggro di uno dei boss** avvia subito il solo, o 5 secondi di preparazione per un gruppo. Alla partenza i giocatori sono collocati sugli spawn e le fiamme si accendono. I compagni dentro la regione durante la preparazione partecipano; uscita, morte o disconnessione dell'iniziatore annullano la preparazione.
 - Seleziona un boss e imposta **Raggio aggro**, in unità mondo (48 = una casella, default 288 = 6 caselle). Il cerchio è visualizzato nel maker, limitato alla regione dell'incontro. È specifico della singola posizione del boss, non cambia il modello condiviso. La rilevazione è per distanza, anche attraverso pareti; i colpi del boss rispettano la linea visiva.
 - **Attivazione e inseguimento sono separati**: un punto può chiudere un labirinto mentre il boss lontano resta fermo. Ogni boss comincia a inseguire quando un partecipante entra nel suo aggro o lo danneggia. Da quel momento non perde aggro per distanza finché l'incontro non termina.
 - Più boss nello **stesso incontro** condividono preparazione, partecipanti e fiamme: vittoria quando tutti sono morti. Oro e XP vengono assegnati solo al completamento. La morte di un partecipante interrompe l’incontro e ripristina anche i boss già uccisi; i superstiti possono uscire e rientrare per riprovare. Il respawn dopo la vittoria usa la durata massima dei boss.
-- **Incontri separati** nella stessa mappa hanno regioni senza sovrapposizioni, ciascuna con boss, 1–5 spawn, punti di attivazione e fiamme propri. Puoi combinare incontri singoli e multipli.
+- **Incontri separati** nella stessa mappa hanno regioni senza sovrapposizioni, ciascuna con boss, 0–5 spawn opzionali, punti di attivazione e fiamme propri. Puoi combinare incontri singoli e multipli.
 - **Chiusura automatica**: tutto il perimetro della mappa diventa roccia mentre un incontro è attivo, anche dove hai dipinto erba, pavimento o acqua. Alla vittoria o alla morte di un partecipante il terreno originale ritorna, purché non restino altri incontri attivi nella stessa mappa. Nessuna barriera manuale da configurare agli ingressi.
 - Fiamme con posizione iniziale, lunghezza in caselle e orientamento, solo all’interno della mappa. Il bordo è riservato ai massi. **Fiamma in un punto casuale** sceglie una casella libera nell’incontro selezionato e salva quella posizione nella bozza. Durante il fight il contatto uccide i partecipanti; uscire dalla regione del fight è anch’esso letale.
 - I punti di attivazione e le fiamme sono indipendenti. Solo **Fiamme** crea barriere, spente prima del combattimento e accese appena inizia. Non ci sono attese aggiuntive o immunità iniziali: il developer dispone correttamente attivatori, spawn e fiamme. Il riposizionamento sugli spawn avviene una sola volta, alla partenza.
@@ -78,22 +79,23 @@ Le bozze incomplete possono essere salvate. La compilazione richiede posizioni v
 ## Dove mettere il dungeon
 
 1. Crea terreno, boss, NPC, incontri, ingressi e fiamme. Apri almeno una casella sul bordo per l'accesso dal mondo.
-2. Imposta un ID nuovo e premi **Scegli sulla mappa del mondo**. Clicca per posizionare l'ingombro, trascina per esplorare, usa rotella o pulsanti per lo zoom e conferma con **Usa questa posizione**. Le sovrapposizioni bloccano la conferma. Le coordinate restano disponibili tra le opzioni avanzate. Il maker non crea un'istanza privata.
-3. **Salva dungeon** e conserva il file in `content/dungeons/nome.draft.json` (o un altro percorso a scelta).
-4. Dalla cartella del progetto esegui:
+2. Imposta un ID nuovo e premi **Installa bozza** nello Studio. Torna nel World Maker, scegli il dungeon dal catalogo, posizionalo con lo strumento **Dungeon** e premi **Applica al gioco**. Le coordinate globali sono gestite esclusivamente nel World Maker; gli aggiornamenti conservano questa posizione. Il maker non crea un’istanza privata. I comandi CLI sotto restano disponibili per importazioni avanzate con coordinate nel file.
+3. Esegui `npm run build` e riavvia il server. Per un server remoto distribuisci anche `shared/custom-dungeons.json`, `shared/custom-world.json`, le immagini condivise e la build client insieme al codice server aggiornato.
+
+Per l’importazione avanzata da CLI, usa **Salva dungeon**, conserva il file in `content/dungeons/nome.draft.json` e verifica le coordinate `origin` nel file prima di eseguire:
 
    ```sh
    npm run dungeon:import -- content/dungeons/nome.draft.json
    npm run build
    ```
 
-5. Riavvia il server con la nuova build. Per un server remoto distribuisci anche `shared/custom-dungeons.json` e la build client insieme al codice server aggiornato.
+Riavvia il server con la nuova build.
 
 Il comando valida il file, collega ogni boss al comportamento scelto e scrive il catalogo condiviso `shared/custom-dungeons.json`. Client e server caricano la stessa geometria e gli stessi ID. Genera un breve accesso esterno verso l'apertura e un punto di espulsione fuori dalla mappa. I segnaposto senza un modello implementato bloccano l'installazione, ma si possono salvare ed esportare nell'editor.
 
 L'importazione rifiuta ID già installati e mappe troppo vicine/sovrapposte. Per aggiornare esplicitamente un ID esistente usa **Aggiorna bozza installata** nello Studio oppure `npm run dungeon:import -- percorso/file.json --replace`. L'aggiornamento azzera gli stati dei boss di quella mappa, conserva gli account e crea backup prima delle modifiche. `--replace --check` verifica senza scrivere. Conserva comunque le esportazioni originali per trasferire e versionare le bozze.
 
-**Importa dungeon** e il comando accettano sia le bozze sia le esportazioni runtime generate dal maker. Il recupero runtime mantiene terreno, posizioni e modelli dei boss; regole personalizzate non rappresentabili vengono rifiutate. Se `area` è incoerente con i tile viene segnalata e ricalcolata: modificare il solo centro non sposta un dungeon. Per riposizionare un vecchio runtime importalo nel maker, scegli sulla mappa del mondo e salva il dungeon.
+**Importa dungeon** e il comando accettano sia le bozze sia le esportazioni runtime generate dal maker. Il recupero runtime mantiene terreno, posizioni e modelli dei boss; regole personalizzate non rappresentabili vengono rifiutate. Se `area` è incoerente con i tile viene segnalata e ricalcolata: modificare il solo centro non sposta un dungeon. Per riposizionare un vecchio runtime importalo nel maker, installalo nel catalogo e scegli la posizione nel World Maker.
 
 Per verificare senza installare né modificare file:
 

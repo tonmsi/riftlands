@@ -5,13 +5,17 @@ import { dungeonEncounters, dungeonStoneTiles, dungeonTile, type DungeonDefiniti
 import { World, chunkCoords, chunkKey, type Chunk } from '../shared/world';
 import type { ClassId, InputCommand, TileKind } from '../shared/types';
 import { WorldSimulation } from '../server/simulation';
+import { WORLD_DOCUMENT } from '../shared/world-content';
+import { newWorldDocument, type WorldAsset } from '../shared/world-schema';
 
 /** Isolated authored map: no procedural terrain, population, accounts or network. */
 export class DungeonPlaytestWorld extends World {
   private readonly stones: Map<string, Set<string>>;
   private readonly encounters: DungeonDefinition[];
-  constructor(readonly dungeon: DungeonDefinition) {
-    super();
+  constructor(readonly dungeon: DungeonDefinition, assets: readonly WorldAsset[] = WORLD_DOCUMENT.assets) {
+    const document = newWorldDocument();
+    document.assets = assets.map(a => ({ ...a, generation: { ...a.generation, enabled: false } }));
+    super(document.seed, 16, 'world', document, [dungeon]);
     this.encounters = dungeonEncounters(dungeon);
     this.stones = new Map(this.encounters.map(e => [e.bossId, new Set(dungeonStoneTiles(e).map(t => `${t.x},${t.y}`))]));
   }
@@ -33,23 +37,24 @@ export class DungeonPlaytestWorld extends World {
   }
 }
 
-export function createDungeonPlaytest(draft: DungeonDraft, classId: ClassId = 'warrior') {
+export function createDungeonPlaytest(draft: DungeonDraft, classId: ClassId = 'warrior', assets: readonly WorldAsset[] = WORLD_DOCUMENT.assets) {
   const isolated = structuredClone(draft);
   isolated.origin = { x: 256, y: 256 }; // Far from world sanctuary/arena rules, irrespective of placement in the editor.
-  const compiled = compileDungeonDraft(isolated), definition = compiled.definition;
+  const compiled = compileDungeonDraft(isolated, assets), definition = compiled.definition;
   const bosses = resolveDungeonBosses(compiled);
   const b = definition.layout.bounds;
-  const start = definition.spawnPoints.party[0];
-  const reachable = reachableDraftTiles(isolated, isolated.entities.find(e => e.kind === 'party')!);
+  const anchor = isolated.entities.find(e => e.kind === 'party') ?? isolated.entities.find(e => e.kind === 'boss')!;
+  const start = definition.spawnPoints.party[0] ?? definition.spawnPoints.boss;
+  const reachable = reachableDraftTiles(isolated, anchor, assets);
   const entrance = definition.passages.filter(p => p.tiles.some(t => (t.x === b.minTx || t.x === b.maxTx || t.y === b.minTy || t.y === b.maxTy) && reachable.has(`${t.x - b.minTx},${t.y - b.minTy}`)))
     .sort((a, b) => Math.hypot(a.position.x - start.x, a.position.y - start.y) - Math.hypot(b.position.x - start.x, b.position.y - start.y))[0];
-  if (!entrance) throw new Error('Apri un ingresso sul bordo con erba o pavimento e collegalo agli spawn gruppo per iniziare la prova fuori dal dungeon.');
+  if (!entrance) throw new Error('Apri un ingresso sul bordo con erba o pavimento e collegalo alla stanza per iniziare la prova fuori dal dungeon.');
   const tile = entrance.tiles[0];
   const normal = tile.x === b.minTx ? { x: -1, y: 0 } : tile.x === b.maxTx ? { x: 1, y: 0 } : tile.y === b.minTy ? { x: 0, y: -1 } : { x: 0, y: 1 };
   const spawn = { x: entrance.position.x + normal.x * TILE_SIZE * 2, y: entrance.position.y + normal.y * TILE_SIZE * 2 };
   const encounters = dungeonEncounters(definition);
   for (const encounter of encounters) encounter.encounter.ejectTo = { ...spawn };
-  const world = new DungeonPlaytestWorld(definition);
+  const world = new DungeonPlaytestWorld(definition, assets);
   const simulation = new WorldSimulation(734291, 1_000_000, undefined, 'world', { world, dungeons: encounters, bosses: new Map(bosses.map(boss => [boss.id, boss])), spawn });
   const player = simulation.addPlayer({ id: 'local-playtest', name: 'Prova locale', nameLower: 'prova locale', salt: '', passwordHash: '', xp: 0, kills: 0, deaths: 0, friends: [], requests: [], lastSeen: 0, gold: 0 }, classId);
   // The offline editor previews the full catalog, independent of account progression.

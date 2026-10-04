@@ -1,6 +1,10 @@
 import { setupDungeonLibrary } from './dungeon-library';
 import './dungeon-maker.css';
-import { chooseDungeonPlacement } from './dungeon-placement';
+import { WORLD_DOCUMENT } from '../shared/world-content';
+import { newWorldDocument, parseWorldDocument, worldAssetVisual, type WorldAsset } from '../shared/world-schema';
+import { loadWorldCheckpoint } from './world-editor-storage';
+import { WorldAssetCatalog } from './world-asset-catalog';
+import { WorldAssetArt } from './world-asset-art';
 import { parseDungeonFile } from '../shared/dungeon-import';
 import { BOSS_TEMPLATES as BOSS_DEFINITIONS } from '../shared/boss-templates';
 import { DUNGEON_DEFINITIONS, flameBarrierFromTiles, inwardFlameAngle } from '../shared/dungeons';
@@ -13,11 +17,11 @@ import type { AbilitySlot, ClassId, PickupKind, TileKind, Vec2 } from '../shared
 const root = document.querySelector<HTMLDivElement>('#maker')!;
 const field = (id: string, label: string, type = 'text') => `<label>${label}<input id="${id}" type="${type}"></label>`;
 root.innerHTML = `
-<header><a href="/" class="brand">◇ RIFTLANDS <span>/ STUDIO</span></a><span class="local-badge">Bozza locale</span><a href="/">Torna al gioco ↗</a></header>
+<header><a href="/" class="brand">◇ RIFTLANDS <span>/ STUDIO</span></a><span class="local-badge">Bozza locale</span><a href="/world-maker.html" id="world-studio-link">World Maker ↗</a><a href="/">Torna al gioco ↗</a></header>
 <div class="title-row"><div><span class="eyebrow">WORLD BUILDING / 01</span><h1>Dungeon maker<span>.</span></h1><p>Disegna il terreno. Popola la mappa. Prepara gli incontri.</p></div><div class="file-actions"><button id="import">Importa dungeon</button><button id="download">Salva dungeon</button><button id="compile" class="primary">Esporta runtime (avanzato)</button></div></div>
-<main><aside class="palette panel"><h2>01 <span>Strumenti</span></h2><div class="tool-grid"><button data-tool="select">↖ Seleziona</button><button data-tool="erase">⌫ Rimuovi entità</button></div><h3>Terreno</h3><div id="terrain" class="tool-grid"></div><h3>Creature</h3><div id="npcs" class="tool-list"></div><h3>Boss disponibili</h3><div id="bosses" class="tool-list"></div><h3>Incontro</h3><div class="tool-list"><button data-tool="boss">◇ Boss / segnaposto</button><button data-tool="party">⊕ Spawn gruppo</button><button data-tool="activation">◇ Punto di attivazione</button><button data-tool="flame">Fiamme</button><button data-tool="visitors">▧ Zona visitatori</button><button data-tool="visitors-erase">Cancella zona visitatori</button></div><p class="hint">Blu trasparente: zona accessibile a nemici e compagni esclusi dallo scontro, per l’incontro selezionato. Fuori dalla zona vengono espulsi. Trascina per dipingere o spostare. Rotella per zoom; tasto destro per spostare la vista.</p></aside>
+<main><aside class="palette panel"><h2>01 <span>Strumenti</span></h2><div class="tool-grid"><button data-tool="select">↖ Seleziona</button><button data-tool="erase">⌫ Rimuovi entità</button></div><h3>Terreno</h3><div id="terrain" class="tool-grid"></div><h3>Creature</h3><div id="npcs" class="tool-list"></div><h3>Boss disponibili</h3><div id="bosses" class="tool-list"></div><h3>Incontro</h3><div class="tool-list"><button data-tool="boss">◇ Boss / segnaposto</button><button data-tool="party">⊕ Spawn solo / gruppo · opzionale</button><button data-tool="activation">◇ Punto di attivazione</button><button data-tool="flame">Fiamme</button><button data-tool="visitors">▧ Zona visitatori</button><button data-tool="visitors-erase">Cancella zona visitatori</button></div><p class="hint">Blu trasparente: zona accessibile a nemici e compagni esclusi dallo scontro, per l’incontro selezionato. Fuori dalla zona vengono espulsi. Trascina per dipingere o spostare. Rotella per zoom; tasto destro per spostare la vista.</p></aside>
 <section class="workspace panel"><div class="canvas-toolbar"><div><button id="undo" aria-label="Annulla modifica">↶</button><button id="redo" aria-label="Ripeti modifica">↷</button></div><span id="tool-name"></span><div><button id="zoom-out">−</button><button id="fit">Adatta</button><button id="zoom-in">+</button></div></div><div class="viewport"><canvas id="map" tabindex="0" aria-label="Mappa dungeon modificabile"></canvas><div id="preview-label" hidden>ANTEPRIMA MOVIMENTO · WASD / FRECCE · ESC PER USCIRE</div></div><div class="canvas-footer"><span id="map-info"></span><button id="preview">Prova movimento</button></div></section>
-<aside class="inspector panel"><section id="dungeon-library" hidden><h2>Catalogo installato</h2><select aria-label="Dungeon installato"></select><div class="tool-list"><button data-library="open">Apri nel maker</button><button data-action="install">Installa bozza</button><button data-action="update">Aggiorna bozza installata</button><button data-action="remove">Elimina dungeon selezionato</button></div><p class="hint">Modifiche locali a server fermo. Aggiornare azzera lo stato dei boss del dungeon.</p></section><section id="dungeon-backups" hidden><h2>Backup locali</h2><label>Backup da eliminare<select id="backup-scope"></select></label><p id="backup-summary" class="hint"></p><details><summary>File inclusi</summary><ul id="backup-files"></ul></details><button id="delete-backups">Elimina backup selezionati</button><p class="hint">Elimina solo le copie di recupero. Catalogo e account attuali restano invariati. I backup sono copie complete dei file, anche quando associati a un solo dungeon.</p></section><h2>02 <span>Proprietà</span></h2>${field('name', 'Nome dungeon')}${field('map-id', 'ID mappa')}<button id="world-placement">Scegli sulla mappa del mondo</button><details><summary>Coordinate avanzate</summary><div class="two-fields">${field('origin-x', 'Origine X (tile)', 'number')}${field('origin-y', 'Origine Y (tile)', 'number')}</div></details><h3>Incontri</h3><label>Incontro attivo<select id="encounter"></select></label><button id="add-encounter">Nuovo incontro separato</button><button id="remove-encounter">Rimuovi incontro vuoto</button>${field('encounter-name', 'Nome incontro')}<div class="two-fields">${field('encounter-x', 'Colonna regione', 'number')}${field('encounter-y', 'Riga regione', 'number')}${field('encounter-width', 'Larghezza', 'number')}${field('encounter-height', 'Altezza', 'number')}</div><p class="hint">Zona visitatori blu: accesso durante lo scontro senza diventare partecipanti. Più boss nello stesso incontro: fiamme fino alla morte dell’ultimo. Incontri separati: regioni senza sovrapposizioni.</p>
+<aside class="inspector panel"><section id="dungeon-library" hidden><h2>Catalogo installato</h2><select aria-label="Dungeon installato"></select><div class="tool-list"><button data-library="open">Apri nel maker</button><button data-action="install">Installa bozza</button><button data-action="update">Aggiorna bozza installata</button><button data-action="remove">Elimina dungeon selezionato</button></div><p class="hint">Modifiche locali a server fermo. Aggiornare azzera lo stato dei boss del dungeon.</p></section><section id="dungeon-backups" hidden><h2>Backup locali</h2><label>Backup da eliminare<select id="backup-scope"></select></label><p id="backup-summary" class="hint"></p><details><summary>File inclusi</summary><ul id="backup-files"></ul></details><button id="delete-backups">Elimina backup selezionati</button><p class="hint">Elimina solo le copie di recupero. Catalogo e account attuali restano invariati. I backup sono copie complete dei file, anche quando associati a un solo dungeon.</p></section><h2>02 <span>Proprietà</span></h2>${field('name', 'Nome dungeon')}${field('map-id', 'ID mappa')}<p class="hint">Posizione sulla mappa gestita dal World Maker.</p><h3>Incontri</h3><label>Incontro attivo<select id="encounter"></select></label><button id="add-encounter">Nuovo incontro separato</button><button id="remove-encounter">Rimuovi incontro vuoto</button>${field('encounter-name', 'Nome incontro')}<div class="two-fields">${field('encounter-x', 'Colonna regione', 'number')}${field('encounter-y', 'Riga regione', 'number')}${field('encounter-width', 'Larghezza', 'number')}${field('encounter-height', 'Altezza', 'number')}</div><p class="hint">Zona visitatori blu: accesso durante lo scontro senza diventare partecipanti. Più boss nello stesso incontro: fiamme fino alla morte dell’ultimo. Incontri separati: regioni senza sovrapposizioni.</p>
 <div id="entity-properties" hidden><h3>Entità selezionata</h3>${field('entity-label', 'Etichetta')}<div class="two-fields">${field('entity-x', 'Colonna', 'number')}${field('entity-y', 'Riga', 'number')}</div><div id="level-label">${field('entity-level', 'Livello', 'number')}</div><label id="template-label">Boss<select id="entity-template"><option value="">Segnaposto · da creare</option></select></label><div id="radius-label">${field('entity-radius', 'Raggio boss', 'number')}</div><div id="aggro-label">${field('entity-aggroRadius', 'Raggio aggro (unità; 48 = 1 tile)', 'number')}</div><label id="entity-encounter-label">Incontro dell’entità<select id="entity-encounter"></select></label><div id="flame-properties">${field('entity-span', 'Lunghezza (tile)', 'number')}<label>Direzione<select id="entity-vertical"><option value="false">Orizzontale</option><option value="true">Verticale</option></select></label></div><button id="delete">Rimuovi entità</button></div><h3>Controllo mappa</h3><ul id="issues"></ul><p class="hint">Installa la bozza nel progetto: npm run dungeon:import -- percorso/file.draft.json. Poi ricompila e riavvia. I segnaposto richiedono un boss implementato. Punti di attivazione o aggro avviano il dungeon: subito in solo, dopo 5 secondi in gruppo. All’avvio i giocatori vengono posizionati sugli spawn gruppo (metti 5 punti distinti per un team completo). I boss lontani attendono il proprio aggro. I punti di attivazione non hanno il limite di 5. Le fiamme appaiono solo dove le disegni, puntano verso l’interno e sono letali durante lo scontro. Per gestire il catalogo direttamente qui: npm run dungeon:studio.</p></aside></main>
 <footer><div class="new-map"><label>Nuova mappa <input id="width" type="number" value="24" min="8" max="96"> × <input id="height" type="number" value="18" min="8" max="96"></label><button id="new">Crea</button><select id="example"><option value="">Copia da catalogo…</option></select></div><span id="status" role="status">Pronto</span></footer><input id="file" type="file" accept=".json,application/json" hidden>`;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -25,6 +29,8 @@ const input = (id: string) => el<HTMLInputElement>(id);
 const value = (id: string) => input(id).value;
 const button = (id: string, action: () => void) => el(id).addEventListener('click', action);
 const status = (message: string) => { el('status').textContent = message; };
+el('npcs').previousElementSibling!.insertAdjacentHTML('beforebegin', '<section class="shared-assets"><h3>Asset condivisi</h3><input id="dungeon-asset-search" placeholder="Cerca un asset…" aria-label="Cerca asset condivisi"><div class="catalog-actions"><button id="dungeon-assets-expand">Espandi tutti</button><button id="dungeon-assets-collapse">Comprimi tutti</button></div><div id="dungeon-assets" class="asset-list"></div><p class="hint">Importa e modifica gli asset nel World Maker. Applica il catalogo prima di installare dungeon che usano nuovi asset.</p></section>');
+el('entity-properties').insertAdjacentHTML('afterend', `<section id="asset-placement-properties" hidden><h3>Asset selezionato</h3><p id="asset-placement-name"></p><div class="two-fields">${field('asset-placement-x', 'Colonna', 'number')}${field('asset-placement-y', 'Riga', 'number')}</div><button id="delete-asset-placement">Rimuovi asset</button></section>`);
 el('npcs').insertAdjacentHTML('afterend', '<h3>Powerup e powerdown</h3><div id="pickups" class="tool-list"></div>');
 el('issues').insertAdjacentHTML('afterend', '<p id="issue-detail" class="hint" role="status" hidden></p>');
 el('preview').textContent = 'Prova gioco locale';
@@ -35,7 +41,7 @@ const playtestDialog = el<HTMLDialogElement>('playtest-dialog');
 const playtestCanvas = el<HTMLCanvasElement>('playtest-canvas');
 root.querySelector('[data-tool="flame"]')!.insertAdjacentHTML('afterend', '<button id="random-flame">Fiamma in un punto casuale</button>');
 const rules = el('issues').parentElement!.querySelector<HTMLParagraphElement>(':scope > p.hint:last-child')!;
-rules.textContent = 'Gli ingressi, anche in erba, si chiudono automaticamente con massi durante lo scontro. Il terreno originale ritorna alla vittoria o alla morte di un partecipante. In solo l’avvio è immediato; in gruppo ci sono 5 secondi per entrare. Gli spawn gruppo determinano la posizione iniziale dei partecipanti. I boss lontani attendono il proprio aggro. Le fiamme sono letali e compaiono solo durante lo scontro: puoi disporle liberamente all’interno o usare il posizionamento casuale. Clicca un errore per vedere i punti coinvolti e come correggerlo. La prova locale usa il combattimento del gioco e non salva progressi.';
+rules.textContent = 'Gli ingressi, anche in erba, si chiudono automaticamente con massi durante lo scontro. Il terreno originale ritorna alla vittoria o alla morte di un partecipante. In solo e in gruppo restano i tempi di ingresso del gioco. Gli spawn sono opzionali: senza punti configurati ogni partecipante conserva la posizione raggiunta entrando; se presenti valgono anche per il singolo. I boss lontani attendono il proprio aggro. Le fiamme sono letali e compaiono solo durante lo scontro. Clicca un errore per vedere i punti coinvolti e come correggerlo. La prova locale usa il combattimento del gioco e non salva progressi.';
 // The retired drafts referenced removed map instances rather than reusable boss models.
 localStorage.removeItem('riftlands.dungeon-draft.v1');
 const KEY = 'riftlands.dungeon-draft.v2';
@@ -47,6 +53,20 @@ let aim = 0, attacking = false, highlighted: Vec2[] = [], queuedCast: AbilitySlo
 const keys = new Set<string>();
 let view = { x: 0, y: 0, scale: 26 };
 const canvas = el<HTMLCanvasElement>('map'), ctx = canvas.getContext('2d')!;
+let sharedAssets: readonly WorldAsset[] = WORLD_DOCUMENT.assets;
+let animatedAssets = false;
+let assetDragOffset: Vec2 | null = null;
+const assetArt = new WorldAssetArt(() => draw());
+const assetCatalog = new WorldAssetCatalog(el('dungeon-assets'), id => { selected = null; setTool(`asset:${id}`); refresh(); });
+const studioChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('riftlands.studio') : undefined;
+button('dungeon-assets-expand', () => assetCatalog.expandAll(true));
+button('dungeon-assets-collapse', () => assetCatalog.expandAll(false));
+input('dungeon-asset-search').addEventListener('input', () => refresh());
+for (const axis of ['x', 'y'] as const) input(`asset-placement-${axis}`).addEventListener('change', () => change(() => {
+    const p = draft.assetPlacements?.find(p => p.id === selected);
+    if (p) p[axis] = Number(value(`asset-placement-${axis}`));
+}));
+button('delete-asset-placement', () => remove());
 let storageError = '';
 try {
     const stored = localStorage.getItem(KEY);
@@ -99,9 +119,11 @@ catch (error) {
     status(error instanceof Error ? error.message : String(error));
 } }
 function setTool(next: string): void { stopPreview(); tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.tool === tool)); if (b.dataset.tool === tool)
-    el('tool-name').textContent = b.textContent; }); }
+    el('tool-name').textContent = b.textContent; }); if (tool.startsWith('asset:')) el('tool-name').textContent = `Asset · ${sharedAssets.find(a => a.id === tool.slice(6))?.name ?? tool.slice(6)}`; }
 root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool!)));
 function refresh(): void {
+    const animated = new Set(sharedAssets.filter(a => worldAssetVisual(a).kind === 'fire').map(a => a.id));
+    animatedAssets = (draft.assetPlacements ?? []).some(p => animated.has(p.assetId));
     if (!draft.encounters.some(g => g.id === activeEncounter))
         activeEncounter = draft.encounters[0].id;
     for (const id of ['encounter', 'entity-encounter'])
@@ -112,12 +134,17 @@ function refresh(): void {
         input(`encounter-${f}`).value = String(group[f]);
     input('name').value = draft.name;
     input('map-id').value = draft.id;
-    for (const axis of ['x', 'y'] as const)
-        input(`origin-${axis}`).value = String(draft.origin[axis]);
     el<HTMLButtonElement>('undo').disabled = !past.length;
     el<HTMLButtonElement>('redo').disabled = !future.length;
     el('map-info').textContent = `${draft.width} × ${draft.height} caselle · ${draft.entities.length} entità · 48 unità / casella`;
     const e = draft.entities.find(e => e.id === selected);
+    const placement = draft.assetPlacements?.find(p => p.id === selected);
+    el('asset-placement-properties').hidden = !placement;
+    if (placement) {
+        el('asset-placement-name').textContent = sharedAssets.find(a => a.id === placement.assetId)?.name ?? placement.assetId;
+        input('asset-placement-x').value = String(placement.x); input('asset-placement-y').value = String(placement.y);
+    }
+    assetCatalog.update(sharedAssets, tool.startsWith('asset:') ? tool.slice(6) : '', value('dungeon-asset-search'));
     el('entity-properties').hidden = !e;
     if (e) {
         for (const f of ['label', 'x', 'y', 'level', 'radius', 'template'] as const)
@@ -132,7 +159,7 @@ function refresh(): void {
         el('entity-encounter-label').hidden = e.kind === 'npc' || e.kind === 'pickup';
         el('flame-properties').hidden = e.kind !== 'flame';
     }
-    const issues = validateDungeonDraft(draft);
+    const issues = validateDungeonDraft(draft, sharedAssets);
     el('issues').replaceChildren(...(issues.length ? issues : ['Terreno e posizioni validi.']).map(message => {
         const li = document.createElement('li');
         if (!issues.length) li.textContent = message;
@@ -156,7 +183,8 @@ function explainIssue(message: string): void {
         : message.includes('solido') || message.includes('ingombro') ? 'Sposta l’entità o dipingi terreno percorribile attorno al suo intero ingombro: il centro libero da solo non basta.'
         : message.includes('regione') ? 'Seleziona l’incontro corretto e correggi posizione, dimensioni o assegnazione delle entità.'
         : message.includes('boss') ? 'Scegli un boss dalla palette e posizionalo nella regione del suo incontro.'
-        : 'Posiziona da uno a cinque spawn gruppo liberi e distinti nella regione dell’incontro.';
+        : message.includes('Asset') || message.includes('asset') ? 'Controlla il catalogo condiviso nel World Maker e mantieni l’asset dentro la mappa.'
+        : 'Gli spawn sono opzionali; se li usi, posiziona al massimo cinque punti liberi e distinti nella regione.';
     el('issue-detail').hidden = false;
     el('issue-detail').textContent = `${message} ${advice}${highlighted.length ? ` Caselle (colonna, riga): ${highlighted.map(p => `(${p.x}, ${p.y})`).join(', ')}.` : ''}`;
     refresh(); fit();
@@ -178,6 +206,18 @@ function draw(): void {
                 ctx.strokeRect(x * s, y * s, s, s);
             }
         }
+    const placements = [...(draft.assetPlacements ?? [])].sort((p, q) => {
+        const a = sharedAssets.find(a => a.id === p.assetId), b = sharedAssets.find(a => a.id === q.assetId);
+        return (a?.layer === 'ground' ? -1 : 1) - (b?.layer === 'ground' ? -1 : 1) || p.y + (a?.height ?? 1) * (a?.pivot.y ?? 1) - q.y - (b?.height ?? 1) * (b?.pivot.y ?? 1);
+    });
+    for (const p of placements) {
+        const a = sharedAssets.find(a => a.id === p.assetId);
+        if (a) assetArt.draw(ctx, a, p, 1, s, performance.now());
+        if (!a || p.id === selected) {
+            ctx.strokeStyle = a ? '#fff' : '#ed997e'; ctx.lineWidth = 2;
+            ctx.strokeRect(p.x * s, p.y * s, (a?.width ?? 1) * s, (a?.height ?? 1) * s);
+        }
+    }
     for (const g of draft.encounters) {
         ctx.fillStyle = g.id === activeEncounter ? 'rgba(45,145,255,0.22)' : 'rgba(45,145,255,0.10)';
         for (const tile of g.visitorTiles ?? []) ctx.fillRect(tile.x*s,tile.y*s,s,s);
@@ -232,6 +272,10 @@ function paint(p: Vec2): void {
     if (p.x < 0 || p.y < 0 || p.x >= draft.width || p.y >= draft.height)
         return;
     const existing = draft.entities.find(e => e.kind === 'flame' ? draftFlameTiles(e).some(t => t.x === p.x && t.y === p.y) : e.x === p.x && e.y === p.y);
+    const existingAsset = [...(draft.assetPlacements ?? [])].reverse().find(item => {
+        const a = sharedAssets.find(a => a.id === item.assetId);
+        return p.x >= item.x && p.y >= item.y && p.x < item.x + (a?.columns ?? 1) && p.y < item.y + (a?.rows ?? 1);
+    });
     if (tool === 'visitors' || tool === 'visitors-erase') {
         const group = draft.encounters.find(g=>g.id===activeEncounter)!;
         const tiles = new Map((group.visitorTiles ?? []).map(t=>[`${t.x},${t.y}`,t]));
@@ -253,13 +297,29 @@ function paint(p: Vec2): void {
     else if (tool === 'erase') {
         if (existing)
             draft.entities = draft.entities.filter(e => e !== existing);
+        else if (existingAsset) draft.assetPlacements = draft.assetPlacements!.filter(a => a !== existingAsset);
     }
     else if (tool === 'select') {
         const e = draft.entities.find(e => e.id === selected);
+        const asset = draft.assetPlacements?.find(a => a.id === selected);
         if (e && lastTile)
             Object.assign(e, p);
-        else if (!lastTile)
-            selected = existing?.id ?? null;
+        else if (asset && lastTile) {
+            const a = sharedAssets.find(a => a.id === asset.assetId), x = p.x - (assetDragOffset?.x ?? 0), y = p.y - (assetDragOffset?.y ?? 0);
+            if (x >= 0 && y >= 0 && x + (a?.columns ?? 1) <= draft.width && y + (a?.rows ?? 1) <= draft.height) Object.assign(asset, { x, y });
+        }
+        else if (!lastTile) {
+            selected = existing?.id ?? existingAsset?.id ?? null;
+            assetDragOffset = existingAsset ? { x: p.x - existingAsset.x, y: p.y - existingAsset.y } : null;
+        }
+    }
+    else if (tool.startsWith('asset:')) {
+        const asset = sharedAssets.find(a => a.id === tool.slice(6));
+        if (!lastTile && asset && (draft.assetPlacements?.length ?? 0) < 4096) {
+            if (p.x + asset.columns > draft.width || p.y + asset.rows > draft.height) { status('L’asset deve restare dentro la mappa.'); return; }
+            const placement = { id: crypto.randomUUID(), assetId: asset.id, ...p };
+            (draft.assetPlacements ??= []).push(placement); selected = placement.id;
+        }
     }
     else if (tool === 'activation') {
         const from = lastTile ?? p, n = Math.max(Math.abs(p.x-from.x),Math.abs(p.y-from.y));
@@ -324,8 +384,6 @@ button('undo', () => history(true));
 button('redo', () => history(false));
 for (const [id, f] of [['name', 'name'], ['map-id', 'id']] as const)
     input(id).addEventListener('change', () => change(() => { draft[f] = value(id).trim(); }));
-for (const axis of ['x', 'y'] as const)
-    input(`origin-${axis}`).addEventListener('change', () => change(() => { draft.origin[axis] = Number(value(`origin-${axis}`)); }));
 el('encounter').addEventListener('change', () => { activeEncounter = value('encounter'); refresh(); });
 for (const f of ['name', 'x', 'y', 'width', 'height'] as const)
     input(`encounter-${f}`).addEventListener('change', () => change(() => { const g = draft.encounters.find(g => g.id === activeEncounter)!; if (f === 'name')
@@ -351,7 +409,7 @@ for (const f of ['label', 'x', 'y', 'level', 'radius', 'template', 'encounter', 
             e.radius = b.radius;
         }
     } }));
-const remove = () => change(() => { draft.entities = draft.entities.filter(e => e.id !== selected); selected = null; });
+const remove = () => change(() => { draft.entities = draft.entities.filter(e => e.id !== selected); if (draft.assetPlacements) draft.assetPlacements = draft.assetPlacements.filter(p => p.id !== selected); selected = null; });
 button('delete', remove);
 button('new', () => { change(() => { draft = newDungeonDraft(Number(value('width')), Number(value('height'))); selected = null; }); fit(); });
 el('example').addEventListener('change', () => { const d = DUNGEON_DEFINITIONS.find(d => d.id === value('example')); if (!d)
@@ -359,7 +417,7 @@ el('example').addEventListener('change', () => { const d = DUNGEON_DEFINITIONS.f
 function download(data: unknown, name: string): void { const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 button('download', () => download(draft, `${draft.id}.draft.json`));
 button('compile', () => { try {
-    download(compileDungeonDraft(draft), `${draft.id}.runtime.json`);
+    download(compileDungeonDraft(draft, sharedAssets), `${draft.id}.runtime.json`);
     status('Runtime esportato. Installa usando dungeon:import con la bozza JSON.');
 }
 catch (e) {
@@ -370,7 +428,7 @@ input('file').addEventListener('change', async () => { const file = input('file'
     return; try {
     if (file.size > 2000000)
         throw new Error('File troppo grande (massimo 2 MB).');
-    const imported = parseDungeonFile(await file.text());
+    const imported = parseDungeonFile(await file.text(), sharedAssets);
     change(() => { draft = imported.draft; selected = null; });
     fit();
     if (imported.warnings.length) status(imported.warnings.join(' '));
@@ -382,7 +440,7 @@ function stopPreview(): void { preview = null; previewRenderer?.destroy(); previ
 function startPreview(): void {
     stopPreview();
     try {
-        preview = createDungeonPlaytest(draft, value('preview-class') as ClassId);
+        preview = createDungeonPlaytest(draft, value('preview-class') as ClassId, sharedAssets);
         playtestDialog.showModal();
         previewRenderer = new Renderer(playtestCanvas, [preview.definition]);
         previewRenderer.world = preview.world;
@@ -434,7 +492,7 @@ window.addEventListener('blur', () => { keys.clear(); attacking = false; queuedC
 document.addEventListener('visibilitychange', () => { if (document.hidden)
     { keys.clear(); attacking = false; queuedCast = undefined; } });
 let previous = performance.now();
-function frame(now: number): void { const dt = Math.min(.05, (now - previous) / 1000); previous = now; if (preview && previewRenderer && !document.hidden) {
+function frame(now: number): void { const dt = Math.min(.05, (now - previous) / 1000); previous = now; if (!preview && animatedAssets && !document.hidden) draw(); if (preview && previewRenderer && !document.hidden) {
     const held = (...codes: string[]) => Number(codes.some(c => keys.has(c)));
     const dx = held('KeyD', 'ArrowRight') - held('KeyA', 'ArrowLeft'), dy = held('KeyS', 'ArrowDown') - held('KeyW', 'ArrowUp');
     const cast: AbilitySlot | undefined = queuedCast ?? (keys.has('KeyQ') ? 'q' : keys.has('KeyE') ? 'e' : keys.has('KeyR') ? 'r' : attacking || keys.has('Space') ? 'basic' : undefined);
@@ -457,11 +515,20 @@ if (storageError)
     status(storageError);
 requestAnimationFrame(frame);
 
-button('world-placement', () => {
-    stopPreview();
-    void chooseDungeonPlacement(draft).then(origin => {
-        if (origin) change(() => { draft.origin = origin; });
-    });
-});
-
-void setupDungeonLibrary(() => draft, incoming => { change(() => { draft = incoming; selected = null; }); fit(); status("Dungeon aperto dal catalogo. Modifica e premi Aggiorna bozza installata."); }, status);
+async function refreshSharedAssets(): Promise<void> {
+    try {
+        const response = await fetch('/__world/project');
+        if (response.ok) {
+            const project = await response.json(), local = await loadWorldCheckpoint();
+            sharedAssets = local && local.revision === project.revision ? local.document.assets : parseWorldDocument(project.document).assets;
+        }
+        refresh();
+    } catch { /* The published client uses the bundled shared catalog. */ }
+}
+if (studioChannel) studioChannel.onmessage = event => {
+    if (event.data?.type === 'assets') {
+        try { const document = newWorldDocument(); document.assets = event.data.assets; sharedAssets = parseWorldDocument(document).assets; stopPreview(); refresh(); } catch { /* Ignore invalid catalog updates. */ }
+    }
+};
+window.addEventListener('focus', () => { void refreshSharedAssets(); });
+void refreshSharedAssets().then(() => setupDungeonLibrary(() => draft, incoming => { change(() => { draft = incoming; selected = null; }); fit(); status('Dungeon aperto dal catalogo. Modifica e premi Aggiorna bozza installata.'); }, status));

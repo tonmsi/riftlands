@@ -46,6 +46,11 @@ export async function setupDungeonLibrary(getDraft: () => DungeonDraft, open: (d
             if (!draft) { status('Nessuna bozza nel catalogo: importa il file originale.'); return; }
             open(parseDungeonDraft(JSON.stringify(draft)));
         };
+        const requested = new URLSearchParams(location.search).get('dungeon');
+        if (requested && library.dungeons.some(d => d.id === requested)) {
+            select.value = requested;
+            panel.querySelector<HTMLButtonElement>('[data-library="open"]')!.click();
+        }
         for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-action]')) button.onclick = async () => {
             const action = button.dataset.action!, draft = getDraft(), id = action === 'remove' ? select.value : draft.id;
             if (!id) return;
@@ -55,6 +60,9 @@ export async function setupDungeonLibrary(getDraft: () => DungeonDraft, open: (d
                 const response = await fetch('/__studio/library', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio-Token': library.token }, body: JSON.stringify({ action, id, draft }) });
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error ?? 'Operazione fallita.');
+                if (typeof BroadcastChannel === 'function') {
+                    const channel = new BroadcastChannel('riftlands.studio'); channel.postMessage({ type: 'dungeons' }); channel.close();
+                }
                 const message = `Dungeon ${action === 'remove' ? 'eliminato' : action === 'update' ? 'aggiornato' : 'installato'}. Ricompila il gioco prima di avviarlo. Backup: ${result.backups.join(', ')}`;
                 sessionStorage.setItem('riftlands.studio-result', message);
                 location.reload();

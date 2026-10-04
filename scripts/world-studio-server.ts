@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createServer as createViteServer } from 'vite';
 import { importWorldImage, readWorldProject, readWorldDungeonCatalog, saveWorldProject } from './world-library';
+import { dungeonStudioRoutes } from './dungeon-studio-routes';
 
 async function readBody(request: IncomingMessage): Promise<any> {
   const chunks: Buffer[] = []; let size = 0;
@@ -13,10 +14,12 @@ async function readBody(request: IncomingMessage): Promise<any> {
 export async function startWorldStudio(options: { root: string; documentPath: string; dungeonPath: string; dataPath: string; port: number }) {
   const token = randomUUID(); let origin = '', busy = false;
   let vite: Awaited<ReturnType<typeof createViteServer>>;
+  const library = dungeonStudioRoutes({ ...options, catalogPath: options.dungeonPath, managedPlacement: true }, () => vite.moduleGraph.invalidateAll());
   const server = createServer((request, response) => {
     const reply = (status: number, value: unknown) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); response.end(JSON.stringify(value)); };
     if (`http://${request.headers.host}` !== origin || (request.headers.origin && request.headers.origin !== origin)) { reply(403, { error: 'World Studio accessibile dalla propria pagina locale.' }); return; }
     const path = (request.url ?? '').split('?')[0];
+    if (library(request, response, origin)) return;
     const image = /^\/world-assets\/([a-zA-Z0-9_-]+\.(png|svg))$/.exec(path);
     if (image && request.method === 'GET') {
       // New immutable uploads are available immediately, independent of Vite's public-file watcher.
@@ -38,7 +41,7 @@ export async function startWorldStudio(options: { root: string; documentPath: st
       try {
         const payload = await readBody(request);
         if (path === '/__world/images') reply(200, { image: await importWorldImage(options.root, payload.mime, payload.base64) });
-        else reply(200, await saveWorldProject(options, payload.document, payload.revision));
+        else { const result = await saveWorldProject(options, payload.document, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
       } finally { busy = false; }
     })().catch(e => { if (!response.headersSent) reply(400, { error: e instanceof Error ? e.message : String(e) }); });
   });

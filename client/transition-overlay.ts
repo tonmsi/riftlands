@@ -7,12 +7,18 @@ export interface TransitionOverlay {
   opacity: number;
   veil: number;
   position?: number;
+  vignette?: boolean;
 }
 
 /** Shared veil, panel and typography for dungeon entry and match outcomes. */
 export function drawTransitionOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, overlay: TransitionOverlay): void {
   ctx.save();
-  ctx.fillStyle = `rgba(12,18,18,${overlay.veil})`;
+  if (overlay.vignette) {
+    const shade = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * .25, width / 2, height / 2, Math.hypot(width, height) / 2);
+    shade.addColorStop(0, 'rgba(12,18,18,0)');
+    shade.addColorStop(1, `rgba(12,18,18,${overlay.veil})`);
+    ctx.fillStyle = shade;
+  } else ctx.fillStyle = `rgba(12,18,18,${overlay.veil})`;
   ctx.fillRect(0, 0, width, height);
   ctx.globalAlpha = overlay.opacity;
   const y = Math.max(100, height * (overlay.position ?? .22));

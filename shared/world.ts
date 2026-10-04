@@ -36,6 +36,9 @@ export class World {
   constructor(public readonly seed = WORLD_DOCUMENT.seed, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world',
     document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS) {
     this.authoring = new WorldAuthoring(document);
+    for (const d of dungeons) for (const p of d.assetPlacements ?? []) {
+      if (this.authoring.assets.has(p.assetId)) this.authoring.placements.add({ ...p, id: `dungeon:${d.id}:${p.id}` });
+    }
     for (const n of document.npcs) {
       const x = (n.x + .5) * TILE_SIZE, y = (n.y + .5) * TILE_SIZE, c = chunkCoords(x, y), key = chunkKey(c.cx, c.cy);
       const bucket = this.manualNpcs.get(key) ?? []; bucket.push({ ...n, id: `authored:${n.id}`, x, y }); this.manualNpcs.set(key, bucket);

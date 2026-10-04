@@ -1,0 +1,97 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { studioDraft } from './fixtures/studio-draft';
+import { compileDungeonDraft, parseDungeonDraft, validateDungeonDraft } from '../shared/dungeon-draft';
+import { parseDungeonFile } from '../shared/dungeon-import';
+import { assertValidDungeonDefinition } from '../shared/dungeons';
+import { newWorldAsset, newWorldDocument, resizeWorldAsset } from '../shared/world-schema';
+import { relocateDungeon } from '../shared/dungeon-relocation';
+import { validateWorld } from '../shared/world-validation';
+import { World } from '../shared/world';
+import { createDungeonPlaytest } from '../client/dungeon-playtest';
+import { installDungeon } from '../scripts/dungeon-library';
+import { readCatalog } from '../scripts/dungeon-removal';
+import type { Actor } from '../shared/types';
+import { DUNGEON_ENTRY_MS } from '../shared/bosses';
+
+test('shared asset references survive export, import and relocation and drive runtime collision and hiding', () => {
+    const draft = studioDraft(), asset = newWorldAsset('shared-tree', 'Albero condiviso', '/world-assets/tree.svg');
+    resizeWorldAsset(asset, 2, 2); asset.cells[0].blocked = true; asset.cells[1].visibility = 'hide-fade';
+    draft.assetPlacements = [{ id: 'decoration', assetId: asset.id, x: 6, y: 6 }];
+    const compiled = compileDungeonDraft(draft, [asset]);
+    assert.deepEqual(parseDungeonDraft(JSON.stringify(draft)), draft);
+    assert.deepEqual(parseDungeonFile(JSON.stringify(compiled), [asset]).draft.assetPlacements, draft.assetPlacements);
+    const moved = relocateDungeon(compiled.definition, { x: 400, y: -400 });
+    assert.deepEqual(moved.assetPlacements![0], { id: 'decoration', assetId: asset.id, x: 406, y: -394 });
+    const document = newWorldDocument(); document.assets = [asset];
+    const world = new World(document.seed, 16, 'world', document, [moved]);
+    assert.equal(world.isBlocked(406, -394), true);
+    assert.equal(world.isHiding(407 * 48 + 24, -394 * 48 + 24), true);
+    assert.equal(world.assetsIn({ left: 406, top: -394, right: 408, bottom: -392 })[0].id, 'dungeon:studio-test:decoration');
+    draft.assetPlacements[0].x = draft.width - 1;
+    assert.ok(validateDungeonDraft(draft, [asset]).some(i => i.includes('fuori mappa')));
+    draft.assetPlacements[0].x = 6;
+    assert.ok(validateDungeonDraft(draft, []).some(i => i.includes('catalogo condiviso')));
+    document.dungeons = [{ dungeonId: moved.id, x: 400, y: -400, enabled: false }]; document.assets = [];
+    assert.ok(validateWorld(document, [moved]).some(i => i.includes('asset assente')));
+});
+
+for (const team of [false, true]) test(`optional player spawns preserve ${team ? 'team' : 'solo'} positions, preparation, admission and gate lifecycle`, () => {
+    const draft = studioDraft(); draft.entities = draft.entities.filter(e => e.kind !== 'party');
+    draft.entities.push({ id: 'trigger', kind: 'activation', template: '', label: 'Attivazione', x: 2, y: 3, radius: 15, level: 1 });
+    assert.deepEqual(validateDungeonDraft(draft), []);
+    const definition = compileDungeonDraft(draft).definition;
+    assert.deepEqual(definition.spawnPoints.party, []); assert.doesNotThrow(() => assertValidDungeonDefinition(definition));
+    const preview = createDungeonPlaytest(draft), sim = preview.simulation, e = [...sim.bosses.values()][0];
+    Object.assign(preview.player, preview.definition.encounter.activationPoints![0], { spawnProtectedUntil: 0 });
+    const teammate = sim.addPlayer({ ...sim.accounts.get(preview.player.id)!, id: 'team-mate', name: 'Compagno' }, 'mage');
+    Object.assign(teammate, { x: preview.player.x + 96, y: preview.player.y, spawnProtectedUntil: 0 });
+    if (team) preview.player.teamId = teammate.teamId = 'team';
+    const before = { x: preview.player.x, y: preview.player.y }, other = { x: teammate.x, y: teammate.y };
+    sim.step();
+    const preparation = e.preparationFor(preview.player)!;
+    assert.equal(preparation.endsAt - preparation.startedAt, team ? 5000 : DUNGEON_ENTRY_MS);
+    for (let i = 0; i < (team ? 51 : 10); i++) sim.step(.1);
+    assert.equal(e.ownerId, preview.player.id);
+    assert.deepEqual({ x: preview.player.x, y: preview.player.y }, before);
+    assert.equal(e.isActiveParticipant(teammate.id), team);
+    if (team) assert.deepEqual({ x: teammate.x, y: teammate.y }, other);
+    else assert.deepEqual({ x: teammate.x, y: teammate.y }, e.dungeon.encounter.ejectTo);
+    assert.equal(preview.world.isBossLocked(e.boss.id), true);
+    (sim as unknown as { damage(target: Actor, attacker: Actor, amount: number): boolean }).damage(e.boss, preview.player, 100000);
+    assert.equal(e.ownerId, undefined); assert.equal(preview.world.isBossLocked(e.boss.id), false);
+});
+
+test('without spawns an entrant on an opening moves only as far as necessary when the gate closes', () => {
+    const draft = studioDraft(); draft.entities = draft.entities.filter(e => e.kind !== 'party');
+    draft.entities.push({ id: 'trigger', kind: 'activation', template: '', label: 'Attivazione', x: 0, y: 3, radius: 15, level: 1 });
+    const p = createDungeonPlaytest(draft), e = [...p.simulation.bosses.values()][0];
+    Object.assign(p.player, p.definition.encounter.activationPoints![0]);
+    for (let i = 0; i < 12; i++) p.simulation.step(.1);
+    assert.equal(e.ownerId, p.player.id);
+    assert.equal(p.player.x, (p.definition.layout.bounds.minTx + 1.5) * 48);
+    assert.ok(Number.isFinite(p.player.y));
+});
+
+test('managed library installs unplaced maps and updates them at the position chosen by World Maker', async t => {
+    const directory = await mkdtemp(join(tmpdir(), 'riftlands-shared-studio-')); t.after(() => rm(directory, { recursive: true, force: true }));
+    const options = { catalogPath: join(directory, 'catalog.json'), documentPath: join(directory, 'world.json'), dataPath: join(directory, 'accounts.json'), managedPlacement: true };
+    const document = newWorldDocument(), asset = newWorldAsset('shared', 'Condiviso', '/world-assets/tree.svg');
+    for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) document.tiles.push({ x, y, terrain: 'grass' });
+    document.assets = [asset];
+    await writeFile(options.documentPath, JSON.stringify(document)); await writeFile(options.catalogPath, '[]');
+    const draft = studioDraft(); draft.assetPlacements = [{ id: 'decoration', assetId: 'shared', x: 6, y: 6 }];
+    await installDungeon(draft, options);
+    const saved = JSON.parse(await readFile(options.documentPath, 'utf8'));
+    assert.deepEqual(saved.dungeons, [{ dungeonId: draft.id, x: 0, y: 0, enabled: false }]);
+    saved.dungeons[0] = { dungeonId: draft.id, x: 500_000, y: -500_000, enabled: true };
+    await writeFile(options.documentPath, JSON.stringify(saved)); draft.origin = { x: -100, y: -100 }; draft.name = 'Updated';
+    await installDungeon(draft, { ...options, replace: true });
+    const catalog = await readCatalog(options.catalogPath);
+    assert.equal(catalog.bundles[0].definition.layout.bounds.minTx, 500_000);
+    assert.equal(catalog.bundles[0].definition.layout.bounds.minTy, -500_000);
+    assert.equal(catalog.bundles[0].definition.assetPlacements![0].x, 500_006);
+});

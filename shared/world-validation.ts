@@ -14,12 +14,24 @@ export function worldDungeons(document: WorldDocument, catalog: readonly Dungeon
 export function validateWorld(document: WorldDocument, catalog: readonly DungeonDefinition[]): string[] {
   const issues: string[] = [], dungeons = worldDungeons(document, catalog), known = new Set(catalog.map(d => d.id));
   for (const p of document.dungeons) if (!known.has(p.dungeonId)) issues.push(`Dungeon assente dal catalogo: ${p.dungeonId}.`);
+  const assets = new Map(document.assets.map(a => [a.id, a]));
+  for (const d of catalog) for (const p of d.assetPlacements ?? []) {
+    const a = assets.get(p.assetId), b = d.layout.bounds;
+    if (!a) issues.push(`${d.name}: asset assente dal catalogo condiviso: ${p.assetId}.`);
+    else if (p.x < b.minTx || p.y < b.minTy || p.x + a.columns > b.maxTx + 1 || p.y + a.rows > b.maxTy + 1)
+      issues.push(`${d.name}: asset ${a.name} fuori dai limiti del dungeon.`);
+  }
   for (const d of dungeons) {
     try { assertValidDungeonDefinition(d); } catch (e) { issues.push((e as Error).message); }
     for (const other of dungeons) if (d.id < other.id && Math.hypot(d.area.x - other.area.x, d.area.y - other.area.y) < d.area.radius + other.area.radius + 192)
       issues.push(`Dungeon sovrapposti o troppo vicini: ${d.name}, ${other.name}.`);
   }
   const world = new World(document.seed, 16, 'world', document, dungeons);
+  for (const d of dungeons) {
+    for (const e of [d, ...(d.additionalEncounters ?? [])]) for (const p of [e.spawnPoints.boss, ...e.spawnPoints.party]) {
+      if (collidesWorld(p.x, p.y, PLAYER_RADIUS, world)) issues.push(`${d.name}: spawn su un ostacolo del catalogo condiviso.`);
+    }
+  }
   const spawn = { x: document.spawn.x * TILE_SIZE, y: document.spawn.y * TILE_SIZE };
   if (collidesWorld(spawn.x, spawn.y, PLAYER_RADIUS + 2, world)) issues.push('Spawn del giocatore bloccato: libera anche le celle vicine.');
   if (configuredDungeonTile(Math.floor(spawn.x / TILE_SIZE), Math.floor(spawn.y / TILE_SIZE), dungeons) !== undefined) issues.push('Spawn globale dentro un dungeon: scegli una posizione nel mondo.');

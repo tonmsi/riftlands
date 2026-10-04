@@ -22,7 +22,7 @@ export async function readCatalog(path: string): Promise<{ text: string; bundles
 }
 
 /** Offline maintenance: never construct AccountStore, which can migrate account data. */
-export async function removeDungeon(options: { id: string; catalogPath: string; dataPath: string; check?: boolean }) {
+export async function removeDungeon(options: { id: string; catalogPath: string; dataPath: string; documentPath?: string; check?: boolean }) {
     const { id, catalogPath } = options;
     const catalog = await readCatalog(catalogPath), bundle = catalog.bundles.find(b => b.definition.id === id);
     if (!bundle && id !== '--all') throw new Error(`Dungeon personalizzato "${id}" non trovato. Usa --list per vedere gli ID installati.`);
@@ -30,7 +30,7 @@ export async function removeDungeon(options: { id: string; catalogPath: string; 
         id === '--all' ? catalog.bundles.flatMap(b => b.bosses.map(boss => boss.id)) : bundle!.bosses.map(b => b.id));
 }
 
-export async function changeCatalog(options: { id: string; catalogPath: string; dataPath: string; check?: boolean },
+export async function changeCatalog(options: { id: string; catalogPath: string; dataPath: string; documentPath?: string; unplacedDungeonId?: string; check?: boolean },
     catalogText: string, next: DungeonBundle[], bossIds: string[]) {
     const { id, catalogPath, dataPath, check } = options;
     const dungeonPath = join(dirname(dataPath), 'dungeon.json');
@@ -64,14 +64,18 @@ export async function changeCatalog(options: { id: string; catalogPath: string; 
     const tag = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}--${id === '--all' ? 'catalog' : `dungeon-${id}`}`;
     const files = [{ path: catalogPath, before: catalogText,
         after: JSON.stringify(next, null, 2) + '\n' }];
-    const worldPath = join(dirname(catalogPath), 'custom-world.json');
+    const worldPath = options.documentPath ?? join(dirname(catalogPath), 'custom-world.json');
     let worldText: string | undefined;
     try { worldText = await readFile(worldPath, 'utf8'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     if (worldText !== undefined) {
         const document = parseWorldDocument(worldText), ids = new Set(next.map(b => b.definition.id));
         const placements = document.dungeons.filter(d => ids.has(d.dungeonId));
-        if (placements.length !== document.dungeons.length) {
+        if (options.unplacedDungeonId && !placements.some(p => p.dungeonId === options.unplacedDungeonId)) {
+            const dungeon = next.find(b => b.definition.id === options.unplacedDungeonId)!.definition;
+            placements.push({ dungeonId: dungeon.id, x: dungeon.layout.bounds.minTx, y: dungeon.layout.bounds.minTy, enabled: false });
+        }
+        if (JSON.stringify(placements) !== JSON.stringify(document.dungeons)) {
             document.dungeons = placements;
             files.push({ path: worldPath, before: worldText, after: serializeWorldDocument(document) });
         }
