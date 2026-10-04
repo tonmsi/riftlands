@@ -34,7 +34,7 @@ export class SnapshotBuilder {
     if (!projected) {
       projected = projectActor(actor);
       for (const effect of projected.effects) Object.freeze(effect);
-      Object.freeze(projected.effects); Object.freeze(projected.cooldowns); Object.freeze(projected);
+      Object.freeze(projected.effects); Object.freeze(projected.cooldowns); if (projected.loadout) Object.freeze(projected.loadout); Object.freeze(projected);
       this.projected.set(actor, projected);
     }
     return projected;

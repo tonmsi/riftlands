@@ -1,8 +1,11 @@
 import { createHmac, randomBytes, randomUUID, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import type { Actor, PublicAccount } from '../shared/types';
-import { CLASSES } from '../shared/config';
+import type { Actor, ClassId, PublicAccount } from '../shared/types';
+import { CLASSES, levelFromXp } from '../shared/config';
+import { newCharacter, normalizeLoadout, unlockTier, validLoadout, type CharacterProgress } from '../shared/progression';
+import { activateCharacter, characterFor } from './character-progress';
+export { activateCharacter, characterFor, saveCharacterBuild } from './character-progress';
 import { validBossStates, type BossState } from '../shared/bosses';
 import { newInventory, validInventory, type Inventory } from '../shared/items';
 import { newNarrativeProgress, validNarrativeProgress, type NarrativeProgress } from '../shared/narrative';
@@ -10,6 +13,7 @@ import { SynchronousSaveWriter, type SaveWriter } from './save-writer';
 import type { GameplayPersistence } from './gameplay-persistence';
 
 export interface Account {
+  characters?: Partial<Record<ClassId, CharacterProgress>>;
   inventory?: Inventory;
   narrative?: NarrativeProgress;
   gold?: number;
@@ -29,7 +33,11 @@ export interface Account {
 
 export function publicAccount(account: Account): PublicAccount {
   const { id, name, kills, deaths, xp } = account;
-  return { id, name, kills, deaths, xp, gold: account.gold ?? 0 };
+  const characters = Object.fromEntries((Object.keys(CLASSES) as ClassId[]).map(classId => {
+    const c = characterFor(account, classId);
+    return [classId, { xp: c.xp, loadout: normalizeLoadout(c.loadout, levelFromXp(c.xp), classId), freeBuild: unlockTier(levelFromXp(c.xp)) > c.configuredTier }];
+  }));
+  return { id, name, kills, deaths, xp, gold: account.gold ?? 0, characters };
 }
 
 export function cleanName(name: string): string {
@@ -112,6 +120,14 @@ export class AccountStore implements GameplayPersistence {
         account.gold ??= 0;
         if (account.inventory !== undefined && !validInventory(account.inventory) || account.narrative !== undefined && !validNarrativeProgress(account.narrative)) throw new Error('Inventario o missioni non validi.');
         account.inventory ??= newInventory(); account.narrative ??= newNarrativeProgress();
+        if (account.characters !== undefined) {
+          if (!account.characters || typeof account.characters !== 'object' || Array.isArray(account.characters)) throw new Error('Personaggi non validi.');
+          for (const [classId, c] of Object.entries(account.characters)) {
+            if (!Object.hasOwn(CLASSES, classId) || !c || !Number.isSafeInteger(c.xp) || c.xp < 0 || !Number.isInteger(c.configuredTier) || c.configuredTier < 0 || c.configuredTier > 3
+              || !validLoadout(c.loadout, levelFromXp(c.xp), classId as ClassId) || !validInventory(c.inventory) || !validNarrativeProgress(c.narrative)) throw new Error('Progressione personaggio non valida.');
+          }
+          activateCharacter(account, account.body?.classId ?? 'mage');
+        }
         this.accounts.set(account.id, account);
         this.accountsByName.set(account.nameLower, account.id);
       }
@@ -248,9 +264,11 @@ export class AccountStore implements GameplayPersistence {
       xp: 0,
       friends: [],
       requests: [],
-      lastSeen: Date.now(), inventory: newInventory(), narrative: newNarrativeProgress()
+      lastSeen: Date.now(), inventory: newInventory(), narrative: newNarrativeProgress(),
+      characters: Object.fromEntries((Object.keys(CLASSES) as ClassId[]).map(id => [id, newCharacter(id)]))
     };
 
+    activateCharacter(account, 'mage');
     this.accounts.set(account.id, account);
     this.accountsByName.set(nameLower, account.id);
     this.touch();

@@ -67,15 +67,15 @@ test('HUD: centered map, circular portraits and non-blocking overlays on desktop
       const toolbar = (await page.locator('.game-top-right').boundingBox())!;
       assert.ok(toolbar.x + toolbar.width <= compact.x && Math.abs(toolbar.y - compact.y) <= 1, 'friends and currency sit beside the minimap');
       assert.ok(player.x + player.width <= toolbar.x, 'player and map toolbar do not overlap');
-      assert.ok(player.height <= 88 && target.height <= 88, 'character frames stay compact');
+      assert.ok(player.height <= 105 && target.height <= 100, 'character frames leave room for XP and the portrait level does not enlarge them');
       assert.ok(target.x + target.width <= toolbar.x || toolbar.y + toolbar.height <= target.y, 'target and toolbar do not overlap');
       const styles = await page.locator('.player-panel,.target-panel').evaluateAll(elements => elements.map(e => [getComputedStyle(e).backgroundImage, getComputedStyle(e).borderRadius]));
       assert.deepEqual(styles[0], styles[1], 'player and selected actor share a surface');
       const teammateStyle = await page.locator('.team-member').evaluate(e => [getComputedStyle(e).backgroundImage, getComputedStyle(e).borderRadius]);
       if (touch) {
         assert.equal(teammateStyle[0], 'none', 'mobile teammates show only their portrait and health ring');
-        assert.equal(player.height, 60);
-        assert.equal(target.height, player.height, 'player and selected player have identical mobile heights');
+        assert.equal(player.height, 80);
+        assert.equal(target.height, 60, 'selected actor stays compact while the player frame includes XP');
         assert.ok(player.x <= 5, 'mobile character HUD sits against the left safe edge');
         await expect(page.locator('.team-health-ring')).toBeVisible();
         await expect(page.locator('.team-member-resource')).toBeHidden();
@@ -92,7 +92,7 @@ test('HUD: centered map, circular portraits and non-blocking overlays on desktop
         assert.ok(strip.y >= box.y + box.height, 'power-ups sit below and outside the character frame');
         const rows = await effects.locator('.effect-chip').evaluateAll(elements => elements.map(e => e.getBoundingClientRect().y));
         assert.ok(rows.every(y => y === rows[0]), 'all power-ups stay on one row');
-        assert.ok(await effects.evaluate(e => e.scrollWidth > e.clientWidth), 'extra power-ups remain accessible by horizontal scrolling');
+        assert.ok(await effects.evaluate(e => e.scrollWidth >= e.clientWidth), 'power-ups can use the wider desktop frame and overflow remains scrollable');
       }
       assert.equal(await page.locator('.ability-button kbd').first().evaluate(e => getComputedStyle(e).backgroundColor), 'rgba(0, 0, 0, 0)');
       const portrait = (await page.locator('[data-ref="portrait"]').boundingBox())!;
@@ -125,7 +125,7 @@ test('HUD: centered map, circular portraits and non-blocking overlays on desktop
       await page.evaluate(() => { const { ui, npc } = (window as any).hudFixture; ui.setSelected(npc); });
       await expect(page.locator('.target-summary-resource')).toBeHidden();
       await expect(page.locator('.target-summary strong')).toHaveText('Guardiano della Soglia');
-      if (touch) assert.equal((await page.locator('.target-panel').boundingBox())!.height, player.height, 'NPC selection keeps the same mobile height even without mana');
+      if (touch) assert.equal((await page.locator('.target-panel').boundingBox())!.height, 60, 'NPC selection keeps the compact mobile height even without mana');
       await page.locator('.target-summary').click();
       await expect(page.locator('[data-ref="target-actions"]')).toBeHidden();
       await page.locator('[data-ref="target-close"]').click();

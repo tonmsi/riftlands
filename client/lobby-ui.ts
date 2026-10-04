@@ -5,8 +5,9 @@ import { newNarrativeProgress, type NarrativeProgress } from '../shared/narrativ
 import type { LobbyArt } from './lobby-assets';
 import type { AbilitySlot, ClassId, PublicAccount, SocialState } from '../shared/types';
 import type { ConnectionStatus, LobbyActions } from './ui-actions';
-import { portrait } from './ui-art';
+import { ABILITY_ICONS, icon, portrait } from './ui-art';
 import { SLOTS, UIRefs, textElement } from './ui-dom';
+import { availableSpells, buildAccent, buildCost, newCharacter, normalizeLoadout, unlockTier, type Loadout, type SpellId } from '../shared/progression';
 export interface LobbyHooks {
   configureControls(settings: ControlSettings): void;
   enterWorld(art?: string): void;
@@ -29,6 +30,9 @@ export class LobbyUI {
   private readonly passwordInput: HTMLInputElement;
   private controls = defaultControls();
   private lobbyRequest = 0;
+  private draftBuild: Loadout = { q: 'q', e: null };
+  private savingBuild = false;
+  private buildPicker?: HTMLDialogElement;
   private readonly refs: UIRefs;
   constructor(private readonly root: HTMLElement, private readonly actions: LobbyActions, private readonly hooks: LobbyHooks) {
     this.refs = new UIRefs(root.querySelector('.lobby')!, root.querySelector('.menu-boot')!);
@@ -69,6 +73,7 @@ export class LobbyUI {
       if (this.status === 'connecting') return;
 
       if (this.savedAccount) {
+        if (this.savingBuild || this.buildChanged()) { this.hooks.toast('Salva o annulla la modifica della build prima di entrare.', 'error'); return; }
         if (!this.assetsLoaded) return;
         this.hooks.enterWorld(this.lobbyArt.classes[this.currentClass]?.background ?? this.lobbyArt.selectionBackground ?? this.lobbyArt.loginBackground);
         this.actions.joinSaved(this.currentClass);
@@ -88,6 +93,7 @@ export class LobbyUI {
       this.currentClass = button.dataset.class as ClassId;
       try { localStorage.setItem('riftlands.selected-class', this.currentClass); } catch { /* Optional preference. */ }
       this.renderClass();
+      void this.refreshLobby();
       this.actions.previewClass?.(this.currentClass);
     }));
 
@@ -113,8 +119,10 @@ export class LobbyUI {
 
   setSavedAccount(account: PublicAccount | null): void {
     const changed = this.savedAccount?.id !== account?.id;
+    const draft = !changed && this.buildChanged() ? { ...this.draftBuild } : undefined;
     if (changed || !account) { this.hooks.resetJournal(); renderCompletedQuests(this.ref('completed-quests'), newNarrativeProgress()); }
     this.savedAccount = account;
+    this.renderClass(draft);
     this.renderLobbyStats();
     if (changed) void this.refreshLobby();
     const hasSaved = Boolean(account);
@@ -124,7 +132,7 @@ export class LobbyUI {
 
     if (hasSaved && account) {
       this.write('saved-name', account.name);
-      this.write('saved-stats', `Livello ${levelFromXp(account.xp)} · ${account.kills} uccisioni`);
+      this.write('saved-stats', `${CLASSES[this.currentClass].name} · Livello ${levelFromXp(this.characterXp())}`);
       this.write('lobby-gold', String(account.gold ?? 0));
       this.write('join-text', 'Entra nel mondo');
       this.nameInput.removeAttribute('required');
@@ -152,6 +160,9 @@ export class LobbyUI {
     const lobby = this.root.querySelector<HTMLElement>('.lobby')!;
     const changedScreen = lobby.dataset.screen !== this.menuScreen;
     lobby.dataset.screen = this.menuScreen;
+    const entryActions = this.root.querySelector<HTMLElement>('.entry-actions')!;
+    const playContainer = this.menuScreen === 'auth' ? this.ref('entry-form') : this.root.querySelector<HTMLElement>('.champion-stage')!;
+    if (entryActions.parentElement !== playContainer) playContainer.append(entryActions);
     this.root.querySelector<HTMLElement>('.entry-panel')!.hidden = this.menuScreen === 'hub';
     this.ref('camp-nav').hidden = !this.savedAccount;
     this.root.querySelector<HTMLButtonElement>('.options-button')!.hidden = !this.savedAccount;
@@ -211,7 +222,7 @@ export class LobbyUI {
     if (!this.savedAccount) { container.textContent = 'Accedi per vedere i tuoi progressi.'; return; }
     const a = this.savedAccount;
     const grid = document.createElement('dl'); grid.className = 'profile-stats';
-    for (const [label, value] of [['Livello', levelFromXp(a.xp)], ['Esperienza', a.xp], ['Uccisioni', a.kills], ['Morti', a.deaths], ['Gold', a.gold ?? 0]]) {
+    for (const [label, value] of [['Personaggio', CLASSES[this.currentClass].name], ['Livello', levelFromXp(this.characterXp())], ['Esperienza', this.characterXp()], ['Uccisioni', a.kills], ['Morti', a.deaths], ['Gold', a.gold ?? 0]]) {
       const item = document.createElement('div');
       item.append(textElement('dt', '', String(label)), textElement('dd', '', String(value))); grid.append(item);
     }
@@ -225,7 +236,7 @@ export class LobbyUI {
     if (!token) try { token = localStorage.getItem('riftlands.jwt'); } catch { /* Guest menu remains available. */ }
     this.write('lobby-data-status', 'Caricamento…');
     try {
-      const response = await fetch('/api/lobby', { headers: token ? { Authorization: 'Bearer ' + token } : {}, signal: AbortSignal.timeout(8000) });
+      const response = await fetch('/api/lobby?classId=' + this.currentClass, { headers: token ? { Authorization: 'Bearer ' + token } : {}, signal: AbortSignal.timeout(8000) });
       if (request !== this.lobbyRequest) return;
       if (response.status === 401) {
         this.actions.logout();
@@ -259,7 +270,7 @@ export class LobbyUI {
     }
   }
 
-  private renderClass(): void {
+  private renderClass(draft?: Loadout): void {
     const chosen = CLASSES[this.currentClass];
     this.root.style.setProperty('--selected-class', chosen.color);
     this.ref('champion-portrait').innerHTML = portrait(this.currentClass);
@@ -275,6 +286,9 @@ export class LobbyUI {
       const active = button.dataset.class === this.currentClass;
       button.classList.toggle('selected', active);
       button.setAttribute('aria-pressed', String(active));
+      let badge = button.querySelector<HTMLElement>('.class-level');
+      if (!badge) { badge = document.createElement('span'); badge.className = 'class-level'; button.append(badge); }
+      badge.textContent = 'LV ' + levelFromXp(this.savedAccount?.characters?.[button.dataset.class as ClassId]?.xp ?? newCharacter(button.dataset.class as ClassId).xp);
     });
     const basic = chosen.abilities.basic;
     const number = (value: number) => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 2 }).format(value);
@@ -290,8 +304,124 @@ export class LobbyUI {
     ];
     this.ref('class-detail').innerHTML = `<div class="class-detail-heading"><span class="eyebrow">PROFILO DEL CAMPIONE</span><h3>${chosen.subtitle}</h3></div><p>${chosen.description}</p><dl class="champion-stats" aria-label="Statistiche base di ${chosen.name}">${stats.map(([label, value, unit]) => `<div><dt>${label}</dt><dd>${value}<small>${unit}</small></dd></div>`).join('')}</dl><p class="gem-note">Statistiche base · potenziamenti con gemme in arrivo</p><div class="lobby-abilities">${SLOTS.map(slot => {
       const ability = chosen.abilities[slot];
-      return `<div class="lobby-ability" title="${ability.description}"><kbd>${this.keyLabel(slot)}</kbd><span><strong>${ability.name}</strong><small>Ricarica ${number(ability.cooldown)} s${ability.cost ? ` · ${ability.cost} ${chosen.resource === 'rage' ? 'rabbia' : 'mana'}` : ' · nessun costo'}</small></span></div>`;
+      const unlock = slot === 'basic' ? 'Base' : slot === 'q' ? 'LV 1' : slot === 'e' ? 'LV 2' : 'LV 10';
+      return `<div class="lobby-ability" title="${ability.description}"><kbd>${unlock}</kbd><span><strong>${ability.name}</strong><small>Ricarica ${number(ability.cooldown)} s${ability.cost ? ` · ${ability.cost} ${chosen.resource === 'rage' ? 'rabbia' : 'mana'}` : ' · nessun costo'}</small></span></div>`;
     }).join('')}</div>`;
+    this.renderBuild(draft);
+    this.write('saved-stats', `${chosen.name} · Livello ${levelFromXp(this.characterXp())}`);
+    this.renderLobbyStats();
+  }
+
+  private characterXp(): number { return this.savedAccount?.characters?.[this.currentClass]?.xp ?? newCharacter(this.currentClass).xp; }
+  private savedBuild(): Loadout { return normalizeLoadout(this.savedAccount?.characters?.[this.currentClass]?.loadout, levelFromXp(this.characterXp()), this.currentClass); }
+  private buildChanged(): boolean { return JSON.stringify(this.draftBuild) !== JSON.stringify(this.savedBuild()); }
+  private renderBuild(draft = this.savedBuild()): void {
+    const container = this.ref('build-editor'), level = levelFromXp(this.characterXp()), chosen = CLASSES[this.currentClass];
+    const nextBuild = normalizeLoadout(draft, level, this.currentClass);
+    const picker = this.buildPicker;
+    if (picker && (this.savingBuild || picker.dataset.classId !== this.currentClass || picker.dataset.level !== String(level) || JSON.stringify(nextBuild) !== JSON.stringify(this.draftBuild))) picker.close();
+    this.draftBuild = nextBuild;
+    container.replaceChildren();
+    const heading = document.createElement('header'); heading.className = 'build-heading';
+    const title = document.createElement('div');
+    title.append(textElement('span', 'eyebrow', 'IL TUO STILE DI COMBATTIMENTO'), textElement('h3', '', 'La tua build'));
+    heading.append(title, textElement('span', 'build-level', `Livello ${level}`)); container.append(heading);
+    container.style.setProperty('--build-accent', buildAccent({ classId: this.currentClass, loadout: this.draftBuild }) ?? chosen.color);
+    const fields = document.createElement('div'); fields.className = 'build-slots';
+    for (const slot of ['basic', 'q', 'e'] as const) {
+      const id = slot === 'basic' ? 'basic' : this.draftBuild[slot];
+      const ability = id ? chosen.abilities[id] : undefined;
+      const card = document.createElement(slot === 'basic' ? 'div' : 'button'); card.className = 'build-slot'; card.dataset.buildSlot = slot;
+      card.style.setProperty('--spell-color', ability?.color ?? '#8fa4b6');
+      card.innerHTML = `<span class="build-slot-orb">${ability ? icon(ABILITY_ICONS[ability.kind]) : icon('<path d="M8 11V7a4 4 0 0 1 8 0v4"/><rect x="5" y="11" width="14" height="10" rx="3"/>')}<kbd>${slot === 'basic' ? 'BASE' : this.keyLabel(slot)}</kbd></span>`;
+      const copy = document.createElement('span'); copy.className = 'build-slot-copy';
+      copy.append(textElement('small', '', slot === 'basic' ? 'SEMPRE EQUIPAGGIATO' : slot === 'q' ? 'PRIMO SLOT' : 'SECONDO SLOT'), textElement('strong', '', ability?.name ?? 'Slot bloccato'), textElement('span', '', slot === 'basic' ? 'Attacco fisso' : !ability ? 'Si sblocca al livello 5' : level < 2 ? 'Prima scelta al livello 2' : 'Tocca per scegliere'));
+      card.append(copy);
+      if (card instanceof HTMLButtonElement) {
+        card.type = 'button'; card.disabled = this.savingBuild || !this.savedAccount || !ability || level < 2;
+        card.setAttribute('aria-label', `Abilità ${slot.toUpperCase()}: ${ability?.name ?? 'bloccata'}`);
+        card.setAttribute('aria-haspopup', 'dialog');
+        card.dataset.spell = id ?? '';
+        card.addEventListener('click', () => this.openBuildPicker(slot as 'q' | 'e'));
+      }
+      fields.append(card);
+    }
+    container.append(fields);
+    const summary = this.savedAccount?.characters?.[this.currentClass];
+    const cost = buildCost({ xp: this.characterXp(), loadout: this.savedBuild(), configuredTier: summary?.freeBuild ? 0 : unlockTier(level) }, this.draftBuild, this.currentClass);
+    const actions = document.createElement('div'); actions.className = 'build-actions';
+    const save = document.createElement('button'); save.type = 'button'; save.textContent = this.savingBuild ? 'Salvataggio…' : `Salva build · ${cost ? cost + ' gold' : 'Gratis'}`;
+    save.disabled = this.savingBuild || !this.savedAccount || !this.buildChanged() || (this.savedAccount.gold ?? 0) < cost;
+    save.addEventListener('click', () => void this.saveBuild());
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Annulla'; cancel.disabled = this.savingBuild || !this.buildChanged(); cancel.addEventListener('click', () => this.renderBuild());
+    actions.append(save, cancel);
+    const hint = level < 2 ? 'Livello 2: prima scelta · Livello 5: secondo slot · Livello 10: terza abilità' : summary?.freeBuild ? 'Una configurazione gratuita disponibile dopo lo sblocco.' : 'Cambiare combinazione costa 10 gold. Invertire gli slot è gratuito.';
+    const footer = document.createElement('footer'); footer.className = 'build-footer';
+    footer.append(textElement('small', 'build-hint', hint), actions); container.append(footer, textElement('span', 'build-status', ''));
+  }
+  private openBuildPicker(slot: 'q' | 'e'): void {
+    const level = levelFromXp(this.characterXp()), chosen = CLASSES[this.currentClass];
+    if (!this.savedAccount || this.savingBuild || level < 2 || (slot === 'e' && level < 5)) return;
+    this.buildPicker?.close();
+    const dialog = document.createElement('dialog'); dialog.className = 'build-picker'; this.buildPicker = dialog;
+    dialog.dataset.classId = this.currentClass; dialog.dataset.level = String(level);
+    dialog.setAttribute('aria-labelledby', 'build-picker-title');
+    dialog.style.setProperty('--selected-class', chosen.color);
+    dialog.innerHTML = `<header><div><span class="eyebrow">PREPARA IL TUO PERSONAGGIO</span><h3 id="build-picker-title">Scegli un attacco</h3></div><button type="button" class="build-picker-close" aria-label="Chiudi scelta attacchi">×</button></header><p class="build-picker-intro">Scegli cosa equipaggiare sullo slot <b>${this.keyLabel(slot)}</b>.</p><div class="spell-wheel"><div class="spell-wheel-orbit"></div><div class="spell-wheel-center"><span>SLOT</span><strong>${this.keyLabel(slot)}</strong><small>${chosen.name}</small></div></div><div class="spell-preview" aria-live="polite"></div><small class="build-picker-note">La scelta viene applicata quando salvi la build.</small>`;
+    const wheel = dialog.querySelector('.spell-wheel')!, detail = dialog.querySelector<HTMLElement>('.spell-preview')!;
+    const available = availableSpells(level);
+    const describe = (id: SpellId) => {
+      const ability = chosen.abilities[id], required = id === 'q' ? 1 : id === 'e' ? 2 : 10;
+      detail.replaceChildren(textElement('strong', '', ability.name), textElement('p', '', ability.description), textElement('small', '', `${level < required ? `Si sblocca al livello ${required} · ` : ''}${ability.damage ? `${ability.damage} danni · ` : ''}${ability.cooldown} s di recupero${ability.cost ? ` · ${ability.cost} ${chosen.resource === 'rage' ? 'rabbia' : 'mana'}` : ''}`));
+      detail.style.setProperty('--spell-color', ability.color);
+    };
+    for (const [index, id] of (['q', 'e', 'r'] as const).entries()) {
+      const ability = chosen.abilities[id], locked = !available.includes(id), current = this.draftBuild[slot] === id;
+      const other = slot === 'q' ? 'e' : 'q', moves = this.draftBuild[other] === id;
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'spell-choice';
+      button.dataset.spell = id; button.dataset.position = String(index); button.style.setProperty('--spell-color', ability.color);
+      button.disabled = locked; button.setAttribute('aria-pressed', String(current)); button.setAttribute('aria-label', ability.name);
+      button.innerHTML = `<span class="spell-choice-orb">${icon(ABILITY_ICONS[ability.kind])}${current ? '<i aria-hidden="true">✓</i>' : ''}</span>`;
+      button.append(textElement('strong', '', ability.name), textElement('small', '', locked ? 'LIVELLO ' + (id === 'e' ? 2 : 10) : current ? 'EQUIPAGGIATO' : moves ? 'SPOSTA DA ' + this.keyLabel(other) : 'DISPONIBILE'));
+      button.addEventListener('mouseenter', () => describe(id)); button.addEventListener('focus', () => describe(id));
+      button.addEventListener('click', () => {
+        const next = { ...this.draftBuild, [slot]: id };
+        if (moves && slot === 'q') next.e = this.draftBuild.q;
+        else if (moves) next.q = this.draftBuild.e!;
+        dialog.close(); this.renderBuild(next);
+        this.ref('build-editor').querySelector<HTMLButtonElement>(`[data-build-slot="${slot}"]`)?.focus();
+      });
+      wheel.append(button);
+    }
+    describe(this.draftBuild[slot]!);
+    dialog.querySelector('.build-picker-close')!.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', event => {
+      if (event.target !== dialog) return;
+      const rect = dialog.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+    });
+    dialog.addEventListener('close', () => {
+      dialog.remove();
+      if (this.buildPicker === dialog) { this.buildPicker = undefined; this.ref('build-editor').querySelector<HTMLButtonElement>(`[data-build-slot="${slot}"]`)?.focus({ preventScroll: true }); }
+    });
+    this.root.append(dialog); dialog.showModal();
+    dialog.querySelector<HTMLButtonElement>('.spell-choice[aria-pressed="true"]')?.focus();
+  }
+  private async saveBuild(): Promise<void> {
+    const classId = this.currentClass, loadout = { ...this.draftBuild };
+    const token = this.actions.lobbyToken?.() ?? localStorage.getItem('riftlands.jwt');
+    if (!token || this.savingBuild || !this.buildChanged()) return;
+    ++this.lobbyRequest;
+    this.savingBuild = true; this.renderBuild(loadout);
+    let saved = false;
+    try {
+      const response = await fetch('/api/build', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ classId, loadout }), signal: AbortSignal.timeout(8000) });
+      const data = await response.json() as { account?: PublicAccount; error?: string };
+      if (!response.ok || !data.account) throw new Error(data.error ?? 'Salvataggio non riuscito.');
+      this.setSavedAccount(data.account);
+      saved = true;
+    } catch (error) { this.hooks.toast(error instanceof Error ? error.message : 'Salvataggio non riuscito.', 'error'); }
+    finally { this.savingBuild = false; this.renderBuild(!saved && this.currentClass === classId ? loadout : this.savedBuild()); }
   }
   setConnection(status: 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline', detail?: string): void {
     this.status = status;

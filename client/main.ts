@@ -6,6 +6,7 @@ import './hud.css';
 import './interactions.css';
 import { INTERACTION_RANGE } from '../shared/interactions';
 import { CLASSES, TICK_RATE } from '../shared/config';
+import { equippedAbility } from '../shared/progression';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import { GameConnection } from './net';
 import { predictMovement, reconcile } from './prediction';
@@ -302,7 +303,7 @@ function advanceInputs(now: number): void {
 setInterval(() => advanceInputs(performance.now()), 8);
 
 mobileControls = new MobileControls(document.querySelector<HTMLElement>('.rift-app')!, {
-  ability: slot => CLASSES[predicted?.classId ?? ui.selectedClass].abilities[slot],
+  ability: slot => equippedAbility(predicted ?? { classId: ui.selectedClass }, slot),
   enabled: () => playing && connection.connected && !ui.inputBlocked && !!predicted && predicted.hp > 0,
   move: vector => controls.setTouchMovement(vector),
   aim: angle => controls.setTouchAim(angle),
@@ -348,7 +349,7 @@ function frame(now: number): void {
     selectedId,
     previewClass: ui.selectedClass,
     playing,
-    aimPreview: mobileControls?.aimPreview ? { ...mobileControls.aimPreview, angle: mobileControls.aimPreview.angle * renderer.orientation } : (playing && !ui.inputBlocked && !isTyping() && predicted && predicted.hp > 0 && controls.manualPointerAim && CLASSES[predicted.classId].abilities[controls.previewSlot].targeting === 'directional'
+    aimPreview: mobileControls?.aimPreview ? { ...mobileControls.aimPreview, angle: mobileControls.aimPreview.angle * renderer.orientation } : (playing && !ui.inputBlocked && !isTyping() && predicted && predicted.hp > 0 && controls.manualPointerAim && equippedAbility(predicted, controls.previewSlot)?.targeting === 'directional'
       ? { slot: controls.previewSlot, angle: controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation).aim } : null),
     moveDirection: playing && !isTyping() && predicted ? (() => {
       const input = controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation);

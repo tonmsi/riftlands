@@ -10,7 +10,7 @@ export function joystickVector(dx: number, dy: number, radius: number): Vec2 {
 }
 interface MobileActions {
   enabled: () => boolean;
-  ability: (slot: AbilitySlot) => AbilityDef;
+  ability: (slot: AbilitySlot) => AbilityDef | undefined;
   move: (vector: Vec2) => void;
   aim: (angle: number | null) => void;
   cast: (slot: AbilitySlot) => void;
@@ -42,7 +42,9 @@ export class MobileControls {
       if (!button) return;
       event.preventDefault();
       const slot = button.dataset.slot as AbilitySlot;
-      if (this.actions.ability(slot).targeting === 'directional') {
+      const ability = this.actions.ability(slot);
+      if (!ability) return;
+      if (ability.targeting === 'directional') {
         if (this.attack) return;
         this.actions.aim(null);
         this.attack = { id: event.pointerId, slot, button, origin: { x: event.clientX, y: event.clientY } };

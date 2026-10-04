@@ -1,4 +1,4 @@
-import { CLASS_ICONS, icon, portrait } from './ui-art';
+import { ABILITY_ICONS, icon, portrait } from './ui-art';
 import { CLASSES } from '../shared/config';
 import { nearArenaGate } from '../shared/arena';
 import { bindingLabel, defaultControls, type ControlSettings } from './controls';
@@ -12,15 +12,8 @@ import type { AbilitySlot, Actor, ClassId, Snapshot, SocialState } from '../shar
 import { SocialUI } from './social-ui';
 import type { HudActions } from './ui-actions';
 import { SLOTS, UIRefs, textElement } from './ui-dom';
-const ABILITY_ICONS: Record<string, string> = {
-  projectile: '<path d="m4 20 8-8M3 14l5-5M10 21l5-5M13 4l7-1-1 7-7 3-3-3Z"/>',
-  melee: '<path d="m5 3 4 1 11 12-4 4L4 8ZM12 18l6-6M5 19l3-3M3 21l3-3"/>',
-  area: '<circle cx="12" cy="12" r="4"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4M4 4l3 3M17 17l3 3M4 20l3-3M17 7l3-3"/>',
-  heal: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6Z"/>',
-  shield: CLASS_ICONS.paladin,
-  dash: '<path d="m11 3 9 9-9 9M3 6l6 6-6 6M6 12h14"/>',
-  trap: '<circle cx="12" cy="12" r="8"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M6.3 17.7l2.8-2.8M14.9 9.1l2.8-2.8"/>',
-};
+import { equippedAbility } from '../shared/progression';
+import { XpFeedback } from './xp-feedback';
 
 export interface HudHooks { entranceVisible(): boolean; }
 export class HudUI {
@@ -31,6 +24,8 @@ export class HudUI {
   public readonly minimap: HTMLCanvasElement;
   public readonly compactMinimap = document.createElement('canvas');
   private activeClass: ClassId | null = null;
+  private activeBuild = '';
+  private xpFeedback?: XpFeedback;
   private selected: Actor | null = null;
   private latest: Snapshot | null = null;
 
@@ -260,7 +255,8 @@ export class HudUI {
     summary.style.setProperty('--target-resource-color', CLASSES[actor.classId].resource === 'rage' ? '#df9877' : '#aaa0e8');
     this.write('target-type', actor.kind === 'npc' ? 'CREATURA DEL MONDO' : 'VIAGGIATORE');
     this.write('target-name', actor.name);
-    this.write('target-detail', `${CLASSES[actor.classId].name} · Livello ${actor.level} · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV`);
+    const build = actor.kind === 'player' && actor.loadout ? ` · ${(['q', 'e'] as const).flatMap(slot => { const ability = equippedAbility(actor, slot); return ability ? [ability.name] : []; }).join(' + ')}` : '';
+    this.write('target-detail', `${CLASSES[actor.classId].name} · Livello ${actor.level} · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV${build}`);
     if (actor.npcKind === 'boss') this.write('target-detail', actor.hp <= 0 ? `Cadavere · Ritorna tra ${Math.max(0, Math.ceil((actor.deadUntil - (this.latest?.time ?? 0)) / 1000))}s` : `Boss · ${Math.ceil(actor.hp)} / ${actor.maxHp} PV`);
     this.fill('target-fill', actor.hp / actor.maxHp);
     this.ref('target-actions').hidden = actor.kind !== 'player';
@@ -302,6 +298,7 @@ export class HudUI {
     this.root.querySelector('.combat-caption > span:last-child')!.textContent = `${settings.bindings.basic.map(bindingLabel).join(' / ')} per attaccare`;
   }
   setPlaying(playing: boolean): void {
+    if (!playing) { this.xpFeedback?.reset(); this.activeBuild = ''; }
     if (!playing) this.popups.dismiss();
     if (!playing) this.setMapVisible(false);
     this.isPlaying = playing;
@@ -323,6 +320,7 @@ export class HudUI {
     }
   }
   setConnection(status: 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline', detail?: string): void {
+    if (status === 'reconnecting' || status === 'offline') this.xpFeedback?.reset();
     const banner = this.ref('connection-banner');
     banner.hidden = !this.isPlaying || (status !== 'offline' && status !== 'reconnecting');
     banner.textContent = status === 'reconnecting'
@@ -335,25 +333,28 @@ export class HudUI {
     this.latest = snapshot;
     const player = snapshot.self;
     const definition = CLASSES[player.classId];
-    if (this.activeClass !== player.classId) {
+    const buildKey = JSON.stringify(player.loadout);
+    if (this.activeClass !== player.classId || this.activeBuild !== buildKey) {
       this.activeClass = player.classId;
+      this.activeBuild = buildKey;
       this.ref('portrait').innerHTML = portrait(player.classId);
       this.ref('portrait').style.color = definition.color;
       this.ref('resource-fill').style.background = definition.resource === 'rage' ? '#df9877' : '#aaa0e8';
       this.write('resource-name', definition.resource === 'rage' ? 'RG' : 'MP');
       this.write('combat-class', definition.name);
       this.ref('ability-bar').innerHTML = SLOTS.map(slot => {
-        const ability = definition.abilities[slot];
+        const ability = equippedAbility(player, slot);
+        if (!ability) return '';
         return `<button class="ability-button" data-slot="${slot}" style="--ability-color:${ability.color}" aria-label="${ability.name} (${this.keyLabel(slot)})" title="${ability.name} — ${ability.description}\n${ability.cost} ${definition.resource === 'rage' ? 'rabbia' : 'mana'} · ${ability.cooldown}s di recupero"><kbd>${this.keyLabel(slot)}</kbd><span class="ability-art">${icon(ABILITY_ICONS[ability.kind])}</span><span class="ability-name">${ability.name}</span><span class="ability-cost">${ability.cost || '—'}</span><span class="cooldown-shade"></span><span class="cooldown-count"></span></button>`;
       }).join('');
     }
     this.write('player-name', player.name);
-    this.write('player-level', `LV ${player.level}`);
     this.fill('hp-fill', player.hp / player.maxHp);
     this.write('hp-label', `${Math.ceil(player.hp)} / ${player.maxHp}`);
     this.fill('resource-fill', player.resource / player.maxResource);
     this.write('resource-label', `${Math.floor(player.resource)} / ${player.maxResource}`);
-    this.fill('xp-fill', (player.xp % 100) / 100);
+    this.xpFeedback ??= new XpFeedback(this.ref('xp-fill'), this.ref('player-level'));
+    this.xpFeedback.update(player.id + ':' + player.classId, player.xp);
     this.write('map-status', snapshot.sanctuary === 'safe' ? 'ZONA SICURA · NO PVP' : snapshot.sanctuary === 'combat' ? `VULNERABILE · ${Math.max(0, Math.ceil(((player.pvpUntil ?? 0) - snapshot.time) / 1000))}s` : snapshot.sanctuary === 'outside' ? 'PVP ATTIVO' : 'ISTANZA PVP');
     this.write('online', String(snapshot.online));
     const gold = snapshot.gold ?? 0;
@@ -389,7 +390,8 @@ export class HudUI {
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-slot]').forEach(button => {
       const slot = button.dataset.slot as AbilitySlot;
-      const ability = definition.abilities[slot];
+      const ability = equippedAbility(player, slot);
+      if (!ability) return;
       const cooldown = Math.max(0, player.cooldowns[slot] - snapshot.time);
       const safeBlocked = snapshot.sanctuary === 'safe' && ability.kind !== 'heal' && ability.kind !== 'shield';
       const unavailable = cooldown > 0 || player.resource < ability.cost || remaining > 0 || safeBlocked;

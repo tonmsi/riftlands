@@ -34,9 +34,9 @@ test('invalid completion counters and revision cannot enter persisted narrative 
 });
 
 
-test('Nereo unlocks exactly twelve hours after completion, including offline time and subsequent runs', () => {
+test('Nereo unlocks exactly five minutes after completion, including offline time and subsequent runs', () => {
   const quest = QUEST_DEFINITIONS['stinking-bait'], progress = newNarrativeProgress(), start = 1_000_000;
-  const cooldown = 12 * 60 * 60 * 1000;
+  const cooldown = 5 * 60 * 1000;
   acceptQuest(progress, quest, start); advanceQuest(progress, quest, 1, start);
   assert.equal(questStatus(progress, quest.id, start + cooldown), 'active');
   assert.equal(progress.quests[quest.id].objectives[quest.objective.id], 1);

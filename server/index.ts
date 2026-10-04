@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
 import { WebSocket, WebSocketServer } from 'ws';
 import { CLASSES, DT, PROTOCOL_VERSION, SNAPSHOT_RATE, TICK_RATE, WORLD_SEED } from '../shared/config';
 import type { ClassId, ClientMessage, ServerMessage } from '../shared/types';
-import { Account, AccountStore, publicAccount } from './store';
+import { Account, AccountStore, publicAccount, characterFor, saveCharacterBuild } from './store';
 import { RoomManager } from './rooms';
 import { AuthBudget } from './auth-budget';
 import { NetworkMetrics } from './metrics';
@@ -38,6 +38,48 @@ const mime: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js
 const server = createServer((request, response) => {
   const path = (request.url ?? '/').split('?')[0];
   response.setHeader('X-Content-Type-Options', 'nosniff');
+  if (path === '/api/build' && request.method === 'POST') {
+    response.setHeader('Cache-Control', 'no-store'); response.setHeader('Content-Type', 'application/json');
+    if (!healthy || closing) { response.writeHead(503); response.end(); return; }
+    try { if (request.headers.origin && new URL(request.headers.origin).host !== request.headers.host) throw new Error(); }
+    catch { response.writeHead(403); response.end(JSON.stringify({ error: 'Origine non consentita.' })); return; }
+    const identity = store.verifyJwt((request.headers.authorization ?? '').replace(/^Bearer /, ''));
+    const account = identity ? store.accounts.get(identity.sub) : undefined;
+    if (!account) { response.writeHead(401); response.end(JSON.stringify({ error: 'Accedi di nuovo.' })); return; }
+    let body = '', size = 0;
+    request.setTimeout(10_000, () => request.destroy()); request.setEncoding('utf8');
+    request.on('data', (chunk: string) => {
+      size += Buffer.byteLength(chunk);
+      if (size > 4096) { response.writeHead(413); response.end(); request.destroy(); return; }
+      body += chunk;
+    });
+    request.on('end', () => { if (response.writableEnded) return; void (async () => {
+      try {
+        const input = JSON.parse(body);
+        if (!input || typeof input.classId !== 'string' || !Object.hasOwn(CLASSES, input.classId)) throw new Error('Personaggio non valido.');
+        const live = simulation.players.get(account.id), connection = simulation.connections.get(account.id);
+        if (byAccount.has(account.id) || simulation.awayPlayers.has(account.id) || live && (live.hp <= 0 || simulation.now - (connection?.combatAt ?? 0) < 10_000)) throw new Error('Cambia build dal menu, quando sei fuori combattimento.');
+        const classId = input.classId as ClassId;
+        const cost = saveCharacterBuild(account, classId, input.loadout);
+        const loadout = characterFor(account, classId).loadout;
+        if (live?.classId === classId) {
+          live.loadout = { ...loadout };
+          const until = Math.max(live.cooldowns.q, live.cooldowns.e, live.cooldowns.r);
+          live.cooldowns.q = live.cooldowns.e = live.cooldowns.r = until;
+        }
+        if (account.body?.classId === classId) {
+          account.body.loadout = { ...loadout };
+          const until = Math.max(account.body.cooldowns.q, account.body.cooldowns.e, account.body.cooldowns.r);
+          account.body.cooldowns.q = account.body.cooldowns.e = account.body.cooldowns.r = until;
+        }
+        store.touch(); store.flush(); await store.drain();
+        if (!response.destroyed) response.end(JSON.stringify({ account: publicAccount(account), cost }));
+      } catch (error) {
+        if (!response.destroyed) { response.writeHead(400); response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Configurazione non valida.' })); }
+      }
+    })(); });
+    return;
+  }
   if (path === '/api/auth' && request.method === 'POST') {
     if (!healthy || closing) { response.writeHead(503); response.end(); return; }
     response.setHeader('Cache-Control', 'no-store');
@@ -90,7 +132,9 @@ const server = createServer((request, response) => {
       const friend = store.accounts.get(id);
       return friend ? [{ id, name: friend.name, online: byAccount.has(id) }] : [];
     }) ?? [];
-    response.end(JSON.stringify({ account: account ? publicAccount(account) : null, narrative: account?.narrative ?? newNarrativeProgress(), friends, leaderboard }));
+    const selectedClass = new URL(request.url!, 'http://localhost').searchParams.get('classId');
+    const narrative = account && selectedClass && Object.hasOwn(CLASSES, selectedClass) ? characterFor(account, selectedClass as ClassId).narrative : account?.narrative;
+    response.end(JSON.stringify({ account: account ? publicAccount(account) : null, narrative: narrative ?? newNarrativeProgress(), friends, leaderboard }));
     return;
   }
   if (path === '/health') {

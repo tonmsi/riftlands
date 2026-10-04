@@ -224,14 +224,14 @@ test('dialogue and loot content reference real nodes, quests and item definition
 });
 
 
-test('Nereo marker and dialogue reopen at the twelve-hour boundary for only the eligible player', () => {
+test('Nereo marker and dialogue reopen at the five-minute boundary for only the eligible player', () => {
   const { sim, a, b, npc, talk, accept, kill } = fixture();
   accept(); insertItem(a.inventory!, 'slime-innards', 6);
   const request = talk();
   sim.interact(a.id, { kind: 'use-item', sessionId: request.sessionId, slot: 0, itemId: 'slime-innards' });
   const completedAt = a.narrative!.quests['stinking-bait'].completedAt!;
   b.narrative!.quests['stinking-bait'] = { status: 'completed', objectives: { 'innards-delivered': 3 }, completions: 1, completedAt: completedAt + 1000 };
-  sim.now = completedAt + 12 * 60 * 60 * 1000 - 1;
+  sim.now = completedAt + 5 * 60 * 1000 - 1;
   assert.equal(sim.interactions.marker(a.id, 'old-fisher', sim.now), 'completed');
   assert.ok(!talk().choices.some(choice => choice.id === 'accept'));
   sim.now++;

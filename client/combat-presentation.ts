@@ -1,4 +1,5 @@
 import { CLASSES, INTEREST_RADIUS } from '../shared/config';
+import { equippedAbility } from '../shared/progression';
 import { hasLineOfSight } from '../shared/physics';
 import { sweptWorldHit } from '../shared/projectiles';
 import type { AbilityDef, AbilitySlot, Actor, GameEvent, InputCommand, Projectile, Snapshot } from '../shared/types';
@@ -41,8 +42,8 @@ export class LocalCombatPresentation {
         this.ownerId = actor.id;
         if (!input.cast || actor.hp <= 0)
             return;
-        const ability = CLASSES[actor.classId].abilities[input.cast];
-        if (ability.kind !== 'projectile' && ability.kind !== 'melee')
+        const ability = equippedAbility(actor, input.cast);
+        if (!ability || ability.kind !== 'projectile' && ability.kind !== 'melee')
             return;
         if (world.mode === 'world' && !world.pvpAt(actor.x, actor.y) && (actor.pvpUntil ?? 0) <= now)
             return;
@@ -89,10 +90,10 @@ export class LocalCombatPresentation {
         for (const [seq, event] of events)
             if (!this.casts.has(seq) && event.at + event.duration >= now
                 && (event.abilityKind === 'projectile' || event.abilityKind === 'melee')) {
-                const slot = (Object.keys(CLASSES[self.classId].abilities) as AbilitySlot[]).find(s => CLASSES[self.classId].abilities[s].name === event.text);
+                const slot = (['basic', 'q', 'e', 'r'] as AbilitySlot[]).find(s => equippedAbility(self, s)?.name === event.text);
                 if (!slot)
                     continue;
-                const cast: Cast = { seq, slot, ability: CLASSES[self.classId].abilities[slot], requestedAt: event.at, event: { ...event }, confirmed: true, rejected: false };
+                const cast: Cast = { seq, slot, ability: equippedAbility(self, slot)!, requestedAt: event.at, event: { ...event }, confirmed: true, rejected: false };
                 const projectile = own.find(p => p.inputSeq === seq);
                 if (projectile)
                     cast.shot = { visual: { ...projectile }, fresh: true, hidden: false, lastAt: now };

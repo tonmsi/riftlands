@@ -4,7 +4,7 @@ import { hasLineOfSight, collidesWorld } from '../shared/physics';
 import type { World } from '../shared/world';
 import type { Account } from './store';
 import { insertItem, newInventory } from '../shared/items';
-import { acceptQuest, advanceQuest, conditionMatches, DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS, newNarrativeProgress, questStatus } from '../shared/narrative';
+import { acceptQuest, advanceQuest, conditionMatches, DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS, newNarrativeProgress, questStatus, questReward, questCompletions } from '../shared/narrative';
 import { NPC_LOOT_TABLES } from '../shared/loot';
 import { GROUND_ITEM_TTL, INTERACTION_RANGE, type GroundItem, type DialogueView, type InteractionCommand } from '../shared/interactions';
 
@@ -12,6 +12,7 @@ interface Host {
   players: ReadonlyMap<string, Actor>; npcs: ReadonlyMap<string, Actor>; accounts: ReadonlyMap<string, Account>; world: World;
   connected: (id: string) => boolean; combatAt: (id: string) => number; changed: (id: string) => void;
   nearbyPlayers: (point: { x: number; y: number }, radius: number) => Actor[];
+  rewardXp: (id: string, amount: number) => void;
 }
 interface Session { id: string; targetId: string; dialogueId: string; node: string; startedAt: number; expiresAt: number; }
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -68,7 +69,13 @@ export class InteractionSystem {
     const consumed = Math.min(stack.quantity, quest.objective.quantity - delivered);
     if (consumed <= 0) throw new Error('Consegna già completata.');
     stack.quantity -= consumed; if (!stack.quantity) account.inventory!.slots[command.slot] = null;
+    const previousCompletions = questCompletions(progress);
     advanceQuest(account.narrative!, quest, consumed, now);
+    if (progress.status === 'completed') {
+      const reward = questReward(quest, previousCompletions);
+      account.gold = (account.gold ?? 0) + reward.gold;
+      this.host.rewardXp(id, reward.xp);
+    }
     this.advance(session, progress.status === 'completed' ? node.itemRequest!.completedNext : node.itemRequest!.progressNext, now); this.host.changed(id);
   }
   view(id: string, now: number): DialogueView | null {

@@ -1,6 +1,6 @@
 import type { ClassDef, ClassId } from './types';
 import { WORLD_DOCUMENT } from './world-content';
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
 export const SNAPSHOT_RATE = 15;
@@ -10,11 +10,12 @@ export const CHUNK_SIZE = TILE_SIZE * CHUNK_TILES;
 export const INTEREST_RADIUS = 1250;
 export const PLAYER_RADIUS = 15;
 export const WORLD_SEED = WORLD_DOCUMENT.seed;
+export const MAX_LEVEL = 20;
 export const CLASSES: Record<ClassId, ClassDef> = {
  mage: { id: 'mage', name: 'Mago', subtitle: 'Il potere dell’arcano', description: 'Controlla il campo da lontano. Dardi arcani, gelo e una nova per chi si avvicina troppo.', color: '#b3a0ed', resource: 'mana', maxHp: 110, maxResource: 120, speed: 195, armor: 0.04,
  abilities: {
  basic: { name: 'Dardo arcano', description: 'Proiettile magico direzionale.', cost: 0, cooldown: 0.5, range: 540, damage: 16, kind: 'projectile', targeting: 'directional', speed: 480, radius: 6, color: '#c5afff' },
- q: { name: 'Lancia di gelo', description: 'Un proiettile che rallenta il bersaglio per 2 secondi.', cost: 24, cooldown: 3.5, range: 620, damage: 28, kind: 'projectile', targeting: 'directional', speed: 440, radius: 10, color: '#91ddf4' },
+ q: { name: 'Lancia di gelo', description: 'Un proiettile che rallenta il bersaglio per 2 secondi.', cost: 24, cooldown: 3.5, range: 620, damage: 28, kind: 'projectile', targeting: 'directional', speed: 440, radius: 10, color: '#91ddf4', slow: 2000 },
  e: { name: 'Nova arcana', description: 'Danneggia i nemici intorno a te. Le pareti bloccano l’esplosione.', cost: 36, cooldown: 7, range: 135, damage: 36, kind: 'area', targeting: 'self', radius: 135, color: '#b3a0ed' },
  r: { name: 'Velo astrale', description: 'Riduce i danni del 60% per 4 secondi.', cost: 30, cooldown: 13, range: 0, damage: 0, kind: 'shield', targeting: 'self', radius: 32, duration: 4, color: '#e4c8ff' }
  } },
@@ -45,5 +46,13 @@ hunter: {
   }
 };
 export const PICKUP_NAMES = { heal: 'Fonte vitale', haste: 'Passo celere', power: 'Potere antico', weakness: 'Maledizione' };
-export function xpForLevel(level: number): number { return level * 100; }
-export function levelFromXp(xp: number): number { return 1 + Math.floor(Math.max(0, xp) / 100); }
+/** Total XP needed to reach the level AFTER this level. */
+export function xpForLevel(level: number): number { return 100 * level + 20 * level * (level - 1); }
+export function levelFromXp(xp: number): number {
+  return Math.min(MAX_LEVEL, 1 + Math.floor((Math.sqrt(6400 + 80 * Math.max(0, xp)) - 80) / 40));
+}
+export function xpProgress(xp: number): { level: number; current: number; required: number; fraction: number } {
+  const level = levelFromXp(xp), floor = xpForLevel(level - 1), required = xpForLevel(level) - floor;
+  if (level === MAX_LEVEL) return { level, current: 0, required: 0, fraction: 1 };
+  return { level, current: xp - floor, required, fraction: (xp - floor) / required };
+}

@@ -29,7 +29,7 @@ function metadata(actor: SnapshotActor): ActorMetadata {
 }
 function updateActor(current: SnapshotActor, previous?: SnapshotActor): ActorUpdate | undefined {
   const update: ActorUpdate = { id: current.id };
-  if (!previous || ACTOR_METADATA_KEYS.some(key => current[key] !== previous[key])) update.metadata = metadata(current);
+  if (!previous || ACTOR_METADATA_KEYS.some(key => !sameValue(current[key], previous[key]))) update.metadata = metadata(current);
   const state: Partial<ActorState> = {}, clear: (keyof ActorState)[] = [];
   for (const key of ACTOR_STATE_KEYS) {
     if (previous && sameValue(current[key], previous[key])) continue;

@@ -3,12 +3,12 @@ export interface NarrativeProgress { version: 1; quests: Record<string, QuestPro
 export const newNarrativeProgress = (): NarrativeProgress => ({ version: 1, quests: {} });
 export type NarrativeCondition = { kind: 'quest-status'; questId: string; status: 'available' | 'active' | 'completed' };
 export type NarrativeAction = { kind: 'accept-quest'; questId: string };
-export interface QuestDefinition { id: string; name: string; repeatable?: boolean; repeatAfterMs?: number; objective: { id: string; itemId: string; quantity: number }; }
+export interface QuestDefinition { id: string; name: string; repeatable?: boolean; repeatAfterMs?: number; reward?: { xp: number; minXp: number; firstGold: number }; objective: { id: string; itemId: string; quantity: number }; }
 export interface DialogueChoice { id: string; label: string; next?: string; action?: NarrativeAction; condition?: NarrativeCondition; }
 export interface DialogueNode { text: string; choices: readonly DialogueChoice[]; itemRequest?: { questId: string; completedNext: string; progressNext: string }; }
 export interface DialogueDefinition { id: string; questId: string; entries: readonly { condition: NarrativeCondition; node: string }[]; nodes: Readonly<Record<string, DialogueNode>>; }
 export const QUEST_DEFINITIONS: Readonly<Record<string, QuestDefinition>> = {
-  'stinking-bait': { id: 'stinking-bait', name: 'Esche puzzolenti', repeatable: true, repeatAfterMs: 12 * 60 * 60 * 1000, objective: { id: 'innards-delivered', itemId: 'slime-innards', quantity: 3 } },
+  'stinking-bait': { id: 'stinking-bait', name: 'Esche puzzolenti', repeatable: true, repeatAfterMs: 5 * 60 * 1000, reward: { xp: 150, minXp: 5, firstGold: 20 }, objective: { id: 'innards-delivered', itemId: 'slime-innards', quantity: 3 } },
 };
 const questCondition = (status: NarrativeCondition['status']): NarrativeCondition => ({ kind: 'quest-status', questId: 'stinking-bait', status });
 export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> = {
@@ -24,9 +24,9 @@ export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> 
       accepted: { text: 'Grazie. Cerca le gelatine e raccogli quello che lasciano. Quando torni, mostrami le interiora dalla tua sacca. Me ne bastano tre.', choices: [{ id: 'leave', label: 'A presto, Nereo.' }] },
       delivery: { text: 'Hai qualcosa per me? Premi sulle interiora nella tua sacca: ne prenderò soltanto quante me ne mancano. Me ne servono ancora {remaining}.', itemRequest: { questId: 'stinking-bait', completedNext: 'thanks', progressNext: 'delivery' }, choices: [{ id: 'event', label: 'Di quell’evento…', next: 'event-active' }, { id: 'leave', label: 'Torno presto.' }] },
       'event-active': { text: 'Da quella notte il mondo ha un altro odore. Le mie esche almeno le so riconoscere… Il resto, meno. Perdona questo vecchio.', choices: [{ id: 'back', label: 'Hai bisogno delle interiora.', next: 'delivery' }] },
-      thanks: { text: 'Eccole! Questo sì che è un fetore come si deve. Con queste preparo le mie esche. Grazie, ragazzo. Le altre tienile tu. Tra dodici ore avrò bisogno di nuove esche.', choices: [{ id: 'leave', label: 'Buona pesca.', next: 'bad-luck' }] },
+      thanks: { text: 'Eccole! Questo sì che è un fetore come si deve. Con queste preparo le mie esche. Grazie, ragazzo. Le altre tienile tu. Tra cinque minuti avrò bisogno di nuove esche.', choices: [{ id: 'leave', label: 'Buona pesca.', next: 'bad-luck' }] },
       'bad-luck': { text: 'Buona pesca?! Ti maledico, ragazzo! Che tutte le gelatine del pantano ti si appiccichino agli stivali! Ai pescatori non si augura mai buona pesca… porta sfortuna!', choices: [{ id: 'leave', label: 'Mi rimangio l’augurio!' }] },
-      after: { text: 'Le tue esche funzionano. Sono contento di rivederti: siediti, se hai un momento. Per ora non ho bisogno di altre interiora. Ripassa dodici ore dopo la tua ultima consegna.', choices: [{ id: 'event', label: 'Come stai?', next: 'after-chat' }, { id: 'leave', label: 'Passavo a salutarti.' }] },
+      after: { text: 'Le tue esche funzionano. Sono contento di rivederti: siediti, se hai un momento. Per ora non ho bisogno di altre interiora. Ripassa cinque minuti dopo la tua ultima consegna.', choices: [{ id: 'event', label: 'Come stai?', next: 'after-chat' }, { id: 'leave', label: 'Passavo a salutarti.' }] },
       'after-chat': { text: 'Le ginocchia scricchiolano e i ricordi fanno peggio. Ma finché c’è qualcuno che passa a salutare, posso aspettare un’altra alba.', choices: [{ id: 'leave', label: 'Ci vediamo, Nereo.' }] },
     },
   },
@@ -43,6 +43,10 @@ export function questStatus(progress: NarrativeProgress, id: string, now = Date.
 export function conditionMatches(progress: NarrativeProgress, condition: NarrativeCondition, now = Date.now()): boolean { return questStatus(progress, condition.questId, now) === condition.status; }
 /** Legacy completed missions count once, without requiring an account reset. */
 export function questCompletions(quest: QuestProgress): number { return quest.completions ?? (quest.status === 'completed' ? 1 : 0); }
+export function questReward(quest: QuestDefinition, previousCompletions: number): { xp: number; gold: number } {
+  if (!quest.reward) return { xp: 0, gold: 0 };
+  return { xp: Math.max(quest.reward.minXp, Math.floor(quest.reward.xp / 2 ** Math.min(30, previousCompletions))), gold: previousCompletions === 0 ? quest.reward.firstGold : 0 };
+}
 export function acceptQuest(progress: NarrativeProgress, quest: QuestDefinition, now = Date.now()): void {
   const previous = progress.quests[quest.id];
   if (previous && (previous.status === 'active' || !quest.repeatable || !cooldownElapsed(previous, quest, now))) throw new Error('Missione già accettata o conclusa.');

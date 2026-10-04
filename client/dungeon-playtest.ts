@@ -52,6 +52,8 @@ export function createDungeonPlaytest(draft: DungeonDraft, classId: ClassId = 'w
   const world = new DungeonPlaytestWorld(definition);
   const simulation = new WorldSimulation(734291, 1_000_000, undefined, 'world', { world, dungeons: encounters, bosses: new Map(bosses.map(boss => [boss.id, boss])), spawn });
   const player = simulation.addPlayer({ id: 'local-playtest', name: 'Prova locale', nameLower: 'prova locale', salt: '', passwordHash: '', xp: 0, kills: 0, deaths: 0, friends: [], requests: [], lastSeen: 0, gold: 0 }, classId);
+  // The offline editor previews the full catalog, independent of account progression.
+  player.loadout = undefined;
   let seq = 0, accumulator = 0;
   return { simulation, player, definition, world,
     step(elapsed: number, input: Omit<InputCommand, 'seq'>) {

@@ -66,6 +66,20 @@ test('keyframes reconstruct complete actors; unchanged metadata and private data
   assert.equal(second.decoded.narrative, undefined);
 });
 
+test('loadouts survive network deltas without retransmitting metadata for identical copied builds', () => {
+  const encoder = new SnapshotEncoder(), decoder = new SnapshotDecoder(), snapshot = frame();
+  const remote = snapshot.actors[1]; remote.loadout = { q: 'q', e: 'r' };
+  deliver(encoder, decoder, snapshot);
+  remote.loadout = { q: 'q', e: 'r' };
+  assert.deepEqual(deliver(encoder, decoder, snapshot).packet.actorUpdates, []);
+  remote.loadout = { q: 'e', e: 'r' };
+  const changed = deliver(encoder, decoder, snapshot);
+  assert.deepEqual(changed.decoded.actors[1].loadout, remote.loadout);
+  assert.deepEqual(changed.packet.actorUpdates[0].metadata!.loadout, remote.loadout);
+  const projected = projectActor(remote); remote.loadout.q = 'q';
+  assert.equal(projected.loadout!.q, 'e');
+});
+
 test('movement, cooldowns, effects, class and optional field removal survive JSON deltas', () => {
   const encoder = new SnapshotEncoder(), decoder = new SnapshotDecoder(), snapshot = frame();
   const remote = snapshot.actors[1]; remote.questMarker = 'active'; remote.dialogueId = 'old-fisher'; remote.spriteMoving = true;

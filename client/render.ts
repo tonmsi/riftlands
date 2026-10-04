@@ -1,5 +1,6 @@
 import { PICKUP_COLORS, circle, noise, polygon } from './render-primitives';
 import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../shared/config';
+import { equippedAbility } from '../shared/progression';
 import type { Actor, ClassId, GameEvent, Pickup, Projectile, Trap, Vec2, RoomMode, MatchResult } from '../shared/types';
 import { drawTransitionOverlay, matchResultText, MATCH_RESULT_DURATION_MS } from './transition-overlay';
 import { World } from '../shared/world';
@@ -254,8 +255,9 @@ export class Renderer {
     }
 
     const events = frame.events.filter(event => frame.time >= event.at && frame.time - event.at < event.duration);
-    if (frame.self && frame.self.hp > 0 && frame.aimPreview != null) {
-      const ability = CLASSES[frame.self.classId].abilities[frame.aimPreview.slot];
+    const previewAbility = frame.self && frame.aimPreview ? equippedAbility(frame.self, frame.aimPreview.slot) : undefined;
+    if (frame.self && frame.self.hp > 0 && frame.aimPreview != null && previewAbility) {
+      const ability = previewAbility;
       ctx.save();
       ctx.translate(frame.self.x, frame.self.y);
       ctx.rotate(frame.aimPreview.angle);

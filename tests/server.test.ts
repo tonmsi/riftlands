@@ -272,13 +272,14 @@ test('team invitations require consent and block friendly melee/projectile damag
 
 test('paladin heals nearby teammates and the shield reduces incoming damage by 60 percent', () => {
   const { simulation, a, b } = arena('paladin', 'mage');
+  a.loadout = { q: 'r', e: 'e' };
   team(simulation, a, b);
   a.hp -= 60;
   b.hp -= 60;
   simulation.cast(a, 'e');
   assert.equal(a.hp, a.maxHp - 22);
   assert.equal(b.hp, b.maxHp - 22);
-  simulation.cast(a, 'r');
+  simulation.cast(a, 'q');
   assert.ok(a.effects.some(effect => effect.kind === 'shield'));
   assert.ok(b.effects.some(effect => effect.kind === 'shield'));
   simulation.socialAction(b.id, 'team-leave');
@@ -287,14 +288,14 @@ test('paladin heals nearby teammates and the shield reduces incoming damage by 6
   assert.equal(hp - b.hp, Math.round(CLASSES.paladin.abilities.basic.damage * (1 - CLASSES.mage.armor) * 0.4));
 });
 
-test('death records kills and XP, then respawns with temporary protection removed on attack', () => {
+test('PvP death records kills without XP, then respawns with temporary protection removed on attack', () => {
   const { simulation, a, b, aAccount, bAccount } = arena('warrior', 'mage');
   b.hp = 1;
   simulation.cast(a, 'basic');
   assert.equal(b.hp, 0);
   assert.equal(aAccount.kills, 1);
   assert.equal(bAccount.deaths, 1);
-  assert.equal(aAccount.xp, 50);
+  assert.equal(aAccount.xp, 0);
   advance(simulation, 5.1);
   assert.equal(b.hp, b.maxHp);
   assert.ok(b.spawnProtectedUntil > simulation.now);

@@ -1071,19 +1071,26 @@ kbd {
 }
 
 .xp-meter {
-  height:2px;
+  position:relative;
+  height:4px;
   background:#95af7320;
   margin:8px 0 0 22px;
   border-radius:3px;
-  overflow:hidden
+  overflow:visible;
+  margin-bottom:14px
 }
 
 .xp-meter>i {
   display:block;
   height:100%;
   background:#cfca8d;
-  transition:width .3s
+  border-radius:3px
 }
+
+.xp-progress-label { position:absolute; top:6px; right:0; font-size:9px; color:#d2d4c3; white-space:nowrap }
+.xp-gain { position:absolute; left:calc(100% + 14px); bottom:-6px; padding:4px 8px; border:1px solid #cabb7c55; border-radius:5px; background:#1a2424f5; color:#f0d796; font-size:12px; font-weight:700; pointer-events:none; z-index:5; white-space:nowrap; box-shadow:0 2px 8px #0005 }
+.xp-gain[hidden] { display:none }
+.class-level { font-size:11px; font-weight:700; color:#f0d796 }
 
 .world-location {
   position:absolute;

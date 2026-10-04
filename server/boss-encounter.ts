@@ -126,7 +126,7 @@ export class BossEncounter {
     this.windup = undefined;
     if (this.group.some(member => member.boss.hp > 0)) return [];
     const respawnAt = now + Math.max(...this.group.map(member => member.definition.respawnMs));
-    const rewards = this.group.flatMap(member => member.killedBy ? [{ id: member.killedBy, xp: 20 + member.boss.level * 3 }] : []);
+    const rewards = this.group.flatMap(member => [...member.participantIds].map(id => ({ id, xp: 100 + member.boss.level * 10 })));
     for (const member of this.group) member.rewardDefeat(now, respawnAt);
     this.unlock(world);
     this.save();

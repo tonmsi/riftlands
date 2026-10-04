@@ -2,6 +2,8 @@
 
 Prototipo multiplayer 2D dall’alto: mondo procedurale, combattimento PvP/PvE e alleanze. Client Canvas e TypeScript, server Node.js autorevole con WebSocket. Il menu e tutti i comandi sono in italiano.
 
+La [progressione dei personaggi](docs/character-progression.md) descrive XP e quest per classe, sblocchi ai livelli 2/5/10, build a 10 gold e ricompense. Il Cacciatore per sviluppatori parte al livello massimo 20.
+
 La review di rete, mobile e architettura, con misure e priorità, è in [docs/code-review-2026-09-18.md](docs/code-review-2026-09-18.md). Il [dungeon maker](docs/dungeon-maker.md) si apre dal menu o da `/dungeon-maker.html`.
 
 Il [World Maker locale](docs/world-maker.md) si avvia con `npm run world:studio`: importa PNG/SVG, definisce ingombri e comportamenti per cella, dipinge terreno e asset sul mondo procedurale e gestisce clima, PvP, ingressi arena e popolazione NPC. I dungeon si costruiscono nel Dungeon Maker e si posizionano nel World Maker.
@@ -48,14 +50,14 @@ HUD touch e desktop condividono dati, abilità e cooldown. `client/mobile.css` o
 | WASD / frecce | Movimento |
 | Mouse | Mira |
 | Spazio / tasto destro tenuto | Attacco base ripetuto |
-| Q / E / R | Abilità della classe |
+| Q / E | Abilità equipaggiate; E si sblocca al livello 5 |
 | Clic sinistro su un personaggio | Seleziona, mostra vita e azioni sociali |
 | Compagni | Giocatori vicini, richieste, amici e team |
 | Esci | Torna al menu e consente di cambiare classe |
 
 Su schermi touch ci sono joystick e attacchi circolari: trascina le abilità direzionali per mirare, tocca i personaggi per selezionarli. Le sprite dei giocatori su mobile usano settori cardinali con isteresi: una lieve componente laterale non impedisce più di mostrare nord e sud.
 
-| Classe | Risorsa | Attacco base | Q | E | R |
+| Classe | Risorsa | Attacco base | Abilità A | Abilità B | Abilità C |
 | --- | --- | --- | --- | --- | --- |
 | Mago | Mana, 120 | Dardo arcano | Lancia di gelo, rallenta | Nova ad area | Velo astrale, scudo |
 | Guerriero | Rabbia, 100 | Fendente, genera rabbia sui colpi | Spaccaterra a cono | Carica | Turbine ad area |
@@ -70,7 +72,7 @@ Mana: rigenerazione di 7/s. Rabbia: generata infliggendo/subendo danni, decade f
 - Nei cespugli i nemici oltre 120 unità non vengono inviati al client. Attaccare o ricevere danni rivela per 2,5 s. Il team resta visibile entro il raggio di interesse.
 - Gelatine, fuochi fatui e guardiani vengono generati insieme ai chunk. Inseguono, attaccano e tornano alla zona d’origine; gli NPC morti ricompaiono dopo 35 s. I nemici diventano più forti allontanandosi dall’origine.
 - Fonte vitale: +35 salute. Passo celere: +35% velocità per 10 s. Potere antico: +30% danni per 10 s. Maledizione: −30% danni per 7 s. I raccoglibili tornano dopo 35 s.
-- Alla morte il giocatore ritorna all’origine dopo 5 s e ottiene 5 s di protezione; usare abilità termina la protezione. Salute recuperata lentamente fuori combattimento. Livelli/XP e statistiche persistono; per ora il livello del giocatore è progressione visibile, senza talenti o aumento automatico delle statistiche.
+- Alla morte il giocatore ritorna all’origine dopo 5 s e ottiene 5 s di protezione; usare abilità termina la protezione. Salute recuperata lentamente fuori combattimento. Livelli/XP persistono per classe e sbloccano slot e abilità, senza aumento automatico delle statistiche. Le uccisioni PvP non assegnano XP.
 - PvP libero. L’amicizia è una relazione sociale: **solo appartenere allo stesso team impedisce il fuoco amico**. Amicizie e ingressi nei team richiedono accettazione esplicita. Team fino a 5 persone; i team sono temporanei e non persistono attraverso il riavvio del server.
 - Dopo l’uscita il personaggio resta nel mondo per **20 s**, esposto al combattimento. Rientrare o cambiare classe non ripristina gratuitamente vita e risorse.
 
@@ -153,7 +155,7 @@ Il server simula a **30 Hz** e invia snapshot a **15 Hz** (ogni 66,7 ms), filtra
 
 Gli altri personaggi e i loro proiettili usano un buffer adattivo di **100–250 ms rispetto agli arrivi dei pacchetti**, indipendente dalle correzioni dell’orologio del ping. Il tempo di riproduzione avanza continuamente e non torna indietro al ricevimento di uno snapshot. Se la rete si interrompe, conserva l’ultima posizione nota anziché inventare movimento attraverso gli ostacoli. Vita, proiettili, risorse, cooldown e raccolte restano autorevoli. C'è rilevamento dei proiettili lungo il segmento percorso fra tick e controllo di visibilità per gli attacchi attraverso ostacoli.
 
-I cast locali melee e a proiettile hanno predizione cosmetica: partono dalla posizione disegnata del personaggio e si collegano alla conferma tramite la sequenza input. Un rifiuto elimina il feedback speculativo; impatti e danni restano server-side. Il melee segue il corpo durante l'animazione; il proiettile vola indipendentemente e viene corretto verso lo stato autorevole senza un secondo spawn. I proiettili del proprietario non passano dal buffer remoto; l'estrapolazione è limitata a 100 ms e rispetta i muri. Aree a terra, trappole e dash non hanno predizione di gameplay. Client e server vanno aggiornati insieme (protocollo 9).
+I cast locali melee e a proiettile hanno predizione cosmetica: partono dalla posizione disegnata del personaggio e si collegano alla conferma tramite la sequenza input. Un rifiuto elimina il feedback speculativo; impatti e danni restano server-side. Il melee segue il corpo durante l'animazione; il proiettile vola indipendentemente e viene corretto verso lo stato autorevole senza un secondo spawn. I proiettili del proprietario non passano dal buffer remoto; l'estrapolazione è limitata a 100 ms e rispetta i muri. Aree a terra, trappole e dash non hanno predizione di gameplay. Client e server vanno aggiornati insieme (protocollo 10).
 
 Gli snapshot trasmessi usano delta per gli attori remoti e mantengono completo il giocatore locale. Metadati, inventario, narrativa e gold viaggiano quando cambiano, con keyframe periodici e reset su cambio stanza o riconnessione. Prima di predizione, interpolazione e UI, il client ricostruisce la vista completa degli attori. Architettura, garanzie e misure sono descritte in [snapshot-replication.md](docs/snapshot-replication.md).
 

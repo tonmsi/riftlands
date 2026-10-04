@@ -134,7 +134,7 @@ export class RoomManager {
       // Prepare everything before removing any character from the global world.
       for (const [teamIndex, team] of roster.entries()) for (const [slot, playerId] of team.entries()) {
         const member = this.membership(playerId);
-        const temporary: Account = { ...member.account, inventory: structuredClone(member.account.inventory), narrative: structuredClone(member.account.narrative), body: undefined, friends: [], requests: [] };
+        const temporary: Account = { ...member.account, characters: structuredClone(member.account.characters), inventory: structuredClone(member.account.inventory), narrative: structuredClone(member.account.narrative), body: undefined, friends: [], requests: [] };
         const actor = simulation.addPlayer(temporary, member.classId);
         actor.teamId = `${id}:${teamIndex}`;
         actor.x = mode === 'arena' ? (slot - (team.length - 1) / 2) * 70 : (teamIndex === 0 ? -1 : 1) * 700;
@@ -194,6 +194,16 @@ export class RoomManager {
       this.notices.set(playerId, reason === 'timeout' ? 'Tempo scaduto: pareggio. Ritorno nel mondo.' : reason === 'elimination' ? (winner ? 'Vittoria! Ritorno nel mondo.' : 'Duello terminato. Ritorno nel mondo.') : 'Partita conclusa. Ritorno nel mondo.');
     }
     for (const playerId of [...room.members]) this.returnToWorld(playerId);
+    // Reward completed battlegrounds, never arena duels, per-kill farming or forfeits.
+    if (room.mode === 'battleground' && resultReason !== 'closed' && resultReason !== 'forfeit') {
+      for (const [playerId, teamId] of room.roster) {
+        const member = this.memberships.get(playerId);
+        if (!member?.connected || !this.global.players.has(playerId)) continue;
+        const winner = survivingTeams.size === 1 && survivingTeams.has(teamId);
+        const xp = reason === 'timeout' || survivingTeams.size === 0 ? 100 : winner ? 150 : 75;
+        this.global.awardXp(playerId, xp);
+      }
+    }
     this.rooms.delete(id);
   }
 

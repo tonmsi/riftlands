@@ -19,10 +19,12 @@ import type { Account } from './store';
 import type { GameplayPersistence } from './gameplay-persistence';
 import { SnapshotBuilder } from './snapshot-builder';
 import { actorVisibleTo } from './actor-visibility';
+import { activateCharacter, characterFor } from './character-progress';
+import { DEVELOPER_XP, equippedAbility, normalizeLoadout } from '../shared/progression';
 
 const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
-const copyActor = (actor: Actor): Actor => ({ ...actor, effects: actor.effects.map(effect => ({ ...effect })), cooldowns: { ...actor.cooldowns } });
+const copyActor = (actor: Actor): Actor => ({ ...actor, ...(actor.loadout ? { loadout: { ...actor.loadout } } : {}), effects: actor.effects.map(effect => ({ ...effect })), cooldowns: { ...actor.cooldowns } });
 type Connection = { account: Account; connected: boolean; removeAt: number; inputs: InputCommand[]; ack: number; highestSeq: number; combatAt: number };
 type NpcMeta = { home: Vec2; chunk: string; nextAttack: number; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
 type ActiveChunk = { key: string; lastUsed: number; npcIds: string[]; pickupIds: string[] };
@@ -87,6 +89,7 @@ export class WorldSimulation {
     this.interactions = new InteractionSystem({ players: this.players, npcs: this.npcs, accounts: this.accounts, world: this.world,
       connected: id => !!this.connections.get(id)?.connected, combatAt: id => this.connections.get(id)?.combatAt ?? 0,
       changed: id => this.persistPlayer(id), nearbyPlayers: (point, radius) => this.near(point, radius).filter(actor => actor.kind === 'player'),
+      rewardXp: (id, amount) => this.awardXp(id, amount),
     }, environment?.lootRandom);
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
     if (mode === 'world') {
@@ -117,6 +120,8 @@ export class WorldSimulation {
     this.snapshots.invalidate();
     account.inventory ??= newInventory(); account.narrative ??= newNarrativeProgress();
     const current = this.players.get(account.id);
+    if (current && current.classId !== classId) { this.persistPlayer(current.id); this.interactions.close(current.id); }
+    const character = activateCharacter(account, classId);
     this.accounts.set(account.id, account);
     if (current) {
       current.name = account.name;
@@ -128,6 +133,9 @@ export class WorldSimulation {
         current.maxResource = spec.maxResource;
         current.resource = 0;
         current.speed = spec.speed;
+        current.xp = character.xp;
+        current.level = levelFromXp(character.xp);
+        current.loadout = normalizeLoadout(character.loadout, this.mode === 'world' ? current.level : 20, classId);
       }
       const connection = this.connections.get(account.id)!;
       connection.connected = true;
@@ -149,7 +157,8 @@ export class WorldSimulation {
       x: validSaved ? saved.x : spawn.x, y: validSaved ? saved.y : spawn.y,
       radius: PLAYER_RADIUS, hp: validSaved ? Math.max(0, Math.min(spec.maxHp, spec.maxHp * saved.hp / saved.maxHp)) : spec.maxHp,
       maxHp: spec.maxHp, resource: validSaved ? (sameClass ? Math.min(spec.maxResource, saved.resource) : 0) : (spec.resource === 'mana' ? spec.maxResource : 0),
-      maxResource: spec.maxResource, aim: 0, speed: spec.speed, level: levelFromXp(account.xp), xp: account.xp,
+      maxResource: spec.maxResource, aim: 0, speed: spec.speed, level: levelFromXp(character.xp), xp: character.xp,
+      loadout: normalizeLoadout(character.loadout, this.mode === 'world' ? levelFromXp(character.xp) : 20, classId),
       spriteRow: 0, spriteMoving: false,
       kills: account.kills, deaths: account.deaths, teamId: (this.teamFor(account.id)?.members.size ?? 0) > 1 ? this.teamFor(account.id)!.id : null,
       hidden: false, revealedUntil: 0, deadUntil: validSaved ? saved.deadUntil : 0,
@@ -445,7 +454,8 @@ export class WorldSimulation {
   /** May be used directly by deterministic combat tests; input validation precedes this in transport. */
   cast(actor: Actor, slot: AbilitySlot, autoAim = false, targetId?: string, inputSeq?: number): boolean {
     this.snapshots.invalidate();
-    const ability = CLASSES[actor.classId].abilities[slot];
+    const ability = equippedAbility(actor, slot);
+    if (!ability) return false;
     if (this.isSafeProtected(actor) && ability.kind !== 'heal' && ability.kind !== 'shield') return false;
     if (actor.hp <= 0 || actor.cooldowns[slot] > this.now || actor.resource < ability.cost) return false;
     if (ability.kind === 'projectile' && this.projectiles.size >= 1000) return false;
@@ -464,7 +474,7 @@ export class WorldSimulation {
     this.emit({ kind: 'cast', x: actor.x, y: actor.y, radius: ability.radius, color: ability.color, duration: ability.kind === 'shield' ? 700 : 380, actorId: actor.id, aim: actor.aim, abilityKind: ability.kind, text: ability.name, ...(inputSeq !== undefined ? { inputSeq } : {}) });
     if (ability.kind === 'projectile') {
       const speed = ability.speed ?? 400;
-      const projectile: Projectile = { id: randomUUID(), ownerId: actor.id, x: actor.x, y: actor.y, vx: Math.cos(actor.aim) * speed, vy: Math.sin(actor.aim) * speed, radius: ability.radius, damage: ability.damage * this.damageMultiplier(actor), expiresAt: this.now + ability.range / speed * 1000, color: ability.color, slow: actor.classId === 'mage' && slot === 'q' ? 2000 : undefined };
+      const projectile: Projectile = { id: randomUUID(), ownerId: actor.id, x: actor.x, y: actor.y, vx: Math.cos(actor.aim) * speed, vy: Math.sin(actor.aim) * speed, radius: ability.radius, damage: ability.damage * this.damageMultiplier(actor), expiresAt: this.now + ability.range / speed * 1000, color: ability.color, slow: ability.slow };
       if (inputSeq !== undefined) projectile.inputSeq = inputSeq;
       this.projectiles.set(projectile.id, projectile);
       this.projectileTeams.set(projectile.id, actor.teamId);
@@ -494,7 +504,7 @@ export class WorldSimulation {
     }
 
     // Gestione della Ultimate R a 360° in sequenza
-    if (actor.classId === 'hunter' && slot === 'r') {
+    if (actor.classId === 'hunter' && ability === CLASSES.hunter.abilities.r) {
       const speed = ability.speed ?? 500;
       const totalShots = 6;
       const angleStep = (Math.PI * 2) / totalShots;
@@ -608,17 +618,18 @@ export class WorldSimulation {
     if (this.mode === 'world') this.interactions.killed(target, attacker, this.now);
     if (attacker?.kind === 'player' && !encounter) {
       if (target.kind === 'player') attacker.kills++;
-      attacker.xp += target.kind === 'player' ? 50 : 20 + target.level * 3;
-      attacker.level = levelFromXp(attacker.xp);
+      // Ordinary PvP never grants character XP, including repeated kills in a match.
+      if (target.kind === 'npc' && this.mode === 'world') {
+        const difference = attacker.level - target.level;
+        this.awardXp(attacker.id, Math.max(1, Math.floor((20 + target.level * 3) * Math.max(.1, 1 - Math.max(0, difference - 3) * .2))));
+      }
       this.persistPlayer(attacker.id);
     }
     if (target.kind === 'player') this.persistPlayer(target.id);
     for (const reward of encounter?.killed(attacker?.kind === 'player' ? attacker.id : undefined, this.now, this.world) ?? []) {
       const recipient = this.players.get(reward.id);
       if (!recipient) continue;
-      recipient.xp += reward.xp;
-      recipient.level = levelFromXp(recipient.xp);
-      this.persistPlayer(recipient.id);
+      this.awardXp(recipient.id, reward.xp);
     }
     return true;
   }
@@ -910,11 +921,25 @@ export class WorldSimulation {
     const actor = this.players.get(id), account = this.accounts.get(id);
     if (!actor || !account) return;
     account.body = copyActor(actor);
-    account.xp = actor.xp;
+    const character = characterFor(account, actor.classId);
+    character.xp = actor.xp;
+    if (actor.loadout) character.loadout = { ...actor.loadout };
+    character.inventory = account.inventory!; character.narrative = account.narrative!;
+    account.xp = Object.entries(account.characters!).reduce((total, [id, c]) => total + (id === 'hunter' ? 0 : c!.xp), 0);
     account.kills = actor.kills;
     account.deaths = actor.deaths;
     account.lastSeen = this.now;
     this.store?.touch();
+  }
+
+  awardXp(id: string, amount: number): void {
+    const actor = this.players.get(id);
+    if (!actor || this.mode !== 'world' || !Number.isSafeInteger(amount) || amount <= 0) return;
+    actor.xp = actor.classId === 'hunter' ? DEVELOPER_XP : Math.min(DEVELOPER_XP, actor.xp + amount);
+    actor.level = levelFromXp(actor.xp);
+    actor.loadout = normalizeLoadout(actor.loadout, actor.level, actor.classId);
+    this.persistPlayer(id);
+    this.snapshots.invalidate();
   }
 
   checkpoint(): void { for (const id of this.players.keys()) this.persistPlayer(id); }
