@@ -270,6 +270,7 @@ export class BossEncounter {
     const boss = this.boss;
     this.resetStallTimer();
     if (attack.kind === 'melee') {
+      boss.bossMeleeAt = now;
       if (distance <= attack.range) damage(target, attack.damage);
       this.nextAttack = now + this.cooldown(attack);
       return;
@@ -487,6 +488,8 @@ export class BossEncounter {
   private resetFight(): void {
     this.engaged = false;
     this.boss.bossAwakenedAt = undefined;
+    this.boss.bossMeleeAt = undefined;
+    this.boss.bossDiedAt = undefined;
     this.killedBy = undefined;
     Object.assign(this.boss, { ...this.dungeon.spawnPoints.boss, hp: this.definition.hp, deadUntil: 0, effects: [] });
     this.windup = undefined; this.nextAttack = 0; this.attackIndex = 0; this.resetPath(); this.resetStallTimer(); this.lastUnstuckSector = -1;

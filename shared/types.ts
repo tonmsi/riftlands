@@ -20,7 +20,7 @@ export interface ClassDef { id: ClassId; name: string; subtitle: string; descrip
 export interface InputCommand { seq: number; dx: number; dy: number; aim: number; cast?: AbilitySlot; autoAim?: boolean; targetId?: string; analogMovement?: boolean; }
 export interface Actor { spriteRow?: number; spriteMoving?: boolean; }
 export interface Actor { loadout?: Loadout; }
-export interface Actor { bossAwakenedAt?: number; }
+export interface Actor { bossAwakenedAt?: number; bossMeleeAt?: number; bossDiedAt?: number; }
 export interface StatusEffect { kind: 'haste' | 'power' | 'weakness' | 'slow' | 'shield' | 'root'; until: number; }
 export interface Actor extends Vec2 { id: string; kind: 'player' | 'npc'; name: string; classId: ClassId; radius: number; hp: number; maxHp: number; resource: number; maxResource: number; aim: number; speed: number; level: number; xp: number; kills: number; deaths: number; teamId: string | null; hidden: boolean; revealedUntil: number; deadUntil: number; spawnProtectedUntil: number; effects: StatusEffect[]; cooldowns: Record<AbilitySlot, number>; npcKind?: NpcTemplateId | 'boss'; bossKey?: string; bossSkin?: string; }
 export interface Actor { disposition?: 'neutral' | 'hostile'; dialogueId?: string; questMarker?: 'available' | 'active' | 'completed'; }

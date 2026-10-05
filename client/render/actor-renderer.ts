@@ -21,26 +21,26 @@ const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = 
   })),
 };
 const BOSS_SPRITE_URLS: Record<string, string> = {
-  'stone-warden': new URL('../../assets/boss-warden.svg', import.meta.url).href,
+  'stone-warden': new URL('../../assets/boss-warden.png', import.meta.url).href,
   'maze-stalker': new URL('../../assets/maze-stalker.svg', import.meta.url).href,
 };
-// Configura qui le sprite speciali. Fallback automatico se non presenti.
+// Sequential attack sheets; melee has one four-frame animation per direction.
 const BOSS_ATTACK_SPRITES: Record<string, { url: string; cols: number; rows: number }> = {
-  'stone-warden:charge': { url: new URL('../../assets/boss-warden-charge.svg', import.meta.url).href, cols: 4, rows: 1 },
-  // Puoi aggiungere in futuro: 'stone-waarden:slam': { ... }
-  'stone-warden:slam': { url: new URL('../../assets/boss-warden-nova.svg', import.meta.url).href, cols: 4, rows: 2 },
-
-  // Aggiungi qui la Nova (es. 5 frame per farlo caricare di energia)
-  'stone-warden:nova': { url: new URL('../../assets/boss-warden-slam.svg', import.meta.url).href, cols: 4, rows: 2 },
-  'stone-warden:prep': { url: new URL('../../assets/boss-warden-prep.svg', import.meta.url).href, cols: 4, rows: 2 },
-
+  'stone-warden:charge': { url: new URL('../../assets/boss-warden-charge.png', import.meta.url).href, cols: 4, rows: 2 },
+  'stone-warden:slam': { url: new URL('../../assets/boss-warden-slam.png', import.meta.url).href, cols: 4, rows: 2 },
+  'stone-warden:nova': { url: new URL('../../assets/boss-warden-nova.png', import.meta.url).href, cols: 4, rows: 2 },
+  'stone-warden:prep': { url: new URL('../../assets/boss-warden-prep.png', import.meta.url).href, cols: 4, rows: 2 },
+  'stone-warden:melee': { url: new URL('../../assets/boss-warden-melee.png', import.meta.url).href, cols: 4, rows: 4 },
+  'stone-warden:death': { url: new URL('../../assets/boss-warden-death.png', import.meta.url).href, cols: 4, rows: 1 },
 };
+const BOSS_MELEE_ANIMATION_MS = 520;
+const BOSS_DEATH_ANIMATION_MS = 1000;
 
 const FRAME_SIZE = 256;
 const PLAYER_DRAW_SIZE = 48;
 const NPC_FRAME_SIZE = 256;
 const NPC_DRAW_SIZE = 48;
-const BOSS_DRAW_SIZE = 84;
+const BOSS_DRAW_SIZE = 140;
 const SPRITE_COLUMNS = 4;
 
 const TAU = Math.PI * 2;
@@ -126,7 +126,7 @@ export class ActorRenderer {
       ctx.moveTo(0, r + 3); ctx.lineTo(0, r + 11);
       ctx.stroke();
     }
-    if (dead) ctx.globalAlpha = 0.45;
+    if (dead) ctx.globalAlpha = actor.npcKind === 'boss' ? 0.75 : 0.45;
     if (detailed) {
       ctx.fillStyle = 'rgba(36, 48, 37, 0.28)';
       ctx.beginPath();
@@ -328,6 +328,7 @@ export class ActorRenderer {
     const r = actor.radius;
     let spriteKey = actor.npcKind === 'boss' ? `boss:${actor.bossSkin}` : actor.npcKind;
     let isAttacking = false;
+    let isMelee = false;
     let isWakingUp = false;
     let isAsleep = false;
 
@@ -357,6 +358,11 @@ export class ActorRenderer {
           spriteKey = attackKey;
           isAttacking = true;
         }
+      } else if (actor.bossMeleeAt !== undefined && time >= actor.bossMeleeAt && time < actor.bossMeleeAt + BOSS_MELEE_ANIMATION_MS
+        && this.npcSprites.has(`boss:${actor.bossSkin}:melee`)) {
+        spriteKey = `boss:${actor.bossSkin}:melee`;
+        row = playerSpriteDirectionRow(Math.cos(actor.aim), Math.sin(actor.aim), row, true);
+        isMelee = true;
       } else if (actor.bossAwakenedAt !== undefined && time < actor.bossAwakenedAt + BOSS_WAKE_MS) {
         // Il server autorizza il risveglio solo dopo l'avvio del dungeon.
         if (this.npcSprites.has(prepKey)) {
@@ -372,11 +378,20 @@ export class ActorRenderer {
       }
     }
 
+    const deathKey = `boss:${actor.bossSkin}:death`;
+    const isDying = actor.npcKind === 'boss' && actor.hp <= 0 && this.npcSprites.has(deathKey);
+    if (isDying) spriteKey = deathKey;
     const sprite = spriteKey ? this.npcSprites.get(spriteKey) : undefined;
-    if (sprite && actor.hp > 0) {
+    if (sprite && (actor.hp > 0 || isDying)) {
       let frameIndex = 0;
 
-      if (isAttacking && windup) {
+      if (isDying) {
+        const progress = actor.bossDiedAt === undefined ? 1 : Math.max(0, (time - actor.bossDiedAt) / BOSS_DEATH_ANIMATION_MS);
+        frameIndex = Math.min(sprite.frames.length - 1, Math.floor(progress * sprite.frames.length));
+      } else if (isMelee) {
+        const progress = (time - actor.bossMeleeAt!) / BOSS_MELEE_ANIMATION_MS;
+        frameIndex = row * SPRITE_COLUMNS + Math.min(SPRITE_COLUMNS - 1, Math.floor(progress * SPRITE_COLUMNS));
+      } else if (isAttacking && windup) {
         // Animazione Attacco
         const duration = windup.resolvesAt - windup.startedAt;
         const progress = Math.max(0, Math.min(1, (time - windup.startedAt) / duration));

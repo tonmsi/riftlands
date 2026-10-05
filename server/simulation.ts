@@ -613,7 +613,8 @@ export class WorldSimulation {
     if (target.hp > 0) return true;
     if (target.kind === 'player') for (const boss of this.bosses.values()) boss.participantDied(target.id, this.world);
     target.deaths++;
-    target.deadUntil = this.now + (target.kind === 'npc' ? 35_000 : 5000);
+    if (target.npcKind === 'boss') target.bossDiedAt = this.now;
+    target.deadUntil = this.now + (target.kind === 'npc' ? 55_000 : 5000);
     target.effects = [];
     this.emit({ kind: 'death', x: target.x, y: target.y, actorId: target.id, radius: 65, duration: 800, color: '#ffd4a3' });
     if (this.mode === 'world') this.interactions.killed(target, attacker, this.now);

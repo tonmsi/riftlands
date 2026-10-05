@@ -113,6 +113,20 @@ test('movement, cooldowns, effects, class and optional field removal survive JSO
   assert.equal(deliver(encoder, decoder, snapshot).decoded.actors[1].cooldowns.q, 3000);
 });
 
+test('boss melee animation timestamps survive network updates and encounter resets', () => {
+  const encoder = new SnapshotEncoder(), decoder = new SnapshotDecoder(), snapshot = frame();
+  const boss = snapshot.actors[1];
+  deliver(encoder, decoder, snapshot);
+  boss.bossMeleeAt = 1200;
+  assert.equal(deliver(encoder, decoder, snapshot).decoded.actors[1].bossMeleeAt, 1200);
+  boss.bossMeleeAt = 2650;
+  assert.equal(deliver(encoder, decoder, snapshot).decoded.actors[1].bossMeleeAt, 2650);
+  delete boss.bossMeleeAt;
+  const result = deliver(encoder, decoder, snapshot);
+  assert.equal(result.decoded.actors[1].bossMeleeAt, undefined);
+  assert.ok(result.packet.actorUpdates[0].clear?.includes('bossMeleeAt'));
+});
+
 test('actors leave interest and reenter with full metadata; reused identifiers do not retain fields', () => {
   const encoder = new SnapshotEncoder(), decoder = new SnapshotDecoder(), snapshot = frame();
   deliver(encoder, decoder, snapshot);
