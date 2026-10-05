@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createDungeonPlaytest } from '../client/dungeon-playtest';
+import { createDungeonPlaytest } from '../client/editors/dungeon/dungeon-playtest';
 import { compileDungeonDraft, validateDungeonDraft } from '../shared/dungeon-draft';
 import { parseDungeonFile } from '../shared/dungeon-import';
 import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonFlames } from '../shared/dungeons';

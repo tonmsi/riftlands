@@ -19,8 +19,8 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     await page.route('**/terrain-review', route => route.fulfill({ contentType: 'text/html', body: '<body style="margin:0"><canvas id="review" style="width:1200px;height:900px"></canvas></body>' }));
     await page.goto(`${server.resolvedUrls!.local[0]}terrain-review`);
     const result = await page.evaluate(async () => {
-      const { EnvironmentArt } = await import('/client/environment-art.ts' as string);
-      const { TERRAIN } = await import('/client/terrain-style.ts' as string);
+      const { EnvironmentArt } = await import('/client/render/environment-art.ts' as string);
+      const { TERRAIN } = await import('/client/render/terrain-style.ts' as string);
       const canvas = document.querySelector('canvas')!;
       canvas.width = 1200; canvas.height = 900;
       const ctx = canvas.getContext('2d')!, art = new EnvironmentArt();
@@ -57,7 +57,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     mkdirSync('artifacts', { recursive: true });
     await page.screenshot({ path: 'artifacts/shoreline-masks.png' });
     const performance = await page.evaluate(async () => {
-      const { Renderer } = await import('/client/render.ts' as string);
+      const { Renderer } = await import('/client/render/render.ts' as string);
       const canvas = document.querySelector('canvas')!;
       const renderer = new Renderer(canvas);
       await renderer.spritesReady;
@@ -86,7 +86,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     assert.ok(performance.maxMs < 250, `terrain render stalled: ${performance.maxMs} ms`);
     console.log('Terrain CPU render timings (headless Chrome):', performance);
     const cachedTerrain = await page.evaluate(async () => {
-      const { Renderer } = await import('/client/render.ts' as string);
+      const { Renderer } = await import('/client/render/render.ts' as string);
       const canvas = document.querySelector('canvas')!;
       const renderer = new Renderer(canvas);
       await renderer.spritesReady;
@@ -129,7 +129,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     console.log('Cached terrain CPU render timings (headless Chrome):', cachedTerrain);
     await page.screenshot({ path: 'artifacts/world-terrain.png' });
     const scrolling = await page.evaluate(async () => {
-      const { Renderer } = await import('/client/render.ts' as string);
+      const { Renderer } = await import('/client/render/render.ts' as string);
       Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 3 });
       const canvas = document.querySelector('canvas')!;
       const renderer = new Renderer(canvas);
@@ -191,8 +191,8 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     }
     assert.equal(scrolling.viewports[0].dpr, 1.5);
     const water = await page.evaluate(async () => {
-      const { EnvironmentArt } = await import('/client/environment-art.ts' as string);
-      const { TERRAIN, shorelineMask } = await import('/client/terrain-style.ts' as string);
+      const { EnvironmentArt } = await import('/client/render/environment-art.ts' as string);
+      const { TERRAIN, shorelineMask } = await import('/client/render/terrain-style.ts' as string);
       const canvas = document.querySelector('canvas')!, ctx = canvas.getContext('2d')!;
       const art = new EnvironmentArt();
       let queries = 0;
@@ -236,7 +236,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     assert.ok(water.populatedCorner >= 2, 'sheltered corners receive lily clusters');
     await page.screenshot({ path: 'artifacts/water-painterly.png' });
     const dungeon = await page.evaluate(async () => {
-      const { Renderer, drawMinimap } = await import('/client/render.ts' as string);
+      const { Renderer, drawMinimap } = await import('/client/render/render.ts' as string);
       const { default: bundles } = await import('/shared/custom-dungeons.json' as string);
       const DUNGEON_DEFINITIONS = bundles.map((b: any) => b.definition);
       const { World } = await import('/shared/world.ts' as string);
@@ -261,7 +261,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     assert.ok(dungeon.sharedRock, 'dungeon rocks use the shared procedural scenery atlas');
     await page.screenshot({ path: 'artifacts/dungeon-terrain.png' });
     await page.evaluate(async () => {
-      const { Renderer } = await import('/client/render.ts' as string);
+      const { Renderer } = await import('/client/render/render.ts' as string);
       const { default: bundles } = await import('/shared/custom-dungeons.json' as string);
       const DUNGEON_DEFINITIONS = bundles.map((b: any) => b.definition);
       const { World } = await import('/shared/world.ts' as string);
@@ -277,7 +277,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     });
     await page.screenshot({ path: 'artifacts/dungeon-entrance.png', clip: { x: 450, y: 90, width: 300, height: 760 } });
     await page.evaluate(async () => {
-      const { Renderer } = await import('/client/render.ts' as string);
+      const { Renderer } = await import('/client/render/render.ts' as string);
       const { default: bundles } = await import('/shared/custom-dungeons.json' as string);
       const DUNGEON_DEFINITIONS = bundles.map((b: any) => b.definition);
       const { World } = await import('/shared/world.ts' as string);
@@ -292,7 +292,7 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     });
     await page.screenshot({ path: 'artifacts/dungeon-scenery-underlay.png' });
     const outpost = await page.evaluate(async () => {
-      const { Renderer } = await import('/client/render.ts' as string);
+      const { Renderer } = await import('/client/render/render.ts' as string);
       const { World } = await import('/shared/world.ts' as string);
       const { newWorldDocument } = await import('/shared/world-schema.ts' as string);
       const canvas = document.querySelector('canvas')!, renderer = new Renderer(canvas);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LocalCombatPresentation } from '../client/combat-presentation';
+import { LocalCombatPresentation } from '../client/core/combat-presentation';
 import { CLASSES } from '../shared/config';
 import { World } from '../shared/world';
 import { WorldSimulation } from '../server/simulation';

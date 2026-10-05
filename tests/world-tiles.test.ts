@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { newWorldDocument, parseWorldDocument } from '../shared/world-schema';
 import { compactWorldTiles, serializeWorldDocument, WorldTiles, tileCode, worldTileMetrics, worldDocumentsEqual } from '../shared/world-tiles';
 import { forkWorldDocument, WorldBrush } from '../shared/world-editing';
-import { WorldEditorHistory } from '../client/world-editor-history';
+import { WorldEditorHistory } from '../client/editors/world/world-editor-history';
 import { World } from '../shared/world';
 
 test('RLE preserves terrain and suppression at negative coordinates, validates runs and decodes only bounded chunks', () => {

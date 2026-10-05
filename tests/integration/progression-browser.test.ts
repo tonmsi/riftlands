@@ -127,7 +127,7 @@ test('real menu saves paid builds, class levels stay independent and quest XP an
     // Feedback lifecycle: no fake gain on entry, reduced motion and session reset.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.evaluate(async () => {
-      const { XpFeedback } = await import('/client/xp-feedback.ts' as string);
+      const { XpFeedback } = await import('/client/ui/hud/xp-feedback.ts' as string);
       const fixture = document.createElement('div'); fixture.className = 'game-hud xp-review';
       fixture.innerHTML = '<span class="review-level"></span><div class="xp-meter"><i></i></div>';
       document.querySelector('#app')!.append(fixture);

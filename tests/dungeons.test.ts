@@ -4,7 +4,7 @@ import { BOSS_BY_ID } from '../shared/bosses';
 import { DUNGEON_DEFINITIONS, dungeonEncounters, dungeonAt, dungeonAtTile, dungeonTile, dungeonFlames, dungeonStoneTiles, isClosedDungeonTile, assertValidDungeonDefinition, flameBarrierFromTiles, inwardFlameAngle } from '../shared/dungeons';
 import { World } from '../shared/world';
 import { insideDungeonRegion } from '../shared/dungeons';
-import { DungeonPlaytestWorld } from '../client/dungeon-playtest';
+import { DungeonPlaytestWorld } from '../client/editors/dungeon/dungeon-playtest';
 import { moveWithCollisions } from '../shared/physics';
 import { WorldSimulation } from '../server/simulation';
 import { engineBundle, registerEngineBundle } from './fixtures/dungeon-engine';

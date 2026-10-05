@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { RenderFrame } from '../../client/render';
+import type { RenderFrame } from '../../client/render/render';
 import type { Snapshot } from '../../shared/types';
 import { SnapshotObserver } from '../fixtures/snapshot-observer';
 
@@ -9,7 +9,7 @@ type ProbeWindow = Window & { movementSamples: Sample[] };
 async function captureFrames(page: Page, targetId?: string): Promise<void> {
   await page.evaluate(async targetId => {
     // Instrument presentation only inside the test. The real client/server code stays in use.
-    const moduleUrl = performance.getEntriesByType('resource').find(entry => new URL(entry.name).pathname === '/client/render.ts')?.name ?? '/client/render.ts';
+    const moduleUrl = performance.getEntriesByType('resource').find(entry => new URL(entry.name).pathname === '/client/render/render.ts')?.name ?? '/client/render/render.ts';
     const { Renderer } = await import(moduleUrl);
     const original = Renderer.prototype.render;
     const probe = window as unknown as ProbeWindow;

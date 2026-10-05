@@ -97,7 +97,7 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
         await world.bringToFront(); await expect(world.locator('#dungeon')).toContainText('Dungeon aggiornato dal World Studio');
         await dungeon.evaluate('window.__name = (func) => func;');
         const entry = await dungeon.evaluate(async () => {
-            const { Renderer } = await import('/client/render.ts' as string), { createDungeonPlaytest } = await import('/client/dungeon-playtest.ts' as string);
+            const { Renderer } = await import('/client/render/render.ts' as string), { createDungeonPlaytest } = await import('/client/editors/dungeon/dungeon-playtest.ts' as string);
             const draft = JSON.parse(localStorage.getItem('riftlands.dungeon-draft.v2')!);
             const { WORLD_DOCUMENT } = await import('/shared/world-content.ts' as string);
             const assets = WORLD_DOCUMENT.assets;
@@ -123,7 +123,7 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
         assert.ok(entry.labels.includes('Dungeon aggiornato dal World Studio'));
         await world.screenshot({ path: resolve('.tmp/unified-world-studio.png') }); await dungeon.screenshot({ path: resolve('.tmp/unified-dungeon-maker.png') });
         const generated = await world.evaluate(async () => {
-            const { World } = await import('/shared/world.ts' as string), { loadWorldCheckpoint } = await import('/client/world-editor-storage.ts' as string);
+            const { World } = await import('/shared/world.ts' as string), { loadWorldCheckpoint } = await import('/client/editors/world/world-editor-storage.ts' as string);
             const { worldDungeons } = await import('/shared/world-validation.ts' as string);
             const { document } = (await loadWorldCheckpoint())!, project = await (await fetch('/__world/project')).json();
             const model = new World(document.seed, 16, 'world', document, worldDungeons(document, project.dungeons));

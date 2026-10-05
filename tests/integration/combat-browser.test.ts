@@ -51,7 +51,7 @@ test('moving casts originate on the rendered player at 30/150/300 ms RTT without
                 await expect(page.locator('.game-hud')).toBeVisible();
                 await page.waitForTimeout(400);
                 await page.evaluate(async () => {
-                    const { Renderer } = await import('/client/render.ts' as string), original = Renderer.prototype.render;
+                    const { Renderer } = await import('/client/render/render.ts' as string), original = Renderer.prototype.render;
                     const probe = window as any;
                     probe.combatFrames = [];
                     Renderer.prototype.render = function (frame: any) { original.call(this, frame); if (frame.playing && frame.self)

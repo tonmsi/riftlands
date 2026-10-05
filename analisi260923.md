@@ -19,14 +19,14 @@ Il progetto contiene già diverse ottimizzazioni: non emerge una cache del mondo
 | Area | Comportamento attuale | Riferimento |
 | --- | --- | --- |
 | Frequenze | Simulazione/input a 30 Hz, snapshot a 15 Hz; rendering a 60 FPS in partita e 30 nel menu | `shared/config.ts:3`, `client/main.ts:252`, `client/main.ts:268` |
-| Risoluzione | DPR massimo 1,5 e budget di circa 3 milioni di pixel per il canvas principale | `client/frame-budget.ts:2` |
-| Campo visivo | Limite al viewport logico; evita di generare terreno smisurato con zoom del browser ridotto | `client/render.ts:36`, `client/render.ts:232` |
-| Terreno | Bitmap con margine, copia della parte riutilizzabile e ridisegno delle strisce esposte | `client/render.ts:507` |
-| Sprite | Rasterizzazione iniziale in piccoli canvas; successivi frame via `drawImage` | `client/render.ts:55` |
-| Visibilità | Attori filtrati prima dell'ordinamento; proiettili ed eventi hanno controlli di visibilità | `client/render.ts:347`, `client/render.ts:1547`, `client/render.ts:1587` |
-| Cache | Mondo limitato a 160 chunk; decorazioni limitate per numero e pixel, acqua a 512 voci | `shared/world.ts:32`, `client/environment-art.ts:69`, `client/environment-art.ts:176` |
-| Memoria temporanea | Buffer massimo 32 snapshot, indici WeakMap e rimozione della storia superata; massimo 1.024 eventi nel client | `client/snapshots.ts:6`, `client/main.ts:140` |
-| Rete lenta | Scarto di nuovi snapshot se la socket server ha già dati in coda; limite anche sul client | `server/index.ts:107`, `server/index.ts:127`, `client/net.ts`, metodo `send` |
+| Risoluzione | DPR massimo 1,5 e budget di circa 3 milioni di pixel per il canvas principale | `client/core/frame-budget.ts:2` |
+| Campo visivo | Limite al viewport logico; evita di generare terreno smisurato con zoom del browser ridotto | `client/render/render.ts:36`, `client/render/render.ts:232` |
+| Terreno | Bitmap con margine, copia della parte riutilizzabile e ridisegno delle strisce esposte | `client/render/render.ts:507` |
+| Sprite | Rasterizzazione iniziale in piccoli canvas; successivi frame via `drawImage` | `client/render/render.ts:55` |
+| Visibilità | Attori filtrati prima dell'ordinamento; proiettili ed eventi hanno controlli di visibilità | `client/render/render.ts:347`, `client/render/render.ts:1547`, `client/render/render.ts:1587` |
+| Cache | Mondo limitato a 160 chunk; decorazioni limitate per numero e pixel, acqua a 512 voci | `shared/world.ts:32`, `client/render/environment-art.ts:69`, `client/render/environment-art.ts:176` |
+| Memoria temporanea | Buffer massimo 32 snapshot, indici WeakMap e rimozione della storia superata; massimo 1.024 eventi nel client | `client/core/snapshots.ts:6`, `client/main.ts:140` |
+| Rete lenta | Scarto di nuovi snapshot se la socket server ha già dati in coda; limite anche sul client | `server/index.ts:107`, `server/index.ts:127`, `client/core/net.ts`, metodo `send` |
 | Background | Rendering e input sospesi con documento nascosto; connessione e ricezione restano attive | `client/main.ts:197`, `client/main.ts:225`, `client/main.ts:265` |
 
 La review storica `tests/client-performance-review.md` riporta un precedente limite DPR di 2: per questa analisi fa fede il codice attuale, che usa 1,5. I suoi risultati browser del 18 settembre non sono nuove misure del 23 settembre.
@@ -35,7 +35,7 @@ La review storica `tests/client-performance-review.md` riporta un precedente lim
 
 ### G1 — Picchi di generazione del terreno, priorità alta
 
-**Dove:** `client/render.ts:507` (`drawCachedTerrain`), `client/render.ts:561` (`drawTerrain`), `shared/world.ts:91` (`getChunk`), `client/environment-art.ts:176`.
+**Dove:** `client/render/render.ts:507` (`drawCachedTerrain`), `client/render/render.ts:561` (`drawTerrain`), `shared/world.ts:91` (`getChunk`), `client/render/environment-art.ts:176`.
 
 La cache evita di ridisegnare tutto il terreno continuamente. Quando la camera esce dal margine, però, le strisce esposte richiedono generazione e disegno sincroni; cambio stanza, resize, variazioni di scala e revisione dei blocchi dei boss possono invalidare la bitmap. `drawTerrain` esegue più passaggi su celle, vicini, bordi e vegetazione.
 
@@ -45,7 +45,7 @@ La cache evita di ridisegnare tutto il terreno continuamente. Quando la camera e
 
 ### G2 — Qualità fissa senza adattamento al tempo di frame, priorità alta sui dispositivi economici
 
-**Dove:** `client/frame-budget.ts:2`, `client/main.ts:268`, `client/render.ts:375`, `client/render.ts:939`, `client/render.ts:1536`.
+**Dove:** `client/core/frame-budget.ts:2`, `client/main.ts:268`, `client/render/render.ts:375`, `client/render/render.ts:939`, `client/render/render.ts:1536`.
 
 Il budget limita risoluzione e frequenza, ma non riduce automaticamente gli effetti quando il dispositivo non riesce a sostenere 60 FPS. Vignetta a pieno schermo, gradienti, ombre sfocate e trasparenze dei proiettili restano lavoro per frame. Il costo effettivo CPU/GPU dipende dal browser e va misurato.
 
@@ -55,7 +55,7 @@ Il budget limita risoluzione e frequenza, ma non riduce automaticamente gli effe
 
 ### G3 — Memoria grafica complessiva superiore al solo canvas, priorità medio-alta
 
-**Dove:** `client/render.ts:55`, `client/render.ts:519`, `client/environment-art.ts:176`.
+**Dove:** `client/render/render.ts:55`, `client/render/render.ts:519`, `client/render/environment-art.ts:176`.
 
 Tre milioni di pixel RGBA corrispondono a circa 11,4 MiB per una singola superficie a 4 byte/pixel. È una stima aritmetica, non una misura della memoria del browser. La bitmap del terreno aggiunge un margine di 192 unità per lato e può superare il budget del canvas visibile. Il tetto delle decorazioni di 8.388.608 pixel vale circa 32 MiB di pixel RGBA quando raggiunto. Si aggiungono sprite, immagini decodificate, superfici temporanee e compositing, con possibili copie interne.
 
@@ -65,7 +65,7 @@ Tre milioni di pixel RGBA corrispondono a circa 11,4 MiB per una singola superfi
 
 ### G4 — Allocazioni e interpolazione prima del culling grafico, priorità media/alta con folle
 
-**Dove:** `client/snapshots.ts`, metodo `sample`; `client/prediction.ts:23`; `client/main.ts:271`; `client/render.ts:347`.
+**Dove:** `client/core/snapshots.ts`, metodo `sample`; `client/core/prediction.ts:23`; `client/main.ts:271`; `client/render/render.ts:347`.
 
 Ogni frame interpola e copia attori/proiettili ricevuti, poi il renderer filtra quelli visibili. Sono presenti array e oggetti temporanei, più Set e ordinamento degli attori visibili. Gli indici per snapshot sono già ottimizzati, ma il lavoro residuo cresce con la densità. I compagni lontani sono ricevuti intenzionalmente per gli indicatori di squadra.
 
@@ -75,7 +75,7 @@ Ogni frame interpola e copia attori/proiettili ricevuti, poi il renderer filtra 
 
 ### G5 — HUD, minimappa e timer sul thread principale, priorità media
 
-**Dove:** `client/main.ts:145`, `client/main.ts:252`, `client/main.ts:307`; `client/ui.ts:491`, `client/ui.ts:561`; `client/render.ts:1631`; `client/style.css:931`.
+**Dove:** `client/main.ts:145`, `client/main.ts:252`, `client/main.ts:307`; `client/ui/ui.ts:491`, `client/ui/ui.ts:561`; `client/render/render.ts:1631`; `client/styles/style.css:931`.
 
 L'HUD viene aggiornato a ogni snapshot; alcune scritture sono già deduplicate, altre modificano larghezze, altezze e testi. La minimappa visibile viene ridisegnata circa quattro volte al secondo. Il timer input si sveglia ogni 8 ms anche se la simulazione input è a 30 Hz; quando non si gioca ritorna subito, ma il timer esiste comunque. I pannelli `.glass` usano blur sullo sfondo; alcune regole mobili lo disattivano già.
 
@@ -85,7 +85,7 @@ L'HUD viene aggiornato a ogni snapshot; alcune scritture sono già deduplicate, 
 
 ### G6 — Costo iniziale di download e rasterizzazione, priorità alta su rete/mobile
 
-**Dove:** `client/render.ts:14`, `client/render.ts:55`, `client/render.ts:212`; `client/ui.ts:8`; `server/index.ts:64`.
+**Dove:** `client/render/render.ts:14`, `client/render/render.ts:55`, `client/render/render.ts:212`; `client/ui/ui.ts:8`; `server/index.ts:64`.
 
 Il renderer prepara in parallelo tutte le sprite elencate al momento della costruzione, comprese quelle dei boss. Il disegno sui canvas è lavoro sincrono dopo il caricamento. Il download asincrono non elimina questo costo iniziale.
 
@@ -97,7 +97,7 @@ Dimensioni sorgente verificate: `boss_warden.svg` 1.131.730 byte, `wisp.svg` 1.0
 
 ### N1 — Snapshot completi JSON a 15 Hz, priorità alta e confermata dal microbenchmark
 
-**Dove:** `server/simulation.ts:747` (`snapshotFor`), `server/index.ts:107`, `shared/config.ts:5`, `client/net.ts`, handler `onmessage`.
+**Dove:** `server/simulation.ts:747` (`snapshotFor`), `server/index.ts:107`, `shared/config.ts:5`, `client/core/net.ts`, handler `onmessage`.
 
 Ogni destinatario riceve copie complete degli attori nell'area di interesse, proiettili, pickup, trappole ed eventi. Il giocatore locale compare sia in `self` sia nell'array `actors`. Gli eventi restano nel buffer server fino a circa 1,8 secondi e possono essere ritrasmessi in snapshot successivi. Molti campi statici sono ripetuti.
 
@@ -129,7 +129,7 @@ Ogni cinque secondi il server esegue checkpoint e flush. Quando lo store è dirt
 
 ### N4 — Code, perdita di pacchetti e riconnessione, priorità medio-alta
 
-**Dove:** `server/index.ts:107`, `server/index.ts:127`, `client/net.ts` (`send`, `retry`, `onclose`); `client/main.ts:225`; `server/simulation.ts:190`.
+**Dove:** `server/index.ts:107`, `server/index.ts:127`, `client/core/net.ts` (`send`, `retry`, `onclose`); `client/main.ts:225`; `server/simulation.ts:190`.
 
 Il server salta snapshot se `bufferedAmount > 0`; oltre 1 MiB nel percorso `send` chiude con codice 1008. Il client considera 1008 terminale e richiede di rientrare: una connessione troppo lenta può quindi finire senza riconnessione automatica. Il client rifiuta nuovi invii oltre 64.000 byte accodati; oltre 120 input pendenti smette temporaneamente di generarli. La coda server conserva fino a sei input, scartando il più vecchio.
 
@@ -139,7 +139,7 @@ Queste sono protezioni, ma su rete instabile possono produrre congelamenti/corre
 
 ### N5 — Interpolazione e riconciliazione sotto jitter, priorità media
 
-**Dove:** `client/snapshots.ts`, metodi `push` e `sample`; `client/prediction.ts:15`; `client/net.ts`, gestione `pong`.
+**Dove:** `client/core/snapshots.ts`, metodi `push` e `sample`; `client/core/prediction.ts:15`; `client/core/net.ts`, gestione `pong`.
 
 A 15 Hz il ritardo base della presentazione remota è 100 ms e il tetto adattivo è 250 ms. Non coincide con il ping e non va sommato meccanicamente a ogni latenza osservata. Quando mancano snapshot la presentazione non estrapola oltre l'ultimo stato. Il movimento locale usa predizione, poi ricalcola gli input non confermati a ogni snapshot.
 
@@ -157,7 +157,7 @@ Il server di produzione invia file tramite stream e imposta cache immutable per 
 
 ### N7 — Traffico e lavoro con scheda nascosta, priorità media
 
-**Dove:** `client/main.ts:128`, `client/main.ts:197`, `server/index.ts:289`, `client/net.ts`, watchdog e heartbeat.
+**Dove:** `client/main.ts:128`, `client/main.ts:197`, `server/index.ts:289`, `client/core/net.ts`, watchdog e heartbeat.
 
 Il rendering si ferma in background, ma gli snapshot vengono ancora ricevuti, analizzati e passati all'HUD; lo stato sociale viene trasmesso ogni due secondi. È utile per continuità, ma mantiene consumo di rete/CPU. Sospensione del browser, cambio Wi-Fi/rete mobile e ripresa possono attivare timeout o riconnessioni.
 

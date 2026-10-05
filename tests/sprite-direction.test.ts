@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { playerSpriteDirectionRow, spriteDirectionRow } from '../client/sprite-direction';
+import { playerSpriteDirectionRow, spriteDirectionRow } from '../client/render/sprite-direction';
 
 test('NPC and boss sprite directions use stable 45-degree cardinal boundaries', () => {
   assert.equal(spriteDirectionRow(0, 1), 0, 'south/front');

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DT } from '../shared/config';
 import { World, chunkCoords, isSolid } from '../shared/world';
 import { collidesWorld, hasLineOfSight, movementSpeed, moveWithCollisions, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
-import { interpolateActors, reconcile } from '../client/prediction';
+import { interpolateActors, reconcile } from '../client/core/prediction';
 import type { Actor, TileKind } from '../shared/types';
 import { DUNGEON_DEFINITIONS, dungeonApproachPoint } from '../shared/dungeons';
 

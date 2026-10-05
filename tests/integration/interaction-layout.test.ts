@@ -16,9 +16,9 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
       await page.route('**/api/lobby', route => route.fulfill({ json: { account: null, friends: [], leaderboard: [] } }));
       await page.goto(`${server.resolvedUrls!.local[0]}interaction-review`);
       await page.evaluate(async () => {
-        for (const file of ['style', 'mobile', 'team', 'lobby', 'hud', 'interactions']) await import(`/client/${file}.css`);
-        const { GameUI } = await import('/client/ui.ts' as string), { MobileControls } = await import('/client/mobile-controls.ts' as string), { CLASSES } = await import('/shared/config.ts' as string);
-        const { Renderer } = await import('/client/render.ts' as string), { World } = await import('/shared/world.ts' as string);
+        for (const file of ['styles/style.css', 'styles/mobile.css', 'ui/hud/team.css', 'ui/lobby/lobby.css', 'ui/hud/hud.css', 'ui/interactions/interactions.css']) await import(`/client/${file}`);
+        const { GameUI } = await import('/client/ui/ui.ts' as string), { MobileControls } = await import('/client/controls/mobile-controls.ts' as string), { CLASSES } = await import('/shared/config.ts' as string);
+        const { Renderer } = await import('/client/render/render.ts' as string), { World } = await import('/shared/world.ts' as string);
         const root = document.querySelector<HTMLElement>('#app')!, commands: unknown[] = []; let releases = 0, movement = { x: 0, y: 0 };
         const noop = () => {}; const ui = new GameUI(root, { joinCredentials: noop, joinSaved: noop, logout: noop, leave: noop, social: noop, select: noop, cast: noop,
           interact: (command: unknown) => commands.push(command), releaseControls: () => { releases++; movement = { x: 0, y: 0 }; } });

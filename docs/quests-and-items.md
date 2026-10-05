@@ -23,7 +23,7 @@ Con missioni attive il riquadro del giocatore ha un sottile bordo blu. Premi su 
 
 Nel menu **Achievement → Missioni completate** compaiono soltanto le missioni concluse. I vecchi salvataggi con una missione completata valgono una conclusione. Le definizioni future possono dichiarare `repeatable: true`: `acceptQuest` conserva il numero delle conclusioni precedenti e azzera gli obiettivi della nuova esecuzione; `advanceQuest` aumenta il contatore solo al completamento. Nereo è ripetibile dopo 5 minuti dal completamento (`repeatAfterMs`): il server salva `completedAt` sul personaggio della classe e, alla scadenza, lo stato esposto da `questStatus` torna disponibile, con il dialogo iniziale e il relativo indicatore. Il tempo offline conta; una missione ancora attiva mantiene le consegne parziali. I vecchi completamenti privi di timestamp sono subito ripetibili. Lo storico resta conservato durante ogni nuova esecuzione.
 
-I pannelli condividono `client/popups.ts`: premere sul mondo o Esc li chiude. L'inventario e il joystick restano utilizzabili durante una conversazione. Il selettore di quantità usa il livello superiore nativo del browser, quindi i gold non possono coprirlo. Le nuove finestre vanno registrate nello stesso gestore, con la propria superficie, pulsante di apertura e funzione di chiusura.
+I pannelli condividono `client/ui/popups.ts`: premere sul mondo o Esc li chiude. L'inventario e il joystick restano utilizzabili durante una conversazione. Il selettore di quantità usa il livello superiore nativo del browser, quindi i gold non possono coprirlo. Le nuove finestre vanno registrate nello stesso gestore, con la propria superficie, pulsante di apertura e funzione di chiusura.
 
 Ogni classe conserva il proprio progresso narrativo. Il progresso narrativo viaggia soltanto nel primo snapshot della connessione e quando cambia la revisione; gli snapshot senza `narrative` conservano il diario precedente. Le transazioni narrative devono passare per `acceptQuest`/`advanceQuest`, che aggiornano la revisione. Il server restituisce lo storico tramite `/api/lobby` esclusivamente all'account autenticato, senza includerlo nelle classifiche o nei dati degli amici.
 
@@ -40,9 +40,9 @@ Riavvia il server e aggiorna il browser dopo questa modifica: il protocollo è p
 - `shared/loot.ts`: regole di bottino, probabilità e condizioni narrative, separate dal combattimento.
 - `shared/npcs.ts`: catalogo dei personaggi manuali, con disposizione e riferimento al dialogo. I personaggi neutrali non entrano nei pesi della popolazione ostile procedurale.
 - `server/interactions.ts`: conversazioni e transazioni autorevoli. Verifica distanza, linea di vista, vita, sessione, oggetto e quantità. Ogni avanzamento cambia il token della conversazione: un comando ripetuto non duplica una consegna.
-- `client/interaction-ui.ts`: presentazione dei dialoghi e dello slot; gli aggiornamenti della simulazione mantengono lo stesso bottone anche mentre viene tenuto premuto.
-- `client/quantity-stepper.ts`: selettore limitato alla quantità disponibile, ripetizione accelerata e cancellazione della pressione su rilascio, chiusura, perdita di focus o cambio di visibilità.
-- `client/item-art.ts`: disegno procedurale riusabile per l'icona nell'inventario e il mucchio a terra.
+- `client/ui/interactions/interaction-ui.ts`: presentazione dei dialoghi e dello slot; gli aggiornamenti della simulazione mantengono lo stesso bottone anche mentre viene tenuto premuto.
+- `client/ui/interactions/quantity-stepper.ts`: selettore limitato alla quantità disponibile, ripetizione accelerata e cancellazione della pressione su rilascio, chiusura, perdita di focus o cambio di visibilità.
+- `client/ui/interactions/item-art.ts`: disegno procedurale riusabile per l'icona nell'inventario e il mucchio a terra.
 
 L'inventario e i progressi narrativi si salvano sull'account esistente. Gli account precedenti ricevono uno slot vuoto e nessuna missione, conservando personaggio, esperienza e altre informazioni. I mucchi a terra sono temporanei e non sopravvivono al riavvio del server. Raccolta e consumo sono indivisibili nella simulazione; il salvataggio usa il sistema di checkpoint degli account, con flush dopo i comandi di interazione. Le istanze PvP usano copie indipendenti dei dati e non permettono queste interazioni.
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FrameBudget, renderDpr } from '../client/frame-budget';
+import { FrameBudget, renderDpr } from '../client/core/frame-budget';
 
 test('render pacing stays at 60 FPS across display refresh rates', () => {
   for (const hz of [60, 90, 120, 144, 165, 240]) {

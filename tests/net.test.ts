@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GameConnection } from '../client/net';
+import { GameConnection } from '../client/core/net';
 import { SnapshotEncoder } from '../shared/snapshot-stream';
 import type { Actor, Snapshot } from '../shared/types';
 

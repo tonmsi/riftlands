@@ -93,11 +93,11 @@ Intervento: singola coda di salvataggio ordinata, batching, gestione degli error
 
 ### 6. Moduli grandi, residui e documentazione — priorità media
 
-`client/render.ts` ha circa 2.004 righe, `client/ui.ts` 1.075, `server/simulation.ts` 952, `client/environment-art.ts` 928. La dimensione non è di per sé un bug, ma rende costose le modifiche che incrociano più sistemi.
+`client/render/render.ts` ha circa 2.004 righe, `client/ui/ui.ts` 1.075, `server/simulation.ts` 952, `client/render/environment-art.ts` 928. La dimensione non è di per sé un bug, ma rende costose le modifiche che incrociano più sistemi.
 
 Separazioni utili: rendering terreno/attori/effetti/minimappa; lobby e pannelli HUD; combattimento e attivazione chunk. Conservare un orchestratore centrale e contratti piccoli, senza introdurre un framework generico per ogni funzione.
 
-Non risultano riferimenti al modulo `client/render_old.ts` nelle ricerche effettuate: è una copia di circa 2.127 righe, candidata alla rimozione dopo verifica dell'uso esterno. La cronologia Git dovrebbe conservare le versioni precedenti. Il file `q` contiene un vecchio elenco Git, candidato alla pulizia. I backup JSON hanno uno scopo di recupero e sono ignorati da Git: definirne la conservazione, non eliminarli indiscriminatamente.
+Non risultano riferimenti al modulo `client/render/legacy/render_old.ts` nelle ricerche effettuate: è una copia di circa 2.127 righe, candidata alla rimozione dopo verifica dell'uso esterno. La cronologia Git dovrebbe conservare le versioni precedenti. Il file `q` contiene un vecchio elenco Git, candidato alla pulizia. I backup JSON hanno uno scopo di recupero e sono ignorati da Git: definirne la conservazione, non eliminarli indiscriminatamente.
 
 README e note storiche non coincidono ovunque con il codice: il protocollo attuale è 8, le classi sono quattro, lo spawn è stato spostato e il DPR massimo effettivo è 1,5. Le review precedenti restano utili come storico, ma non devono sostituire i dati correnti.
 

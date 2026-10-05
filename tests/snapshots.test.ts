@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SnapshotBuffer } from '../client/snapshots';
+import { SnapshotBuffer } from '../client/core/snapshots';
 import type { Actor, Projectile, Snapshot } from '../shared/types';
 
 function actor(id: string, x: number): Actor {

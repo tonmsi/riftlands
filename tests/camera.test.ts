@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { arenaViewSign, cameraZoom, parseCameraSettings, viewVector } from '../client/camera-settings';
-import { defaultControls, GameControls } from '../client/controls';
+import { arenaViewSign, cameraZoom, parseCameraSettings, viewVector } from '../client/controls/camera-settings';
+import { defaultControls, GameControls } from '../client/controls/controls';
 
 test('camera preserves the game scale and bounds wide and tall displays', () => {
   const settings = parseCameraSettings(null);

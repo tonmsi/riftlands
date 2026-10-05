@@ -10,7 +10,7 @@ La simulazione conserva lo stato autorevole. La rete pubblica una proiezione esp
 - `shared/snapshot-actor.ts`: elenco dei campi pubblici, metadati e stato degli attori. Copia effetti e cooldown per evitare riferimenti allo stato autorevole.
 - `shared/snapshot-stream.ts`: codifica per destinatario e ricostruzione. Le differenze fra proiezioni immutabili comuni vengono calcolate una sola volta anche quando più destinatari osservano gli stessi attori.
 - `server/index.ts`: invio del pacchetto e conferma della baseline solo se il trasporto accetta l'invio.
-- `client/net.ts`: ricostruzione prima di consegnare uno snapshot al resto del client.
+- `client/core/net.ts`: ricostruzione prima di consegnare uno snapshot al resto del client.
 
 Le proiezioni sono condivise solo all'interno dello stesso tick. `SnapshotBuilder.invalidate()` va chiamato quando si modifica direttamente un attore dopo aver prodotto una vista in quel tick. Le operazioni pubbliche di aggiunta giocatore, cast e socialità lo fanno già; anche la ricostruzione delle celle invalida la cache. I marcatori quest vengono aggiunti alla vista del singolo destinatario.
 
@@ -58,6 +58,6 @@ L'ultima ripetizione con 128 giocatori in movimento ha step p95 3,67 ms e broadc
 
 Proiettili, pickup, trappole, eventi e stato dei boss conservano il formato completo e i filtri esistenti. Non sono stati introdotti quantizzazione, formato binario o una seconda autorità di gameplay nel client.
 
-Il renderer ora importa minimappa, rasterizzazione sprite e primitive grafiche da moduli dedicati. La UI importa ritratti e icone da `client/ui-art.ts`. La scomposizione completa di terreno, attori, HUD e lobby resta progressiva: i due orchestratori sono ancora grandi.
+Il renderer ora importa minimappa, rasterizzazione sprite e primitive grafiche da moduli dedicati. La UI importa ritratti e icone da `client/ui/ui-art.ts`. La scomposizione completa di terreno, attori, HUD e lobby resta progressiva: i due orchestratori sono ancora grandi.
 
 La persistenza è stata successivamente portata dietro un'interfaccia con coda ordinata e I/O asincrono nel server live; garanzie e limiti sono descritti in [persistence.md](persistence.md). La serializzazione JSON resta sincrona. NPC, world builder, dungeon, regole delle ricompense e coordinate dei test storici non sono stati modificati.

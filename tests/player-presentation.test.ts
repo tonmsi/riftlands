@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WorldSimulation } from '../server/simulation';
 import type { Account } from '../server/store';
-import { predictMovement } from '../client/prediction';
+import { predictMovement } from '../client/core/prediction';
 
 const account = (id: string): Account => ({ id, name: id, nameLower: id, salt: '', passwordHash: '', xp: 0, kills: 0, deaths: 0, friends: [], requests: [], lastSeen: 0 });
 

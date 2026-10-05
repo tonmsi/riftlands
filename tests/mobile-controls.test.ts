@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { joystickVector } from '../client/mobile-controls';
-import { defaultControls, GameControls } from '../client/controls';
+import { joystickVector } from '../client/controls/mobile-controls';
+import { defaultControls, GameControls } from '../client/controls/controls';
 import { CLASSES } from '../shared/config';
 
 test('joystick has a dead zone, analog travel and clamped diagonal movement', () => {

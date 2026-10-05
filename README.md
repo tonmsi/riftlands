@@ -39,11 +39,11 @@ Dal menu principale, **Opzioni → Controlli** permette di cambiare i comandi di
 
 La modalità **Segui il cursore** muove il personaggio verso il puntatore mentre si tiene premuto il comando configurato (mouse destro per impostazione iniziale). Il rilascio arresta il movimento; il personaggio si ferma vicino al cursore e collide normalmente con gli ostacoli, senza calcolare un percorso. Il clic sinistro seleziona; tenendolo premuto si attiva la mira manuale con anteprima direzionale. Senza il sinistro, gli attacchi si orientano verso il nemico visibile più vicino. Passando a questa modalità, il destro viene rimosso dall'attacco base, che resta su Spazio; eventuali altri conflitti tra movimento e attacchi vengono risolti e mostrati nelle opzioni. Le associazioni duplicate attive vengono rifiutate.
 
-`client/controls.ts` separa input fisici e azioni di gioco. `client/mobile-controls.ts` gestisce il joystick analogico e le dita indipendenti: trascina qualsiasi abilità direzionale per mirare e rilascia per usarla; un tocco mira automaticamente al nemico visibile più vicino. La scelta avviene sul server, esclude alleati, morti, nemici protetti o nascosti e richiede linea di vista libera; nei cespugli valgono le regole esistenti di rivelazione e prossimità. Senza bersagli validi si mantiene la direzione corrente. Ogni `AbilityDef` dichiara obbligatoriamente `targeting: 'directional' | 'self'`: proiettili, colpi frontali, scatti e trappole sono direzionali, mentre cure, scudi e aree centrate sul personaggio si attivano con un tocco. Il pulsante e l'anteprima usano la definizione dell'abilità selezionata, indipendentemente dalla sua posizione nella barra. Il joystick non cambia la direzione di mira. La selezione di giocatori e creature avviene ancora toccandoli nel mondo. Gesti annullati, cambio di orientamento, perdita del focus e disconnessione rilasciano gli input.
+`client/controls/controls.ts` separa input fisici e azioni di gioco. `client/controls/mobile-controls.ts` gestisce il joystick analogico e le dita indipendenti: trascina qualsiasi abilità direzionale per mirare e rilascia per usarla; un tocco mira automaticamente al nemico visibile più vicino. La scelta avviene sul server, esclude alleati, morti, nemici protetti o nascosti e richiede linea di vista libera; nei cespugli valgono le regole esistenti di rivelazione e prossimità. Senza bersagli validi si mantiene la direzione corrente. Ogni `AbilityDef` dichiara obbligatoriamente `targeting: 'directional' | 'self'`: proiettili, colpi frontali, scatti e trappole sono direzionali, mentre cure, scudi e aree centrate sul personaggio si attivano con un tocco. Il pulsante e l'anteprima usano la definizione dell'abilità selezionata, indipendentemente dalla sua posizione nella barra. Il joystick non cambia la direzione di mira. La selezione di giocatori e creature avviene ancora toccandoli nel mondo. Gesti annullati, cambio di orientamento, perdita del focus e disconnessione rilasciano gli input.
 
-Su dispositivi touch, l'ingresso richiede subito il fullscreen con `navigationUI: 'hide'` e prova a bloccare l'orientamento landscape. Il gioco resta utilizzabile anche in portrait o se il browser rifiuta il fullscreen; il pulsante **Schermo intero** consente di riprovare. Il primo Indietro durante la partita apre la conferma d'uscita. Uscire ripristina scorrimento, orientamento e presentazione del menu. CSS limita overscroll, pull-to-refresh e gesti sulle superfici di gioco; le gesture riservate al sistema operativo e l'effettiva disponibilità del fullscreen rimangono sotto il controllo del browser/dispositivo. `client/game-display.ts` concentra questa integrazione per il futuro wrapper Android.
+Su dispositivi touch, l'ingresso richiede subito il fullscreen con `navigationUI: 'hide'` e prova a bloccare l'orientamento landscape. Il gioco resta utilizzabile anche in portrait o se il browser rifiuta il fullscreen; il pulsante **Schermo intero** consente di riprovare. Il primo Indietro durante la partita apre la conferma d'uscita. Uscire ripristina scorrimento, orientamento e presentazione del menu. CSS limita overscroll, pull-to-refresh e gesti sulle superfici di gioco; le gesture riservate al sistema operativo e l'effettiva disponibilità del fullscreen rimangono sotto il controllo del browser/dispositivo. `client/ui/game-display.ts` concentra questa integrazione per il futuro wrapper Android.
 
-HUD touch e desktop condividono dati, abilità e cooldown. `client/mobile.css` organizza le aree touch con margini per notch e barre di sistema, pulsanti di almeno 44 px e layout dedicati a portrait, landscape e tablet. Canvas del mondo e minimappa si ridimensionano alla superficie disponibile e alla densità del display (massimo DPR 2). In arena touch la camera segue il personaggio senza rimpicciolire gli attori per far entrare tutta la mappa. **Mostra/Nascondi mappa** funziona anche su PC e salva la preferenza localmente; sui dispositivi touch la mappa è inizialmente nascosta.
+HUD touch e desktop condividono dati, abilità e cooldown. `client/styles/mobile.css` organizza le aree touch con margini per notch e barre di sistema, pulsanti di almeno 44 px e layout dedicati a portrait, landscape e tablet. Canvas del mondo e minimappa si ridimensionano alla superficie disponibile e alla densità del display (massimo DPR 2). In arena touch la camera segue il personaggio senza rimpicciolire gli attori per far entrare tutta la mappa. **Mostra/Nascondi mappa** funziona anche su PC e salva la preferenza localmente; sui dispositivi touch la mappa è inizialmente nascosta.
 
 | Comando | Azione |
 | --- | --- |
@@ -86,26 +86,19 @@ Conserva la cartella `data`: `accounts.json` contiene account, personaggi, progr
 
 ```text
 client/
-  main.ts          Input, ciclo grafico e collegamento dei moduli
-  net.ts           WebSocket, sessione, ping, riconnessione con backoff
-  prediction.ts    Previsione locale, riconciliazione e interpolazione
-  motion.ts        Interpolazione grafica locale fra tick della simulazione
-  snapshots.ts     Buffer remoto adattivo agli arrivi dei pacchetti
-  render.ts        Camera, viewport e ordine dei passaggi di rendering
-  terrain-renderer.ts Terreno e cache scorrevole del mondo
-  actor-renderer.ts Sprite, fallback e stato delle animazioni
-  render-types.ts  Dati del frame e geometria del viewport
-  minimap.ts       Minimap con cache del terreno
-  sprite-sheet.ts  Caricamento e rasterizzazione delle sprite
-  ui.ts            API della presentazione e coordinamento delle transizioni
-  lobby-ui.ts      Accesso, selezione della classe e profilo
-  hud-ui.ts        HUD di gioco, bersaglio, mappa e pannelli
-  social-ui.ts     Amici, inviti e membri del team
-  world-entrance.ts Transizione d'ingresso e relativi timer
-  ui-layout.ts     Struttura HTML iniziale
-  ui-actions.ts    Contratti delle azioni per ogni vista
-  ui-art.ts        Ritratti e icone condivisi dall'interfaccia
-  style.css        Stili dell’interfaccia
+  main.ts          Avvio, ciclo grafico e collegamento dei moduli
+  core/            Rete, snapshot, predizione, audio e budget dei frame
+  controls/        Tastiera, mouse, touch e impostazioni della camera
+  render/          Renderer, terreno, attori, minimappa, sprite e asset
+    legacy/        Renderer storico conservato
+  ui/              Composizione, layout, popup e transizioni
+    lobby/         Accesso, personaggi, build e stili del menu
+    hud/           HUD, feedback XP, diario, team e pannelli sociali
+    interactions/  Dialoghi, inventario e selettore quantità
+  styles/          Stili generali e adattamenti touch
+  editors/
+    world/         World Maker, cronologia e salvataggi locali
+    dungeon/       Dungeon Maker, catalogo e prove locali
 shared/
   types.ts         Contratto del protocollo e modelli dati
   snapshot-actor.ts Proiezione esplicita degli attori per la rete

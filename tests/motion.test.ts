@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DT } from '../shared/config';
 import type { Actor } from '../shared/types';
-import { LocalMovementView } from '../client/motion';
+import { LocalMovementView } from '../client/core/motion';
 
 function actor(x = 0): Actor {
   return { id: 'self', x, y: 0, kind: 'player', name: 'Test', classId: 'mage', radius: 15, hp: 110, maxHp: 110, resource: 120, maxResource: 120, aim: 0, speed: 190, level: 1, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 } };

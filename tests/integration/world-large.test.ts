@@ -26,8 +26,8 @@ test('ten million authored cells stay compact, cached views avoid terrain work a
     await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
     await expect(page.locator('#map-info')).toContainText('10.240.049');
     const timings = await page.evaluate(async () => {
-      const { World } = await import('/shared/world.ts' as string), { drawWorldEditorMap } = await import('/client/world-editor-canvas.ts' as string);
-      const { WorldAssetArt } = await import('/client/world-asset-art.ts' as string), { drawMinimap } = await import('/client/render.ts' as string);
+      const { World } = await import('/shared/world.ts' as string), { drawWorldEditorMap } = await import('/client/editors/world/world-editor-canvas.ts' as string);
+      const { WorldAssetArt } = await import('/client/render/world-asset-art.ts' as string), { drawMinimap } = await import('/client/render/render.ts' as string);
       const project = await (await fetch('/__world/project')).json(), world = new World(42, 16, 'world', project.document, []);
       const canvas = window.document.createElement('canvas'); canvas.style.cssText = 'width:900px;height:700px'; window.document.body.append(canvas);
       const options = { grid: false, cells: false, zones: false, npcs: false, selected: null, gesture: null, pointerTile: null, tool: 'select' };
@@ -51,7 +51,7 @@ test('ten million authored cells stay compact, cached views avoid terrain work a
     await page.locator('#apply-world').click(); await expect(page.locator('#status')).toContainText('Progetto applicato con backup');
     await page.locator('#undo').click(); await page.locator('#redo').click();
     const writes = await page.evaluate(async () => {
-      const { loadWorldCheckpoint, saveWorldCheckpoint } = await import('/client/world-editor-storage.ts' as string);
+      const { loadWorldCheckpoint, saveWorldCheckpoint } = await import('/client/editors/world/world-editor-storage.ts' as string);
       const { WorldBrush, forkWorldDocument } = await import('/shared/world-editing.ts' as string);
       const checkpoint = await loadWorldCheckpoint(), next = forkWorldDocument(checkpoint.document), brush = new WorldBrush(next);
       brush.tile({ x: 0, y: 0 }, { terrain: 'rock', suppressAssets: true }); brush.flushTiles();
@@ -75,7 +75,7 @@ test('ten million authored cells stay compact, cached views avoid terrain work a
         request.onsuccess = () => { const db = request.result, transaction = db.transaction('drafts', 'readwrite'); transaction.objectStore('drafts').put({ revision: 'old', document: old }, 'project'); transaction.oncomplete = () => { db.close(); resolve(); }; };
         request.onerror = () => reject(request.error);
       });
-      const { loadWorldCheckpoint, saveWorldCheckpoint } = await import('/client/world-editor-storage.ts' as string);
+      const { loadWorldCheckpoint, saveWorldCheckpoint } = await import('/client/editors/world/world-editor-storage.ts' as string);
       const { WorldTiles } = await import('/shared/world-tiles.ts' as string);
       const checkpoint = await loadWorldCheckpoint(); await saveWorldCheckpoint(checkpoint); const next = await loadWorldCheckpoint();
       return { version: next.document.version, legacyTiles: next.document.tiles.length, terrain: new WorldTiles(next.document).at(-1, -1)?.terrain, revision: next.revision };

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SnapshotEncoder, SnapshotDecoder, type SnapshotPacket } from '../shared/snapshot-stream';
 import { projectActor } from '../shared/snapshot-actor';
-import { SnapshotBuffer } from '../client/snapshots';
+import { SnapshotBuffer } from '../client/core/snapshots';
 import { WorldSimulation } from '../server/simulation';
 import type { Actor, Snapshot } from '../shared/types';
 import { SnapshotPrivateState } from '../server/snapshot-private-state';

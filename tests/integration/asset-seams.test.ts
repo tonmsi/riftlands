@@ -16,8 +16,8 @@ test('asset masks and clips have no tile seams at fractional sizes and game zoom
     await page.goto(`${server.resolvedUrls!.local[0]}seam-review`);
     const result = await page.evaluate(async () => {
       const { newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
-      const { makeAssetFadeMask } = await import('/client/world-asset-fade.ts' as string);
-      const { assetCellRegions, clipAssetCells } = await import('/client/asset-cell-regions.ts' as string);
+      const { makeAssetFadeMask } = await import('/client/render/world-asset-fade.ts' as string);
+      const { assetCellRegions, clipAssetCells } = await import('/client/render/asset-cell-regions.ts' as string);
       const a = newWorldAsset('roof', 'Copertura', '/world-assets/test.svg'); resizeWorldAsset(a, 12, 12);
       a.cells.forEach((cell: any) => cell.visibility = 'fade'); a.fade = { opacity: .28, feather: 0, durationMs: 0 };
       const mask = makeAssetFadeMask(a, 1024, 997, 'fade');
@@ -65,7 +65,7 @@ test('asset masks and clips have no tile seams at fractional sizes and game zoom
         for (let c = 0; c < 4; c++) if (original[i + c] !== split[i + c]) splitDifferences++;
       }
       const { WORLD_DOCUMENT } = await import('/shared/world-content.ts' as string);
-      const { WorldAssetArt } = await import('/client/world-asset-art.ts' as string);
+      const { WorldAssetArt } = await import('/client/render/world-asset-art.ts' as string);
       const bridge = WORLD_DOCUMENT.assets.find((asset: any) => asset.name === 'Ponte Fortificato in Rovina');
       if (!bridge) throw new Error('Missing bridge fixture');
       const art = new WorldAssetArt(); art.image(bridge);

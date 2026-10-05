@@ -11,7 +11,7 @@ import { newWorldAsset, newWorldDocument, resizeWorldAsset } from '../shared/wor
 import { relocateDungeon } from '../shared/dungeon-relocation';
 import { validateWorld } from '../shared/world-validation';
 import { World } from '../shared/world';
-import { createDungeonPlaytest } from '../client/dungeon-playtest';
+import { createDungeonPlaytest } from '../client/editors/dungeon/dungeon-playtest';
 import { installDungeon } from '../scripts/dungeon-library';
 import { readCatalog } from '../scripts/dungeon-removal';
 import type { Actor } from '../shared/types';

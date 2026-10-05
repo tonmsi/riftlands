@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shorelineMask, sceneryGroups, groundColor, bushColor, mapTerrainColor, TERRAIN } from '../client/terrain-style';
+import { shorelineMask, sceneryGroups, groundColor, bushColor, mapTerrainColor, TERRAIN } from '../client/render/terrain-style';
 import { World } from '../shared/world';
 
 test('minimap shares grass, foliage variants and water colors with the world', () => {

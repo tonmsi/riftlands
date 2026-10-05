@@ -53,7 +53,7 @@ test('HUD settings on desktop/mobile and renderer entity churn', { timeout: 90_0
       await page.keyboard.press('Escape'); await expect(page.locator('.minimap-panel')).toBeHidden();
       if (!mobile) {
         const result = await page.evaluate(async () => {
-          const renderPath = '/client/render.ts', simPath = '/shared/config.ts';
+          const renderPath = '/client/render/render.ts', simPath = '/shared/config.ts';
           const { Renderer } = await import(renderPath);
           const { WORLD_SEED } = await import(simPath);
           const canvas = document.createElement('canvas'); canvas.style.cssText = 'width:1280px;height:720px'; document.body.append(canvas);

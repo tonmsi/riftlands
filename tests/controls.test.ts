@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assignBinding, changeMovement, defaultControls, GameControls, parseControls } from '../client/controls';
+import { assignBinding, changeMovement, defaultControls, GameControls, parseControls } from '../client/controls/controls';
 
 const worldPoint = (x: number, y: number) => ({ x, y });
 const origin = { x: 0, y: 0 };

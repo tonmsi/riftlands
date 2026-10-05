@@ -112,7 +112,7 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     const release = acquireDataLease(options.dataPath);
     try { assert.equal((await write({ Origin: origin, 'X-World-Token': state.token })).status, 400); } finally { release(); }
     const catalog = await page.evaluate(async () => {
-      const { WorldAssetCatalog } = await import('/client/world-asset-catalog.ts' as string), { newWorldAsset } = await import('/shared/world-schema.ts' as string);
+      const { WorldAssetCatalog } = await import('/client/editors/world/world-asset-catalog.ts' as string), { newWorldAsset } = await import('/shared/world-schema.ts' as string);
       const root = window.document.createElement('div'); window.document.body.append(root);
       const assets = Array.from({ length: 1000 }, (_, i) => ({ ...newWorldAsset(`fixture-${i}`, `Pianta ${i}`, '/world-assets/tree.svg'), group: 'Test catalogo' }));
       const catalog = new WorldAssetCatalog(root, () => {}); catalog.update(assets, assets[0].id, '');

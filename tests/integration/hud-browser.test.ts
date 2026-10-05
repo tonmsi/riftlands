@@ -20,9 +20,9 @@ test('HUD: centered map, circular portraits and non-blocking overlays on desktop
       await page.route('**/api/lobby', route => route.fulfill({ json: { account: null, friends: [], leaderboard: [] } }));
       await page.goto(`${server.resolvedUrls!.local[0]}hud-review`);
       await page.evaluate(async () => {
-        for (const file of ['style', 'mobile', 'team', 'lobby', 'hud', 'interactions']) await import(`/client/${file}.css`);
-        const { GameUI } = await import('/client/ui.ts' as string);
-        const { drawMinimap } = await import('/client/render.ts' as string);
+        for (const file of ['styles/style.css', 'styles/mobile.css', 'ui/hud/team.css', 'ui/lobby/lobby.css', 'ui/hud/hud.css', 'ui/interactions/interactions.css']) await import(`/client/${file}`);
+        const { GameUI } = await import('/client/ui/ui.ts' as string);
+        const { drawMinimap } = await import('/client/render/render.ts' as string);
         const { World } = await import('/shared/world.ts' as string);
         const root = document.querySelector<HTMLElement>('#app')!;
         let ui: InstanceType<typeof GameUI>;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SoundCues, soundPosition } from '../client/audio';
+import { SoundCues, soundPosition } from '../client/core/audio';
 import type { Actor, GameEvent } from '../shared/types';
 import { WorldSimulation } from '../server/simulation';
 

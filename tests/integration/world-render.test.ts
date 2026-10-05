@@ -13,7 +13,7 @@ test('game renderer draws authored layers around players and fades overhead cell
     await page.route('**/world-render-review', route => route.fulfill({ contentType: 'text/html', body: '<body style="margin:0"><canvas style="width:900px;height:700px"></canvas></body>' }));
     await page.goto(`${server.resolvedUrls!.local[0]}world-render-review`);
     const result = await page.evaluate(async () => {
-      const { Renderer } = await import('/client/render.ts' as string), { World } = await import('/shared/world.ts' as string);
+      const { Renderer } = await import('/client/render/render.ts' as string), { World } = await import('/shared/world.ts' as string);
       const { newWorldDocument, newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
       const document = newWorldDocument(), roof = newWorldAsset('roof', 'Chioma', '/world-assets/bush.svg'), floor = newWorldAsset('floor', 'Sfondo', '/world-assets/waystone.svg');
       resizeWorldAsset(roof, 2, 2); roof.cells[2].visibility = 'fade'; roof.cells[1].visibility = 'hide'; floor.layer = 'ground';
@@ -44,7 +44,7 @@ test('game renderer draws authored layers around players and fades overhead cell
     assert.equal(result.hiding.find(e => e.id === 'roof-1')!.time, 1400);
     await page.route('**/world-assets/fade-test.svg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" fill="#659045"/></svg>' }));
     const partial = await page.evaluate(async () => {
-      const { WorldAssetArt } = await import('/client/world-asset-art.ts' as string), { newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
+      const { WorldAssetArt } = await import('/client/render/world-asset-art.ts' as string), { newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
       const a = newWorldAsset('partial', 'Chioma e tronco', '/world-assets/fade-test.svg'); resizeWorldAsset(a, 2, 2);
       a.cells[0].visibility = 'fade'; a.cells[1].visibility = 'fade'; a.fade = { opacity: .2, feather: .5, durationMs: 200 };
       let loaded!: () => void; const ready = new Promise<void>(resolve => loaded = resolve), art = new WorldAssetArt(() => loaded()); art.image(a); await ready;
@@ -67,8 +67,8 @@ test('game renderer draws authored layers around players and fades overhead cell
     assert.ok(partial.publicFade.traversable < 90); assert.equal(partial.publicFade.hiding, 255);
     assert.equal(partial.privateFade.traversable, 255); assert.ok(partial.privateFade.hiding < 90);
     const overflow = await page.evaluate(async () => {
-      const { WorldAssetArt } = await import('/client/world-asset-art.ts' as string);
-      const { clipAssetCells } = await import('/client/asset-cell-regions.ts' as string);
+      const { WorldAssetArt } = await import('/client/render/world-asset-art.ts' as string);
+      const { clipAssetCells } = await import('/client/render/asset-cell-regions.ts' as string);
       const { newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
       const a = newWorldAsset('overflow', 'Trasformata', '/world-assets/fade-test.svg'); resizeWorldAsset(a, 2, 2);
       a.imageTransform = { x: -.5, y: -.5, scale: 1.5 };
@@ -94,7 +94,7 @@ test('game renderer draws authored layers around players and fades overhead cell
     assert.equal(overflow.first.right, 255); assert.equal(overflow.first.bottomRight, 255); assert.equal(overflow.first.outside, 0);
     assert.equal(overflow.shiftedOutside, 0); assert.equal(overflow.shiftedOpaque, 255);
     const coverage = await page.evaluate(async () => {
-      const { Renderer } = await import('/client/render.ts' as string), { World } = await import('/shared/world.ts' as string);
+      const { Renderer } = await import('/client/render/render.ts' as string), { World } = await import('/shared/world.ts' as string);
       const { newWorldDocument, newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
       const results: { layer: string; visibility: string; pvp: boolean; local: boolean; covered: boolean; hiding: boolean }[] = [];
       for (const layer of ['ground', 'object']) for (const visibility of ['normal', 'fade', 'hide', 'hide-fade']) for (const pvp of [false, true]) for (const local of [false, true]) {
@@ -132,7 +132,7 @@ test('game renderer draws authored layers around players and fades overhead cell
       assert.equal(c.hiding, c.visibility === 'hide' || c.visibility === 'hide-fade');
     }
     const fires = await page.evaluate(async () => {
-      const { WorldAssetArt } = await import('/client/world-asset-art.ts' as string);
+      const { WorldAssetArt } = await import('/client/render/world-asset-art.ts' as string);
       const { newWorldAsset } = await import('/shared/world-schema.ts' as string);
       const art = new WorldAssetArt(), canvas = window.document.createElement('canvas'); canvas.width = 320; canvas.height = 240;
       const ctx = canvas.getContext('2d')!, results: { style: string; differences: number; pixels: number; alpha: number }[] = [];
