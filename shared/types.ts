@@ -37,7 +37,7 @@ export interface PublicAccount { id: string; name: string; kills: number; deaths
 export interface PublicAccount { gold?: number; }
 export interface PublicAccount { characters?: Partial<Record<ClassId, CharacterSummary>>; }
 export interface Snapshot { gold?: number; goldDrops?: BossDrop[]; bossWindups?: BossWindup[]; bossLocks?: BossLockState[]; bossPreparations?: BossPreparationState[]; }
-export interface Snapshot { inventory?: Inventory; narrative?: NarrativeProgress; groundItems?: GroundItem[]; dialogue?: DialogueView | null; inventoryActions?: InventoryAction[]; }
+export interface Snapshot { inventory?: Inventory; narrative?: NarrativeProgress; groundItems?: GroundItem[]; dialogue?: DialogueView | null; inventoryActions?: InventoryAction[]; fishing?: import('./fishing/model').FishingView | null; fishingAvailable?: boolean; }
 export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: SnapshotActor; actors: SnapshotActor[]; projectiles: Projectile[]; pickups: Pickup[]; traps?: Trap[]; events: GameEvent[]; online: number; activeChunks: number; arenaGate?: ArenaGateState; matchEndsAt?: number; sanctuary?: 'safe' | 'combat' | 'outside'; }
 
 export type ClientMessage =

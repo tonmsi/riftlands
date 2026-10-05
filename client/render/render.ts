@@ -20,6 +20,7 @@ import { TERRAIN } from './terrain-style';
 import { arenaViewSign, cameraZoom, parseCameraSettings, viewVector, type CameraSettings } from '../controls/camera-settings';
 
 import { TerrainRenderer } from './terrain-renderer';
+import { drawFishingWorld } from '../fishing/world-art';
 import { ActorRenderer } from './actor-renderer';
 import type { RenderFrame } from './render-types';
 export type { RenderFrame } from './render-types';
@@ -39,6 +40,9 @@ export class Renderer {
   private height = 1;
   private dpr = 1;
   private zoom = 1;
+  private baseZoom = 1;
+  private fishingZoom = 1;
+  private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   private cameraSettings = parseCameraSettings(null);
   private viewSign = 1;
   get orientation(): number { return this.viewSign; }
@@ -106,7 +110,8 @@ export class Renderer {
       this.canvas.width = Math.round(this.width * this.dpr);
       this.canvas.height = Math.round(this.height * this.dpr);
     }
-    this.zoom = cameraZoom(this.width, this.height, this.touchQuery.matches, this.cameraSettings);
+    this.baseZoom = cameraZoom(this.width, this.height, this.touchQuery.matches, this.cameraSettings);
+    this.zoom = this.baseZoom * this.fishingZoom;
   }
 
   render(frame: RenderFrame): void {
@@ -115,6 +120,9 @@ export class Renderer {
     const delta = this.lastTime ? Math.max(0, Math.min(80, now - this.lastTime)) : 16;
     this.lastTime = now;
     if (this.dpr !== renderDpr(window.devicePixelRatio, this.width, this.height)) this.resize();
+    const fishingTargetZoom = !this.reducedMotion.matches && frame.fishing?.phase === 'fight' ? 1.12 : 1;
+    this.fishingZoom += (fishingTargetZoom - this.fishingZoom) * (1 - Math.exp(-delta / 240));
+    this.zoom = this.baseZoom * this.fishingZoom;
 
     this.viewSign = arenaViewSign(this.world.mode, frame.playing ? frame.self?.teamId : null);
     const target = frame.self && frame.playing
@@ -359,6 +367,7 @@ export class Renderer {
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);
 
     for (const event of events) this.drawFloatingEvent(event, frame.time);
+    if (frame.self && frame.fishing) drawFishingWorld(ctx, frame.self, frame.fishing, frame.fishingTarget, frame.time, this.reducedMotion.matches);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     if (frame.time - this.lastWeatherCheck > 1000) {

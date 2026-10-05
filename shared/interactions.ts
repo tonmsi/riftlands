@@ -1,5 +1,6 @@
 import type { ItemStack } from './items';
 import type { VendorOffer } from './vendors';
+import { validFishingCommand, type FishingCommand } from './fishing/model';
 export const INTERACTION_RANGE = 144;
 export const GROUND_ITEM_TTL = 10_000;
 export const LOOT_ITEM_TTL = 120_000;
@@ -7,6 +8,7 @@ export interface InventoryAction { id: string; kind: 'purchase' | 'consume' | 'd
 export interface GroundItem { id: string; x: number; y: number; stack: ItemStack; expiresAt: number; ownerId?: string; availableAt?: number; requireOwnerExit?: boolean; droppedBy?: string; ownerPickupAt?: number; }
 export interface DialogueView { sessionId: string; targetId: string; speaker: string; text: string; choices: { id: string; label: string }[]; request?: { itemId: string; remaining: number }; shop?: (VendorOffer & { disabledReason?: string })[]; rewards?: ItemStack[]; rewardGold?: number; }
 export type InteractionCommand =
+  | { kind: 'fishing'; command: FishingCommand }
   | { kind: 'talk'; targetId: string }
   | { kind: 'choose'; sessionId: string; choiceId: string }
   | { kind: 'close'; sessionId: string }
@@ -20,6 +22,7 @@ export function validInteractionCommand(value: unknown): value is InteractionCom
   const text = (value: unknown) => typeof value === 'string' && value.length > 0 && value.length <= 160;
   const slot = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) < 64;
   switch (command.kind) {
+    case 'fishing': return validFishingCommand(command.command);
     case 'talk': return text(command.targetId);
     case 'choose': return text(command.sessionId) && text(command.choiceId);
     case 'close': return text(command.sessionId);

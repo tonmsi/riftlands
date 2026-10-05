@@ -16,6 +16,7 @@ export class InteractionUI {
   private backpack: HTMLButtonElement;
   private bagOpen = false;
   private alive = true;
+  private fishingAvailable = false;
   private feedback: InventoryFeedback;
   private dropPanel: HTMLElement;
   private quantity: QuantityStepper;
@@ -25,6 +26,7 @@ export class InteractionUI {
   private dropping?: { slot: number; itemId: string };
   private dismissedSession?: string;
   constructor(parent: HTMLElement, private send: (command: InteractionCommand) => void, private notify: (message: string) => void, focusWorld: () => void, popups: PopupManager) {
+    window.addEventListener('fishing-art-ready', () => this.slots?.querySelectorAll<HTMLButtonElement>('[data-item-slot]').forEach(button => { delete button.dataset.stack; }));
     this.root.className = 'interaction-ui'; this.root.hidden = true;
     this.root.innerHTML = '<aside class="inventory-panel" aria-label="Inventario"><button type="button" class="backpack-toggle" aria-label="Apri zaino" aria-expanded="false"><canvas width="56" height="56"></canvas><b>1</b></button><div class="inventory-slots" hidden></div><div class="drop-item-panel" role="group" aria-label="Oggetto e quantità da gettare" hidden><strong data-item-name></strong><p data-item-description></p><div class="quantity-stepper"><button type="button" data-quantity-minus aria-label="Diminuisci quantità">−</button><output aria-label="Quantità da gettare" aria-live="polite">0</output><button type="button" data-quantity-plus aria-label="Aumenta quantità">+</button></div><div class="drop-item-actions"><button type="button" data-drop-confirm>Getta</button></div></div></aside><section class="npc-dialogue" role="dialog" aria-label="Conversazione" hidden><div class="npc-portrait" aria-hidden="true"><span>◉</span></div><div class="dialogue-content"><header><strong data-speaker></strong><button type="button" data-dialogue-close aria-label="Chiudi conversazione">×</button></header><div class="dialogue-scroll" tabindex="0"><p data-dialogue-text></p><small class="dialogue-request" hidden></small><div class="dialogue-rewards" hidden></div><div class="vendor-offers" hidden></div></div><div class="dialogue-choices"></div></div></section>';
     parent.append(this.root); this.slots = this.root.querySelector('.inventory-slots')!; this.panel = this.root.querySelector('.npc-dialogue')!;
@@ -71,7 +73,11 @@ export class InteractionUI {
       if (this.suppressClick) { this.suppressClick = false; return; }
       const button = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-item-slot]'); if (!button) return;
       const slot = Number(button.dataset.itemSlot), stack = this.inventory.slots[slot]; if (!stack) return;
-      if (this.dialogue?.request?.itemId === stack.itemId) {
+      if (stack.itemId === 'fishing-rod') {
+        if (!this.fishingAvailable) { this.notify('Avvicinati a una riva per usare la canna.'); return; }
+        this.send({ kind: 'fishing', command: { kind: 'open' } }); this.setBagOpen(false);
+      }
+      else if (this.dialogue?.request?.itemId === stack.itemId) {
         this.send({ kind: 'use-item', sessionId: this.dialogue.sessionId, slot, itemId: stack.itemId });
       }
       else if (ITEM_DEFINITIONS[stack.itemId].consumable) {
@@ -124,6 +130,7 @@ export class InteractionUI {
   private cancelHold(): void { if (this.hold) clearTimeout(this.hold.timer); this.hold = undefined; this.slots.querySelectorAll('.is-holding').forEach(button => button.classList.remove('is-holding')); }
   update(snapshot: Snapshot): void {
     this.inventory = snapshot.inventory ?? newInventory();
+    this.fishingAvailable = snapshot.fishingAvailable ?? false;
     this.alive = snapshot.self.hp > 0;
     this.backpack.disabled = !this.alive; this.backpack.title = this.alive ? 'Apri lo zaino' : 'Zaino disponibile dopo la rinascita';
     const bagSignature = `${this.inventory.backpackId ?? 'starter'}:${this.inventory.capacity}`;
@@ -152,6 +159,7 @@ export class InteractionUI {
         button.title = stack ? `${ITEM_DEFINITIONS[stack.itemId].name} × ${stack.quantity}` : 'Slot inventario vuoto';
       }
       button.classList.toggle('is-requested', !!stack && snapshot.dialogue?.request?.itemId === stack.itemId);
+      button.classList.toggle('is-unavailable', stack?.itemId === 'fishing-rod' && !this.fishingAvailable);
     });
     if (this.dropping) { const stack = this.inventory.slots[this.dropping.slot]; if (!stack || stack.itemId !== this.dropping.itemId || snapshot.self.hp <= 0) this.closeDrop(); else this.quantity.set(this.quantity.quantity, stack.quantity); }
     this.feedback.update(`${snapshot.self.id}:${snapshot.self.classId}`, snapshot.inventoryActions ?? []);

@@ -4,6 +4,8 @@ import './ui/hud/team.css';
 import './ui/lobby/lobby.css';
 import './ui/hud/hud.css';
 import './ui/interactions/interactions.css';
+import './fishing/fishing.css';
+import { FishingUI } from './fishing/fishing-ui';
 import { INTERACTION_RANGE } from '../shared/interactions';
 import { CLASSES, TICK_RATE } from '../shared/config';
 import { equippedAbility } from '../shared/progression';
@@ -86,6 +88,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
     ui.toast('Disconnessione completata.');
   },
   leave: () => {
+    fishingUI.reset();
     renderer.clearMatchResult();
     joinGeneration++;
     connection.leave(); playing = false; latest = null; predicted = null; selectedId = null; localMovement.reset();
@@ -119,16 +122,18 @@ window.addEventListener('pointerdown', audio.unlock);
 window.addEventListener('keydown', audio.unlock);
 
 const renderer = new Renderer(ui.canvas);
+const fishingUI = new FishingUI(document.querySelector<HTMLElement>('.game-hud')!, () => renderer.world,
+  (x, y) => renderer.screenToWorld(x, y), command => { if (playing && connection.connected) connection.send({ type: 'interaction', command: { kind: 'fishing', command } }); });
 let cameraSettings = parseCameraSettings(null);
 try { cameraSettings = parseCameraSettings(localStorage.getItem(CAMERA_STORAGE_KEY)); } catch { /* Storage may be unavailable. */ }
 renderer.setCameraSettings(cameraSettings);
 new CameraOptions(document.querySelector<HTMLElement>('#app')!, cameraSettings, settings => renderer.setCameraSettings(settings));
 const menuAssetsReady = prepareLobbyArt(renderer.spritesReady, (done, total, failed) => ui.setAssetProgress(done, total, failed), Object.values(PROFILE_URLS)).then(art => ui.setLobbyArt(art));
 const connection = new GameConnection({
-  reset: () => { renderer.clearMatchResult(); releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
+  reset: () => { fishingUI.reset(); renderer.clearMatchResult(); releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
   status: (status, detail) => {
     ui.setConnection(status, detail);
-    if (status === 'offline' || status === 'reconnecting') { releaseControls(); localCombat.reset(); }
+    if (status === 'offline' || status === 'reconnecting') { fishingUI.reset(); releaseControls(); localCombat.reset(); }
     if (status === 'offline') { playing = false; ui.setPlaying(false); if (detail) ui.toast(detail, 'error'); }
   },
   authExpired: () => {
@@ -160,6 +165,7 @@ const connection = new GameConnection({
       lastMinimap = 0;
       ui.setSelected(null);
       ui.interactions.reset();
+      fishingUI.reset();
     } else if (message.type === 'snapshot') {
       const old = predicted;
       latest = message;
@@ -177,6 +183,7 @@ const connection = new GameConnection({
       for (const [id, effect] of effects) if (message.time > effect.at + effect.duration + 250) effects.delete(id);
       while (effects.size > 1024) effects.delete(effects.keys().next().value!);
       ui.setSnapshot(message, connection.ping);
+      fishingUI.update(message);
       const { id, name, xp, kills, deaths } = message.self;
       if (renderer.world.mode === 'world') saveProfile({ id, name, xp, kills, deaths, gold: message.gold ?? 0 });
       if (selectedId) {
@@ -229,6 +236,7 @@ const isTyping = (): boolean => {
 
 window.addEventListener('keydown', event => {
   if (!playing || !connection.connected || ui.inputBlocked || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (latest?.fishing && ['Space', 'Enter', 'Escape'].includes(event.code)) { event.preventDefault(); if (!event.repeat) { if (event.code === 'Escape') fishingUI.close(); else fishingUI.press(); } return; }
   if (event.code === 'KeyF' && !event.repeat && predicted) {
     const target = renderedActors.filter(actor => actor.dialogueId && Math.hypot(actor.x - predicted!.x, actor.y - predicted!.y) <= INTERACTION_RANGE).sort((a, b) => Math.hypot(a.x - predicted!.x, a.y - predicted!.y) - Math.hypot(b.x - predicted!.x, b.y - predicted!.y))[0];
     if (target) { event.preventDefault(); connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
@@ -239,7 +247,7 @@ window.addEventListener('keydown', event => {
   }
 });
 
-window.addEventListener('keyup', event => controls.release(event.code));
+window.addEventListener('keyup', event => { controls.release(event.code); if (['Space', 'Enter'].includes(event.code)) fishingUI.release(); });
 window.addEventListener('blur', releaseControls);
 document.addEventListener('focusin', () => { if (isTyping()) releaseControls(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { releaseControls(); localCombat.reset(); audio.setActive(false); } });
@@ -253,6 +261,7 @@ ui.canvas.addEventListener('pointerdown', event => {
     if (event.button !== 0) return;
   }
   const position = renderer.screenToWorld(event.clientX, event.clientY);
+  if (latest?.fishing) { fishingUI.aim(position); return; }
   const target = renderedActors.find(actor => actor.id !== predicted?.id && Math.hypot(actor.x - position.x, actor.y - position.y) < actor.radius + 14);
   if (target?.dialogueId) { connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
   if (target) { selectedId = target.id; ui.setSelected(target); }
@@ -262,6 +271,7 @@ ui.canvas.addEventListener('pointerdown', event => {
 // Mouse events fire for every button in a chord; pointerdown/up only fire for the first/last.
 ui.canvas.addEventListener('mousedown', event => {
   if (!playing || !connection.connected || ui.inputBlocked || ![0, 1, 2].includes(event.button)) return;
+  if (latest?.fishing) return;
   controls.setPointer({ x: event.clientX, y: event.clientY });
   const point = renderer.screenToWorld(event.clientX, event.clientY);
   if (renderedActors.some(actor => actor.dialogueId && Math.hypot(actor.x - point.x, actor.y - point.y) < actor.radius + 14)) return;
@@ -281,7 +291,7 @@ function inputTick(): void {
     ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined, autoAim: false })
     : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation);
   const castTime = connection.serverTime(), castLead = Math.min(150, connection.ping / 2);
-  const readyCast = cast === 'basic' && !localCombat.basicReady(predicted, castTime + castLead) ? undefined : cast;
+  const readyCast = latest?.fishing || cast === 'basic' && !localCombat.basicReady(predicted, castTime + castLead) ? undefined : cast;
   const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, analogMovement: matchMedia('(pointer: coarse)').matches || controls.settings.movement !== 'keyboard', ...(readyCast ? { cast: readyCast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
   if (connection.send({ type: 'input', input })) {
     pending.push(input);
@@ -333,6 +343,8 @@ function frame(now: number): void {
   const frameEvents = combat.events;
   if (audible && self) audio.update(self, actors, frameEvents, latest?.bossWindups ?? [], time);
   renderer.render({
+    fishing: latest?.fishing,
+    fishingTarget: fishingUI.target,
     arenaGate: latest?.arenaGate,
     goldDrops: latest?.goldDrops,
     groundItems: latest?.groundItems,
@@ -350,7 +362,7 @@ function frame(now: number): void {
     selectedId,
     previewClass: ui.selectedClass,
     playing,
-    aimPreview: mobileControls?.aimPreview ? { ...mobileControls.aimPreview, angle: mobileControls.aimPreview.angle * renderer.orientation } : (playing && !ui.inputBlocked && !isTyping() && predicted && predicted.hp > 0 && controls.manualPointerAim && equippedAbility(predicted, controls.previewSlot)?.targeting === 'directional'
+    aimPreview: latest?.fishing ? null : mobileControls?.aimPreview ? { ...mobileControls.aimPreview, angle: mobileControls.aimPreview.angle * renderer.orientation } : (playing && !ui.inputBlocked && !isTyping() && predicted && predicted.hp > 0 && controls.manualPointerAim && equippedAbility(predicted, controls.previewSlot)?.targeting === 'directional'
       ? { slot: controls.previewSlot, angle: controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation).aim } : null),
     moveDirection: playing && !isTyping() && predicted ? (() => {
       const input = controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation);

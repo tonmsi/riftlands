@@ -58,6 +58,19 @@ test('authored neutral NPC wanders near home, remains invulnerable and has a per
   assert.equal(npc.hp, hp); assert.ok(moved); assert.ok(paused); assert.ok([0, 1, 2, 3].includes(npc.spriteRow!));
 });
 
+test('Nereo gives one private fishing rod per character without replacing a full inventory', () => {
+  const f = fixture(); insertItem(f.a.inventory!, 'slime-innards', 3);
+  const view = f.talk(); assert.ok(view.choices.some(choice => choice.id === 'fishing'));
+  f.sim.interact(f.a.id, { kind: 'choose', sessionId: view.sessionId, choiceId: 'fishing' });
+  assert.equal(f.a.inventory!.slots[0]!.itemId, 'slime-innards');
+  const rod = [...f.sim.interactions.drops.values()].filter(drop => drop.stack.itemId === 'fishing-rod');
+  assert.equal(rod.length, 1); assert.equal(rod[0].ownerId, f.a.id);
+  assert.ok(f.a.narrative!.gifts!.includes('nereo-first-rod'));
+  assert.equal(f.sim.interactions.visibleDrops(f.b.id, f.sim.now, 500).some(drop => drop.stack.itemId === 'fishing-rod'), false);
+  assert.equal(f.talk().choices.some(choice => choice.id === 'fishing'), false);
+  assert.ok(f.sim.snapshotFor(f.a.id)!.narrative!.gifts!.includes('nereo-first-rod'));
+});
+
 test('slime deaths unlock 50% loot only while the killer has the active quest', () => {
   let value = .499999;
   const { sim, a, b, accept, kill, player, other } = fixture(() => value);
@@ -232,7 +245,7 @@ test('vendor validates server prices, balance, capacity and session tokens; upgr
   const merchant: Actor = { ...npc, id: 'vendor', name: 'Ada, mercante', npcKind: 'outpost-vendor', dialogueId: 'outpost-shop' };
   sim.npcs.set(merchant.id, merchant); a.gold = 200; insertItem(a.inventory!, 'slime-innards', 9999);
   const talk = () => { sim.interact(a.id, { kind: 'talk', targetId: merchant.id }); return sim.interactions.view(a.id, sim.now)!; };
-  const first = talk(); assert.equal(first.shop!.length, 5);
+  const first = talk(); assert.equal(first.shop!.length, 6);
   const buy = { kind: 'buy-item', sessionId: first.sessionId, offerId: 'bag-2' } as const;
   sim.interact(a.id, buy); assert.equal(a.gold, 190); assert.equal(a.inventory!.backpackId, 'backpack-2');
   assert.throws(() => sim.interact(a.id, buy), /terminata/); assert.equal(a.gold, 190);
@@ -346,6 +359,29 @@ test('legacy accounts gain empty inventory without resetting progress; quests an
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test('loading old accounts discards worn bait without changing fresh items, characters or gold', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'riftlands-bait-cleanup-')), path = join(directory, 'accounts.json');
+  try {
+    const store = new AccountStore(path), entry = store.register('BaitCleanup', 'test-password').account;
+    entry.gold = 23;
+    for (const [classId, remaining] of [['mage', 2], ['hunter', 1]] as const) {
+      const inventory = entry.characters![classId]!.inventory;
+      collectItem(inventory, 'backpack-3', 1); insertItem(inventory, 'slime-innards', 7);
+      inventory.slots[1] = Object.assign({ itemId: 'slime-innards', quantity: 1 }, { baitUsesRemaining: remaining });
+      insertItem(inventory, 'fishing-rod', 1);
+    }
+    store.touch(); store.flush();
+    const loaded = new AccountStore(path), migrated = loaded.accounts.get(entry.id)!;
+    for (const classId of ['mage', 'hunter'] as const) {
+      const character = migrated.characters![classId]!;
+      assert.equal(character.inventory.slots[0]!.quantity, 7); assert.equal(character.inventory.slots[1], null);
+      assert.equal(character.inventory.slots[2]!.itemId, 'fishing-rod'); assert.equal(character.xp, entry.characters![classId]!.xp);
+    }
+    assert.equal(migrated.gold, 23); loaded.flush();
+    assert.equal(readFileSync(path, 'utf8').includes('baitUsesRemaining'), false);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test('room epochs reject stale interactions and arena accounts cannot mutate world inventory', async () => {
   const manager = new RoomManager(undefined, 734291, 1_000_000), a = account('alice'), b = account('bob');
   manager.connect(a, 'mage'); manager.connect(b, 'mage');
@@ -376,19 +412,20 @@ test('dialogue and loot content reference real nodes, quests and item definition
   }
   for (const dialogue of Object.values(DIALOGUE_DEFINITIONS)) {
     assert.ok(Object.hasOwn(QUEST_DEFINITIONS, dialogue.questId));
-    for (const entry of dialogue.entries) { assert.ok(Object.hasOwn(dialogue.nodes, entry.node)); assert.ok(Object.hasOwn(QUEST_DEFINITIONS, entry.condition.questId)); }
+    for (const entry of dialogue.entries) { assert.ok(Object.hasOwn(dialogue.nodes, entry.node)); if (entry.condition.kind === 'quest-status') assert.ok(Object.hasOwn(QUEST_DEFINITIONS, entry.condition.questId)); }
     for (const node of Object.values(dialogue.nodes)) {
       assert.equal(new Set(node.choices.map(choice => choice.id)).size, node.choices.length);
       for (const choice of node.choices) {
         if (choice.next) assert.ok(Object.hasOwn(dialogue.nodes, choice.next));
-        if (choice.action) assert.ok(Object.hasOwn(QUEST_DEFINITIONS, choice.action.questId));
+        if (choice.action?.kind === 'accept-quest') assert.ok(Object.hasOwn(QUEST_DEFINITIONS, choice.action.questId));
+        if (choice.action?.kind === 'give-item') assert.ok(Object.hasOwn(ITEM_DEFINITIONS, choice.action.itemId));
       }
       if (node.itemRequest) for (const next of [node.itemRequest.completedNext, node.itemRequest.progressNext]) assert.ok(Object.hasOwn(dialogue.nodes, next));
     }
   }
   for (const rules of Object.values(NPC_LOOT_TABLES)) for (const rule of rules) {
     assert.ok(Object.hasOwn(ITEM_DEFINITIONS, rule.itemId)); assert.ok(rule.chance >= 0 && rule.chance <= 1);
-    if (rule.condition) assert.ok(Object.hasOwn(QUEST_DEFINITIONS, rule.condition.questId));
+    if (rule.condition?.kind === 'quest-status') assert.ok(Object.hasOwn(QUEST_DEFINITIONS, rule.condition.questId));
   }
 });
 

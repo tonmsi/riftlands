@@ -89,6 +89,7 @@ client/
   main.ts          Avvio, ciclo grafico e collegamento dei moduli
   core/            Rete, snapshot, predizione, audio e budget dei frame
   controls/        Tastiera, mouse, touch e impostazioni della camera
+  fishing/         UI pesca, mulinello e disegno di canna/lenza/galleggiante
   render/          Renderer, terreno, attori, minimappa, sprite e asset
     legacy/        Renderer storico conservato
   ui/              Composizione, layout, popup e transizioni
@@ -100,6 +101,7 @@ client/
     world/         World Maker, cronologia e salvataggi locali
     dungeon/       Dungeon Maker, catalogo e prove locali
 shared/
+  fishing/         Regole, pesci, comandi e riconoscimento delle rive
   types.ts         Contratto del protocollo e modelli dati
   snapshot-actor.ts Proiezione esplicita degli attori per la rete
   snapshot-stream.ts Delta, keyframe e ricostruzione degli snapshot
@@ -108,6 +110,7 @@ shared/
   world.ts         Generazione deterministica e cache limitata
   physics.ts       Movimento, collisioni, raggi e proiettili
 server/
+  fishing/         Simulazione autorevole della pesca e transazioni delle esche
   index.ts         HTTP, WebSocket, validazione, clock e ciclo di vita
   simulation.ts    Stato autorevole, combattimento, NPC, chunk e socialità
   snapshot-builder.ts Selezione spaziale e costruzione delle viste per destinatario

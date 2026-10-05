@@ -24,12 +24,13 @@ export class InteractionSystem {
   private sessions = new Map<string, Session>();
   private consumableReadyAt = new Map<string, number>();
   private inventoryActions = new Map<string, InventoryAction[]>();
-  private action(id: string, kind: InventoryAction['kind'], stack: ItemStack, now: number, slot?: number): void {
+  action(id: string, kind: InventoryAction['kind'], stack: ItemStack, now: number, slot?: number): void {
     const recent = this.feedback(id, now);
     recent.push({ id: randomUUID(), kind, itemId: stack.itemId, quantity: stack.quantity, at: now, slot });
     this.inventoryActions.set(id, recent.slice(-12));
   }
   feedback(id: string, now: number): InventoryAction[] { return (this.inventoryActions.get(id) ?? []).filter(action => now - action.at < 2500).map(action => ({ ...action })); }
+  rewardDrop(id: string, stack: ItemStack, now: number, ttl?: number): void { const player = this.host.players.get(id); if (player) { const drop = this.spawnLoot(player, stack, id, now, 0, 1000, 42); if (ttl) drop.expiresAt = now + ttl; } }
   constructor(private host: Host, private random = Math.random) {}
   private account(id: string): Account {
     const account = this.host.accounts.get(id);
@@ -49,6 +50,7 @@ export class InteractionSystem {
   }
   private advance(session: Session, node: string, now: number): void { session.node = node; session.id = randomUUID(); session.expiresAt = now + 120_000; }
   command(id: string, command: InteractionCommand, now: number): void {
+    if (command.kind === 'fishing') throw new Error('Usa il modulo pesca.');
     const account = this.account(id);
     if (command.kind === 'talk') {
       const target = this.target(id, command.targetId), vendor = VENDOR_DEFINITIONS[target.dialogueId!];
@@ -84,6 +86,13 @@ export class InteractionSystem {
         const quest = QUEST_DEFINITIONS[choice.action.questId];
         if (!quest) throw new Error('Missione non disponibile.');
         acceptQuest(account.narrative!, quest, now); this.host.changed(id);
+      }
+      if (choice.action?.kind === 'give-item') {
+        if (account.narrative!.gifts?.includes(choice.action.giftId)) throw new Error('Regalo già ricevuto.');
+        if (this.drops.size >= 2048) throw new Error('Troppi oggetti a terra. Riprova tra poco.');
+        this.rewardDrop(id, { itemId: choice.action.itemId, quantity: 1 }, now);
+        (account.narrative!.gifts ??= []).push(choice.action.giftId);
+        account.narrative!.revision = (account.narrative!.revision ?? 0) + 1; this.host.changed(id);
       }
       if (choice.next) this.advance(session, choice.next, now); else this.sessions.delete(id);
       return;
@@ -149,7 +158,7 @@ export class InteractionSystem {
       this.spawnLoot(victim, rule, killer.id, now, index++, 900, 56, killer);
     }
   }
-  private spawnLoot(origin: Actor, stack: ItemStack, ownerId: string, now: number, index: number, delay = 0, radius = 12, avoid?: Actor): void {
+  private spawnLoot(origin: Actor, stack: ItemStack, ownerId: string, now: number, index: number, delay = 0, radius = 12, avoid?: Actor): GroundItem {
     let point = { x: origin.x, y: origin.y };
     const direction = avoid ? Math.atan2(origin.y - avoid.y, origin.x - avoid.x) : origin.aim;
     // Search reachable rings away from the killer, rather than dropping straight under a melee player.
@@ -160,9 +169,10 @@ export class InteractionSystem {
       if (avoid && distance(candidate, avoid) <= avoid.radius + 26) continue;
       if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world) && hasLineOfSight(origin, candidate, this.host.world)) { point = candidate; break; }
     }
-    const drop: GroundItem = { id: randomUUID(), ...point, stack: { itemId: stack.itemId, quantity: stack.quantity }, ownerId, availableAt: now + delay, expiresAt: now + LOOT_ITEM_TTL,
+    const drop: GroundItem = { id: randomUUID(), ...point, stack: { ...stack }, ownerId, availableAt: now + delay, expiresAt: now + LOOT_ITEM_TTL,
       ...(avoid && distance(point, avoid) <= avoid.radius + 10 ? { requireOwnerExit: true } : {}) };
     this.drops.set(drop.id, drop);
+    return drop;
   }
   private consume(id: string, slot: number, itemId: string, now: number): void {
     const player = this.host.players.get(id), account = this.account(id), stack = account.inventory!.slots[slot];
@@ -184,7 +194,7 @@ export class InteractionSystem {
       const angle = player.aim + i * Math.PI / 6, candidate = { x: player.x + Math.cos(angle) * 42, y: player.y + Math.sin(angle) * 42 };
       if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world) && hasLineOfSight(player, candidate, this.host.world)) { point = candidate; break; }
     }
-    const drop: GroundItem = { id: randomUUID(), ...point, stack: { itemId, quantity }, expiresAt: now + GROUND_ITEM_TTL, droppedBy: id, ownerPickupAt: now + 1000 };
+    const drop: GroundItem = { id: randomUUID(), ...point, stack: { ...stack, itemId, quantity }, expiresAt: now + GROUND_ITEM_TTL, droppedBy: id, ownerPickupAt: now + 1000 };
     stack.quantity -= quantity; if (!stack.quantity) account.inventory!.slots[slot] = null;
     this.action(id, 'drop', { itemId, quantity }, now, slot);
     this.drops.set(drop.id, drop); this.host.changed(id);
