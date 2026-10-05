@@ -4,6 +4,7 @@ import type { DialogueView, InteractionCommand } from '../../../shared/interacti
 import { drawItemArt } from './item-art';
 import { QuantityStepper } from './quantity-stepper';
 import type { PopupManager } from '../popups';
+import { InventoryFeedback } from './inventory-feedback';
 
 /** Independent HUD component: snapshot updates never replace a slot during a held pointer. */
 export class InteractionUI {
@@ -14,6 +15,8 @@ export class InteractionUI {
   private slots: HTMLElement;
   private backpack: HTMLButtonElement;
   private bagOpen = false;
+  private alive = true;
+  private feedback: InventoryFeedback;
   private dropPanel: HTMLElement;
   private quantity: QuantityStepper;
   private choiceSignature = '';
@@ -23,10 +26,11 @@ export class InteractionUI {
   private dismissedSession?: string;
   constructor(parent: HTMLElement, private send: (command: InteractionCommand) => void, private notify: (message: string) => void, focusWorld: () => void, popups: PopupManager) {
     this.root.className = 'interaction-ui'; this.root.hidden = true;
-    this.root.innerHTML = '<aside class="inventory-panel" aria-label="Inventario"><button type="button" class="backpack-toggle" aria-label="Apri zaino" aria-expanded="false"><canvas width="56" height="56"></canvas><b>1</b></button><div class="inventory-slots" hidden></div><div class="drop-item-panel" role="group" aria-label="Oggetto e quantità da gettare" hidden><strong data-item-name></strong><p data-item-description></p><div class="quantity-stepper"><button type="button" data-quantity-minus aria-label="Diminuisci quantità">−</button><output aria-label="Quantità da gettare" aria-live="polite">0</output><button type="button" data-quantity-plus aria-label="Aumenta quantità">+</button></div><div class="drop-item-actions"><button type="button" data-drop-confirm>Getta</button><button type="button" data-drop-cancel>Annulla</button></div></div></aside><section class="npc-dialogue" role="dialog" aria-label="Conversazione" hidden><div class="npc-portrait" aria-hidden="true"><span>◉</span></div><div class="dialogue-content"><header><strong data-speaker></strong><button type="button" data-dialogue-close aria-label="Chiudi conversazione">×</button></header><div class="dialogue-scroll" tabindex="0"><p data-dialogue-text></p><small class="dialogue-request" hidden></small></div><div class="dialogue-choices"></div></div></section>';
+    this.root.innerHTML = '<aside class="inventory-panel" aria-label="Inventario"><button type="button" class="backpack-toggle" aria-label="Apri zaino" aria-expanded="false"><canvas width="56" height="56"></canvas><b>1</b></button><div class="inventory-slots" hidden></div><div class="drop-item-panel" role="group" aria-label="Oggetto e quantità da gettare" hidden><strong data-item-name></strong><p data-item-description></p><div class="quantity-stepper"><button type="button" data-quantity-minus aria-label="Diminuisci quantità">−</button><output aria-label="Quantità da gettare" aria-live="polite">0</output><button type="button" data-quantity-plus aria-label="Aumenta quantità">+</button></div><div class="drop-item-actions"><button type="button" data-drop-confirm>Getta</button></div></div></aside><section class="npc-dialogue" role="dialog" aria-label="Conversazione" hidden><div class="npc-portrait" aria-hidden="true"><span>◉</span></div><div class="dialogue-content"><header><strong data-speaker></strong><button type="button" data-dialogue-close aria-label="Chiudi conversazione">×</button></header><div class="dialogue-scroll" tabindex="0"><p data-dialogue-text></p><small class="dialogue-request" hidden></small><div class="dialogue-rewards" hidden></div><div class="vendor-offers" hidden></div></div><div class="dialogue-choices"></div></div></section>';
     parent.append(this.root); this.slots = this.root.querySelector('.inventory-slots')!; this.panel = this.root.querySelector('.npc-dialogue')!;
     this.dropPanel = this.root.querySelector('.drop-item-panel')!; this.quantity = new QuantityStepper(this.dropPanel);
     this.backpack = this.root.querySelector('.backpack-toggle')!;
+    this.feedback = new InventoryFeedback(this.backpack, this.slots);
     this.backpack.addEventListener('click', () => this.setBagOpen(!this.bagOpen));
     popups.register(this.root.querySelector('.inventory-panel')!, () => this.bagOpen, () => this.setBagOpen(false), this.backpack);
     document.addEventListener('pointerdown', event => {
@@ -40,7 +44,6 @@ export class InteractionUI {
     popups.register(this.panel, () => !this.panel.hidden, () => this.closeDialogue());
     window.addEventListener('resize', () => { if (!this.dropPanel.hidden) this.positionDrop(); });
     this.root.querySelector('[data-dialogue-close]')!.addEventListener('click', () => this.closeDialogue());
-    this.root.querySelector('[data-drop-cancel]')!.addEventListener('click', () => this.closeDrop());
     this.root.querySelector('[data-drop-confirm]')!.addEventListener('click', () => {
       const dropping = this.dropping, quantity = this.quantity.quantity, stack = dropping ? this.inventory.slots[dropping.slot] : undefined;
       if (!dropping || !stack || stack.itemId !== dropping.itemId || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > stack.quantity) { this.notify('Scegli una quantità disponibile.'); return; }
@@ -69,10 +72,10 @@ export class InteractionUI {
       const button = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-item-slot]'); if (!button) return;
       const slot = Number(button.dataset.itemSlot), stack = this.inventory.slots[slot]; if (!stack) return;
       if (this.dialogue?.request?.itemId === stack.itemId) {
-        this.send({ kind: 'use-item', sessionId: this.dialogue.sessionId, slot, itemId: stack.itemId }); this.setBagOpen(false);
+        this.send({ kind: 'use-item', sessionId: this.dialogue.sessionId, slot, itemId: stack.itemId });
       }
       else if (ITEM_DEFINITIONS[stack.itemId].consumable) {
-        this.send({ kind: 'consume-item', slot, itemId: stack.itemId }); this.setBagOpen(false);
+        this.send({ kind: 'consume-item', slot, itemId: stack.itemId });
       }
       else this.notify(`${ITEM_DEFINITIONS[stack.itemId].name} × ${stack.quantity}`);
     });
@@ -97,8 +100,9 @@ export class InteractionUI {
     document.addEventListener('visibilitychange', () => { if (document.hidden) cancelPointers(); });
   }
   setVisible(visible: boolean): void { this.root.hidden = !visible; if (!visible) this.reset(); }
-  reset(): void { this.cancelHold(); this.dialogue = null; this.dismissedSession = undefined; this.panel.hidden = true; this.choiceSignature = ''; this.setBagOpen(false); }
+  reset(): void { this.cancelHold(); this.feedback.reset(); this.dialogue = null; this.dismissedSession = undefined; this.panel.hidden = true; this.choiceSignature = ''; this.setBagOpen(false); }
   private setBagOpen(open: boolean): void {
+    open = open && this.alive;
     this.bagOpen = open; this.slots.hidden = !open;
     this.backpack.setAttribute('aria-expanded', String(open)); this.backpack.setAttribute('aria-label', `${open ? 'Chiudi' : 'Apri'} zaino, ${this.inventory.capacity} slot`);
     if (!open) { this.cancelHold(); this.closeDrop(); }
@@ -120,6 +124,8 @@ export class InteractionUI {
   private cancelHold(): void { if (this.hold) clearTimeout(this.hold.timer); this.hold = undefined; this.slots.querySelectorAll('.is-holding').forEach(button => button.classList.remove('is-holding')); }
   update(snapshot: Snapshot): void {
     this.inventory = snapshot.inventory ?? newInventory();
+    this.alive = snapshot.self.hp > 0;
+    this.backpack.disabled = !this.alive; this.backpack.title = this.alive ? 'Apri lo zaino' : 'Zaino disponibile dopo la rinascita';
     const bagSignature = `${this.inventory.backpackId ?? 'starter'}:${this.inventory.capacity}`;
     if (this.backpack.dataset.bag !== bagSignature) {
       this.backpack.dataset.bag = bagSignature;
@@ -148,19 +154,49 @@ export class InteractionUI {
       button.classList.toggle('is-requested', !!stack && snapshot.dialogue?.request?.itemId === stack.itemId);
     });
     if (this.dropping) { const stack = this.inventory.slots[this.dropping.slot]; if (!stack || stack.itemId !== this.dropping.itemId || snapshot.self.hp <= 0) this.closeDrop(); else this.quantity.set(this.quantity.quantity, stack.quantity); }
+    this.feedback.update(`${snapshot.self.id}:${snapshot.self.classId}`, snapshot.inventoryActions ?? []);
     // Ignore a snapshot already in flight when the player dismissed the conversation.
     const dialogue = snapshot.dialogue?.sessionId === this.dismissedSession ? null : snapshot.dialogue ?? null;
     if (!snapshot.dialogue) this.dismissedSession = undefined;
     this.dialogue = dialogue; this.panel.hidden = !dialogue;
     if (!dialogue) { this.choiceSignature = ''; return; }
     const signature = JSON.stringify(dialogue); if (signature === this.choiceSignature) return; this.choiceSignature = signature;
-    this.panel.querySelector('.dialogue-scroll')!.scrollTop = 0;
+    const scroll = this.panel.querySelector('.dialogue-scroll')!;
+    const shopScroll = dialogue.shop && this.panel.dataset.shopTarget === dialogue.targetId ? scroll.scrollTop : 0;
+    scroll.scrollTop = 0; this.panel.dataset.shopTarget = dialogue.shop ? dialogue.targetId : '';
     this.panel.querySelector('[data-speaker]')!.textContent = dialogue.speaker; this.panel.querySelector('[data-dialogue-text]')!.textContent = dialogue.text;
+    this.panel.classList.toggle('is-shop', !!dialogue.shop);
+    const shop = this.panel.querySelector<HTMLElement>('.vendor-offers')!; shop.hidden = !dialogue.shop;
+    shop.replaceChildren(...(dialogue.shop ?? []).map(offer => {
+      const card = document.createElement('div'); card.className = 'vendor-offer';
+      const image = document.createElement('canvas'); image.width = image.height = 48; drawItemArt(image.getContext('2d')!, offer.itemId, 48);
+      const name = document.createElement('strong'); name.textContent = ITEM_DEFINITIONS[offer.itemId].name;
+      const button = document.createElement('button'); button.type = 'button'; button.dataset.offer = offer.id;
+      button.textContent = `${offer.price} gold · Compra`; button.disabled = !!offer.disabledReason;
+      const reason = document.createElement('small'); reason.textContent = offer.disabledReason ?? ITEM_DEFINITIONS[offer.itemId].description;
+      button.onclick = () => { button.disabled = true; this.send({ kind: 'buy-item', sessionId: dialogue.sessionId, offerId: offer.id }); };
+      card.append(image, name, reason, button); return card;
+    }));
+    const rewards = this.panel.querySelector<HTMLElement>('.dialogue-rewards')!; rewards.hidden = !dialogue.rewards?.length && dialogue.rewardGold === undefined;
+    rewards.replaceChildren();
+    if (!rewards.hidden) {
+      const heading = document.createElement('strong'); heading.textContent = 'La tua ricompensa'; rewards.append(heading);
+      if (dialogue.rewardGold !== undefined) {
+        const gold = document.createElement('span'), image = document.createElement('canvas'); image.width = image.height = 32;
+        drawItemArt(image.getContext('2d')!, 'gold', 32); gold.dataset.rewardGold = ''; gold.append(image, `${dialogue.rewardGold} gold ricevuti`); rewards.append(gold);
+      }
+      const groundLabel = document.createElement('small'); groundLabel.textContent = 'Oggetti a terra · Solo tuoi'; rewards.append(groundLabel);
+      for (const reward of dialogue.rewards ?? []) {
+        const chip = document.createElement('span'), image = document.createElement('canvas'); image.width = image.height = 32;
+        drawItemArt(image.getContext('2d')!, reward.itemId, 32); chip.append(image, `${ITEM_DEFINITIONS[reward.itemId].name} × ${reward.quantity}`); rewards.append(chip);
+      }
+    }
     const request = this.panel.querySelector<HTMLElement>('.dialogue-request')!; request.hidden = !dialogue.request;
     request.textContent = dialogue.request ? `${ITEM_DEFINITIONS[dialogue.request.itemId].name} · ancora ${dialogue.request.remaining}` : '';
     this.panel.querySelector('.dialogue-choices')!.replaceChildren(...dialogue.choices.map(choice => {
       const button = document.createElement('button'); button.type = 'button'; button.textContent = choice.label; button.dataset.choice = choice.id;
       button.onclick = () => this.send({ kind: 'choose', sessionId: dialogue.sessionId, choiceId: choice.id }); return button;
     }));
+    scroll.scrollTop = shopScroll;
   }
 }

@@ -3,8 +3,8 @@
   "generatorVersion": 1,
   "seed": 734291,
   "spawn": {
-    "x": 10,
-    "y": 115
+    "x": 0,
+    "y": 23
   },
   "assets": [
     {
@@ -3253,12 +3253,6 @@
       "y": -109
     },
     {
-      "id": "asset-99effe1e-b699-4f17-b138-68e12e3fe20e",
-      "assetId": "asset-8fcbc776-e0d9-4fbd-8042-b3401ec4ded4",
-      "x": 2,
-      "y": 109
-    },
-    {
       "id": "asset-92b402ca-e4ae-4076-b53c-87adbc8306a7",
       "assetId": "asset-6876aaf2-5c5b-4b3b-9485-b9158d94ff9b",
       "x": 3,
@@ -3310,7 +3304,7 @@
       "shape": {
         "kind": "rect",
         "x": -49,
-        "y": 18,
+        "y": 17,
         "width": 89,
         "height": 122
       },
@@ -3391,10 +3385,24 @@
   ],
   "npcs": [
     {
-      "x": 7,
-      "y": 42,
+      "x": 2,
+      "y": 19,
       "id": "npc-205589a0-3292-4724-8df2-514f76a3580d",
       "npcKind": "old-fisher",
+      "level": 1
+    },
+    {
+      "x": 12,
+      "y": 115,
+      "id": "npc-outpost-vendor",
+      "npcKind": "outpost-vendor",
+      "level": 1
+    },
+    {
+      "x": -4,
+      "y": 25,
+      "id": "npc-0b871cd1-6e29-4400-8fe3-5601360b1a30",
+      "npcKind": "outpost-vendor",
       "level": 1
     }
   ],

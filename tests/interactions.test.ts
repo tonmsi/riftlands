@@ -8,7 +8,8 @@ import { AccountStore, type Account } from '../server/store';
 import { RoomManager } from '../server/rooms';
 import { World } from '../shared/world';
 import { newWorldDocument, parseWorldDocument } from '../shared/world-schema';
-import { collectItem, insertItem, newInventory, validInventory } from '../shared/items';
+import { canCollectItem, collectItem, insertItem, newInventory, validInventory } from '../shared/items';
+import { VENDOR_DEFINITIONS } from '../shared/vendors';
 import { questStatus } from '../shared/narrative';
 import { DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS } from '../shared/narrative';
 import { ITEM_DEFINITIONS } from '../shared/items';
@@ -65,7 +66,8 @@ test('slime deaths unlock 50% loot only while the killer has the active quest', 
   accept(); const slime = kill(); assert.equal(questDrops().length, 1);
   assert.equal(sim.interactions.visibleDrops(b.id, sim.now, 900).length, 0, 'another player cannot steal quest loot');
   Object.assign(other, { x: slime.x, y: slime.y }); sim.step(.01); assert.equal(b.inventory!.slots[0], null);
-  Object.assign(other, { x: -200 }); Object.assign(player, { x: slime.x, y: slime.y }); sim.step(.01);
+  Object.assign(other, { x: -200 }); sim.now += 1000;
+  Object.assign(player, { x: questDrops()[0].x, y: questDrops()[0].y }); sim.step(.01);
   assert.deepEqual(a.inventory!.slots[0], { itemId: 'slime-innards', quantity: 1 });
   value = .5; kill(); assert.equal(questDrops().length, 0, 'exact 50% boundary rejects');
   value = 0; kill(); assert.equal(questDrops().length, 1);
@@ -204,16 +206,53 @@ test('mob currency bypasses full inventory; backpack upgrades on contact and sma
   assert.ok(sim.interactions.drops.has('no-room'), 'old backpack takes the newly added slot, without destroying the smaller ground bag');
 });
 
-test('loot tables give hostile mobs currency, bags and healing potions without requiring a quest', () => {
+test('loot tables give hostile mobs currency and healing potions without requiring a quest; bags are sold by vendors', () => {
   const { sim, a, b, kill } = fixture(); kill();
   const items = [...sim.interactions.drops.values()];
-  assert.deepEqual(items.map(drop => drop.stack.itemId), ['gold', 'healing-potion', 'backpack-2', 'backpack-3', 'backpack-4', 'backpack-5']);
+  assert.deepEqual(items.map(drop => drop.stack.itemId), ['gold', 'healing-potion']);
   for (const drop of items) { assert.equal(drop.ownerId, a.id); assert.equal(drop.expiresAt - sim.now, LOOT_ITEM_TTL); }
   assert.equal(sim.interactions.visibleDrops(b.id, sim.now, 900).length, 0);
   for (const kind of ['slime', 'wisp', 'sentinel']) {
     assert.ok(NPC_LOOT_TABLES[kind].some(rule => rule.itemId === 'gold'));
     assert.ok(NPC_LOOT_TABLES[kind].some(rule => rule.itemId === 'healing-potion'));
-    assert.ok(NPC_LOOT_TABLES[kind].some(rule => rule.itemId === 'backpack-5'));
+    assert.ok(NPC_LOOT_TABLES[kind].every(rule => !ITEM_DEFINITIONS[rule.itemId].backpackSlots));
+  }
+});
+
+test('collection availability preserves currency, matching stacks and upgrades even when every slot is occupied', () => {
+  const inventory = newInventory(); insertItem(inventory, 'healing-potion', 19);
+  assert.ok(canCollectItem(inventory, 'healing-potion', 1)); assert.equal(canCollectItem(inventory, 'healing-potion', 2), false);
+  assert.equal(canCollectItem(inventory, 'slime-innards', 1), false); assert.ok(canCollectItem(inventory, 'gold', 1));
+  assert.ok(canCollectItem(inventory, 'backpack-2', 1));
+  assert.equal(canCollectItem(inventory, 'unknown', 1), false);
+});
+
+test('vendor validates server prices, balance, capacity and session tokens; upgrades replace the equipped bag', () => {
+  const { sim, a, player, npc } = fixture();
+  const merchant: Actor = { ...npc, id: 'vendor', name: 'Ada, mercante', npcKind: 'outpost-vendor', dialogueId: 'outpost-shop' };
+  sim.npcs.set(merchant.id, merchant); a.gold = 200; insertItem(a.inventory!, 'slime-innards', 9999);
+  const talk = () => { sim.interact(a.id, { kind: 'talk', targetId: merchant.id }); return sim.interactions.view(a.id, sim.now)!; };
+  const first = talk(); assert.equal(first.shop!.length, 5);
+  const buy = { kind: 'buy-item', sessionId: first.sessionId, offerId: 'bag-2' } as const;
+  sim.interact(a.id, buy); assert.equal(a.gold, 190); assert.equal(a.inventory!.backpackId, 'backpack-2');
+  assert.throws(() => sim.interact(a.id, buy), /terminata/); assert.equal(a.gold, 190);
+  let next = sim.interactions.view(a.id, sim.now)!;
+  assert.match(next.shop!.find(offer => offer.id === 'bag-2')!.disabledReason!, /già/);
+  assert.throws(() => sim.interact(a.id, { ...buy, sessionId: next.sessionId }), /già/);
+  sim.interact(a.id, { ...buy, sessionId: next.sessionId, offerId: 'bag-3' });
+  assert.equal(a.gold, 165); assert.equal(a.inventory!.capacity, 3); assert.ok(a.inventory!.slots.every(stack => !stack || !ITEM_DEFINITIONS[stack.itemId].backpackSlots));
+  next = sim.interactions.view(a.id, sim.now)!;
+  sim.interact(a.id, { ...buy, sessionId: next.sessionId, offerId: 'potion' }); assert.equal(a.gold, 162);
+  next = sim.interactions.view(a.id, sim.now)!; const before = structuredClone(a.inventory);
+  assert.throws(() => sim.interact(a.id, { ...buy, sessionId: next.sessionId, offerId: 'made-up' }));
+  a.gold = 0;
+  assert.throws(() => sim.interact(a.id, { ...buy, sessionId: next.sessionId, offerId: 'bag-5' }), /insufficienti/); assert.deepEqual(a.inventory, before);
+  a.gold = 200; a.inventory!.slots[1]!.quantity = 20; insertItem(a.inventory!, 'backpack-2', 1);
+  assert.throws(() => sim.interact(a.id, { ...buy, sessionId: next.sessionId, offerId: 'potion' }), /pieno/); assert.equal(a.gold, 200);
+  player.x = merchant.x + 200;
+  assert.throws(() => sim.interact(a.id, { ...buy, sessionId: next.sessionId, offerId: 'bag-5' }), /Avvicinati/); assert.equal(a.gold, 200);
+  for (const vendor of Object.values(VENDOR_DEFINITIONS)) for (const offer of vendor.offers) {
+    assert.ok(ITEM_DEFINITIONS[offer.itemId]); assert.ok(Number.isSafeInteger(offer.price) && offer.price > 0);
   }
 });
 
@@ -252,6 +291,34 @@ test('quest rewards stay on the ground and private; completion replay cannot dup
   sim.interact(a.id, { kind: 'use-item', sessionId: next.sessionId, slot, itemId: 'slime-innards' });
   assert.deepEqual([...sim.interactions.drops.values()].map(drop => drop.stack.itemId), ['healing-potion']);
   assert.equal(a.gold, 20, 'gold stays first-completion only');
+  assert.equal(sim.interactions.view(a.id, sim.now)!.rewardGold, 0, 'repeat rewards visibly show zero gold');
+});
+
+test('melee loot appears outside the killer pickup radius and is not collected where the mob died', () => {
+  const { sim, a, player, kill } = fixture(); const victim = kill();
+  const drops = [...sim.interactions.drops.values()]; assert.ok(drops.length);
+  for (const drop of drops) {
+    assert.ok(Math.hypot(drop.x - player.x, drop.y - player.y) > player.radius + 10);
+    assert.ok(Math.hypot(drop.x - victim.x, drop.y - victim.y) >= 40);
+  }
+  Object.assign(player, { x: victim.x, y: victim.y }); sim.now += 1000; sim.step(.01);
+  assert.equal(sim.interactions.drops.size, drops.length); assert.equal(a.gold ?? 0, 0);
+  Object.assign(player, { x: drops[0].x, y: drops[0].y }); sim.step(.01); assert.equal(a.gold, drops[0].stack.quantity);
+});
+
+test('inventory feedback confirms only successful actions, is private and expires without replaying a purchase', () => {
+  const { sim, a, b, player, npc } = fixture(); insertItem(a.inventory!, 'healing-potion', 2);
+  assert.throws(() => sim.interact(a.id, { kind: 'consume-item', itemId: 'healing-potion', slot: 0 })); assert.deepEqual(sim.interactions.feedback(a.id, sim.now), []);
+  player.hp = 20; sim.interact(a.id, { kind: 'consume-item', itemId: 'healing-potion', slot: 0 });
+  assert.equal(sim.snapshotFor(a.id)!.inventoryActions![0].kind, 'consume'); assert.deepEqual(sim.snapshotFor(b.id)!.inventoryActions, []);
+  sim.interact(a.id, { kind: 'drop-item', itemId: 'healing-potion', slot: 0, quantity: 1 });
+  assert.equal(sim.interactions.feedback(a.id, sim.now)[1].kind, 'drop');
+  const vendor: Actor = { ...npc, id: 'merchant', npcKind: 'outpost-vendor', dialogueId: 'outpost-shop' }; sim.npcs.set(vendor.id, vendor); a.gold = 30;
+  sim.interact(a.id, { kind: 'talk', targetId: vendor.id }); const sessionId = sim.interactions.view(a.id, sim.now)!.sessionId;
+  const command = { kind: 'buy-item', sessionId, offerId: 'bag-3' } as const;
+  sim.interact(a.id, command); assert.throws(() => sim.interact(a.id, command));
+  assert.equal(sim.interactions.feedback(a.id, sim.now).filter(action => action.kind === 'purchase').length, 1);
+  sim.now += 2500; assert.deepEqual(sim.interactions.feedback(a.id, sim.now), []);
 });
 
 test('ground loot limit rejects the delivery before consuming objectives or awarding XP', () => {

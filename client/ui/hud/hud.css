@@ -92,6 +92,9 @@
 .rift-app .menu-buttons svg { width:18px; height:18px }
 .rift-app .gold-counter { padding:6px 10px; border-radius:10px; font-size:12px }
 .rift-app .gold-counter b { color:#ffdc73; font-size:12px }
+.rift-app .gold-counter { position:relative; overflow:visible }
+.gold-gain { position:absolute; right:calc(100% + 8px); top:50%; margin-top:-11px; white-space:nowrap; padding:3px 7px; border:1px solid #d4b86688; border-radius:8px; color:#ffe3a0; background:#172a35; font-size:11px; font-weight:750; pointer-events:none; box-shadow:0 2px 10px #0005 }
+.gold-gain[hidden] { display:none }
 .rift-app .settings-panel { top:calc(var(--safe-top) + 132px); right:calc(var(--safe-right) + 18px); width:250px; max-width:calc(100% - 24px); padding:6px; max-height:calc(var(--game-height,100dvh) - 152px) }
 .rift-app .settings-actions { gap:3px }
 .rift-app .settings-actions .hud-menu-button { width:100%; justify-content:flex-start; min-height:40px; font-size:12px; border:0; box-shadow:none; background:none; backdrop-filter:none }
@@ -221,7 +224,7 @@
 .rift-app .xp-gain { color:#ffe8ad; border:1px solid #ffe19b66; background:linear-gradient(140deg,#273d4bf5,#102232f5); border-radius:7px; font-size:13px; font-weight:900; text-shadow:0 1px #071423; box-shadow:0 3px 10px #0004; z-index:10 }
 .xp-confetti { position:absolute; inset:0; z-index:40; pointer-events:none }
 .xp-confetti>i { position:absolute; bottom:0; height:6px; border-radius:1px; box-shadow:0 0 5px #fff3 }
-.xp-level-up { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:12px 0 18px; z-index:80; pointer-events:none!important; text-align:center; color:#ffe5a2; isolation:isolate }
+.xp-level-up { position:absolute; top:clamp(110px,25%,220px); left:50%; transform:translate(-50%,-50%); width:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:12px 0 18px; z-index:80; pointer-events:none!important; text-align:center; color:#ffe5a2; isolation:isolate }
 .xp-level-up[hidden] { display:none }
 .xp-level-up::before { content:""; position:absolute; z-index:-1; inset:-55px -35px; border-radius:50%; background:radial-gradient(ellipse,#061827d9 0,#1430428c 30%,#f8d38412 50%,transparent 70%); pointer-events:none }
 .level-up-emblem { font-size:28px; line-height:1; color:#ffe9b1; text-shadow:0 0 24px #ffd66888 }
@@ -258,6 +261,15 @@
 .rift-app.touch-layout .xp-gain { font-size:11px; left:calc(100% + 12px); padding:4px 7px; bottom:-7px }
 .rift-app.touch-layout .xp-level-up { width:260px }
 .rift-app.touch-layout .level-up-number { font-size:76px }
+@media (orientation:landscape) and (max-height:600px) {
+  .rift-app.touch-layout .xp-level-up { width:230px; top:105px; padding:6px 0 8px }
+  .rift-app.touch-layout .level-up-emblem { font-size:18px }
+  .rift-app.touch-layout .level-up-heading { font-size:9px; margin-top:6px; letter-spacing:2px }
+  .rift-app.touch-layout .level-up-number { font-size:56px }
+  .rift-app.touch-layout .level-up-unlock { font-size:10px }
+  .rift-app.touch-layout .level-up-rule { margin-top:10px }
+  .rift-app.touch-layout .xp-level-up::before { inset:-20px -15px }
+}
 @media(prefers-reduced-motion:reduce) {
   .xp-confetti { display:none }
 }

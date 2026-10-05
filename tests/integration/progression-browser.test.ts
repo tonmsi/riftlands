@@ -80,13 +80,14 @@ test('real menu saves paid builds, class levels stay independent and quest XP an
     const online = await page.request.post(origin + '/api/build', { headers, data: { classId: 'hunter', loadout: { q: 'q', e: 'r' } } }); assert.equal(online.status(), 400);
     await page.keyboard.press('KeyF'); await expect(page.locator('.npc-dialogue')).toBeVisible();
     await page.locator('.backpack-toggle').click(); await page.locator('.inventory-slot').click(); await expect(page.locator('.xp-gain')).toHaveText('+150 XP');
+    await expect(page.locator('.gold-gain')).toHaveText('+20 GOLD');
     const gainBounds = await page.locator('.xp-gain').boundingBox(), resourceBounds = await page.locator('[data-ref=resource-fill]').boundingBox();
     assert.ok(gainBounds && resourceBounds && gainBounds.y >= resourceBounds.y + resourceBounds.height, 'XP gain sits below the vitals without covering them');
     await expect(page.locator('.level-up-number')).toHaveText('3');
     await expect(page.locator('.xp-level-up')).toBeVisible();
     assert.ok(await page.locator('.xp-confetti>i').count() > 0, 'level gain emits particles at the XP meter');
     const center = await page.locator('.xp-level-up').boundingBox();
-    assert.ok(center && Math.abs(center.x + center.width / 2 - 720) < 5 && Math.abs(center.y + center.height / 2 - 500) < 30, 'level number celebrates at screen center');
+    assert.ok(center && Math.abs(center.x + center.width / 2 - 720) < 5 && center.y + center.height < 500, 'level celebration stays above the player');
     assert.equal(await page.locator('.xp-level-up').evaluate(node => getComputedStyle(node).pointerEvents), 'none', 'celebration preserves gameplay input');
     await page.waitForTimeout(160); // Capture the visible burst after the entry frames.
     await page.screenshot({ path: 'test-results/progression-xp-desktop.png' });
@@ -95,6 +96,7 @@ test('real menu saves paid builds, class levels stay independent and quest XP an
     assert.ok(levelBadge && portraitBox && levelBadge.width <= 24 && levelBadge.height === levelBadge.width && Math.abs(levelBadge.x + levelBadge.width / 2 - (portraitBox.x + portraitBox.width / 2)) < 1 && levelBadge.y >= portraitBox.y + portraitBox.height - 16, 'level is a small circle on the lower edge of the portrait');
     assert.equal(await page.locator('[data-ref=player-level]').evaluate(node => getComputedStyle(node).borderRadius), '50%');
     assert.equal(await page.locator('[data-ref=player-level]').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(23, 41, 53)');
+    await page.waitForTimeout(1400); await expect(page.locator('.xp-level-up')).toBeVisible();
     await expect(page.locator('.xp-level-up')).toBeHidden(); await expect(page.locator('.xp-confetti>i')).toHaveCount(0);
     const state = await page.request.get(origin + '/api/lobby?classId=mage', { headers }), data = await state.json();
     assert.equal(data.account.characters.mage.xp, 240); assert.equal(data.account.characters.warrior.xp, 0); assert.equal(data.narrative.quests['stinking-bait'].completions, 1);

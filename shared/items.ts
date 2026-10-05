@@ -27,11 +27,20 @@ export function validInventory(value: unknown): value is Inventory {
       && stack.quantity > 0 && stack.quantity <= ITEM_DEFINITIONS[stack.itemId].maxStack);
 }
 export function inventoryCount(inventory: Inventory, itemId: string): number { return inventory.slots.reduce((count, stack) => count + (stack?.itemId === itemId ? stack.quantity : 0), 0); }
+export function canInsertItem(inventory: Inventory, itemId: string, quantity: number): boolean {
+  const item = ITEM_DEFINITIONS[itemId]; if (!item || item.currency || !Number.isSafeInteger(quantity) || quantity < 1) return false;
+  return inventory.slots.reduce((room, stack) => room + (stack === null ? item.maxStack : stack.itemId === itemId ? item.maxStack - stack.quantity : 0), 0) >= quantity;
+}
+/** Shared by ground rendering and server collection; currency and upgrades do not need an empty slot. */
+export function canCollectItem(inventory: Inventory, itemId: string, quantity: number): boolean {
+  const item = ITEM_DEFINITIONS[itemId]; if (!item || !Number.isSafeInteger(quantity) || quantity < 1) return false;
+  if (item.currency) return true;
+  if (item.backpackSlots && item.backpackSlots > inventory.capacity) return quantity === 1 && item.backpackSlots <= MAX_BACKPACK_SLOTS;
+  return canInsertItem(inventory, itemId, quantity);
+}
 /** All-or-nothing insertion: a full slot never destroys a ground drop. */
 export function insertItem(inventory: Inventory, itemId: string, quantity: number): boolean {
-  const item = ITEM_DEFINITIONS[itemId]; if (!item || item.currency || !Number.isSafeInteger(quantity) || quantity < 1) return false;
-  const room = inventory.slots.reduce((n, stack) => n + (stack === null ? item.maxStack : stack.itemId === itemId ? item.maxStack - stack.quantity : 0), 0);
-  if (room < quantity) return false;
+  const item = ITEM_DEFINITIONS[itemId]; if (!canInsertItem(inventory, itemId, quantity)) return false;
   let remaining = quantity;
   const order = inventory.slots.flatMap((stack, index) => stack?.itemId === itemId ? [index] : [])
     .concat(inventory.slots.flatMap((stack, index) => stack === null ? [index] : []));
@@ -45,11 +54,11 @@ export function insertItem(inventory: Inventory, itemId: string, quantity: numbe
 }
 
 /** Upgrade is atomic: existing contents and the previously equipped backpack are preserved. */
-export function collectItem(inventory: Inventory, itemId: string, quantity: number): boolean {
+export function collectItem(inventory: Inventory, itemId: string, quantity: number, keepPreviousBackpack = true): boolean {
   const capacity = ITEM_DEFINITIONS[itemId]?.backpackSlots;
   if (!capacity || capacity <= inventory.capacity) return insertItem(inventory, itemId, quantity);
   if (quantity !== 1 || capacity > MAX_BACKPACK_SLOTS) return false;
   const upgraded: Inventory = { ...inventory, backpackId: itemId, capacity, slots: [...inventory.slots, ...Array<ItemStack | null>(capacity - inventory.capacity).fill(null)] };
-  if (inventory.backpackId && !insertItem(upgraded, inventory.backpackId, 1)) return false;
+  if (keepPreviousBackpack && inventory.backpackId && !insertItem(upgraded, inventory.backpackId, 1)) return false;
   Object.assign(inventory, upgraded); return true;
 }

@@ -1,7 +1,7 @@
 import type { BossDrop, BossLockState, BossPreparationState, BossWindup } from './bosses';
 import type { Inventory } from './items';
 import type { NarrativeProgress } from './narrative';
-import type { GroundItem, DialogueView, InteractionCommand } from './interactions';
+import type { GroundItem, DialogueView, InteractionCommand, InventoryAction } from './interactions';
 import type { NpcTemplateId } from './npcs';
 import type { SnapshotActor } from './snapshot-actor';
 import type { Loadout, CharacterSummary } from './progression';
@@ -37,7 +37,7 @@ export interface PublicAccount { id: string; name: string; kills: number; deaths
 export interface PublicAccount { gold?: number; }
 export interface PublicAccount { characters?: Partial<Record<ClassId, CharacterSummary>>; }
 export interface Snapshot { gold?: number; goldDrops?: BossDrop[]; bossWindups?: BossWindup[]; bossLocks?: BossLockState[]; bossPreparations?: BossPreparationState[]; }
-export interface Snapshot { inventory?: Inventory; narrative?: NarrativeProgress; groundItems?: GroundItem[]; dialogue?: DialogueView | null; }
+export interface Snapshot { inventory?: Inventory; narrative?: NarrativeProgress; groundItems?: GroundItem[]; dialogue?: DialogueView | null; inventoryActions?: InventoryAction[]; }
 export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: SnapshotActor; actors: SnapshotActor[]; projectiles: Projectile[]; pickups: Pickup[]; traps?: Trap[]; events: GameEvent[]; online: number; activeChunks: number; arenaGate?: ArenaGateState; matchEndsAt?: number; sanctuary?: 'safe' | 'combat' | 'outside'; }
 
 export type ClientMessage =

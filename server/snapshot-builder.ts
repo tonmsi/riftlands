@@ -78,6 +78,7 @@ export class SnapshotBuilder {
       type: 'snapshot', tick: s.tick, time: s.now, ack: connection.ack, self: this.actor(self), actors,
       gold: account?.gold ?? 0,
       ...this.privateState.read(id, account),
+      inventoryActions: s.interactions.feedback(id, s.now),
       ...(s.mode === 'world' ? { groundItems: s.interactions.visibleDrops(id, s.now, INTEREST_RADIUS), dialogue: s.interactions.view(id, s.now) } : { groundItems: [], dialogue: null }),
       goldDrops: [...s.bosses.values()].flatMap(encounter => encounter.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > s.now && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop }))),
       bossWindups: [...s.bosses.values()].flatMap(encounter => encounter.windup && distance(self, encounter.windup) < INTEREST_RADIUS ? [{ ...encounter.windup }] : []),

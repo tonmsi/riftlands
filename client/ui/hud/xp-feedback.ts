@@ -87,10 +87,10 @@ export class XpFeedback {
       { opacity: 1, transform: 'translate(-50%, -50%) scale(1.04)', filter: 'blur(0)', offset: .18 },
       { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', filter: 'blur(0)', offset: .72 },
       { opacity: 0, transform: 'translate(-50%, -56%) scale(1.02)', filter: 'blur(2px)' },
-    ], 1400);
+    ], 2400);
     this.level.getAnimations().forEach(animation => animation.cancel());
     this.animate(this.level, [{ scale: '1', filter: 'brightness(1)' }, { scale: '1.18', filter: 'brightness(1.25)', offset: .4 }, { scale: '1', filter: 'brightness(1)' }], 450);
-    this.levelTimer = window.setTimeout(() => { this.celebration.hidden = true; this.levelTimer = 0; }, 1400);
+    this.levelTimer = window.setTimeout(() => { this.celebration.hidden = true; this.levelTimer = 0; }, 2400);
     if (!this.reducedMotion()) this.burst();
   }
   private burst(): void {

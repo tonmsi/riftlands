@@ -3,10 +3,11 @@ import { randomUUID } from '../shared/id';
 import { hasLineOfSight, collidesWorld } from '../shared/physics';
 import type { World } from '../shared/world';
 import type { Account } from './store';
-import { collectItem, ITEM_DEFINITIONS, newInventory, type ItemStack } from '../shared/items';
+import { canCollectItem, collectItem, ITEM_DEFINITIONS, newInventory, type ItemStack } from '../shared/items';
+import { VENDOR_DEFINITIONS, type VendorOffer } from '../shared/vendors';
 import { acceptQuest, advanceQuest, conditionMatches, DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS, newNarrativeProgress, questStatus, questReward, questCompletions } from '../shared/narrative';
 import { NPC_LOOT_TABLES } from '../shared/loot';
-import { GROUND_ITEM_TTL, LOOT_ITEM_TTL, INTERACTION_RANGE, type GroundItem, type DialogueView, type InteractionCommand } from '../shared/interactions';
+import { GROUND_ITEM_TTL, LOOT_ITEM_TTL, INTERACTION_RANGE, type GroundItem, type DialogueView, type InteractionCommand, type InventoryAction } from '../shared/interactions';
 
 interface Host {
   players: ReadonlyMap<string, Actor>; npcs: ReadonlyMap<string, Actor>; accounts: ReadonlyMap<string, Account>; world: World;
@@ -22,6 +23,13 @@ export class InteractionSystem {
   readonly drops = new Map<string, GroundItem>();
   private sessions = new Map<string, Session>();
   private consumableReadyAt = new Map<string, number>();
+  private inventoryActions = new Map<string, InventoryAction[]>();
+  private action(id: string, kind: InventoryAction['kind'], stack: ItemStack, now: number, slot?: number): void {
+    const recent = this.feedback(id, now);
+    recent.push({ id: randomUUID(), kind, itemId: stack.itemId, quantity: stack.quantity, at: now, slot });
+    this.inventoryActions.set(id, recent.slice(-12));
+  }
+  feedback(id: string, now: number): InventoryAction[] { return (this.inventoryActions.get(id) ?? []).filter(action => now - action.at < 2500).map(action => ({ ...action })); }
   constructor(private host: Host, private random = Math.random) {}
   private account(id: string): Account {
     const account = this.host.accounts.get(id);
@@ -43,7 +51,11 @@ export class InteractionSystem {
   command(id: string, command: InteractionCommand, now: number): void {
     const account = this.account(id);
     if (command.kind === 'talk') {
-      const target = this.target(id, command.targetId), dialogue = DIALOGUE_DEFINITIONS[target.dialogueId!];
+      const target = this.target(id, command.targetId), vendor = VENDOR_DEFINITIONS[target.dialogueId!];
+      if (vendor) {
+        this.sessions.set(id, { id: randomUUID(), targetId: target.id, dialogueId: vendor.id, node: 'shop', startedAt: now, expiresAt: now + 120_000 }); return;
+      }
+      const dialogue = DIALOGUE_DEFINITIONS[target.dialogueId!];
       if (!dialogue) throw new Error('Questo personaggio non ha ancora un dialogo.');
       const node = dialogue.entries.find(entry => conditionMatches(account.narrative!, entry.condition, now))?.node;
       if (!node) throw new Error('Nessuna conversazione disponibile.');
@@ -52,7 +64,19 @@ export class InteractionSystem {
     if (command.kind === 'drop-item') { this.drop(id, command.slot, command.itemId, command.quantity, now); return; }
     if (command.kind === 'consume-item') { this.consume(id, command.slot, command.itemId, now); return; }
     if (command.kind === 'close') { if (this.sessions.get(id)?.id === command.sessionId) this.sessions.delete(id); return; }
-    const session = this.session(id, command.sessionId, now), dialogue = DIALOGUE_DEFINITIONS[session.dialogueId], node = dialogue.nodes[session.node];
+    const session = this.session(id, command.sessionId, now);
+    if (command.kind === 'buy-item') {
+      const offer = VENDOR_DEFINITIONS[session.dialogueId]?.offers.find(offer => offer.id === command.offerId);
+      if (!offer) throw new Error('Offerta non disponibile.');
+      const reason = this.purchaseBlocked(account, offer); if (reason) throw new Error(reason);
+      const inventory = structuredClone(account.inventory!);
+      if (!collectItem(inventory, offer.itemId, offer.quantity, false)) throw new Error('Zaino pieno.');
+      Object.assign(account.inventory!, inventory); account.gold = (account.gold ?? 0) - offer.price;
+      // Rotate the token only after success so a duplicate purchase packet cannot charge twice.
+      this.advance(session, 'shop', now); this.action(id, 'purchase', offer, now); this.host.changed(id); return;
+    }
+    const dialogue = DIALOGUE_DEFINITIONS[session.dialogueId], node = dialogue?.nodes[session.node];
+    if (!node) throw new Error('Interazione non disponibile.');
     if (command.kind === 'choose') {
       const choice = node.choices.find(choice => choice.id === command.choiceId && (!choice.condition || conditionMatches(account.narrative!, choice.condition, now)));
       if (!choice) throw new Error('Questa risposta non è più disponibile.');
@@ -77,6 +101,7 @@ export class InteractionSystem {
     // Reserve space for every reward before consuming a delivery or completing its mission.
     if (this.drops.size + rewardItems.length > 2048) throw new Error('Troppi oggetti a terra. Attendi qualche secondo prima di consegnare.');
     stack.quantity -= consumed; if (!stack.quantity) account.inventory!.slots[command.slot] = null;
+    this.action(id, 'deliver', { itemId: command.itemId, quantity: consumed }, now, command.slot);
     advanceQuest(account.narrative!, quest, consumed, now);
     if (progress.status === 'completed') {
       const reward = questReward(quest, previousCompletions);
@@ -90,12 +115,26 @@ export class InteractionSystem {
   view(id: string, now: number): DialogueView | null {
     const session = this.sessions.get(id); if (!session) return null;
     try { this.session(id, session.id, now); } catch { this.sessions.delete(id); return null; }
-    const account = this.account(id), dialogue = DIALOGUE_DEFINITIONS[session.dialogueId], node = dialogue.nodes[session.node];
+    const account = this.account(id), vendor = VENDOR_DEFINITIONS[session.dialogueId];
+    if (vendor) return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: vendor.greeting, choices: [],
+      shop: vendor.offers.map(offer => ({ ...offer, disabledReason: this.purchaseBlocked(account, offer) })) };
+    const dialogue = DIALOGUE_DEFINITIONS[session.dialogueId], node = dialogue.nodes[session.node];
     const quest = node.itemRequest ? QUEST_DEFINITIONS[node.itemRequest.questId] : undefined;
     const remaining = quest ? Math.max(0, quest.objective.quantity - (account.narrative!.quests[quest.id]?.objectives[quest.objective.id] ?? 0)) : 0;
+    const rewardQuest = node.rewardQuestId ? QUEST_DEFINITIONS[node.rewardQuestId] : undefined;
+    const rewardProgress = rewardQuest ? account.narrative!.quests[rewardQuest.id] : undefined;
+    const rewards = rewardQuest && rewardProgress ? (rewardQuest.reward?.items ?? []).filter(item => !item.firstOnly || questCompletions(rewardProgress) === 1).map(({ itemId, quantity }) => ({ itemId, quantity })) : undefined;
     return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: node.text.replace('{remaining}', String(remaining)),
       choices: node.choices.filter(choice => !choice.condition || conditionMatches(account.narrative!, choice.condition, now)).map(({ id, label }) => ({ id, label })),
-      ...(quest && remaining ? { request: { itemId: quest.objective.itemId, remaining } } : {}) };
+      ...(quest && remaining ? { request: { itemId: quest.objective.itemId, remaining } } : {}),
+      ...(rewards ? { rewards, rewardGold: questReward(rewardQuest!, Math.max(0, questCompletions(rewardProgress!) - 1)).gold } : {}) };
+  }
+  private purchaseBlocked(account: Account, offer: VendorOffer): string | undefined {
+    const size = ITEM_DEFINITIONS[offer.itemId]?.backpackSlots;
+    if (size && size <= account.inventory!.capacity) return 'Hai già uno zaino uguale o più grande.';
+    if ((account.gold ?? 0) < offer.price) return 'Gold insufficienti.';
+    if (!canCollectItem(account.inventory!, offer.itemId, offer.quantity)) return 'Zaino pieno.';
+    return undefined;
   }
   marker(id: string, dialogueId: string, now: number): Actor['questMarker'] {
     const dialogue = DIALOGUE_DEFINITIONS[dialogueId]; return dialogue ? questStatus(this.account(id).narrative!, dialogue.questId, now) : undefined;
@@ -107,17 +146,22 @@ export class InteractionSystem {
     for (const rule of NPC_LOOT_TABLES[victim.npcKind ?? ''] ?? []) {
       if (rule.condition && !conditionMatches(account.narrative!, rule.condition, now) || this.random() >= rule.chance) continue;
       if (this.drops.size >= 2048) return;
-      this.spawnLoot(victim, rule, killer.id, now, index++);
+      this.spawnLoot(victim, rule, killer.id, now, index++, 900, 56, killer);
     }
   }
-  private spawnLoot(origin: Actor, stack: ItemStack, ownerId: string, now: number, index: number, delay = 0, radius = 12): void {
+  private spawnLoot(origin: Actor, stack: ItemStack, ownerId: string, now: number, index: number, delay = 0, radius = 12, avoid?: Actor): void {
     let point = { x: origin.x, y: origin.y };
-    for (let i = 0; i < 12; i++) {
-      const angle = origin.aim + (index + i) * Math.PI / 3;
-      const candidate = { x: origin.x + Math.cos(angle) * radius, y: origin.y + Math.sin(angle) * radius };
+    const direction = avoid ? Math.atan2(origin.y - avoid.y, origin.x - avoid.x) : origin.aim;
+    // Search reachable rings away from the killer, rather than dropping straight under a melee player.
+    for (let i = 0; i < (avoid ? 72 : 12); i++) {
+      const angle = direction + (index + i % 12) * Math.PI / 6;
+      const reach = avoid ? [radius, 40, 72, 24, 88, 104][Math.floor(i / 12)] : radius;
+      const candidate = { x: origin.x + Math.cos(angle) * reach, y: origin.y + Math.sin(angle) * reach };
+      if (avoid && distance(candidate, avoid) <= avoid.radius + 26) continue;
       if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world) && hasLineOfSight(origin, candidate, this.host.world)) { point = candidate; break; }
     }
-    const drop: GroundItem = { id: randomUUID(), ...point, stack: { itemId: stack.itemId, quantity: stack.quantity }, ownerId, availableAt: now + delay, expiresAt: now + LOOT_ITEM_TTL };
+    const drop: GroundItem = { id: randomUUID(), ...point, stack: { itemId: stack.itemId, quantity: stack.quantity }, ownerId, availableAt: now + delay, expiresAt: now + LOOT_ITEM_TTL,
+      ...(avoid && distance(point, avoid) <= avoid.radius + 10 ? { requireOwnerExit: true } : {}) };
     this.drops.set(drop.id, drop);
   }
   private consume(id: string, slot: number, itemId: string, now: number): void {
@@ -128,6 +172,7 @@ export class InteractionSystem {
     if (now < (this.consumableReadyAt.get(id) ?? 0)) throw new Error('Attendi prima di usare un’altra pozione.');
     this.host.heal(player, effect.heal);
     if (--stack.quantity === 0) account.inventory!.slots[slot] = null;
+    this.action(id, 'consume', { itemId, quantity: 1 }, now, slot);
     this.consumableReadyAt.set(id, now + effect.cooldownMs); this.host.changed(id);
   }
   private drop(id: string, slot: number, itemId: string, quantity: number, now: number): void {
@@ -141,22 +186,32 @@ export class InteractionSystem {
     }
     const drop: GroundItem = { id: randomUUID(), ...point, stack: { itemId, quantity }, expiresAt: now + GROUND_ITEM_TTL, droppedBy: id, ownerPickupAt: now + 1000 };
     stack.quantity -= quantity; if (!stack.quantity) account.inventory!.slots[slot] = null;
+    this.action(id, 'drop', { itemId, quantity }, now, slot);
     this.drops.set(drop.id, drop); this.host.changed(id);
   }
   step(now: number): void {
     for (const [id, drop] of this.drops) {
       if (now >= drop.expiresAt) { this.drops.delete(id); continue; }
+      if (drop.requireOwnerExit) {
+        const owner = drop.ownerId ? this.host.players.get(drop.ownerId) : undefined;
+        if (!owner || distance(owner, drop) <= owner.radius + 10) continue;
+        delete drop.requireOwnerExit;
+      }
       for (const player of this.host.nearbyPlayers(drop, 64)) {
         if (!this.host.connected(player.id) || player.hp <= 0 || drop.ownerId && drop.ownerId !== player.id
           || now < (drop.availableAt ?? 0) || drop.droppedBy === player.id && now < (drop.ownerPickupAt ?? 0) || distance(player, drop) > player.radius + 10 || !hasLineOfSight(player, drop, this.host.world)) continue;
         const account = this.account(player.id);
         if (ITEM_DEFINITIONS[drop.stack.itemId]?.currency) account.gold = (account.gold ?? 0) + drop.stack.quantity;
-        else if (!collectItem(account.inventory!, drop.stack.itemId, drop.stack.quantity)) continue;
+        else {
+          if (!collectItem(account.inventory!, drop.stack.itemId, drop.stack.quantity)) continue;
+          this.action(player.id, 'collect', drop.stack, now);
+        }
         this.drops.delete(id); this.host.changed(player.id); break;
       }
     }
     for (const id of this.sessions.keys()) this.view(id, now);
     for (const id of this.consumableReadyAt.keys()) if (!this.host.players.has(id)) this.consumableReadyAt.delete(id);
+    for (const [id, actions] of this.inventoryActions) if (!this.host.players.has(id) || actions.every(action => now - action.at >= 2500)) this.inventoryActions.delete(id);
   }
   visibleDrops(id: string, now: number, radius: number): GroundItem[] {
     const player = this.host.players.get(id); if (!player) return [];

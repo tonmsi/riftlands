@@ -113,7 +113,7 @@ export class ActorRenderer {
       if (actor.questMarker === 'active') ctx.setLineDash([5, 3]);
       circle(ctx, 0, 0, r + 6); ctx.stroke(); ctx.setLineDash([]);
       ctx.font = 'bold 14px system-ui'; ctx.fillStyle = ctx.strokeStyle; ctx.textAlign = 'center';
-      ctx.fillText(actor.questMarker === 'available' ? '!' : actor.questMarker === 'active' ? '…' : '•', 0, -r - 12);
+      ctx.fillText(actor.npcKind === 'outpost-vendor' ? '¤' : actor.questMarker === 'available' ? '!' : actor.questMarker === 'active' ? '…' : '•', 0, -r - 12);
     }
     if (actor.effects.some(effect => effect.kind === 'root' && effect.until > time)) {
       ctx.strokeStyle = '#6ebd57';
@@ -416,11 +416,17 @@ export class ActorRenderer {
     // === VECCHIO CODICE GRAFICA PROCEDURALE DI FALLBACK ===
     if (actor.disposition === 'neutral') {
       ctx.save(); if (moving) ctx.translate(0, Math.sin(time * .008) * 1.2);
-      const gradient = ctx.createRadialGradient(-5, -7, 1, 0, 0, r); gradient.addColorStop(0, '#cfbf9a'); gradient.addColorStop(1, '#78795d');
+      const merchant = actor.npcKind === 'outpost-vendor';
+      const gradient = ctx.createRadialGradient(-5, -7, 1, 0, 0, r); gradient.addColorStop(0, merchant ? '#d6ba9f' : '#cfbf9a'); gradient.addColorStop(1, merchant ? '#937b69' : '#78795d');
       ctx.fillStyle = gradient; circle(ctx, 0, 0, r); ctx.fill(); ctx.strokeStyle = '#343d30'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = '#e1e0cc'; ctx.beginPath(); ctx.ellipse(0, 7, 11, 7, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = merchant ? '#82659f' : '#e1e0cc'; ctx.beginPath(); ctx.ellipse(0, 7, 11, 7, 0, 0, TAU); ctx.fill();
+      if (merchant) {
+        ctx.fillStyle = '#82659f'; polygon(ctx, [-r - 3, -8, -r + 4, -17, r - 4, -17, r + 3, -8]); ctx.fill();
+        ctx.strokeStyle = '#ead182'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-r + 2, -9); ctx.lineTo(r - 2, -9); ctx.stroke();
+        ctx.fillStyle = '#bc945e'; ctx.beginPath(); ctx.roundRect(6, 4, 10, 11, 3); ctx.fill();
+      }
       ctx.fillStyle = '#30392d'; circle(ctx, -5, -3, 1.8); ctx.fill(); circle(ctx, 5, -3, 1.8); ctx.fill(); ctx.restore();
-      ctx.fillStyle = '#eee7ce'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(actor.name.split(',')[0], 0, r + 19); return;
+      ctx.fillStyle = '#eee7ce'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(merchant ? 'Ada · Mercante' : actor.name.split(',')[0], 0, r + 19); return;
     }
     ctx.strokeStyle = '#3c483b'; ctx.lineWidth = 1.8;
     if (actor.npcKind === 'boss') {

@@ -336,6 +336,7 @@ function frame(now: number): void {
     arenaGate: latest?.arenaGate,
     goldDrops: latest?.goldDrops,
     groundItems: latest?.groundItems,
+    inventory: latest?.inventory,
     bossWindups: latest?.bossWindups,
     bossLocks: latest?.bossLocks,
     bossPreparations: latest?.bossPreparations,

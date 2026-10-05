@@ -30,13 +30,13 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
           inventory: { version: 1, capacity: 1, slots: [{ itemId: 'slime-innards', quantity: 600 }] }, dialogue: { sessionId: 'review', targetId: 'nereo', speaker: npc.name, text: 'Da quella notte il mondo ha un altro odore. '.repeat(40), choices: [{ id: 'leave', label: 'Torno presto.' }] } };
         ui.setSnapshot(snapshot, 24);
         const mobile = new MobileControls(root, { enabled: () => !ui.inputBlocked, ability: (slot: 'basic' | 'q' | 'e' | 'r') => CLASSES.mage.abilities[slot], move: (vector: { x: number; y: number }) => { movement = vector; }, aim: noop, cast: noop });
-        const renderer = new Renderer(ui.canvas, new World()); await renderer.spritesReady;
+        const renderer = new Renderer(ui.canvas); renderer.world = new World(); await renderer.spritesReady;
         // A configured sheet must take precedence over the round neutral fallback.
         const frame = document.createElement('canvas'); frame.width = frame.height = 48; const ctx = frame.getContext('2d')!; ctx.fillStyle = '#fa00df'; ctx.fillRect(0, 0, 48, 48);
         (renderer as any).characters.npcSprites.set('old-fisher', { frames: Array(16).fill(frame) });
         const draw = (renderer as any).characters.drawNpc.bind((renderer as any).characters); renderer.ctx.save(); renderer.ctx.translate(24, 24); draw(npc, Date.now(), '#fff'); renderer.ctx.restore();
         const pixel = [...renderer.ctx.getImageData(24, 24, 1, 1).data];
-        (window as any).interactionFixture = { ui, mobile, snapshot, commands, initialReleases: releases, releases: () => releases, movement: () => movement, pixel };
+        (window as any).interactionFixture = { ui, mobile, renderer, snapshot, commands, initialReleases: releases, releases: () => releases, movement: () => movement, pixel };
       });
       await expect(page.locator('.npc-dialogue')).toBeVisible();
       const box = (await page.locator('.npc-dialogue').boundingBox())!;
@@ -69,6 +69,7 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
       const releaseSlot = await press('.inventory-slot'); await expect(page.locator('.drop-item-panel')).toBeVisible(); await releaseSlot();
       await expect(page.locator('[data-item-name]')).toHaveText('Interiora di gelatina');
       await expect(page.locator('[data-item-description]')).toContainText('esche puzzolenti');
+      await expect(page.locator('[data-drop-cancel]')).toHaveCount(0);
       await expect(page.locator('.drop-item-panel input')).toHaveCount(0); await expect(page.locator('.drop-item-panel output')).toHaveText('600');
       assert.equal(await page.locator('.drop-item-panel').evaluate(element => element.matches(':popover-open')), true, 'discard box is above all HUD layers, including gold');
       if (touch) {
@@ -144,14 +145,58 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
       await expect(page.locator('[data-item-name]')).toHaveText('Zaino da 2 slot');
       await expect(page.locator('[data-item-description]')).toContainText('non aggiungono spazio');
       await page.screenshot({ path: `test-results/backpack-details-${width}x${height}.png` });
-      const cancelBagDrop = await press('[data-drop-cancel]'); await cancelBagDrop();
+      const cancelBagDrop = await press('.world-canvas'); await cancelBagDrop();
+      await expect(page.locator('.drop-item-panel')).toBeHidden(); await expect(page.locator('.inventory-slots')).toBeHidden();
+      const reopenPotionBag = await press('.backpack-toggle'); await reopenPotionBag();
       const usePotion = await press('[data-item-slot="0"]'); await usePotion();
-      await expect(page.locator('.inventory-slots')).toBeHidden();
+      await expect(page.locator('.inventory-slots')).toBeVisible();
+      await expect(page.locator('.inventory-feedback')).toBeHidden();
       assert.deepEqual(await page.evaluate(() => (window as any).interactionFixture.commands.at(-1)), { kind: 'consume-item', slot: 0, itemId: 'healing-potion' });
-      const openOutside = await press('.backpack-toggle'); await openOutside();
+      await page.evaluate(() => {
+        const f = (window as any).interactionFixture;
+        f.snapshot.inventory.slots[0].quantity = 2;
+        f.snapshot.inventoryActions = [{ id: 'potion-confirmed', kind: 'consume', itemId: 'healing-potion', quantity: 1, slot: 0, at: f.snapshot.time }];
+        f.ui.setSnapshot(f.snapshot, 24);
+      });
+      await expect(page.locator('.inventory-feedback')).toContainText('Usato');
+      await expect(page.locator('.inventory-feedback strong')).toHaveText('−1');
+      await expect(page.locator('.inventory-slots')).toBeVisible();
+      await page.screenshot({ path: `test-results/inventory-feedback-${width}x${height}.png` });
       const closeOutside = await press('.world-canvas'); await closeOutside(); await expect(page.locator('.inventory-slots')).toBeHidden();
       const openEscape = await press('.backpack-toggle'); await openEscape();
       await page.keyboard.press('Escape'); await expect(page.locator('.inventory-slots')).toBeHidden();
+      // Every confirmed wallet gain animates; initial balances and spending never replay a reward.
+      await expect(page.locator('.gold-gain')).toBeHidden();
+      await page.evaluate(() => { const f = (window as any).interactionFixture; f.snapshot.gold = 20; f.ui.setSnapshot(f.snapshot, 24); });
+      await expect(page.locator('.gold-gain')).toHaveText('+20 GOLD');
+      await expect(page.locator('[data-ref=hud-gold]')).toHaveText('20');
+      await page.evaluate(() => { const f = (window as any).interactionFixture; f.snapshot.gold = 23; f.ui.setSnapshot(f.snapshot, 24); });
+      await expect(page.locator('.gold-gain')).toHaveText('+23 GOLD');
+      await expect(page.locator('[data-ref=hud-gold]')).toHaveText('23');
+      await page.screenshot({ path: `test-results/gold-gain-${width}x${height}.png` });
+      await page.evaluate(() => { const f = (window as any).interactionFixture; f.snapshot.gold = 10; f.ui.setSnapshot(f.snapshot, 24); });
+      await expect(page.locator('.gold-gain')).toBeHidden(); await expect(page.locator('[data-ref=hud-gold]')).toHaveText('10');
+      await page.evaluate(() => { const f = (window as any).interactionFixture; f.snapshot.self.hp = 0; f.snapshot.self.deadUntil = f.snapshot.time + 5000; f.ui.setSnapshot(f.snapshot, 24); });
+      await expect(page.locator('.backpack-toggle')).toBeDisabled(); await expect(page.locator('.inventory-slots')).toBeHidden();
+      await page.evaluate(() => { const f = (window as any).interactionFixture; f.snapshot.self.hp = 110; f.snapshot.self.deadUntil = 0; f.ui.setSnapshot(f.snapshot, 24); });
+      await expect(page.locator('.backpack-toggle')).toBeEnabled();
+      const afterRespawn = await press('.backpack-toggle'); await afterRespawn(); await expect(page.locator('.inventory-slots')).toBeVisible();
+      const afterRespawnClose = await press('.world-canvas'); await afterRespawnClose();
+      const dropOpacity = await page.evaluate(() => {
+        const f = (window as any).interactionFixture, renderer = f.renderer, ctx = renderer.ctx, recorded: number[] = [];
+        const fill = ctx.fill.bind(ctx); ctx.fill = (...args: any[]) => { if (['#db6270', '#efc66e', '#d5b78a'].includes(ctx.fillStyle)) recorded.push(ctx.globalAlpha); fill(...args); };
+        const sample = (itemId: string, inventory: unknown) => {
+          recorded.length = 0;
+          renderer.render({ time: 1000, self: f.snapshot.self, actors: [], projectiles: [], pickups: [], events: [], selectedId: null, previewClass: 'mage', playing: true,
+            inventory, groundItems: [{ id: 'drop', x: f.snapshot.self.x + 80, y: f.snapshot.self.y, stack: { itemId, quantity: 1 }, expiresAt: 1200 }] });
+          return [...recorded];
+        };
+        const empty = { version: 1, capacity: 1, slots: [null] }, full = { version: 1, capacity: 1, slots: [{ itemId: 'slime-innards', quantity: 9999 }] };
+        const results = { empty: sample('healing-potion', empty), full: sample('healing-potion', full), currency: sample('gold', full), upgrade: sample('backpack-2', full), stack: sample('healing-potion', { ...full, slots: [{ itemId: 'healing-potion', quantity: 19 }] }) };
+        ctx.fill = fill; return results;
+      });
+      for (const key of ['empty', 'currency', 'upgrade', 'stack'] as const) { assert.ok(dropOpacity[key].length); assert.ok(dropOpacity[key].every(value => value === 1), `${key}: collectible drops are opaque even just before expiry`); }
+      assert.ok(dropOpacity.full.length && dropOpacity.full.every(value => Math.abs(value - .32) < .001), 'only uncollectible loot fades');
       assert.equal(await page.evaluate(() => (window as any).interactionFixture.releases()), await page.evaluate(() => (window as any).interactionFixture.initialReleases));
       if (touch) await cdp!.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       assert.deepEqual(errors, []); await context.close();

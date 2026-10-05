@@ -15,7 +15,7 @@ export function drawItemArt(ctx: CanvasRenderingContext2D, itemId: string, size:
     ctx.fillStyle = '#efd9a1'; ctx.fillRect(21, 19, 6, 7); ctx.restore(); return;
   }
   if (item.appearance === 'potion') {
-    ctx.fillStyle = '#c6e9eccc'; ctx.strokeStyle = '#d6f4ef'; ctx.lineWidth = 1.5;
+    ctx.fillStyle = '#c6e9ec'; ctx.strokeStyle = '#d6f4ef'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(18, 10); ctx.lineTo(30, 10); ctx.lineTo(30, 19); ctx.bezierCurveTo(46, 34, 36, 44, 24, 44); ctx.bezierCurveTo(12, 44, 2, 34, 18, 19); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#db6270'; ctx.beginPath(); ctx.ellipse(24, 33, 12, 8, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#a77d4c'; ctx.beginPath(); ctx.roundRect(17, 5, 14, 8, 2); ctx.fill();

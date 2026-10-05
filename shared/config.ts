@@ -1,6 +1,6 @@
 import type { ClassDef, ClassId } from './types';
 import { WORLD_DOCUMENT } from './world-content';
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 13;
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
 export const SNAPSHOT_RATE = 15;

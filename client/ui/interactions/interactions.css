@@ -7,6 +7,12 @@
 .inventory-slot canvas, .backpack-toggle canvas { width:100%; height:100%; pointer-events:none; }
 .inventory-slot b, .backpack-toggle b { position:absolute; right:4px; bottom:2px; color:#fff3c3; font-size:13px; text-shadow:0 1px 3px #000; pointer-events:none; }
 .backpack-toggle[aria-expanded=true] { border-color:#c7b18b; box-shadow:0 0 12px #c7b18b25; }
+.backpack-toggle:disabled { opacity:.4; cursor:default }
+.inventory-feedback { position:fixed; z-index:60; display:flex; align-items:center; gap:5px; height:36px; padding:3px 9px 3px 4px; border:1px solid #a8ccb388; border-radius:10px; background:#172b24f5; box-shadow:0 3px 14px #0006; pointer-events:none; white-space:nowrap }
+.inventory-feedback canvas { width:28px; height:28px }
+.inventory-feedback strong { font-size:14px; color:#c6f0d1 }
+.inventory-feedback span { font-size:11px; color:#e4edde }
+.inventory-feedback[data-kind=drop] strong, .inventory-feedback[data-kind=consume] strong, .inventory-feedback[data-kind=deliver] strong { color:#f1d7a0 }
 .inventory-slot.is-empty::after { content:'◇'; position:absolute; inset:0; display:grid; place-items:center; color:#c7d1ae4d; font-size:22px; }
 .inventory-slot.is-requested { border-color:#efcf6e; box-shadow:0 0 14px #e7be3b44; }
 .inventory-slot.is-holding { animation:inventory-hold .65s linear forwards; }
@@ -26,11 +32,34 @@
 .npc-dialogue header { display:flex; gap:12px; align-items:center; flex:none; }
 .npc-dialogue header strong { flex:1; color:#f4d89b; font-size:15px; }
 .npc-dialogue header button { background:none; border:0; color:#d9e0c9; font-size:24px; cursor:pointer; }
-.dialogue-scroll { overflow-y:auto; min-height:0; overscroll-behavior:contain; scrollbar-width:thin; touch-action:pan-y; }
+.dialogue-scroll { overflow-y:auto; min-height:0; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#81967a #16251e; touch-action:pan-y; }
+.dialogue-scroll::-webkit-scrollbar { width:5px }
+.dialogue-scroll::-webkit-scrollbar-track { background:#16251e; border-radius:9px }
+.dialogue-scroll::-webkit-scrollbar-thumb { background:#81967a; border-radius:9px; border:1px solid #16251e }
+.dialogue-scroll::-webkit-scrollbar-button { display:none }
 .npc-dialogue p { font-size:14px; line-height:1.65; margin:10px 0 12px; }
 .dialogue-request { display:block; padding:8px; background:#cfba6630; border-radius:6px; font-size:11px; line-height:1.5; margin-bottom:10px; }
 .dialogue-choices { display:flex; flex-wrap:wrap; gap:8px; flex:none; padding-top:6px; }
 .dialogue-choices button { font-size:12px; text-align:left; padding:9px 12px; }
+.npc-dialogue.is-shop .npc-portrait { display:none }
+.npc-dialogue.is-shop { max-height:min(440px,calc(var(--game-height,100dvh) - 180px)) }
+.vendor-offers { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:2px 0 8px }
+.vendor-offer { display:grid; grid-template-columns:38px 1fr; gap:5px 7px; padding:9px; border:1px solid #b4c29444; border-radius:10px; background:#17251f99 }
+.vendor-offer canvas { width:38px; height:38px; grid-row:span 2 }
+.vendor-offer strong { font-size:12px; align-self:end }
+.vendor-offer small { font-size:10px; color:#bfcaad; line-height:1.3 }
+.vendor-offer button { grid-column:1/-1; padding:8px 4px; border:1px solid #b4c29477; border-radius:7px; background:#394b31; font:inherit; font-size:11px; cursor:pointer }
+.vendor-offer button:disabled { opacity:.45; cursor:default }
+.dialogue-rewards { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; padding:8px; border:1px solid #d8c58455; border-radius:8px; background:#cfba661a }
+.dialogue-rewards>strong { width:100%; font-size:11px; color:#f4d89b }
+.dialogue-rewards>small { width:100%; color:#d0c4a2; font-size:10px }
+.dialogue-rewards>span { display:flex; align-items:center; gap:5px; font-size:11px }
+.dialogue-rewards canvas { width:26px; height:26px }
+.rift-app.touch-layout .vendor-offer { padding:6px; gap:4px }
+.rift-app.touch-layout .vendor-offer strong { font-size:11px }
+@media (orientation:landscape) and (min-width:800px) and (max-height:600px) {
+  .rift-app.touch-layout .npc-dialogue.is-shop { width:min(420px,calc(100% - 340px)); max-height:min(240px,calc(var(--game-height,100dvh) - 140px)) }
+}
 .interaction-ui button:focus-visible, .dialogue-scroll:focus-visible { outline:2px solid #f3d48b; outline-offset:3px; }
 @keyframes inventory-hold { to { box-shadow:inset 0 0 0 5px #e0c67d; border-color:#edd092; } }
 .rift-app.touch-layout .inventory-panel { top:calc(var(--safe-top,0px) + 92px); right:calc(var(--safe-right,0px) + 12px); gap:6px; }

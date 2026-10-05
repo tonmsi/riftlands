@@ -1,9 +1,11 @@
 import type { AbilitySlot, Actor, ArenaGateState, ClassId, GameEvent, Pickup, Projectile, Trap, Vec2 } from '../../shared/types';
 import type { GroundItem } from '../../shared/interactions';
+import type { Inventory } from '../../shared/items';
 import type { BossDrop, BossLockState, BossPreparationState, BossWindup } from '../../shared/bosses';
 export interface RenderFrame {
   goldDrops?: BossDrop[];
   groundItems?: GroundItem[];
+  inventory?: Inventory;
   bossWindups?: BossWindup[];
   bossLocks?: BossLockState[];
   bossPreparations?: BossPreparationState[];

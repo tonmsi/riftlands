@@ -7,6 +7,7 @@ import { World } from '../../shared/world';
 import { ARENA_GATE } from '../../shared/arena';
 import { WorldAssetArt } from './world-asset-art';
 import { drawItemArt } from '../ui/interactions/item-art';
+import { canCollectItem } from '../../shared/items';
 import { shapeBounds } from '../../shared/world-authoring';
 import { activeAssetFades } from './asset-visibility';
 import { clipAssetCells } from './asset-cell-regions';
@@ -299,7 +300,8 @@ export class Renderer {
     for (const pickup of pickups) if (this.visible(pickup)) this.drawPickup(pickup, frame.time);
     for (const item of frame.groundItems ?? []) if (this.visible(item) && item.expiresAt > frame.time) {
       ctx.save(); ctx.translate(item.x - 11, item.y - 11 + Math.sin(frame.time * .003 + item.x) * 1.5);
-      ctx.globalAlpha = Math.min(1, (item.expiresAt - frame.time) / 1000); drawItemArt(ctx, item.stack.itemId, 22, frame.time);
+      ctx.globalAlpha = frame.inventory && !canCollectItem(frame.inventory, item.stack.itemId, item.stack.quantity) ? .32 : 1;
+      drawItemArt(ctx, item.stack.itemId, 22, frame.time);
       if (item.stack.quantity > 1) { ctx.font = 'bold 9px system-ui'; ctx.fillStyle = '#f5e7b3'; ctx.fillText(String(item.stack.quantity), 15, 24); }
       ctx.restore();
     }

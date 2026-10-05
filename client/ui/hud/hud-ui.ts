@@ -14,6 +14,7 @@ import type { HudActions } from '../ui-actions';
 import { SLOTS, UIRefs, textElement } from '../ui-dom';
 import { equippedAbility } from '../../../shared/progression';
 import { XpFeedback } from './xp-feedback';
+import { GoldFeedback } from './gold-feedback';
 
 export interface HudHooks { entranceVisible(): boolean; }
 export class HudUI {
@@ -33,6 +34,7 @@ export class HudUI {
 
   private readonly arenaStatus = document.createElement('div');
   private readonly goldWallet: HTMLElement;
+  private readonly goldFeedback: GoldFeedback;
   private controls = defaultControls();
   private readonly display: GameDisplay;
   private readonly exitDialog = document.createElement('dialog');
@@ -59,6 +61,7 @@ export class HudUI {
     this.arenaStatus.setAttribute('role', 'status');
     root.append(this.arenaStatus);
     this.goldWallet = this.ref('hud-gold');
+    this.goldFeedback = new GoldFeedback(this.goldWallet);
     this.canvas = root.querySelector<HTMLCanvasElement>('.world-canvas')!;
     this.popups = popups;
     this.interactions = new InteractionUI(root, command => this.actions.interact?.(command), message => this.toast(message), () => this.canvas.focus({ preventScroll: true }), this.popups);
@@ -298,7 +301,7 @@ export class HudUI {
     this.root.querySelector('.combat-caption > span:last-child')!.textContent = `${settings.bindings.basic.map(bindingLabel).join(' / ')} per attaccare`;
   }
   setPlaying(playing: boolean): void {
-    if (!playing) { this.xpFeedback?.reset(); this.activeBuild = ''; }
+    if (!playing) { this.xpFeedback?.reset(); this.goldFeedback.reset(); this.activeBuild = ''; }
     if (!playing) this.popups.dismiss();
     if (!playing) this.setMapVisible(false);
     this.isPlaying = playing;
@@ -320,7 +323,7 @@ export class HudUI {
     }
   }
   setConnection(status: 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline', detail?: string): void {
-    if (status === 'reconnecting' || status === 'offline') this.xpFeedback?.reset();
+    if (status === 'reconnecting' || status === 'offline') { this.xpFeedback?.reset(); this.goldFeedback.reset(); }
     const banner = this.ref('connection-banner');
     banner.hidden = !this.isPlaying || (status !== 'offline' && status !== 'reconnecting');
     banner.textContent = status === 'reconnecting'
@@ -358,7 +361,7 @@ export class HudUI {
     this.write('map-status', snapshot.sanctuary === 'safe' ? 'ZONA SICURA · NO PVP' : snapshot.sanctuary === 'combat' ? `VULNERABILE · ${Math.max(0, Math.ceil(((player.pvpUntil ?? 0) - snapshot.time) / 1000))}s` : snapshot.sanctuary === 'outside' ? 'PVP ATTIVO' : 'ISTANZA PVP');
     this.write('online', String(snapshot.online));
     const gold = snapshot.gold ?? 0;
-    this.goldWallet.textContent = String(gold);
+    this.goldFeedback.update(player.id, gold);
     const gate = snapshot.arenaGate;
     const bossPreparation = snapshot.bossPreparations?.[0];
     const worldTip = this.root.querySelector<HTMLElement>('.world-tip');
