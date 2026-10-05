@@ -5,6 +5,7 @@ import type { SnapshotActor } from '../shared/snapshot-actor';
 import type { Account } from './store';
 import type { BossEncounter } from './boss-encounter';
 import type { InteractionSystem } from './interactions';
+import type { FishingSystem } from './fishing/fishing-system';
 import { actorVisibleTo } from './actor-visibility';
 import { SnapshotPrivateState } from './snapshot-private-state';
 
@@ -14,7 +15,7 @@ interface SnapshotSource {
   accounts: ReadonlyMap<string, Account>; bosses: ReadonlyMap<string, BossEncounter>;
   projectiles: ReadonlyMap<string, Projectile>; pickups: ReadonlyMap<string, Pickup>; traps: ReadonlyMap<string, Trap>;
   events: readonly GameEvent[]; activeChunks: ReadonlyMap<string, unknown>; interactions: InteractionSystem;
-  tick: number; now: number; mode: RoomMode;
+  tick: number; now: number; mode: RoomMode; fishing?: FishingSystem;
 }
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
 const CELL_SIZE = 768;
@@ -79,6 +80,8 @@ export class SnapshotBuilder {
       gold: account?.gold ?? 0,
       ...this.privateState.read(id, account),
       inventoryActions: s.interactions.feedback(id, s.now),
+      fishing: s.fishing?.view(id) ?? null,
+      fishingAvailable: s.mode === 'world' && s.fishing?.available(id),
       ...(s.mode === 'world' ? { groundItems: s.interactions.visibleDrops(id, s.now, INTEREST_RADIUS), dialogue: s.interactions.view(id, s.now) } : { groundItems: [], dialogue: null }),
       goldDrops: [...s.bosses.values()].flatMap(encounter => encounter.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > s.now && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop }))),
       bossWindups: [...s.bosses.values()].flatMap(encounter => encounter.windup && distance(self, encounter.windup) < INTEREST_RADIUS ? [{ ...encounter.windup }] : []),

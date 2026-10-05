@@ -7,7 +7,7 @@ import { newCharacter, normalizeLoadout, unlockTier, validLoadout, type Characte
 import { activateCharacter, characterFor } from './character-progress';
 export { activateCharacter, characterFor, saveCharacterBuild } from './character-progress';
 import { validBossStates, type BossState } from '../shared/bosses';
-import { newInventory, validInventory, type Inventory } from '../shared/items';
+import { discardLegacyUsedBaits, newInventory, validInventory, type Inventory } from '../shared/items';
 import { newNarrativeProgress, validNarrativeProgress, type NarrativeProgress } from '../shared/narrative';
 import { SynchronousSaveWriter, type SaveWriter } from './save-writer';
 import type { GameplayPersistence } from './gameplay-persistence';
@@ -120,11 +120,13 @@ export class AccountStore implements GameplayPersistence {
         account.gold ??= 0;
         if (account.inventory !== undefined && !validInventory(account.inventory) || account.narrative !== undefined && !validNarrativeProgress(account.narrative)) throw new Error('Inventario o missioni non validi.');
         account.inventory ??= newInventory(); account.narrative ??= newNarrativeProgress();
+        if (discardLegacyUsedBaits(account.inventory)) this.dirty = true;
         if (account.characters !== undefined) {
           if (!account.characters || typeof account.characters !== 'object' || Array.isArray(account.characters)) throw new Error('Personaggi non validi.');
           for (const [classId, c] of Object.entries(account.characters)) {
             if (!Object.hasOwn(CLASSES, classId) || !c || !Number.isSafeInteger(c.xp) || c.xp < 0 || !Number.isInteger(c.configuredTier) || c.configuredTier < 0 || c.configuredTier > 3
               || !validLoadout(c.loadout, levelFromXp(c.xp), classId as ClassId) || !validInventory(c.inventory) || !validNarrativeProgress(c.narrative)) throw new Error('Progressione personaggio non valida.');
+            if (discardLegacyUsedBaits(c.inventory)) this.dirty = true;
           }
           activateCharacter(account, account.body?.classId ?? 'mage');
         }

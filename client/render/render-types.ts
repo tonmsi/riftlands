@@ -3,6 +3,8 @@ import type { GroundItem } from '../../shared/interactions';
 import type { Inventory } from '../../shared/items';
 import type { BossDrop, BossLockState, BossPreparationState, BossWindup } from '../../shared/bosses';
 export interface RenderFrame {
+  fishing?: import('../../shared/fishing/model').FishingView | null;
+  fishingTarget?: Vec2;
   goldDrops?: BossDrop[];
   groundItems?: GroundItem[];
   inventory?: Inventory;

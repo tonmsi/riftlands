@@ -21,7 +21,7 @@ test('real vendor sells and equips backpacks, preserves contents and spends gold
   const vendor = WORLD_DOCUMENT.npcs.find(npc => npc.npcKind === 'outpost-vendor')!; assert.ok(vendor);
   const users = ['DesktopBuyer', 'TouchBuyer'].map((name, index) => {
     const user = store.register(name, 'test-password'), body = sim.addPlayer(user.account, 'mage'); user.account.gold = 200;
-    Object.assign(body, { x: WORLD_DOCUMENT.spawn.x * TILE_SIZE + 20, y: WORLD_DOCUMENT.spawn.y * TILE_SIZE + index * 40, spawnProtectedUntil: Date.now() + 120_000 });
+    Object.assign(body, { x: (vendor.x + .5) * TILE_SIZE - 48, y: (vendor.y + .5) * TILE_SIZE + index * 24, spawnProtectedUntil: Date.now() + 120_000 });
     insertItem(user.account.inventory!, 'slime-innards', 9999); return user;
   });
   sim.checkpoint(); store.flush();
@@ -47,7 +47,7 @@ test('real vendor sells and equips backpacks, preserves contents and spends gold
       await page.goto(`http://127.0.0.1:${port}`); await page.locator('[data-ref=join]').click(); await expect(page.locator('[data-ref=world-entrance]')).toBeHidden();
       await expect(page.locator('[data-ref=hud-gold]')).toHaveText('200'); await expect(page.locator('.gold-gain')).toBeHidden();
       await page.keyboard.press('KeyF'); await expect(page.locator('[data-speaker]')).toHaveText('Ada, mercante');
-      await expect(page.locator('.vendor-offer')).toHaveCount(5); await expect(page.locator('[data-offer=potion]')).toBeDisabled();
+      await expect(page.locator('.vendor-offer')).toHaveCount(6); await expect(page.locator('[data-offer=potion]')).toBeDisabled();
       const activate = async (selector: string) => { if (touch) await page.locator(selector).tap(); else await page.locator(selector).click(); };
       await activate('[data-offer=bag-3]'); await expect(page.locator('.backpack-toggle b')).toHaveText('3'); await expect(page.locator('[data-ref=hud-gold]')).toHaveText('175');
       assert.equal(latest!.inventory!.slots[0]!.quantity, 9999);

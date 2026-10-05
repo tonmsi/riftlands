@@ -72,7 +72,7 @@ test('real multiplayer quest: accept, deliver via slot, touch hold to discard, a
     await expect(fresh.page.locator('[data-dialogue-text]')).toContainText('dopo quello che è successo');
     await fresh.page.locator('[data-choice=event]').click(); await expect(fresh.page.locator('[data-dialogue-text]')).toContainText('certe persone non tornano');
     await fresh.page.locator('[data-choice=back]').click(); await fresh.page.locator('[data-choice=accept]').click();
-    await expect.poll(() => fresh.latest().actors.find(actor => actor.dialogueId)?.questMarker).toBe('active');
+    await expect.poll(() => fresh.latest().actors.find(actor => actor.dialogueId === 'old-fisher')?.questMarker).toBe('active');
     await expect(fresh.page.locator('.player-panel')).toHaveClass(/has-active-quests/);
     await expect.poll(() => fresh.narrative().quests['stinking-bait']?.status).toBe('active');
     const journalFrames = fresh.narrativeFrames();
@@ -108,7 +108,7 @@ test('real multiplayer quest: accept, deliver via slot, touch hold to discard, a
     await expect(ready.page.locator('.dialogue-rewards')).toContainText('Pozione curativa');
     await expect(ready.page.locator('.gold-gain')).toHaveText('+20 GOLD');
     await expect(ready.page.locator('.inventory-slot b')).toHaveText('2');
-    await expect.poll(() => ready.latest().actors.find(actor => actor.dialogueId)?.questMarker).toBe('completed');
+    await expect.poll(() => ready.latest().actors.find(actor => actor.dialogueId === 'old-fisher')?.questMarker).toBe('completed');
     await expect(ready.page.locator('.player-panel')).not.toHaveClass(/has-active-quests/);
     await expect.poll(() => ready.narrative().quests['stinking-bait']?.completions).toBe(1);
     await expect.poll(() => ready.latest().groundItems?.map(drop => drop.stack.itemId)).toEqual(['backpack-2', 'healing-potion']);
@@ -129,7 +129,7 @@ test('real multiplayer quest: accept, deliver via slot, touch hold to discard, a
     await expect(ready.page.locator('.drop-item-panel input')).toHaveCount(0);
     await ready.page.locator('[data-drop-confirm]').tap(); await expect(ready.page.locator('.inventory-slot')).toHaveAttribute('aria-label', 'Slot inventario vuoto');
     await expect(collector.page.locator('.inventory-slot b')).toHaveText('2');
-    assert.equal(collector.latest().actors.find(actor => actor.dialogueId)?.questMarker, 'available', 'public discarded items do not auto-accept quests');
+    assert.equal(collector.latest().actors.find(actor => actor.dialogueId === 'old-fisher')?.questMarker, 'available', 'public discarded items do not auto-accept quests');
     await ready.page.locator('.map-toggle').tap(); await ready.page.locator('[data-ref=leave]').tap();
     await ready.page.locator('[data-exit]').tap(); await expect(ready.page.locator('.game-hud')).toBeHidden();
     await ready.page.locator('[data-screen-target=achievements]').click();

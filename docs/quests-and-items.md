@@ -43,6 +43,7 @@ Uso, consegna, acquisto, raccolta e getto confermati dal server mostrano per cir
 | Zaino da 4 slot | 50 gold |
 | Zaino da 5 slot | 100 gold |
 | Pozione curativa | 3 gold |
+| Canna da pesca di ricambio | 10 gold |
 
 Il prezzo è deciso dal server e si paga solo dopo l'inserimento riuscito. Gli zaini acquistati sostituiscono quello equipaggiato: il contenuto rimane, lo zaino precedente non viene inserito nella sacca. Il negozio impedisce di comprare zaini uguali o più piccoli, per evitare di riempire la borsa. Le pozioni si aggiungono allo stack esistente o a uno slot libero. Offerte non disponibili indicano saldo insufficiente, inventario pieno o zaino già posseduto. Ogni acquisto riuscito cambia il token della conversazione: un comando duplicato non addebita due volte. Distanza, linea di vista, vita, combattimento e istanza sono verificati come per Nereo. La barra di scorrimento del catalogo è sottile e riprende i colori del pannello.
 
@@ -72,7 +73,7 @@ Ogni classe conserva il proprio progresso narrativo. Il progresso narrativo viag
 
 Nereo passa per lo stesso caricamento, cache dei frame, orientamento e animazione degli altri NPC. Per assegnargli una sprite aggiungi `assets/npc-old-fisher.svg` oppure `assets/npc-old-fisher.png`: il foglio standard contiene **4 colonne × 4 righe**, con celle di **256 × 256**, orientamenti sud, nord, ovest, est. Gli altri template possono usare `assets/npc-<id-template>.svg` o `.png`. Se il foglio manca o non si carica viene usato il fallback circolare. Ricostruisci il frontend dopo aver aggiunto una nuova risorsa.
 
-Riavvia il server e aggiorna il browser dopo questa modifica: il protocollo è passato alla versione 13.
+Riavvia il server e aggiorna il browser dopo questa modifica: il protocollo è passato alla versione 15. Il gioco di pesca è descritto in [fishing.md](fishing.md).
 
 ## Struttura
 

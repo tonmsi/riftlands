@@ -11,6 +11,7 @@ import { BOSS_BY_ID, type BossDefinition } from '../shared/bosses';
 import { DUNGEON_BY_BOSS_ID, type DungeonDefinition } from '../shared/dungeons';
 import { NPC_DEFINITIONS, type NpcWanderBehavior } from '../shared/npcs';
 import { InteractionSystem } from './interactions';
+import { FishingSystem } from './fishing/fishing-system';
 import { validInteractionCommand, type InteractionCommand } from '../shared/interactions';
 import { newInventory } from '../shared/items';
 import { newNarrativeProgress } from '../shared/narrative';
@@ -43,6 +44,7 @@ export type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
 export class WorldSimulation {
   private readonly snapshots = new SnapshotBuilder(this);
   readonly interactions: InteractionSystem;
+  readonly fishing: FishingSystem;
   readonly bosses = new Map<string, BossEncounter>();
   readonly world: World;
   readonly seed: number;
@@ -92,6 +94,11 @@ export class WorldSimulation {
       rewardXp: (id, amount) => this.awardXp(id, amount),
       heal: (player, amount) => this.heal(player, amount),
     }, environment?.lootRandom);
+    this.fishing = new FishingSystem({ players: this.players, accounts: this.accounts, world: this.world,
+      connected: id => !!this.connections.get(id)?.connected, combatAt: id => this.connections.get(id)?.combatAt ?? 0,
+      changed: id => this.persistPlayer(id), rewardDrop: (id, stack, at, ttl) => this.interactions.rewardDrop(id, stack, at, ttl),
+      feedback: (id, kind, stack, at, slot) => this.interactions.action(id, kind, stack, at, slot),
+    });
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
     if (mode === 'world') {
       for (const dungeon of environment?.dungeons ?? DUNGEON_BY_BOSS_ID.values()) {
@@ -114,10 +121,14 @@ export class WorldSimulation {
   get online(): number { return [...this.connections.values()].filter(connection => connection.connected).length; }
   interact(id: string, command: InteractionCommand): void {
     if (this.mode !== 'world' || !validInteractionCommand(command)) throw new Error('Interazione non disponibile in questa istanza.');
+    if (command.kind === 'fishing') { this.fishing.command(id, command.command, this.now); this.pendingCasts.delete(id); this.interactions.close(id); return; }
+    if (this.fishing.busy(id)) throw new Error('Ritira la lenza prima di usare l’inventario o parlare.');
+    this.fishing.close(id);
     this.interactions.command(id, command, this.now);
   }
 
   addPlayer(account: Account, classId: ClassId): Actor {
+    this.fishing.close(account.id);
     this.snapshots.invalidate();
     account.inventory ??= newInventory(); account.narrative ??= newNarrativeProgress();
     const current = this.players.get(account.id);
@@ -179,6 +190,7 @@ export class WorldSimulation {
   }
 
   disconnectPlayer(id: string): void {
+    this.fishing.close(id);
     this.interactions.close(id);
     const connection = this.connections.get(id);
     if (!connection) return;
@@ -199,6 +211,7 @@ export class WorldSimulation {
 
   /** Transfer is distinct from logout: no old body or owned attack may remain. */
   detachPlayer(id: string): void {
+    this.fishing.close(id);
     this.interactions.close(id);
     this.persistPlayer(id);
     this.players.delete(id);
@@ -254,7 +267,7 @@ export class WorldSimulation {
       if (input) {
         actor.aim = input.aim;
         actor.spriteRow = playerSpriteDirectionRow(input.dx, input.dy, actor.spriteRow ?? 0, input.analogMovement === true);
-        if (input.cast) this.pendingCasts.set(id, input);
+        if (input.cast && !this.fishing.active(id)) this.pendingCasts.set(id, input);
         const magnitude = Math.hypot(input.dx, input.dy);
         if (magnitude > 0) Object.assign(actor, moveWithCollisions(actor, input.dx / Math.max(1, magnitude), input.dy / Math.max(1, magnitude), movementSpeed(actor, this.now) * terrainSpeed(actor, this.world) * dt, this.world));
       }
@@ -279,6 +292,7 @@ export class WorldSimulation {
     this.stepTraps();
     this.stepPickups();
     if (this.mode === 'world') this.interactions.step(this.now);
+    this.fishing.step(this.now);
     for (const encounter of this.bosses.values()) for (const player of this.players.values()) encounter.collect(player, this.accounts.get(player.id)!, !!this.connections.get(player.id)?.connected, this.now);
     while (this.events.length && this.events[0].at + 1800 < this.now) this.events.shift();
     if (this.tick % 150 === 0) {

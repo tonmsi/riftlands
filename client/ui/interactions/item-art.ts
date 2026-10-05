@@ -1,9 +1,11 @@
 import { ITEM_DEFINITIONS } from '../../../shared/items';
+import { drawFishingItem } from '../../fishing/item-art';
 /** Shared procedural artwork for world drops and the inventory; no external image needed. */
 export function drawItemArt(ctx: CanvasRenderingContext2D, itemId: string, size: number, time = 0): void {
   if (!Object.hasOwn(ITEM_DEFINITIONS, itemId)) return;
   ctx.save(); ctx.scale(size / 48, size / 48);
   const item = ITEM_DEFINITIONS[itemId];
+  if (item.appearance === 'rod' || item.appearance === 'fish') { drawFishingItem(ctx, itemId); ctx.restore(); return; }
   if (item.appearance === 'backpack') {
     const colors = ['#98704b', '#98704b', '#718856', '#537f91', '#8e6ca6'];
     ctx.lineWidth = 3; ctx.strokeStyle = '#ddc9a1'; ctx.beginPath(); ctx.roundRect(17, 5, 14, 12, 5); ctx.stroke();
