@@ -3,16 +3,17 @@ import { randomUUID } from '../shared/id';
 import { hasLineOfSight, collidesWorld } from '../shared/physics';
 import type { World } from '../shared/world';
 import type { Account } from './store';
-import { insertItem, newInventory } from '../shared/items';
+import { collectItem, ITEM_DEFINITIONS, newInventory, type ItemStack } from '../shared/items';
 import { acceptQuest, advanceQuest, conditionMatches, DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS, newNarrativeProgress, questStatus, questReward, questCompletions } from '../shared/narrative';
 import { NPC_LOOT_TABLES } from '../shared/loot';
-import { GROUND_ITEM_TTL, INTERACTION_RANGE, type GroundItem, type DialogueView, type InteractionCommand } from '../shared/interactions';
+import { GROUND_ITEM_TTL, LOOT_ITEM_TTL, INTERACTION_RANGE, type GroundItem, type DialogueView, type InteractionCommand } from '../shared/interactions';
 
 interface Host {
   players: ReadonlyMap<string, Actor>; npcs: ReadonlyMap<string, Actor>; accounts: ReadonlyMap<string, Account>; world: World;
   connected: (id: string) => boolean; combatAt: (id: string) => number; changed: (id: string) => void;
   nearbyPlayers: (point: { x: number; y: number }, radius: number) => Actor[];
   rewardXp: (id: string, amount: number) => void;
+  heal: (player: Actor, amount: number) => void;
 }
 interface Session { id: string; targetId: string; dialogueId: string; node: string; startedAt: number; expiresAt: number; }
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -20,6 +21,7 @@ const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => M
 export class InteractionSystem {
   readonly drops = new Map<string, GroundItem>();
   private sessions = new Map<string, Session>();
+  private consumableReadyAt = new Map<string, number>();
   constructor(private host: Host, private random = Math.random) {}
   private account(id: string): Account {
     const account = this.host.accounts.get(id);
@@ -48,6 +50,7 @@ export class InteractionSystem {
       this.sessions.set(id, { id: randomUUID(), targetId: target.id, dialogueId: dialogue.id, node, startedAt: now, expiresAt: now + 120_000 }); return;
     }
     if (command.kind === 'drop-item') { this.drop(id, command.slot, command.itemId, command.quantity, now); return; }
+    if (command.kind === 'consume-item') { this.consume(id, command.slot, command.itemId, now); return; }
     if (command.kind === 'close') { if (this.sessions.get(id)?.id === command.sessionId) this.sessions.delete(id); return; }
     const session = this.session(id, command.sessionId, now), dialogue = DIALOGUE_DEFINITIONS[session.dialogueId], node = dialogue.nodes[session.node];
     if (command.kind === 'choose') {
@@ -68,13 +71,19 @@ export class InteractionSystem {
     const progress = account.narrative!.quests[quest.id], delivered = progress.objectives[quest.objective.id] ?? 0;
     const consumed = Math.min(stack.quantity, quest.objective.quantity - delivered);
     if (consumed <= 0) throw new Error('Consegna già completata.');
-    stack.quantity -= consumed; if (!stack.quantity) account.inventory!.slots[command.slot] = null;
     const previousCompletions = questCompletions(progress);
+    const rewardItems = consumed === quest.objective.quantity - delivered
+      ? (quest.reward?.items ?? []).filter(item => !item.firstOnly || previousCompletions === 0) : [];
+    // Reserve space for every reward before consuming a delivery or completing its mission.
+    if (this.drops.size + rewardItems.length > 2048) throw new Error('Troppi oggetti a terra. Attendi qualche secondo prima di consegnare.');
+    stack.quantity -= consumed; if (!stack.quantity) account.inventory!.slots[command.slot] = null;
     advanceQuest(account.narrative!, quest, consumed, now);
     if (progress.status === 'completed') {
       const reward = questReward(quest, previousCompletions);
       account.gold = (account.gold ?? 0) + reward.gold;
       this.host.rewardXp(id, reward.xp);
+      const player = this.host.players.get(id)!;
+      rewardItems.forEach((item, index) => this.spawnLoot(player, item, id, now, index, 1000, 42));
     }
     this.advance(session, progress.status === 'completed' ? node.itemRequest!.completedNext : node.itemRequest!.progressNext, now); this.host.changed(id);
   }
@@ -94,12 +103,32 @@ export class InteractionSystem {
   killed(victim: Actor, killer: Actor | undefined, now: number): void {
     if (killer?.kind !== 'player' || !this.host.connected(killer.id)) return;
     const account = this.account(killer.id);
+    let index = 0;
     for (const rule of NPC_LOOT_TABLES[victim.npcKind ?? ''] ?? []) {
       if (rule.condition && !conditionMatches(account.narrative!, rule.condition, now) || this.random() >= rule.chance) continue;
       if (this.drops.size >= 2048) return;
-      const drop: GroundItem = { id: randomUUID(), x: victim.x, y: victim.y, stack: { itemId: rule.itemId, quantity: rule.quantity }, expiresAt: now + GROUND_ITEM_TTL, ownerId: killer.id };
-      this.drops.set(drop.id, drop);
+      this.spawnLoot(victim, rule, killer.id, now, index++);
     }
+  }
+  private spawnLoot(origin: Actor, stack: ItemStack, ownerId: string, now: number, index: number, delay = 0, radius = 12): void {
+    let point = { x: origin.x, y: origin.y };
+    for (let i = 0; i < 12; i++) {
+      const angle = origin.aim + (index + i) * Math.PI / 3;
+      const candidate = { x: origin.x + Math.cos(angle) * radius, y: origin.y + Math.sin(angle) * radius };
+      if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world) && hasLineOfSight(origin, candidate, this.host.world)) { point = candidate; break; }
+    }
+    const drop: GroundItem = { id: randomUUID(), ...point, stack: { itemId: stack.itemId, quantity: stack.quantity }, ownerId, availableAt: now + delay, expiresAt: now + LOOT_ITEM_TTL };
+    this.drops.set(drop.id, drop);
+  }
+  private consume(id: string, slot: number, itemId: string, now: number): void {
+    const player = this.host.players.get(id), account = this.account(id), stack = account.inventory!.slots[slot];
+    const effect = ITEM_DEFINITIONS[itemId]?.consumable;
+    if (!player || !this.host.connected(id) || player.hp <= 0 || !stack || stack.itemId !== itemId || !effect) throw new Error('Oggetto non utilizzabile.');
+    if (player.hp >= player.maxHp) throw new Error('La tua vita è già al massimo.');
+    if (now < (this.consumableReadyAt.get(id) ?? 0)) throw new Error('Attendi prima di usare un’altra pozione.');
+    this.host.heal(player, effect.heal);
+    if (--stack.quantity === 0) account.inventory!.slots[slot] = null;
+    this.consumableReadyAt.set(id, now + effect.cooldownMs); this.host.changed(id);
   }
   private drop(id: string, slot: number, itemId: string, quantity: number, now: number): void {
     const player = this.host.players.get(id), account = this.account(id), stack = account.inventory!.slots[slot];
@@ -119,12 +148,15 @@ export class InteractionSystem {
       if (now >= drop.expiresAt) { this.drops.delete(id); continue; }
       for (const player of this.host.nearbyPlayers(drop, 64)) {
         if (!this.host.connected(player.id) || player.hp <= 0 || drop.ownerId && drop.ownerId !== player.id
-          || drop.droppedBy === player.id && now < (drop.ownerPickupAt ?? 0) || distance(player, drop) > player.radius + 10 || !hasLineOfSight(player, drop, this.host.world)) continue;
-        if (!insertItem(this.account(player.id).inventory!, drop.stack.itemId, drop.stack.quantity)) continue;
+          || now < (drop.availableAt ?? 0) || drop.droppedBy === player.id && now < (drop.ownerPickupAt ?? 0) || distance(player, drop) > player.radius + 10 || !hasLineOfSight(player, drop, this.host.world)) continue;
+        const account = this.account(player.id);
+        if (ITEM_DEFINITIONS[drop.stack.itemId]?.currency) account.gold = (account.gold ?? 0) + drop.stack.quantity;
+        else if (!collectItem(account.inventory!, drop.stack.itemId, drop.stack.quantity)) continue;
         this.drops.delete(id); this.host.changed(player.id); break;
       }
     }
     for (const id of this.sessions.keys()) this.view(id, now);
+    for (const id of this.consumableReadyAt.keys()) if (!this.host.players.has(id)) this.consumableReadyAt.delete(id);
   }
   visibleDrops(id: string, now: number, radius: number): GroundItem[] {
     const player = this.host.players.get(id); if (!player) return [];

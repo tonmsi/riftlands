@@ -79,7 +79,7 @@ test('real menu saves paid builds, class levels stay independent and quest XP an
     await expect(page.locator('.ability-bar [data-slot]')).toHaveCount(2);
     const online = await page.request.post(origin + '/api/build', { headers, data: { classId: 'hunter', loadout: { q: 'q', e: 'r' } } }); assert.equal(online.status(), 400);
     await page.keyboard.press('KeyF'); await expect(page.locator('.npc-dialogue')).toBeVisible();
-    await page.locator('.inventory-slot').click(); await expect(page.locator('.xp-gain')).toHaveText('+150 XP');
+    await page.locator('.backpack-toggle').click(); await page.locator('.inventory-slot').click(); await expect(page.locator('.xp-gain')).toHaveText('+150 XP');
     const gainBounds = await page.locator('.xp-gain').boundingBox(), resourceBounds = await page.locator('[data-ref=resource-fill]').boundingBox();
     assert.ok(gainBounds && resourceBounds && gainBounds.y >= resourceBounds.y + resourceBounds.height, 'XP gain sits below the vitals without covering them');
     await expect(page.locator('.level-up-number')).toHaveText('3');

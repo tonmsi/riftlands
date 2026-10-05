@@ -7,6 +7,7 @@ import { WorldSimulation } from '../server/simulation';
 import type { Actor, Snapshot } from '../shared/types';
 import { SnapshotPrivateState } from '../server/snapshot-private-state';
 import type { Account } from '../server/store';
+import { collectItem, newInventory } from '../shared/items';
 
 const room = { id: 'world', epoch: 1 };
 function actor(id: string, x = 0): Actor {
@@ -64,6 +65,22 @@ test('keyframes reconstruct complete actors; unchanged metadata and private data
   assert.equal(Object.hasOwn(second.packet, 'gold'), false);
   assert.deepEqual(second.decoded.inventory, snapshot.inventory); assert.equal(second.decoded.gold, 10);
   assert.equal(second.decoded.narrative, undefined);
+});
+
+test('equipped backpack and expanded contents survive cached private views and JSON deltas', () => {
+  const encoder = new SnapshotEncoder(), decoder = new SnapshotDecoder(), cache = new SnapshotPrivateState();
+  const account = { inventory: newInventory() } as Account, snapshot = frame();
+  snapshot.inventory = cache.read('self', account).inventory; deliver(encoder, decoder, snapshot);
+  collectItem(account.inventory!, 'backpack-2', 1); collectItem(account.inventory!, 'backpack-5', 1);
+  snapshot.inventory = cache.read('self', account).inventory;
+  const changed = deliver(encoder, decoder, snapshot);
+  assert.equal(changed.decoded.inventory!.backpackId, 'backpack-5'); assert.equal(changed.decoded.inventory!.capacity, 5);
+  assert.deepEqual(changed.decoded.inventory!.slots[0], { itemId: 'backpack-2', quantity: 1 });
+  assert.equal(Object.hasOwn(deliver(encoder, decoder, snapshot).packet, 'inventory'), false);
+  // A legacy inventory can acquire its equipped identity without changing its slot contents.
+  const legacy = { inventory: { version: 1, capacity: 2, slots: [null, null] } } as Account;
+  const old = cache.read('legacy', legacy).inventory; legacy.inventory!.backpackId = 'backpack-2';
+  assert.notEqual(cache.read('legacy', legacy).inventory, old);
 });
 
 test('loadouts survive network deltas without retransmitting metadata for identical copied builds', () => {

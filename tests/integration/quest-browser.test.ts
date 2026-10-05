@@ -45,13 +45,19 @@ test('real multiplayer quest: accept, deliver via slot, touch hold to discard, a
     mkdirSync('test-results', { recursive: true });
     const pages = [];
     for (const [index, user] of users.entries()) {
-      const mobile = index === 1, context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 }, isMobile: mobile, hasTouch: mobile });
+      const mobile = index === 1, context = await browser.newContext({ viewport: mobile ? { width: 844, height: 390 } : { width: 1440, height: 900 }, isMobile: mobile, hasTouch: mobile });
       await context.addInitScript(({ token, profile }) => { localStorage.setItem('riftlands.jwt', token); localStorage.setItem('riftlands.profile', JSON.stringify(profile)); }, { token: user.token, profile: publicAccount(user.account) });
       const page = await context.newPage(), errors: string[] = []; let latest: Snapshot | undefined, narrative: NarrativeProgress | undefined, narrativeFrames = 0;
       page.on('pageerror', error => errors.push(error.message));
       page.on('websocket', socket => {
         const observer = new SnapshotObserver();
-        socket.on('framereceived', frame => { const message = observer.read(String(frame.payload)); if (message.type === 'snapshot') { latest = message; if (message.narrative) { narrative = message.narrative; narrativeFrames++; } } });
+        socket.on('framereceived', frame => {
+          const payload = String(frame.payload), packet = JSON.parse(payload), message = observer.read(payload);
+          if (message.type === 'snapshot') {
+            latest = message;
+            if (message.narrative) { narrative = message.narrative; if (packet.base !== null || narrativeFrames === 0) narrativeFrames++; }
+          }
+        });
       });
       await page.goto(`http://127.0.0.1:${port}`); await page.locator('[data-ref=join]').click();
       await expect(page.locator('[data-ref="world-entrance"]')).toBeHidden(); await expect(page.locator('.game-hud')).toBeVisible();
@@ -82,6 +88,7 @@ test('real multiplayer quest: accept, deliver via slot, touch hold to discard, a
     assert.equal(fresh.narrativeFrames(), journalFrames, 'unchanged progress is omitted from subsequent snapshots');
 
     await ready.page.keyboard.press('KeyF'); await expect(ready.page.locator('.dialogue-request')).toContainText('ancora 3');
+    await ready.page.locator('.backpack-toggle').tap();
     const map = (await ready.page.locator('.compact-map').boundingBox())!, slot = (await ready.page.locator('.inventory-slot').boundingBox())!;
     assert.ok(slot.y >= map.y + map.height, 'inventory is below the compact minimap');
     await ready.page.screenshot({ path: 'test-results/quest-mobile.png' });
@@ -92,16 +99,21 @@ test('real multiplayer quest: accept, deliver via slot, touch hold to discard, a
     await ready.page.locator('[data-drop-cancel]').tap(); await expect(ready.page.locator('.inventory-slot b')).toHaveText('5');
     await expect(ready.page.locator('.dialogue-request')).toContainText('ancora 3');
     await ready.page.locator('.inventory-slot').tap(); await expect(ready.page.locator('[data-dialogue-text]')).toContainText('Con queste preparo');
+    await expect(ready.page.locator('.inventory-slots')).toBeHidden();
     await expect(ready.page.locator('.inventory-slot b')).toHaveText('2');
     await expect.poll(() => ready.latest().actors.find(actor => actor.dialogueId)?.questMarker).toBe('completed');
     await expect(ready.page.locator('.player-panel')).not.toHaveClass(/has-active-quests/);
     await expect.poll(() => ready.narrative().quests['stinking-bait']?.completions).toBe(1);
+    await expect.poll(() => ready.latest().groundItems?.map(drop => drop.stack.itemId)).toEqual(['backpack-2', 'healing-potion']);
+    const privateRewards = ready.latest().groundItems!.map(drop => drop.id);
+    assert.ok(!(collector.latest().groundItems ?? []).some(drop => privateRewards.includes(drop.id)), 'quest reward objects are absent from the other player’s network view');
     await ready.page.locator('[data-choice=leave]').tap(); await expect(ready.page.locator('[data-dialogue-text]')).toContainText('Ti maledico');
     await ready.page.locator('[data-choice=leave]').tap(); await expect(ready.page.locator('.npc-dialogue')).toBeHidden();
-    await ready.page.keyboard.press('KeyF'); await expect(ready.page.locator('[data-dialogue-text]')).toContainText('Non ho bisogno di altre interiora');
+    await ready.page.keyboard.press('KeyF'); await expect(ready.page.locator('[data-dialogue-text]')).toContainText('Per ora non ho bisogno di altre interiora');
     await expect(ready.page.locator('[data-choice=accept]')).toHaveCount(0); await ready.page.locator('[data-dialogue-close]').tap();
     await expect(ready.page.locator('.npc-dialogue')).toBeHidden();
 
+    await ready.page.locator('.backpack-toggle').tap();
     const rect = (await ready.page.locator('.inventory-slot').boundingBox())!;
     await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }] });
     await expect(ready.page.locator('.drop-item-panel')).toBeVisible();

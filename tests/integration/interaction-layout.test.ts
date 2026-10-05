@@ -65,7 +65,10 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
         else { await page.mouse.move(point.x, point.y); await page.mouse.down(); }
         return async () => { if (touch) await cdp!.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [point] }); else await page.mouse.up(); };
       };
+      const openBag = await press('.backpack-toggle'); await openBag();
       const releaseSlot = await press('.inventory-slot'); await expect(page.locator('.drop-item-panel')).toBeVisible(); await releaseSlot();
+      await expect(page.locator('[data-item-name]')).toHaveText('Interiora di gelatina');
+      await expect(page.locator('[data-item-description]')).toContainText('esche puzzolenti');
       await expect(page.locator('.drop-item-panel input')).toHaveCount(0); await expect(page.locator('.drop-item-panel output')).toHaveText('600');
       assert.equal(await page.locator('.drop-item-panel').evaluate(element => element.matches(':popover-open')), true, 'discard box is above all HUD layers, including gold');
       if (touch) {
@@ -114,6 +117,7 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
         await page.locator(toggle).click(); await expect(page.locator(panel)).toBeVisible();
         const release = await press('.world-canvas'); await release(); await expect(page.locator(panel)).toBeHidden();
       }
+      const reopenBag = await press('.backpack-toggle'); await reopenBag();
       const releaseAgain = await press('.inventory-slot'); await expect(page.locator('.drop-item-panel')).toBeVisible(); await releaseAgain();
       const dismissDrop = await press('.world-canvas'); await dismissDrop(); await expect(page.locator('.drop-item-panel')).toBeHidden();
       // Dismissed invitations must stay hidden when identical social state is refreshed.
@@ -123,6 +127,31 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
       await page.evaluate(() => { const f = (window as any).interactionFixture; f.ui.setSocial(f.social); });
       await expect(page.locator('[data-ref=team-invite]')).toBeHidden();
       await page.locator('.player-journal-toggle').click(); await page.keyboard.press('Escape'); await expect(page.locator('.quest-journal')).toBeHidden();
+      await page.evaluate(() => {
+        const f = (window as any).interactionFixture;
+        f.snapshot.inventory = { version: 1, backpackId: 'backpack-5', capacity: 5, slots: [{ itemId: 'healing-potion', quantity: 3 }, { itemId: 'backpack-2', quantity: 1 }, { itemId: 'slime-innards', quantity: 4 }, null, null] };
+        f.ui.setSnapshot(f.snapshot, 24);
+      });
+      await expect(page.locator('.inventory-slots')).toBeHidden(); await expect(page.locator('.backpack-toggle b')).toHaveText('5');
+      const openFive = await press('.backpack-toggle'); await openFive();
+      await expect(page.locator('.inventory-slot')).toHaveCount(5);
+      const row = (await page.locator('.inventory-slots').boundingBox())!;
+      assert.ok(row.x >= 0 && row.x + row.width <= width, `${width}x${height}: five-slot bag fits the viewport`);
+      const slots = await page.locator('.inventory-slot').all();
+      for (const slot of slots) assert.equal(Math.round((await slot.boundingBox())!.y), Math.round((await slots[0].boundingBox())!.y), 'all slots stay in one horizontal row');
+      await page.screenshot({ path: `test-results/backpack-${width}x${height}.png` });
+      const heldBag = await press('[data-item-slot="1"]'); await expect(page.locator('.drop-item-panel')).toBeVisible(); await heldBag();
+      await expect(page.locator('[data-item-name]')).toHaveText('Zaino da 2 slot');
+      await expect(page.locator('[data-item-description]')).toContainText('non aggiungono spazio');
+      await page.screenshot({ path: `test-results/backpack-details-${width}x${height}.png` });
+      const cancelBagDrop = await press('[data-drop-cancel]'); await cancelBagDrop();
+      const usePotion = await press('[data-item-slot="0"]'); await usePotion();
+      await expect(page.locator('.inventory-slots')).toBeHidden();
+      assert.deepEqual(await page.evaluate(() => (window as any).interactionFixture.commands.at(-1)), { kind: 'consume-item', slot: 0, itemId: 'healing-potion' });
+      const openOutside = await press('.backpack-toggle'); await openOutside();
+      const closeOutside = await press('.world-canvas'); await closeOutside(); await expect(page.locator('.inventory-slots')).toBeHidden();
+      const openEscape = await press('.backpack-toggle'); await openEscape();
+      await page.keyboard.press('Escape'); await expect(page.locator('.inventory-slots')).toBeHidden();
       assert.equal(await page.evaluate(() => (window as any).interactionFixture.releases()), await page.evaluate(() => (window as any).interactionFixture.initialReleases));
       if (touch) await cdp!.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       assert.deepEqual(errors, []); await context.close();

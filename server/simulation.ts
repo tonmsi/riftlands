@@ -90,6 +90,7 @@ export class WorldSimulation {
       connected: id => !!this.connections.get(id)?.connected, combatAt: id => this.connections.get(id)?.combatAt ?? 0,
       changed: id => this.persistPlayer(id), nearbyPlayers: (point, radius) => this.near(point, radius).filter(actor => actor.kind === 'player'),
       rewardXp: (id, amount) => this.awardXp(id, amount),
+      heal: (player, amount) => this.heal(player, amount),
     }, environment?.lootRandom);
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
     if (mode === 'world') {

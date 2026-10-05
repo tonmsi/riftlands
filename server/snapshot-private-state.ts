@@ -6,7 +6,7 @@ import type { Account } from './store';
 interface PrivateView { inventory: Inventory; narrative: NarrativeProgress; }
 interface CachedView extends PrivateView { narrativeSource?: NarrativeProgress; revision: number; }
 function sameInventory(a: Inventory, b: Inventory): boolean {
-  return a.version === b.version && a.capacity === b.capacity && a.slots.length === b.slots.length
+  return a.version === b.version && a.capacity === b.capacity && a.backpackId === b.backpackId && a.slots.length === b.slots.length
     && a.slots.every((slot, i) => slot === null ? b.slots[i] === null : slot.itemId === b.slots[i]?.itemId && slot.quantity === b.slots[i]?.quantity);
 }
 function copyInventory(source: Inventory): Inventory {

@@ -12,6 +12,8 @@ export class InteractionUI {
   private dialogue: DialogueView | null = null;
   private panel: HTMLElement;
   private slots: HTMLElement;
+  private backpack: HTMLButtonElement;
+  private bagOpen = false;
   private dropPanel: HTMLElement;
   private quantity: QuantityStepper;
   private choiceSignature = '';
@@ -21,9 +23,15 @@ export class InteractionUI {
   private dismissedSession?: string;
   constructor(parent: HTMLElement, private send: (command: InteractionCommand) => void, private notify: (message: string) => void, focusWorld: () => void, popups: PopupManager) {
     this.root.className = 'interaction-ui'; this.root.hidden = true;
-    this.root.innerHTML = '<aside class="inventory-panel" aria-label="Inventario"><div class="inventory-slots"></div><div class="drop-item-panel" role="group" aria-label="Quantità da gettare" hidden><div class="quantity-stepper"><button type="button" data-quantity-minus aria-label="Diminuisci quantità">−</button><output aria-label="Quantità da gettare" aria-live="polite">0</output><button type="button" data-quantity-plus aria-label="Aumenta quantità">+</button></div><div class="drop-item-actions"><button type="button" data-drop-confirm>Getta</button><button type="button" data-drop-cancel>Annulla</button></div></div></aside><section class="npc-dialogue" role="dialog" aria-label="Conversazione" hidden><div class="npc-portrait" aria-hidden="true"><span>◉</span></div><div class="dialogue-content"><header><strong data-speaker></strong><button type="button" data-dialogue-close aria-label="Chiudi conversazione">×</button></header><div class="dialogue-scroll" tabindex="0"><p data-dialogue-text></p><small class="dialogue-request" hidden></small></div><div class="dialogue-choices"></div></div></section>';
+    this.root.innerHTML = '<aside class="inventory-panel" aria-label="Inventario"><button type="button" class="backpack-toggle" aria-label="Apri zaino" aria-expanded="false"><canvas width="56" height="56"></canvas><b>1</b></button><div class="inventory-slots" hidden></div><div class="drop-item-panel" role="group" aria-label="Oggetto e quantità da gettare" hidden><strong data-item-name></strong><p data-item-description></p><div class="quantity-stepper"><button type="button" data-quantity-minus aria-label="Diminuisci quantità">−</button><output aria-label="Quantità da gettare" aria-live="polite">0</output><button type="button" data-quantity-plus aria-label="Aumenta quantità">+</button></div><div class="drop-item-actions"><button type="button" data-drop-confirm>Getta</button><button type="button" data-drop-cancel>Annulla</button></div></div></aside><section class="npc-dialogue" role="dialog" aria-label="Conversazione" hidden><div class="npc-portrait" aria-hidden="true"><span>◉</span></div><div class="dialogue-content"><header><strong data-speaker></strong><button type="button" data-dialogue-close aria-label="Chiudi conversazione">×</button></header><div class="dialogue-scroll" tabindex="0"><p data-dialogue-text></p><small class="dialogue-request" hidden></small></div><div class="dialogue-choices"></div></div></section>';
     parent.append(this.root); this.slots = this.root.querySelector('.inventory-slots')!; this.panel = this.root.querySelector('.npc-dialogue')!;
     this.dropPanel = this.root.querySelector('.drop-item-panel')!; this.quantity = new QuantityStepper(this.dropPanel);
+    this.backpack = this.root.querySelector('.backpack-toggle')!;
+    this.backpack.addEventListener('click', () => this.setBagOpen(!this.bagOpen));
+    popups.register(this.root.querySelector('.inventory-panel')!, () => this.bagOpen, () => this.setBagOpen(false), this.backpack);
+    document.addEventListener('pointerdown', event => {
+      if (this.bagOpen && !(event.target as Element).closest('.inventory-panel')) this.setBagOpen(false);
+    }, true);
     // Native top layer prevents HUD stacking contexts (including gold) covering the popover.
     this.dropPanel.setAttribute('popover', 'manual');
     popups.register(this.dropPanel, () => !this.dropPanel.hidden || !!this.hold, () => {
@@ -48,6 +56,9 @@ export class InteractionUI {
         const current = hold ? this.inventory.slots[hold.slot] : null;
         if (!hold || !current || current.itemId !== hold.itemId) return;
         this.dropping = { slot: hold.slot, itemId: hold.itemId }; this.quantity.set(current.quantity, current.quantity);
+        const item = ITEM_DEFINITIONS[current.itemId];
+        this.dropPanel.querySelector('[data-item-name]')!.textContent = item.name;
+        this.dropPanel.querySelector('[data-item-description]')!.textContent = item.description;
         this.dropPanel.hidden = false; this.dropPanel.showPopover(); this.positionDrop();
       }, 650) };
     });
@@ -57,7 +68,12 @@ export class InteractionUI {
       if (this.suppressClick) { this.suppressClick = false; return; }
       const button = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-item-slot]'); if (!button) return;
       const slot = Number(button.dataset.itemSlot), stack = this.inventory.slots[slot]; if (!stack) return;
-      if (this.dialogue?.request?.itemId === stack.itemId) this.send({ kind: 'use-item', sessionId: this.dialogue.sessionId, slot, itemId: stack.itemId });
+      if (this.dialogue?.request?.itemId === stack.itemId) {
+        this.send({ kind: 'use-item', sessionId: this.dialogue.sessionId, slot, itemId: stack.itemId }); this.setBagOpen(false);
+      }
+      else if (ITEM_DEFINITIONS[stack.itemId].consumable) {
+        this.send({ kind: 'consume-item', slot, itemId: stack.itemId }); this.setBagOpen(false);
+      }
       else this.notify(`${ITEM_DEFINITIONS[stack.itemId].name} × ${stack.quantity}`);
     });
     this.slots.addEventListener('contextmenu', e => e.preventDefault());
@@ -81,11 +97,20 @@ export class InteractionUI {
     document.addEventListener('visibilitychange', () => { if (document.hidden) cancelPointers(); });
   }
   setVisible(visible: boolean): void { this.root.hidden = !visible; if (!visible) this.reset(); }
-  reset(): void { this.cancelHold(); this.dialogue = null; this.dismissedSession = undefined; this.panel.hidden = true; this.choiceSignature = ''; this.closeDrop(); }
+  reset(): void { this.cancelHold(); this.dialogue = null; this.dismissedSession = undefined; this.panel.hidden = true; this.choiceSignature = ''; this.setBagOpen(false); }
+  private setBagOpen(open: boolean): void {
+    this.bagOpen = open; this.slots.hidden = !open;
+    this.backpack.setAttribute('aria-expanded', String(open)); this.backpack.setAttribute('aria-label', `${open ? 'Chiudi' : 'Apri'} zaino, ${this.inventory.capacity} slot`);
+    if (!open) { this.cancelHold(); this.closeDrop(); }
+  }
   private positionDrop(): void {
-    const anchor = this.slots.getBoundingClientRect(), bounds = this.dropPanel.getBoundingClientRect();
-    this.dropPanel.style.left = `${Math.max(8, Math.min(innerWidth - bounds.width - 8, anchor.left - bounds.width - 8))}px`;
-    this.dropPanel.style.top = `${Math.max(8, Math.min(innerHeight - bounds.height - 8, anchor.top - (this.root.parentElement?.classList.contains('touch-layout') ? 12 : 0)))}px`;
+    const anchor = (this.slots.querySelector(`[data-item-slot="${this.dropping?.slot}"]`) ?? this.backpack).getBoundingClientRect(), bounds = this.dropPanel.getBoundingClientRect();
+    const left = Math.max(8, Math.min(innerWidth - bounds.width - 8, anchor.left - bounds.width - 8));
+    const top = Math.max(8, Math.min(innerHeight - bounds.height - 8, anchor.top));
+    const controls = [...this.root.parentElement!.querySelectorAll('.mobile-joystick,[data-ref=ability-bar]')].map(element => element.getBoundingClientRect());
+    const candidates = [{ left, top }, { left, top: 8 }, { left: (innerWidth - bounds.width) / 2, top: 8 }];
+    const point = candidates.find(candidate => controls.every(rect => !rect.width || !rect.height || candidate.left + bounds.width <= rect.left || rect.right <= candidate.left || candidate.top + bounds.height <= rect.top || rect.bottom <= candidate.top)) ?? candidates[0];
+    this.dropPanel.style.left = `${point.left}px`; this.dropPanel.style.top = `${point.top}px`;
   }
   private closeDrop(): void { this.quantity.cancel(); this.dropPanel.hidePopover(); this.dropPanel.hidden = true; this.dropping = undefined; }
   private closeDialogue(): void {
@@ -95,6 +120,16 @@ export class InteractionUI {
   private cancelHold(): void { if (this.hold) clearTimeout(this.hold.timer); this.hold = undefined; this.slots.querySelectorAll('.is-holding').forEach(button => button.classList.remove('is-holding')); }
   update(snapshot: Snapshot): void {
     this.inventory = snapshot.inventory ?? newInventory();
+    const bagSignature = `${this.inventory.backpackId ?? 'starter'}:${this.inventory.capacity}`;
+    if (this.backpack.dataset.bag !== bagSignature) {
+      this.backpack.dataset.bag = bagSignature;
+      const canvas = this.backpack.querySelector('canvas')!, ctx = canvas.getContext('2d')!; ctx.clearRect(0, 0, 56, 56);
+      drawItemArt(ctx, this.inventory.backpackId ?? 'backpack-2', 56);
+      this.backpack.querySelector('b')!.textContent = String(this.inventory.capacity);
+      this.backpack.title = this.inventory.backpackId ? ITEM_DEFINITIONS[this.inventory.backpackId].name : 'Sacca da 1 slot';
+      this.backpack.setAttribute('aria-label', `${this.bagOpen ? 'Chiudi' : 'Apri'} zaino, ${this.inventory.capacity} slot`);
+    }
+    if (snapshot.self.hp <= 0) this.setBagOpen(false);
     if (this.slots.children.length !== this.inventory.capacity) {
       this.cancelHold(); this.slots.replaceChildren(...this.inventory.slots.map((_, index) => {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'inventory-slot'; button.dataset.itemSlot = String(index);
