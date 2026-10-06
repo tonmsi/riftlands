@@ -26,7 +26,7 @@ import { DEVELOPER_XP, equippedAbility, normalizeLoadout } from '../shared/progr
 const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
 const copyActor = (actor: Actor): Actor => ({ ...actor, ...(actor.loadout ? { loadout: { ...actor.loadout } } : {}), effects: actor.effects.map(effect => ({ ...effect })), cooldowns: { ...actor.cooldowns } });
-type Connection = { account: Account; connected: boolean; removeAt: number; inputs: InputCommand[]; ack: number; highestSeq: number; combatAt: number };
+type Connection = { account: Account; connected: boolean; removeAt: number; inputs: InputCommand[]; ack: number; highestSeq: number; combatAt: number; combatUntil?: number };
 type NpcMeta = { home: Vec2; chunk: string; nextAttack: number; aggroTargetId?: string; windup?: { targetId: string; readyAt: number }; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
 type ActiveChunk = { key: string; lastUsed: number; npcIds: string[]; pickupIds: string[] };
 type Team = { id: string; leaderId: string; members: Set<string> };
@@ -488,7 +488,7 @@ export class WorldSimulation {
     actor.spawnProtectedUntil = 0;
     actor.revealedUntil = this.now + 2500;
     const connection = this.connections.get(actor.id);
-    if (connection) connection.combatAt = this.now;
+    if (connection) { connection.combatAt = this.now; connection.combatUntil = this.now + 10_000; }
     this.emit({ kind: 'cast', x: actor.x, y: actor.y, radius: ability.radius, color: ability.color, duration: ability.kind === 'shield' ? 700 : 380, actorId: actor.id, aim: actor.aim, abilityKind: ability.kind, text: ability.name, ...(inputSeq !== undefined ? { inputSeq } : {}) });
     if (ability.kind === 'projectile') {
       const speed = ability.speed ?? 400;
@@ -620,11 +620,11 @@ export class WorldSimulation {
     }
     target.revealedUntil = this.now + 2500;
     const connection = this.connections.get(target.id);
-    if (connection) connection.combatAt = this.now;
+    if (connection) { connection.combatAt = this.now; connection.combatUntil = this.now + 10_000; }
     if (CLASSES[target.classId].resource === 'rage') target.resource = Math.min(target.maxResource, target.resource + 8);
     if (attacker) {
       const source = this.connections.get(attacker.id);
-      if (source) source.combatAt = this.now;
+      if (source) { source.combatAt = this.now; source.combatUntil = this.now + 10_000; }
       if (CLASSES[attacker.classId].resource === 'rage') attacker.resource = Math.min(attacker.maxResource, attacker.resource + 12);
     }
     this.emit({ kind: 'hit', x: target.x, y: target.y, actorId: attacker?.id, targetId: target.id, amount: applied, radius: 26, duration: 500, color: '#ffb8a2' });

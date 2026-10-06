@@ -101,6 +101,7 @@ test('rooms isolate actors and terrain; transfers remove owned projectiles and o
   assert.equal(manager.enqueueInput(ids[0], { seq: 1, dx: 1, dy: 0, aim: 0 }, old.id, old.epoch), true);
   assert.equal(sim.connections.get(ids[0])!.inputs.length, 0);
   const current = manager.stateFor(ids[0]);
+  advance(manager, 10.1); // Arena input is locked throughout the betting countdown.
   manager.enqueueInput(ids[0], { seq: 1, dx: 1, dy: 0, aim: 0 }, current.id, current.epoch);
   assert.equal(sim.connections.get(ids[0])!.inputs.length, 1);
   for (const mode of ['arena', 'battleground'] as const) {

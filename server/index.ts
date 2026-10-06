@@ -255,6 +255,7 @@ function sendSnapshot(session: Session): void {
   if (notice) send(session, { type: 'notice', message: notice, tone: 'info' });
   const result = rooms.takeMatchResult(session.id!);
   if (result) send(session, { type: 'match-result', result });
+  for (const win of rooms.takeBetWins(session.id!)) send(session, { type: 'bet-win', win });
   const snapshot = rooms.snapshotFor(session.id!);
   if (snapshot) {
     const prepared = session.snapshots.prepare(snapshot, state);
@@ -351,6 +352,14 @@ wss.on('connection', (ws, request) => {
           if (!closing && byAccount.get(session.id) === session) sendSnapshot(session);
         }
       } catch (error) { send(session, { type: 'notice', message: error instanceof Error ? error.message : 'Interazione non riuscita.', tone: 'error' }); }
+    } else if (message.type === 'betting') {
+      if (session.interactionTokens < 1) { send(session, { type: 'notice', message: 'Attendi un momento.', tone: 'error' }); return; }
+      session.interactionTokens--;
+      try {
+        rooms.bettingAction(session.id, message.action);
+        store.flush(); await store.drain();
+        if (!closing && byAccount.get(session.id) === session) sendSnapshot(session);
+      } catch (error) { send(session, { type: 'notice', message: error instanceof Error ? error.message : 'Scommessa non riuscita.', tone: 'error' }); }
     } else if (message.type === 'ping') {
       if (!Number.isFinite(message.at) || Math.abs(message.at) > 1e15) { fatal(session, 'Ping non valido.'); return; }
       send(session, { type: 'pong', at: message.at, time: simulation.now });

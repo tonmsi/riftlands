@@ -26,6 +26,7 @@ import { prepareLobbyArt } from './ui/lobby/lobby-assets';
 import { CAMERA_STORAGE_KEY, parseCameraSettings } from './controls/camera-settings';
 import { CameraOptions } from './controls/camera-options';
 import { matchResultText } from './ui/transition-overlay';
+import { BettingUI } from './ui/betting-ui';
 
 let playing = false;
 let latest: Snapshot | null = null;
@@ -88,6 +89,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
     ui.toast('Disconnessione completata.');
   },
   leave: () => {
+    bettingUI.reset();
     fishingUI.reset();
     renderer.clearMatchResult();
     joinGeneration++;
@@ -97,8 +99,8 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   },
   social: (action, targetId) => { connection.send({ type: 'social', action, targetId }); },
   select: id => { selectedId = id; ui.setSelected(latest?.actors.find(actor => actor.id === id) ?? null); },
-  interact: command => { if (playing && connection.connected) connection.send({ type: 'interaction', command }); },
-  cast: slot => { if (playing && connection.connected && !ui.inputBlocked) controls.cast(slot); },
+  interact: command => { if (command.kind === 'talk' && command.targetId === 'authored:npc-arena-bookmaker') { bettingUI.open(); return; } if (playing && connection.connected && !latest?.betting?.spectating) connection.send({ type: 'interaction', command }); },
+  cast: slot => { if (playing && connection.connected && !ui.inputBlocked && !bettingUI.visible && !latest?.betting?.spectating) controls.cast(slot); },
   controlsChanged: settings => {
     if (playing) return;
     releaseControls(); controls.settings = settings;
@@ -134,7 +136,7 @@ const connection = new GameConnection({
   status: (status, detail) => {
     ui.setConnection(status, detail);
     if (status === 'offline' || status === 'reconnecting') { fishingUI.reset(); releaseControls(); localCombat.reset(); }
-    if (status === 'offline') { playing = false; ui.setPlaying(false); if (detail) ui.toast(detail, 'error'); }
+    if (status === 'offline') { bettingUI.reset(); playing = false; ui.setPlaying(false); if (detail) ui.toast(detail, 'error'); }
   },
   authExpired: () => {
     lobbyToken = undefined;
@@ -170,7 +172,7 @@ const connection = new GameConnection({
       const old = predicted;
       latest = message;
       renderer.world.setBossLocks((message.bossLocks ?? []).filter(lock => lock.locked).map(lock => lock.bossId));
-      const result = reconcile(message.self, message.ack, pending, renderer.world, message.time);
+      const result = message.betting?.spectating ? { actor: message.self, pending: [] } : reconcile(message.self, message.ack, pending, renderer.world, message.time);
       pending = result.pending;
       predicted = result.actor;
       localMovement.correct(old, predicted);
@@ -183,6 +185,7 @@ const connection = new GameConnection({
       for (const [id, effect] of effects) if (message.time > effect.at + effect.duration + 250) effects.delete(id);
       while (effects.size > 1024) effects.delete(effects.keys().next().value!);
       ui.setSnapshot(message, connection.ping);
+      bettingUI.update(message);
       fishingUI.update(message);
       const { id, name, xp, kills, deaths } = message.self;
       if (renderer.world.mode === 'world') saveProfile({ id, name, xp, kills, deaths, gold: message.gold ?? 0 });
@@ -201,10 +204,12 @@ const connection = new GameConnection({
       const text = matchResultText(message.result);
       ui.announceMatchResult(`${text.title}. ${text.detail}`);
     }
+    else if (message.type === 'bet-win') bettingUI.win(message.win);
     else if (message.type === 'notice') ui.toast(message.message, message.tone);
     else if (message.type === 'error') ui.toast(message.message, 'error');
   }
 });
+const bettingUI = new BettingUI(document.querySelector<HTMLElement>('.rift-app')!, action => connection.send({ type: 'betting', action }), releaseControls);
 
 function saveProfile(profile: PublicAccount): void {
   const serialized = JSON.stringify(profile);
@@ -235,11 +240,11 @@ const isTyping = (): boolean => {
 };
 
 window.addEventListener('keydown', event => {
-  if (!playing || !connection.connected || ui.inputBlocked || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (!playing || !connection.connected || ui.inputBlocked || bettingUI.visible || latest?.betting?.spectating || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
   if (latest?.fishing && ['Space', 'Enter', 'Escape'].includes(event.code)) { event.preventDefault(); if (!event.repeat) { if (event.code === 'Escape') fishingUI.close(); else fishingUI.press(); } return; }
   if (event.code === 'KeyF' && !event.repeat && predicted) {
     const target = renderedActors.filter(actor => actor.dialogueId && Math.hypot(actor.x - predicted!.x, actor.y - predicted!.y) <= INTERACTION_RANGE).sort((a, b) => Math.hypot(a.x - predicted!.x, a.y - predicted!.y) - Math.hypot(b.x - predicted!.x, b.y - predicted!.y))[0];
-    if (target) { event.preventDefault(); connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
+    if (target) { event.preventDefault(); if (target.id === 'authored:npc-arena-bookmaker') bettingUI.open(); else connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
   }
   if (controls.press(event.code)) {
     event.preventDefault();
@@ -253,7 +258,7 @@ document.addEventListener('focusin', () => { if (isTyping()) releaseControls(); 
 document.addEventListener('visibilitychange', () => { if (document.hidden) { releaseControls(); localCombat.reset(); audio.setActive(false); } });
 ui.canvas.addEventListener('pointermove', event => { if (playing && event.pointerType === 'mouse') controls.setPointer({ x: event.clientX, y: event.clientY }); });
 ui.canvas.addEventListener('pointerdown', event => {
-  if (!playing || !connection.connected || ui.inputBlocked || ![0, 1, 2].includes(event.button)) return;
+  if (!playing || !connection.connected || ui.inputBlocked || bettingUI.visible || latest?.betting?.spectating || ![0, 1, 2].includes(event.button)) return;
   ui.canvas.focus({ preventScroll: true });
   if (event.pointerType === 'mouse') {
     controls.setPointer({ x: event.clientX, y: event.clientY });
@@ -263,14 +268,14 @@ ui.canvas.addEventListener('pointerdown', event => {
   const position = renderer.screenToWorld(event.clientX, event.clientY);
   if (latest?.fishing) { fishingUI.aim(position); return; }
   const target = renderedActors.find(actor => actor.id !== predicted?.id && Math.hypot(actor.x - position.x, actor.y - position.y) < actor.radius + 14);
-  if (target?.dialogueId) { connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
+  if (target?.dialogueId) { if (target.id === 'authored:npc-arena-bookmaker') bettingUI.open(); else connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
   if (target) { selectedId = target.id; ui.setSelected(target); }
   else if (selectedId) { selectedId = null; ui.setSelected(null); }
 });
 
 // Mouse events fire for every button in a chord; pointerdown/up only fire for the first/last.
 ui.canvas.addEventListener('mousedown', event => {
-  if (!playing || !connection.connected || ui.inputBlocked || ![0, 1, 2].includes(event.button)) return;
+  if (!playing || !connection.connected || ui.inputBlocked || bettingUI.visible || latest?.betting?.spectating || ![0, 1, 2].includes(event.button)) return;
   if (latest?.fishing) return;
   controls.setPointer({ x: event.clientX, y: event.clientY });
   const point = renderer.screenToWorld(event.clientX, event.clientY);
@@ -284,10 +289,12 @@ ui.canvas.addEventListener('contextmenu', event => event.preventDefault());
 ui.canvas.addEventListener('auxclick', event => event.preventDefault());
 
 function inputTick(): void {
-  if (!playing || !connection.connected || !predicted || document.hidden) return;
+  if (!playing || !connection.connected || !predicted || document.hidden || latest?.betting?.spectating) return;
+  // Do not fill the reconciliation queue while the arena simulation is paused.
+  if ((latest?.betting?.startsAt ?? 0) > connection.serverTime()) { releaseControls(); return; }
   localMovement.advance(predicted, predicted);
   if (pending.length > 120) { releaseControls(); return; }
-  const { dx, dy, aim, cast, autoAim } = isTyping() || ui.inputBlocked || predicted.hp <= 0
+  const { dx, dy, aim, cast, autoAim } = isTyping() || ui.inputBlocked || bettingUI.visible || predicted.hp <= 0
     ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined, autoAim: false })
     : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation);
   const castTime = connection.serverTime(), castLead = Math.min(150, connection.ping / 2);
@@ -314,7 +321,7 @@ setInterval(() => advanceInputs(performance.now()), 8);
 
 mobileControls = new MobileControls(document.querySelector<HTMLElement>('.rift-app')!, {
   ability: slot => equippedAbility(predicted ?? { classId: ui.selectedClass }, slot),
-  enabled: () => playing && connection.connected && !ui.inputBlocked && !!predicted && predicted.hp > 0,
+  enabled: () => playing && connection.connected && !ui.inputBlocked && !bettingUI.visible && !latest?.betting?.spectating && !!predicted && predicted.hp > 0,
   move: vector => controls.setTouchMovement(vector),
   aim: angle => controls.setTouchAim(angle),
   cast: slot => controls.cast(slot),
@@ -334,7 +341,7 @@ function frame(now: number): void {
   renderedActors = actors;
   const immediateSelf = predicted ? localMovement.sample(predicted, inputAccumulator / (1000 / TICK_RATE), delta) : latest?.self ?? null;
   // Never switch the owner's body onto the delayed remote timeline near enemies.
-  const self = immediateSelf;
+  const self = latest?.betting?.spectating ? actors.find(a => a.id === latest!.self.id) ?? latest.self : immediateSelf;
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const combat = localCombat.sample(self, remoteFrame?.projectiles ?? [], [...effects.values()], renderer.world, time);
   const projectiles = combat.projectiles;
@@ -343,6 +350,7 @@ function frame(now: number): void {
   const frameEvents = combat.events;
   if (audible && self) audio.update(self, actors, frameEvents, latest?.bossWindups ?? [], time);
   renderer.render({
+    spectating: !!latest?.betting?.spectating,
     fishing: latest?.fishing,
     fishingTarget: fishingUI.target,
     arenaGate: latest?.arenaGate,
@@ -362,7 +370,7 @@ function frame(now: number): void {
     selectedId,
     previewClass: ui.selectedClass,
     playing,
-    aimPreview: latest?.fishing ? null : mobileControls?.aimPreview ? { ...mobileControls.aimPreview, angle: mobileControls.aimPreview.angle * renderer.orientation } : (playing && !ui.inputBlocked && !isTyping() && predicted && predicted.hp > 0 && controls.manualPointerAim && equippedAbility(predicted, controls.previewSlot)?.targeting === 'directional'
+    aimPreview: latest?.betting?.spectating || bettingUI.visible || latest?.fishing ? null : mobileControls?.aimPreview ? { ...mobileControls.aimPreview, angle: mobileControls.aimPreview.angle * renderer.orientation } : (playing && !ui.inputBlocked && !isTyping() && predicted && predicted.hp > 0 && controls.manualPointerAim && equippedAbility(predicted, controls.previewSlot)?.targeting === 'directional'
       ? { slot: controls.previewSlot, angle: controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation).aim } : null),
     moveDirection: playing && !isTyping() && predicted ? (() => {
       const input = controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation);

@@ -6,9 +6,15 @@ import type { Account } from './store';
 import type { GameplayPersistence } from './gameplay-persistence';
 import { WorldSimulation, type SocialAction } from './simulation';
 import type { InteractionCommand } from '../shared/interactions';
+import { INTERACTION_RANGE } from '../shared/interactions';
+import { arenaOdds, type ArenaMarket, type ArenaBet, type BettingAction, type BetWin } from '../shared/betting';
+import { projectActor } from '../shared/snapshot-actor';
 
 type Membership = { roomId: string; epoch: number; account: Account; classId: ClassId; connected: boolean; expiresAt?: number };
 export interface MatchRoom {
+  closing?: boolean;
+  startsAt?: number;
+  market?: ArenaMarket;
   id: string;
   mode: Exclude<RoomMode, 'world'>;
   simulation: WorldSimulation;
@@ -30,6 +36,10 @@ export class RoomManager {
   private transfersStopped = false;
   private readonly notices = new Map<string, string>();
   private readonly matchResults = new Map<string, MatchResult>();
+  private readonly spectators = new Map<string, string>();
+  private readonly wagerAccounts = new Map<string, Account>();
+  private readonly recentBets = new Map<string, ArenaBet[]>();
+  private readonly betWins = new Map<string, BetWin[]>();
   constructor(private readonly store?: GameplayPersistence, seed = WORLD_SEED, now = Date.now()) {
     this.global = new WorldSimulation(seed, now, store);
   }
@@ -47,6 +57,8 @@ export class RoomManager {
 
   stateFor(id: string): RoomState {
     const member = this.membership(id), sim = this.simulationFor(id);
+    const watched = this.spectators.get(id);
+    if (watched) return { id: watched, epoch: member.epoch, mode: 'arena', seed: this.global.seed, spectating: true };
     return { id: member.roomId, epoch: member.epoch, mode: sim.mode, seed: sim.seed };
   }
 
@@ -71,6 +83,8 @@ export class RoomManager {
   }
 
   disconnect(id: string, voluntary = false): void {
+    this.recentBets.delete(id);
+    if (this.spectators.has(id)) this.stopWatching(id);
     const member = this.memberships.get(id);
     if (!member || !member.connected) return;
     member.connected = false;
@@ -91,12 +105,24 @@ export class RoomManager {
 
   enqueueInput(id: string, input: InputCommand, roomId: string, epoch: number): boolean {
     const member = this.membership(id);
+    if (this.spectators.has(id)) return true;
     // In-flight packets from a previous instance are harmless, not malformed input.
     if (roomId !== member.roomId || epoch !== member.epoch) return true;
+    if ((this.rooms.get(member.roomId)?.startsAt ?? 0) > this.global.now) {
+      const sim = this.simulationFor(id);
+      if (!sim.enqueueInput(id, input)) return false;
+      // Consume valid countdown packets without executing them, keeping sequence and ACK aligned.
+      const connection = sim.connections.get(id)!;
+      connection.inputs.length = 0;
+      connection.ack = input.seq;
+      return true;
+    }
     return this.simulationFor(id).enqueueInput(id, input);
   }
   interact(id: string, command: InteractionCommand, roomId: string, epoch: number): boolean {
     const member = this.membership(id);
+    if (this.spectators.has(id)) return false;
+    if (command?.kind === 'talk' && command.targetId === 'authored:npc-arena-bookmaker') return false;
     if (!member.connected || roomId !== member.roomId || epoch !== member.epoch) return false;
     this.simulationFor(id).interact(id, command); return true;
   }
@@ -143,6 +169,15 @@ export class RoomManager {
       }
       this.rooms.set(id, { id, mode, simulation, members: new Set(ids), endsAt: this.global.now + durationSeconds * 1000,
         roster: new Map([...simulation.players.values()].map(actor => [actor.id, actor.teamId!])) });
+      if (mode === 'arena' && ids.length === 2) {
+        const room = this.rooms.get(id)!;
+        room.startsAt = this.global.now + 10_000;
+        room.endsAt += 10_000;
+        const contenders = [...simulation.players.values()].map(p => ({ id: p.id, name: p.name, classId: p.classId, level: p.level, kills: p.kills, deaths: p.deaths, odds: 1 }));
+        const odds = arenaOdds(contenders);
+        contenders.forEach((p, i) => p.odds = odds[i]);
+        room.market = { id, startsAt: room.startsAt, phase: 'open', contenders };
+      }
       for (const playerId of ids) {
         this.global.detachPlayer(playerId);
         this.global.awayPlayers.add(playerId);
@@ -176,15 +211,22 @@ export class RoomManager {
     member.epoch++;
     member.expiresAt = undefined;
     if (!member.connected) { this.global.leaveTeam(id); this.memberships.delete(id); }
-    if (!room.members.size) this.rooms.delete(room.id);
+    if (!room.members.size && !room.closing) this.closeMatch(room.id);
   }
 
   closeMatch(id: string, reason: 'closed' | 'timeout' | 'elimination' = 'closed'): void {
     const room = this.rooms.get(id);
-    if (!room) return;
+    if (!room || room.closing) return;
+    room.closing = true;
     const survivingTeams = new Set([...room.simulation.players.values()].filter(actor => actor.hp > 0).map(actor => actor.teamId));
     const remainingTeams = new Set([...room.simulation.players.values()].map(actor => actor.teamId));
     const resultReason = reason === 'elimination' && remainingTeams.size < 2 ? 'forfeit' : reason;
+    const winnerTeam = reason === 'elimination' && resultReason !== 'forfeit' && survivingTeams.size === 1 ? [...survivingTeams][0] : undefined;
+    this.settleBets(room, winnerTeam ?? undefined);
+    for (const [spectator, watched] of [...this.spectators]) if (watched === id) {
+      this.stopWatching(spectator);
+      this.notices.set(spectator, winnerTeam ? `Duello concluso: vince ${room.market?.contenders.find(p => room.roster.get(p.id) === winnerTeam)?.name ?? 'il vincitore'}!` : 'Duello concluso: puntate rimborsate.');
+    }
     for (const playerId of room.members) {
       const winner = survivingTeams.size === 1 && survivingTeams.has(room.roster.get(playerId)!);
       this.matchResults.set(playerId, { roomId: room.id, mode: room.mode,
@@ -209,7 +251,11 @@ export class RoomManager {
 
   step(dt = DT): void {
     this.global.step(dt);
-    for (const room of this.rooms.values()) room.simulation.step(dt);
+    for (const room of this.rooms.values()) {
+      if ((room.startsAt ?? 0) > this.global.now) { room.simulation.now = this.global.now; continue; }
+      if (room.market) room.market.phase = 'live';
+      room.simulation.step(dt);
+    }
     for (const [id, member] of this.memberships) if (!member.connected && member.expiresAt !== undefined && member.expiresAt <= this.global.now) {
       if (member.roomId !== 'world') this.returnToWorld(id, true);
       else { this.memberships.delete(id); this.mustExitGate.delete(id); }
@@ -268,8 +314,24 @@ export class RoomManager {
   }
 
   snapshotFor(id: string) {
+    const watched = this.spectators.get(id);
+    if (watched) {
+      const room = this.rooms.get(watched)!;
+      const players = [...room.simulation.players.values()];
+      const focus = players.find(p => p.hp > 0) ?? players[0];
+      if (!focus) return undefined;
+      // Spectators have no actor in the arena, and never receive a fighter's private state.
+      const sim = room.simulation;
+      return { type: 'snapshot' as const, tick: sim.tick, time: this.global.now, ack: 0,
+        self: projectActor(focus), actors: players.map(projectActor), projectiles: [...sim.projectiles.values()],
+        pickups: [], traps: [...sim.traps.values()], events: [...sim.events], online: room.members.size,
+        activeChunks: sim.activeChunks.size, gold: this.membership(id).account.gold ?? 0,
+        matchEndsAt: room.endsAt, betting: this.bettingView(id) };
+    }
     const snapshot = this.simulationFor(id).snapshotFor(id);
     if (snapshot) {
+      snapshot.betting = this.bettingView(id);
+      snapshot.gold = this.membership(id).account.gold ?? 0;
       snapshot.arenaGate = this.gateStateFor(id);
       if (this.membership(id).roomId === 'world') snapshot.sanctuary = this.global.world.pvpAt(snapshot.self.x, snapshot.self.y) ? 'outside' : this.global.isSafeProtected(snapshot.self) ? 'safe' : 'combat';
       snapshot.matchEndsAt = this.rooms.get(this.membership(id).roomId)?.endsAt;
@@ -304,9 +366,92 @@ export class RoomManager {
   }
 
   socialAction(id: string, action: SocialAction, targetId?: string): string {
+    if (this.spectators.has(id)) throw new Error('Esci dalla tribuna per gestire il gruppo.');
     if (action.startsWith('team-') && (this.membership(id).roomId !== 'world' || (targetId && this.memberships.has(targetId) && this.membership(targetId).roomId !== 'world'))) throw new Error('Gestisci il gruppo dopo la partita.');
     return this.global.socialAction(id, action, targetId);
   }
 
+  bookmakerNearby(id: string): boolean {
+    const actor = this.global.players.get(id), npc = this.global.npcs.get('authored:npc-arena-bookmaker');
+    return !!actor && !!npc && Math.hypot(actor.x - npc.x, actor.y - npc.y) <= INTERACTION_RANGE;
+  }
+
+  private bettingView(id: string) {
+    const member = this.membership(id), watched = this.spectators.get(id);
+    let bets = this.recentBets.get(id);
+    if (!bets) {
+      const history = member.account.arenaBets ?? [], active: ArenaBet[] = [], recent: ArenaBet[] = [];
+      for (let i = history.length - 1; i >= 0; i--) {
+        const bet = history[i];
+        if (bet.status === 'active') active.push(bet);
+        else if (recent.length < 10) recent.push(bet);
+      }
+      bets = [...active, ...recent]; this.recentBets.set(id, bets);
+    }
+    return { markets: [...this.rooms.values()].flatMap(r => r.market ? [r.market] : []),
+      bets, inCombat: this.bettingInCombat(id), bookmakerNearby: !watched && member.roomId === 'world' && this.bookmakerNearby(id),
+      spectating: watched, startsAt: this.rooms.get(watched ?? member.roomId)?.startsAt };
+  }
+
+  bettingAction(id: string, action: BettingAction): void {
+    const member = this.membership(id);
+    if (!member.connected || !action || typeof action !== 'object') throw new Error('Richiesta non valida.');
+    if (action.kind === 'exit') { this.stopWatching(id); return; }
+    const room = this.rooms.get(action.matchId);
+    if (!room?.market || room.members.has(id)) throw new Error('Duello non disponibile per questa azione.');
+    if (action.kind === 'watch') {
+      if (this.spectators.has(id)) this.stopWatching(id);
+      if (member.roomId !== 'world' || !this.global.canTransfer(id)) throw new Error('Devi essere vivo e fuori combattimento da 10 secondi.');
+      this.global.checkpoint(); this.global.detachPlayer(id); this.global.awayPlayers.add(id);
+      this.spectators.set(id, room.id); this.mustExitGate.add(id); member.epoch++;
+      return;
+    }
+    if (action.kind !== 'bet' || this.spectators.has(id) || member.roomId !== 'world' || !this.bookmakerNearby(id)) throw new Error('Avvicinati a Silas per scommettere.');
+    if (this.global.now >= room.market.startsAt) throw new Error('Puntate chiuse: il duello è iniziato.');
+    const contender = room.market.contenders.find(p => p.id === action.playerId);
+    if (!contender || !Number.isSafeInteger(action.stake) || action.stake < 1 || action.stake > 10000) throw new Error('Puntata non valida (1–10.000 gold).');
+    const account = member.account;
+    if (account.arenaBets?.some(b => b.matchId === room.id)) throw new Error('Hai già puntato su questo duello.');
+    if ((account.gold ?? 0) < action.stake) throw new Error('Gold insufficienti.');
+    account.gold = (account.gold ?? 0) - action.stake;
+    (account.arenaBets ??= []).push({ id: randomUUID(), matchId: room.id, playerId: contender.id, playerName: contender.name, stake: action.stake, odds: contender.odds, payout: 0, status: 'active', placedAt: this.global.now });
+    this.recentBets.delete(id);
+    this.wagerAccounts.set(id, account); this.store?.touch();
+    this.notices.set(id, `Puntata accettata: ${action.stake} gold su ${contender.name}, quota ${contender.odds.toFixed(2)}.`);
+  }
+
+  private stopWatching(id: string): void {
+    if (!this.spectators.delete(id)) return;
+    const member = this.membership(id);
+    this.global.awayPlayers.delete(id); this.global.addPlayer(member.account, member.classId); member.epoch++;
+  }
+
+  private settleBets(room: MatchRoom, winnerTeam?: string): void {
+    for (const account of this.wagerAccounts.values()) for (const bet of account.arenaBets ?? []) {
+      if (bet.matchId !== room.id || bet.status !== 'active') continue;
+      bet.status = !winnerTeam ? 'refunded' : room.roster.get(bet.playerId) === winnerTeam ? 'won' : 'lost';
+      bet.payout = bet.status === 'refunded' ? bet.stake : bet.status === 'won' ? Math.floor(bet.stake * bet.odds) : 0;
+      account.gold = (account.gold ?? 0) + bet.payout; this.store?.touch();
+      this.recentBets.delete(account.id);
+      if (bet.status === 'won' && this.memberships.get(account.id)?.connected) {
+        const wins = this.betWins.get(account.id) ?? [];
+        wins.push({ id: bet.id, amount: bet.payout, celebrate: !this.bettingInCombat(account.id) });
+        this.betWins.set(account.id, wins);
+      }
+      this.notices.set(account.id, bet.status === 'won' ? `Scommessa vinta! +${bet.payout} gold.` : bet.status === 'refunded' ? `Scommessa rimborsata: ${bet.stake} gold.` : 'Scommessa persa.');
+    }
+    for (const [id, account] of this.wagerAccounts) if (!account.arenaBets?.some(b => b.status === 'active')) this.wagerAccounts.delete(id);
+    this.store?.flush();
+  }
+
   checkpoint(): void { this.global.checkpoint(); }
+  private bettingInCombat(id: string): boolean {
+    const member = this.memberships.get(id);
+    if (!member || this.spectators.has(id)) return false;
+    if (member.roomId !== 'world') return true;
+    return Math.max(this.global.connections.get(id)?.combatUntil ?? 0, this.global.players.get(id)?.pvpUntil ?? 0) > this.global.now;
+  }
+  takeBetWins(id: string): BetWin[] {
+    const wins = this.betWins.get(id) ?? []; this.betWins.delete(id); return wins;
+  }
 }

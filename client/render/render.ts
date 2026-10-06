@@ -123,9 +123,10 @@ export class Renderer {
     const fishingTargetZoom = !this.reducedMotion.matches && frame.fishing?.phase === 'fight' ? 1.12 : 1;
     this.fishingZoom += (fishingTargetZoom - this.fishingZoom) * (1 - Math.exp(-delta / 240));
     this.zoom = this.baseZoom * this.fishingZoom;
+    if (frame.spectating) this.zoom = Math.min(this.zoom, this.width / 1000, this.height / 850);
 
-    this.viewSign = arenaViewSign(this.world.mode, frame.playing ? frame.self?.teamId : null);
-    const target = frame.self && frame.playing
+    this.viewSign = arenaViewSign(this.world.mode, frame.playing && !frame.spectating ? frame.self?.teamId : null);
+    const target = frame.spectating ? { x: 0, y: 0 } : frame.self && frame.playing
         ? frame.self
         : {
             x: this.world.authoring.document.spawn.x * TILE_SIZE + 25 + Math.sin(frame.time * 0.000025) * 18,
@@ -338,8 +339,8 @@ export class Renderer {
         if ((p.y + a.height * a.pivot.y) * TILE_SIZE > actor.y) break;
         paintObject(p); objectIndex++;
       }
-      const self = actor.id === frame.self?.id || (!frame.playing && actor.id === 'preview');
-      const allied = !!frame.self?.teamId && actor.teamId === frame.self.teamId;
+      const self = !frame.spectating && (actor.id === frame.self?.id || (!frame.playing && actor.id === 'preview'));
+      const allied = !frame.spectating && !!frame.self?.teamId && actor.teamId === frame.self.teamId;
 
       // TROVA IL WINDUP (ATTACCO IN CORSO)
       const activeWindup = actor.npcKind === 'boss'

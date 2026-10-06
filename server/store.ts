@@ -13,6 +13,7 @@ import { SynchronousSaveWriter, type SaveWriter } from './save-writer';
 import type { GameplayPersistence } from './gameplay-persistence';
 
 export interface Account {
+  arenaBets?: import('../shared/betting').ArenaBet[];
   characters?: Partial<Record<ClassId, CharacterProgress>>;
   inventory?: Inventory;
   narrative?: NarrativeProgress;
@@ -118,6 +119,11 @@ export class AccountStore implements GameplayPersistence {
         const account = entry as Account;
         if (account.gold !== undefined && (!Number.isSafeInteger(account.gold) || account.gold < 0)) throw new Error('Saldo gold non valido.');
         account.gold ??= 0;
+        if (account.arenaBets !== undefined && (!Array.isArray(account.arenaBets) || account.arenaBets.some(b => !b || typeof b.id !== 'string' || typeof b.matchId !== 'string' || typeof b.playerId !== 'string' || typeof b.playerName !== 'string' || !Number.isSafeInteger(b.stake) || b.stake < 1 || b.stake > 10000 || !Number.isFinite(b.odds) || b.odds < 1 || b.odds > 10 || !Number.isSafeInteger(b.payout) || b.payout < 0 || !Number.isFinite(b.placedAt) || !['active', 'won', 'lost', 'refunded'].includes(b.status)))) throw new Error('Scommesse non valide.');
+        // Match rooms are transient: refund unsettled stakes after a restart.
+        for (const bet of account.arenaBets ?? []) if (bet.status === 'active') {
+          account.gold += bet.stake; bet.status = 'refunded'; bet.payout = bet.stake; this.dirty = true;
+        }
         if (account.inventory !== undefined && !validInventory(account.inventory) || account.narrative !== undefined && !validNarrativeProgress(account.narrative)) throw new Error('Inventario o missioni non validi.');
         account.inventory ??= newInventory(); account.narrative ??= newNarrativeProgress();
         if (discardLegacyUsedBaits(account.inventory)) this.dirty = true;

@@ -10,7 +10,7 @@ export type AbilitySlot = 'basic' | 'q' | 'e' | 'r';
 export type Vec2 = { x: number; y: number };
 export type RoomMode = 'world' | 'arena' | 'battleground';
 export interface Actor { pvpUntil?: number; }
-export interface RoomState { id: string; epoch: number; mode: RoomMode; seed: number; }
+export interface RoomState { id: string; epoch: number; mode: RoomMode; seed: number; spectating?: boolean; }
 export interface ArenaGateState { phase: 'waiting' | 'countdown' | 'combat' | 'reenter' | 'full'; players: number; startsAt?: number; }
 export type TileKind = 'grass' | 'path' | 'water' | 'rock' | 'bush' | 'mud' | 'snow' | 'ice';
 export type Biome = 'meadow' | 'forest' | 'marsh';
@@ -37,10 +37,12 @@ export interface PublicAccount { id: string; name: string; kills: number; deaths
 export interface PublicAccount { gold?: number; }
 export interface PublicAccount { characters?: Partial<Record<ClassId, CharacterSummary>>; }
 export interface Snapshot { gold?: number; goldDrops?: BossDrop[]; bossWindups?: BossWindup[]; bossLocks?: BossLockState[]; bossPreparations?: BossPreparationState[]; }
+export interface Snapshot { betting?: import('./betting').BettingView; }
 export interface Snapshot { inventory?: Inventory; narrative?: NarrativeProgress; groundItems?: GroundItem[]; dialogue?: DialogueView | null; inventoryActions?: InventoryAction[]; fishing?: import('./fishing/model').FishingView | null; fishingAvailable?: boolean; }
 export interface Snapshot { type: 'snapshot'; tick: number; time: number; ack: number; self: SnapshotActor; actors: SnapshotActor[]; projectiles: Projectile[]; pickups: Pickup[]; traps?: Trap[]; events: GameEvent[]; online: number; activeChunks: number; arenaGate?: ArenaGateState; matchEndsAt?: number; sanctuary?: 'safe' | 'combat' | 'outside'; }
 
 export type ClientMessage =
+  | { type: 'betting'; action: import('./betting').BettingAction }
   | {
       type: 'hello';
       protocol: number;
@@ -76,6 +78,7 @@ export interface MatchResult {
 }
 
 export type ServerMessage =
+  | { type: 'bet-win'; win: import('./betting').BetWin }
   | { type: 'welcome'; token: string; account: PublicAccount; playerId: string; seed: number; tickRate: number; time: number; social: SocialState }
   | { type: 'room'; room: RoomState }
   | { type: 'match-result'; result: MatchResult }

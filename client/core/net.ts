@@ -256,6 +256,7 @@ export class GameConnection {
   send(message: ClientMessage | { type: 'input'; input: InputCommand } | Pick<Extract<ClientMessage, { type: 'interaction' }>, 'type' | 'command'>): boolean {
     if (this.socket?.readyState !== WebSocket.OPEN || this.socket.bufferedAmount > 64_000) return false;
     if (message.type === 'input' || message.type === 'interaction') {
+      if (this.room?.spectating) return false;
       if (!this.welcomed || !this.room) return false;
       message = { ...message, roomId: this.room.id, epoch: this.room.epoch };
     }

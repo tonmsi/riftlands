@@ -3385,6 +3385,13 @@
   ],
   "npcs": [
     {
+      "x": -15,
+      "y": 114,
+      "id": "npc-arena-bookmaker",
+      "npcKind": "arena-bookmaker",
+      "level": 1
+    },
+    {
       "x": 2,
       "y": 19,
       "id": "npc-205589a0-3292-4724-8df2-514f76a3580d",

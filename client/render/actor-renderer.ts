@@ -90,7 +90,7 @@ export class ActorRenderer {
       if (actor.questMarker === 'active') ctx.setLineDash([5, 3]);
       circle(ctx, 0, 0, r + 6); ctx.stroke(); ctx.setLineDash([]);
       ctx.font = 'bold 14px system-ui'; ctx.fillStyle = ctx.strokeStyle; ctx.textAlign = 'center';
-      ctx.fillText(actor.npcKind === 'outpost-vendor' ? '¤' : actor.questMarker === 'available' ? '!' : actor.questMarker === 'active' ? '…' : '•', 0, -r - 12);
+      ctx.fillText(actor.npcKind === 'arena-bookmaker' ? '♠' : actor.npcKind === 'outpost-vendor' ? '¤' : actor.questMarker === 'available' ? '!' : actor.questMarker === 'active' ? '…' : '•', 0, -r - 12);
     }
     if (actor.effects.some(effect => effect.kind === 'root' && effect.until > time)) {
       ctx.strokeStyle = '#6ebd57';
@@ -344,9 +344,14 @@ export class ActorRenderer {
     if (actor.disposition === 'neutral') {
       ctx.save(); if (moving) ctx.translate(0, Math.sin(time * .008) * 1.2);
       const merchant = actor.npcKind === 'outpost-vendor';
+      const bookmaker = actor.npcKind === 'arena-bookmaker';
       const gradient = ctx.createRadialGradient(-5, -7, 1, 0, 0, r); gradient.addColorStop(0, merchant ? '#d6ba9f' : '#cfbf9a'); gradient.addColorStop(1, merchant ? '#937b69' : '#78795d');
       ctx.fillStyle = gradient; circle(ctx, 0, 0, r); ctx.fill(); ctx.strokeStyle = '#343d30'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = merchant ? '#82659f' : '#e1e0cc'; ctx.beginPath(); ctx.ellipse(0, 7, 11, 7, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = bookmaker ? '#303d65' : merchant ? '#82659f' : '#e1e0cc'; ctx.beginPath(); ctx.ellipse(0, 7, 11, 7, 0, 0, TAU); ctx.fill();
+      if (bookmaker) {
+        ctx.fillStyle = '#26334e'; ctx.fillRect(-10, -20, 20, 10); ctx.fillRect(-15, -11, 30, 4);
+        ctx.fillStyle = '#e1bd70'; ctx.fillRect(-10, -13, 20, 2); circle(ctx, 0, 7, 3); ctx.fill();
+      }
       if (merchant) {
         ctx.fillStyle = '#82659f'; polygon(ctx, [-r - 3, -8, -r + 4, -17, r - 4, -17, r + 3, -8]); ctx.fill();
         ctx.strokeStyle = '#ead182'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-r + 2, -9); ctx.lineTo(r - 2, -9); ctx.stroke();
