@@ -2,7 +2,7 @@
 
 ## Come giocare
 
-Parla con Nereo e scegli **Vorrei imparare a pescare**: regala una canna per personaggio, lasciandola a terra come bottino privato. Il regalo è salvato e non dipende dalla missione delle interiora. Se la perdi, Ada vende una canna di ricambio per 10 gold.
+Completa per la prima volta **Esche puzzolenti**, la missione delle interiora di Nereo: ricevi automaticamente una canna per personaggio. Se c’è spazio dopo la consegna, va subito nella sacca; se la sacca è piena, Nereo lo dice e la lascia a terra come bottino privato. Non c’è una scelta separata per imparare a pescare. Le ripetizioni non danno altre canne e Nereo non regala più pozioni. Se perdi la canna, Ada ne vende una di ricambio per 10 gold.
 
 Porta la canna nella sacca e usala vicino a una riva. Fuori dalle zone raggiungibili il suo simbolo è attenuato e l’uso spiega di avvicinarsi all’acqua. In questa versione tutti i bacini con terreno `water` nel mondo sono pescabili: mare, lago o fiume. Non si pesca in arena o battleground, né durante il combattimento.
 
@@ -50,7 +50,7 @@ Puoi sostituire le grafiche procedurali con PNG trasparenti: **`assets/fish-pike
 
 Le future varianti albine possono avere un ID distinto, un proprio `spawnWeight` e PNG `fish-<variante>.png`; vanno registrate sia tra i pesci sia nel catalogo oggetti. Questo evita di mischiare la variante rara con lo stack della specie normale. Le varianti albine non sono ancora presenti.
 
-Il regalo è configurato nei dialoghi di `shared/narrative.ts`; la canna di ricambio è in `shared/vendors.ts`. Oggetti, persistenza e pesci devono avere ID coerenti nel catalogo.
+Il regalo è configurato nelle ricompense della missione in `shared/narrative.ts`; la canna di ricambio è in `shared/vendors.ts`. Oggetti, persistenza e pesci devono avere ID coerenti nel catalogo.
 
 Per le esche che si deteriorano imposta **`fishingBaitConsumable: true`** in `shared/items.ts`. Il valore predefinito rende l’esca riutilizzabile; le cariche residue sono autorevoli e non possono essere ripristinate dal client.
 

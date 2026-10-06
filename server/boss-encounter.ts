@@ -29,6 +29,8 @@ export function canWalkDirectly(from: Vec2, to: Vec2, radius: number, world: Wor
 
 /** Shared runtime for data-defined bosses. Unique mechanics can extend this class later without duplicating its lifecycle. */
 export class BossEncounter {
+  /** Monotonic signal for the dungeon's ordinary mob lifecycle. */
+  resetVersion = 0;
   readonly dungeon: DungeonDefinition;
   readonly boss: Actor;
   readonly state: BossState;
@@ -171,6 +173,7 @@ export class BossEncounter {
       this.unlock(world);
       if (now < this.state.respawnAt) return;
       Object.assign(boss, { ...this.dungeon.spawnPoints.boss, hp: this.definition.hp, deadUntil: 0, effects: [] });
+      this.resetVersion++;
       this.state.respawnAt = 0; this.nextAttack = now + 1500; this.attackIndex = 0; this.resetPath();
       this.save();
       return;
@@ -484,7 +487,7 @@ export class BossEncounter {
   private eject(player: Actor): void {
     Object.assign(player, this.dungeon.encounter.ejectTo);
   }
-  private fail(world: World): void { for (const member of this.group) { member.resetFight(); member.state.respawnAt = 0; } this.unlock(world); }
+  private fail(world: World): void { for (const member of this.group) { member.resetVersion++; member.resetFight(); member.state.respawnAt = 0; } this.unlock(world); }
   private resetFight(): void {
     this.engaged = false;
     this.boss.bossAwakenedAt = undefined;

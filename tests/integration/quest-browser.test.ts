@@ -105,13 +105,15 @@ test('real multiplayer quest: accept, deliver via slot, touch hold to discard, a
     await expect(ready.page.locator('.dialogue-rewards')).toContainText('La tua ricompensa');
     await expect(ready.page.locator('[data-reward-gold]')).toContainText('20 gold');
     await expect(ready.page.locator('.dialogue-rewards')).toContainText('Zaino da 2 slot');
-    await expect(ready.page.locator('.dialogue-rewards')).toContainText('Pozione curativa');
+    await expect(ready.page.locator('.dialogue-rewards')).toContainText('Canna da pesca');
+    await expect(ready.page.locator('[data-dialogue-text]')).toContainText('La sacca è piena');
+    await expect(ready.page.locator('[data-choice=fishing]')).toHaveCount(0);
     await expect(ready.page.locator('.gold-gain')).toHaveText('+20 GOLD');
     await expect(ready.page.locator('.inventory-slot b')).toHaveText('2');
     await expect.poll(() => ready.latest().actors.find(actor => actor.dialogueId === 'old-fisher')?.questMarker).toBe('completed');
     await expect(ready.page.locator('.player-panel')).not.toHaveClass(/has-active-quests/);
     await expect.poll(() => ready.narrative().quests['stinking-bait']?.completions).toBe(1);
-    await expect.poll(() => ready.latest().groundItems?.map(drop => drop.stack.itemId)).toEqual(['backpack-2', 'healing-potion']);
+    await expect.poll(() => ready.latest().groundItems?.map(drop => drop.stack.itemId)).toEqual(['backpack-2', 'fishing-rod']);
     const privateRewards = ready.latest().groundItems!.map(drop => drop.id);
     assert.ok(!(collector.latest().groundItems ?? []).some(drop => privateRewards.includes(drop.id)), 'quest reward objects are absent from the other player’s network view');
     await ready.page.locator('[data-choice=leave]').tap(); await expect(ready.page.locator('[data-dialogue-text]')).toContainText('Ti maledico');
