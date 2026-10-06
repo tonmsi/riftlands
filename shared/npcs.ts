@@ -4,6 +4,12 @@ export const NPC_CATALOG = {
   sentinel: { name: 'Guardiano errante', radius: 19, speed: 120, classId: 'warrior', color: '#c4a17d' },
 } as const;
 export type NpcKind = keyof typeof NPC_CATALOG;
+/** Distances are world pixels; attack/respawn timings are milliseconds. */
+export const NPC_COMBAT = {
+  slime: { retaliatesOnly: true, aggroRadius: 370, attackRange: 43, windupMs: 400, cooldownMs: 1300, respawnMs: 120_000 },
+  wisp: { retaliatesOnly: false, aggroRadius: 370, attackRange: 230, windupMs: 0, cooldownMs: 1900, respawnMs: 120_000 },
+  sentinel: { retaliatesOnly: false, aggroRadius: 370, attackRange: 43, windupMs: 650, cooldownMs: 1300, respawnMs: 120_000 },
+} as const;
 /** Manual characters and hostile spawn types share definitions, without mixing quest givers into population weights. */
 export interface NpcWanderBehavior { kind: 'wander'; radius: number; pauseMs: readonly [number, number]; }
 interface NpcTemplate { name: string; radius: number; speed: number; classId: 'warrior' | 'mage'; color: string; disposition: 'hostile' | 'neutral'; dialogueId?: string; behavior?: NpcWanderBehavior; }

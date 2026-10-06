@@ -8,8 +8,8 @@ import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputComman
 import { World, chunkCoords, chunkKey, coordinateHash } from '../shared/world';
 import { OUTPOST } from '../shared/outpost';
 import { BOSS_BY_ID, type BossDefinition } from '../shared/bosses';
-import { DUNGEON_BY_BOSS_ID, type DungeonDefinition } from '../shared/dungeons';
-import { NPC_DEFINITIONS, type NpcWanderBehavior } from '../shared/npcs';
+import { DUNGEON_BY_BOSS_ID, insideDungeon, type DungeonDefinition } from '../shared/dungeons';
+import { NPC_COMBAT, NPC_DEFINITIONS, type NpcWanderBehavior } from '../shared/npcs';
 import { InteractionSystem } from './interactions';
 import { FishingSystem } from './fishing/fishing-system';
 import { validInteractionCommand, type InteractionCommand } from '../shared/interactions';
@@ -27,7 +27,7 @@ const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
 const copyActor = (actor: Actor): Actor => ({ ...actor, ...(actor.loadout ? { loadout: { ...actor.loadout } } : {}), effects: actor.effects.map(effect => ({ ...effect })), cooldowns: { ...actor.cooldowns } });
 type Connection = { account: Account; connected: boolean; removeAt: number; inputs: InputCommand[]; ack: number; highestSeq: number; combatAt: number };
-type NpcMeta = { home: Vec2; chunk: string; nextAttack: number; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
+type NpcMeta = { home: Vec2; chunk: string; nextAttack: number; aggroTargetId?: string; windup?: { targetId: string; readyAt: number }; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
 type ActiveChunk = { key: string; lastUsed: number; npcIds: string[]; pickupIds: string[] };
 type Team = { id: string; leaderId: string; members: Set<string> };
 type Invite = { fromId: string; teamId: string; expiresAt: number };
@@ -75,6 +75,8 @@ export class WorldSimulation {
   }[] = [];
   private readonly invites = new Map<string, Invite[]>();
   private readonly npcSleep = new Map<string, { body: Actor; nextAttack: number; until: number }>();
+  private readonly dungeonCorpses = new Map<string, string>();
+  private readonly dungeonResetVersions = new Map<string, number>();
   private readonly pickupReady = new Map<string, number>();
   private readonly cells = new Map<string, Actor[]>();
   private largestActorRadius = PLAYER_RADIUS;
@@ -284,6 +286,7 @@ export class WorldSimulation {
     this.stepNpcs(dt);
     for (const encounter of this.bosses.values()) encounter.step(this.now, dt, [...this.players.values()],
       id => !!this.connections.get(id)?.connected, this.world, (target, amount) => this.damage(target, encounter.boss, amount));
+    this.resetDungeonMobs();
     resolveActorCollisions([...this.players.values(), ...this.npcs.values()].filter(actor => actor.hp > 0 && actor.disposition !== 'neutral'), this.world);
     if (this.mode === 'world') for (const actor of this.players.values()) if (this.world.pvpAt(actor.x, actor.y)) actor.spawnProtectedUntil = 0;
     this.rebuildCells();
@@ -610,6 +613,7 @@ export class WorldSimulation {
     const shield = target.effects.some(effect => effect.kind === 'shield' && effect.until > this.now) ? 0.4 : 1;
     const applied = Math.max(1, Math.round(amount * (1 - armor) * shield));
     target.hp = Math.max(0, target.hp - applied);
+    if (target.npcKind === 'slime' && attacker?.kind === 'player') this.provokeSlimes(target, attacker);
     if (encounter && attacker?.kind === 'player') encounter.recordDamage(attacker.id, applied);
     if (this.mode === 'world' && target.kind === 'player' && attacker?.kind === 'player') {
       target.pvpUntil = attacker.pvpUntil = this.now + OUTPOST.combatMs;
@@ -627,7 +631,14 @@ export class WorldSimulation {
     if (target.hp > 0) return true;
     if (target.kind === 'player') for (const boss of this.bosses.values()) boss.participantDied(target.id, this.world);
     target.deaths++;
-    target.deadUntil = this.now + (target.kind === 'npc' ? 35_000 : 5000);
+    const dungeon = target.kind === 'npc' && !encounter
+      ? this.world.dungeons.find(definition => target.id.startsWith(`dungeon:${definition.id}:`)
+        || insideDungeon(definition, this.npcMeta.get(target.id)?.home ?? target)) : undefined;
+    if (dungeon) this.dungeonCorpses.set(target.id, dungeon.id);
+    target.deadUntil = dungeon ? Number.MAX_SAFE_INTEGER : this.now + (target.kind === 'npc'
+      ? (target.npcKind && target.npcKind in NPC_COMBAT ? NPC_COMBAT[target.npcKind as keyof typeof NPC_COMBAT].respawnMs : 120_000) : 5000);
+    const deadMeta = this.npcMeta.get(target.id);
+    if (deadMeta) { deadMeta.windup = undefined; deadMeta.aggroTargetId = undefined; }
     target.effects = [];
     this.emit({ kind: 'death', x: target.x, y: target.y, actorId: target.id, radius: 65, duration: 800, color: '#ffd4a3' });
     if (this.mode === 'world') this.interactions.killed(target, attacker, this.now);
@@ -721,6 +732,7 @@ export class WorldSimulation {
             level: npc.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: EMPTY_COOLDOWNS(),
           };
           this.npcs.set(actor.id, actor);
+          if (this.dungeonCorpses.has(actor.id)) { actor.hp = 0; actor.deadUntil = Number.MAX_SAFE_INTEGER; }
           this.npcMeta.set(actor.id, { home: { x: npc.x, y: npc.y }, chunk: key, nextAttack: slept?.nextAttack ?? this.now + 1500 });
           this.npcSleep.delete(actor.id);
           chunk.npcIds.push(actor.id);
@@ -772,6 +784,37 @@ export class WorldSimulation {
     else pause();
   }
 
+  private provokeSlimes(hit: Actor, attacker: Actor): void {
+    for (const slime of this.npcs.values()) {
+      if (slime.npcKind !== 'slime' || (slime.hp <= 0 && slime !== hit)) continue;
+      const meta = this.npcMeta.get(slime.id);
+      if (!meta || distance(slime, hit) > NPC_COMBAT.slime.aggroRadius || distance(attacker, meta.home) >= 650
+        || !hasLineOfSight(slime, hit, this.world)) continue;
+      if (meta.aggroTargetId !== attacker.id) meta.windup = undefined;
+      meta.aggroTargetId = attacker.id;
+    }
+  }
+
+  private resetDungeonMobs(): void {
+    const resetIds = new Set<string>();
+    for (const encounter of this.bosses.values()) {
+      if (encounter.resetVersion !== (this.dungeonResetVersions.get(encounter.definition.id) ?? 0)) resetIds.add(encounter.dungeon.id);
+      this.dungeonResetVersions.set(encounter.definition.id, encounter.resetVersion);
+    }
+    if (!resetIds.size) return;
+    for (const [id, dungeonId] of this.dungeonCorpses) {
+      if (!resetIds.has(dungeonId)) continue;
+      this.dungeonCorpses.delete(id);
+      // An unloaded corpse is recreated at its authored spawn on the next visit.
+      this.npcSleep.delete(id);
+      const npc = this.npcs.get(id), meta = this.npcMeta.get(id);
+      if (npc && meta) {
+        Object.assign(npc, meta.home, { hp: npc.maxHp, deadUntil: 0, effects: [], hidden: false });
+        meta.nextAttack = this.now + 1200; meta.windup = undefined; meta.aggroTargetId = undefined;
+      }
+    }
+  }
+
   private stepNpcs(dt: number): void {
     for (const npc of this.npcs.values()) {
       if (npc.npcKind === 'boss') continue;
@@ -782,21 +825,33 @@ export class WorldSimulation {
         continue;
       }
       npc.effects = npc.effects.filter(effect => effect.until > this.now);
-      const candidates = this.near(npc, 370).filter(actor => actor.kind === 'player' && actor.hp > 0 && actor.spawnProtectedUntil <= this.now && (!actor.hidden || actor.revealedUntil > this.now || distance(npc, actor) < 100));
+      const combat = NPC_COMBAT[npc.npcKind as keyof typeof NPC_COMBAT];
+      if (!combat) continue;
+      const candidates = this.near(npc, combat.aggroRadius).filter(actor => actor.kind === 'player' && actor.hp > 0 && actor.spawnProtectedUntil <= this.now
+        && (!combat.retaliatesOnly || actor.id === meta.aggroTargetId)
+        && (!actor.hidden || actor.revealedUntil > this.now || distance(npc, actor) < 100));
       const target = candidates.filter(actor => distance(actor, meta.home) < 650 && hasLineOfSight(npc, actor, this.world)).sort((a, b) => distance(npc, a) - distance(npc, b))[0];
+      if (!target) meta.aggroTargetId = undefined;
       const objective = target ?? meta.home;
       const d = distance(npc, objective);
-      const attackRange = npc.npcKind === 'wisp' ? 230 : 43;
+      const attackRange = combat.attackRange;
+      const ranged = npc.npcKind === 'wisp';
       npc.aim = Math.atan2(objective.y - npc.y, objective.x - npc.x);
-      if (d > (target ? attackRange * 0.85 : 8)) Object.assign(npc, moveWithCollisions(npc, Math.cos(npc.aim), Math.sin(npc.aim), movementSpeed(npc, this.now) * terrainSpeed(npc, this.world) * dt, this.world));
-      if (target && d < attackRange && this.now >= meta.nextAttack) {
-        meta.nextAttack = this.now + (npc.npcKind === 'wisp' ? 1900 : 1300);
-        if (npc.npcKind === 'wisp' && this.projectiles.size < 1000) {
+      const moving = d > (target ? (ranged ? attackRange * .85 : attackRange) : 8);
+      if (moving) Object.assign(npc, moveWithCollisions(npc, Math.cos(npc.aim), Math.sin(npc.aim), movementSpeed(npc, this.now) * terrainSpeed(npc, this.world) * dt, this.world));
+      if (!target || moving || d > attackRange || meta.windup?.targetId !== target.id) meta.windup = undefined;
+      const canAttack = target && d <= attackRange && (ranged || !moving) && this.now >= meta.nextAttack;
+      if (canAttack && !ranged && !meta.windup) meta.windup = { targetId: target.id, readyAt: this.now + combat.windupMs };
+      if (canAttack && (ranged || (meta.windup && this.now >= meta.windup.readyAt))) {
+        meta.windup = undefined;
+        meta.nextAttack = this.now + combat.cooldownMs;
+        if (ranged) {
+          if (this.projectiles.size >= 1000) continue;
           const projectile: Projectile = { id: randomUUID(), ownerId: npc.id, x: npc.x, y: npc.y, vx: Math.cos(npc.aim) * 270, vy: Math.sin(npc.aim) * 270, radius: 7, damage: 9 + Math.min(10, npc.level), expiresAt: this.now + 1300, color: '#b5dff2' };
           this.projectiles.set(projectile.id, projectile);
           this.projectileTeams.set(projectile.id, null);
         } else this.damage(target, npc, 8 + Math.min(npc.level, 10));
-        this.emit({ kind: 'cast', actorId: npc.id, x: npc.x, y: npc.y, aim: npc.aim, abilityKind: npc.npcKind === 'wisp' ? 'projectile' : 'melee', radius: attackRange, duration: 300, color: '#e4b79d' });
+        this.emit({ kind: 'cast', actorId: npc.id, x: npc.x, y: npc.y, aim: npc.aim, abilityKind: ranged ? 'projectile' : 'melee', radius: attackRange, duration: 300, color: '#e4b79d' });
       } else if (!target && d < 15) npc.hp = Math.min(npc.maxHp, npc.hp + 8 * dt);
       npc.hidden = this.world.getTile(Math.floor(npc.x / TILE_SIZE), Math.floor(npc.y / TILE_SIZE)) === 'bush';
     }

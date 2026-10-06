@@ -193,7 +193,7 @@ export class InteractionUI {
         const gold = document.createElement('span'), image = document.createElement('canvas'); image.width = image.height = 32;
         drawItemArt(image.getContext('2d')!, 'gold', 32); gold.dataset.rewardGold = ''; gold.append(image, `${dialogue.rewardGold} gold ricevuti`); rewards.append(gold);
       }
-      const groundLabel = document.createElement('small'); groundLabel.textContent = 'Oggetti a terra · Solo tuoi'; rewards.append(groundLabel);
+      if (dialogue.rewards?.length) { const itemLabel = document.createElement('small'); itemLabel.textContent = 'Oggetti della ricompensa · Solo tuoi'; rewards.append(itemLabel); }
       for (const reward of dialogue.rewards ?? []) {
         const chip = document.createElement('span'), image = document.createElement('canvas'); image.width = image.height = 32;
         drawItemArt(image.getContext('2d')!, reward.itemId, 32); chip.append(image, `${ITEM_DEFINITIONS[reward.itemId].name} × ${reward.quantity}`); rewards.append(chip);
