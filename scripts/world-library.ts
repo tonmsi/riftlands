@@ -7,6 +7,7 @@ import type { DungeonDefinition } from '../shared/dungeons';
 import { acquireDataLease } from '../server/data-lease';
 import { worldDungeons } from '../shared/world-validation';
 import { compactWorldTiles, serializeWorldDocument } from '../shared/world-tiles';
+import { readCatalog } from './dungeon-removal';
 
 export const worldRevision = (text: string): string => createHash('sha256').update(text).digest('hex');
 async function formatCompatibleRevisions(path: string, revision: string): Promise<string[]> {
@@ -20,8 +21,7 @@ export async function readWorldProject(path: string) {
   return { document: compactWorldTiles(parseWorldDocument(text)), revision, compatibleRevisions: await formatCompatibleRevisions(path, revision) };
 }
 export async function readWorldDungeonCatalog(path: string): Promise<DungeonDefinition[]> {
-  const bundles = JSON.parse(await readFile(path, 'utf8'));
-  if (!Array.isArray(bundles)) throw new Error('Catalogo dungeon non leggibile.');
+  const { bundles } = await readCatalog(path);
   return bundles.map(b => b.definition);
 }
 export async function saveWorldProject(options: { root: string; documentPath: string; dungeonPath: string; dataPath: string }, document: unknown, revision: string) {

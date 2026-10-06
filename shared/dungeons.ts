@@ -2,6 +2,7 @@ import { TILE_SIZE } from './config';
 import type { Pickup, TileKind, Vec2 } from './types';
 import { NPC_DEFINITIONS, type NpcTemplateId } from './npcs';
 import customDungeons from './custom-dungeons.json';
+import { unpackDungeonCatalog } from './dungeon-storage';
 import { WORLD_DOCUMENT } from './world-content';
 import { relocateDungeon } from './dungeon-relocation';
 import type { AssetPlacement } from './world-schema';
@@ -119,7 +120,7 @@ export function inwardFlameAngle(flame: DungeonFlameBarrier, bounds: DungeonTile
 export const DEFAULT_DUNGEON_THEME: DungeonTheme = { floor: '#918567', wall: '#5c5d52', wallTop: '#92917e', minimap: '#d8bd79', markerStone: '#777864', markerEdge: '#464e42', markerRune: '#d0b97999' };
 
 export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] =
-  (customDungeons as { definition: DungeonDefinition }[]).filter(entry => WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id)?.enabled !== false).map(entry => {
+  unpackDungeonCatalog(customDungeons).filter(entry => WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id)?.enabled !== false).map(entry => {
     const placement = WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id);
     return placement ? relocateDungeon(entry.definition, placement) : entry.definition;
   });

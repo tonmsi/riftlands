@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { parseWorldDocument } from '../shared/world-schema';
 import { validateWorld, worldDungeons } from '../shared/world-validation';
+import { readActorProject } from './actor-library';
 
 /** Both the CLI and the local Studio use this install/update transaction. Caller holds the data lease. */
 export async function installDungeon(draft: DungeonDraft, options: { catalogPath: string; dataPath: string; documentPath?: string; managedPlacement?: boolean; replace?: boolean; check?: boolean }) {
@@ -28,7 +29,8 @@ export async function installDungeon(draft: DungeonDraft, options: { catalogPath
         }
     }
     const bundle = buildDungeonBundle(parsed, worldDocument ? worldDungeons(worldDocument, remaining.map(b => b.definition)) : remaining.map(b => b.definition),
-        { assets: worldDocument?.assets, checkPlacement: placed });
+        { assets: worldDocument?.assets, checkPlacement: placed,
+          templates: new Map((await readActorProject(join(dirname(options.catalogPath), 'actor-catalog.json'))).catalog.bosses.map(b => [b.id, b])) });
     if (worldDocument) {
         const issues = validateWorld(worldDocument, [...remaining, bundle].map(b => b.definition));
         if (issues.length) throw new Error(`Dungeon incompatibile con il mondo: ${issues.slice(0, 12).join('\n')}`);

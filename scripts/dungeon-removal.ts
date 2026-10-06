@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path';
 import type { DungeonBundle } from '../shared/dungeon-install';
 import { parseWorldDocument } from '../shared/world-schema';
 import { serializeWorldDocument } from '../shared/world-tiles';
+import { serializeDungeonCatalog, unpackDungeonCatalog } from '../shared/dungeon-storage';
+import { readActorProject } from './actor-library';
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const parse = (text: string): unknown => JSON.parse(text.replace(/^\uFEFF/, ''));
@@ -18,7 +20,9 @@ export async function readCatalog(path: string): Promise<{ text: string; bundles
     const ids = value.map(b => b.definition.id), bosses = value.flatMap(b => b.bosses.map((boss: { id: string }) => boss.id));
     if (new Set(ids).size !== ids.length || new Set(bosses).size !== bosses.length)
         throw new Error('ID duplicati nel catalogo dungeon. Nessun file modificato.');
-    return { text, bundles: value as DungeonBundle[] };
+    const catalog = await readActorProject(join(dirname(path), 'actor-catalog.json'));
+    // Removal also supports older ID-only records, without requiring runnable geometry.
+    return { text, bundles: value.flatMap(entry => entry.definition.layout ? unpackDungeonCatalog([entry], catalog.catalog) : [entry]) as DungeonBundle[] };
 }
 
 /** Offline maintenance: never construct AccountStore, which can migrate account data. */
@@ -63,7 +67,7 @@ export async function changeCatalog(options: { id: string; catalogPath: string; 
     if (id !== '--all' && !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) throw new Error('ID dungeon non valido.');
     const tag = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}--${id === '--all' ? 'catalog' : `dungeon-${id}`}`;
     const files = [{ path: catalogPath, before: catalogText,
-        after: JSON.stringify(next, null, 2) + '\n' }];
+        after: serializeDungeonCatalog(next, (await readActorProject(join(dirname(catalogPath), 'actor-catalog.json'))).catalog) }];
     const worldPath = options.documentPath ?? join(dirname(catalogPath), 'custom-world.json');
     let worldText: string | undefined;
     try { worldText = await readFile(worldPath, 'utf8'); }

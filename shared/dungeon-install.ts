@@ -1,6 +1,7 @@
 import { dungeonPlacementIssue } from './dungeon-placement';
 import type { BossDefinition } from './bosses';
 import { BOSS_TEMPLATE_BY_ID } from './boss-templates';
+import type { BossTemplate } from './actor-catalog';
 import { compileDungeonDraft, type DungeonDraft } from './dungeon-draft';
 import { DUNGEON_DEFINITIONS, type DungeonDefinition } from './dungeons';
 import type { WorldAsset } from './world-schema';
@@ -11,7 +12,10 @@ export interface DungeonBundle {
 }
 /** Resolve authored placements against implemented behavior; never execute imported code. */
 export function buildDungeonBundle(draft: DungeonDraft, existing: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS,
-    options: { assets?: readonly WorldAsset[]; checkPlacement?: boolean } = {}): DungeonBundle {
+    options: { assets?: readonly WorldAsset[]; checkPlacement?: boolean; templates?: ReadonlyMap<string, BossTemplate> } = {}): DungeonBundle {
+    draft = structuredClone(draft);
+    for (const entity of draft.entities) if (entity.kind === 'boss' && entity.inheritRadius)
+      entity.radius = (options.templates ?? BOSS_TEMPLATE_BY_ID).get(entity.template)?.radius ?? entity.radius;
     const compiled = compileDungeonDraft(draft, options.assets), definition = compiled.definition;
     const bounds = definition.layout.bounds;
     for (const other of existing) {
@@ -35,17 +39,17 @@ export function buildDungeonBundle(draft: DungeonDraft, existing: readonly Dunge
     definition.encounter.ejectTo = outside;
     for (const encounter of definition.additionalEncounters ?? [])
         encounter.encounter.ejectTo = { ...outside };
-    const bosses = resolveDungeonBosses(compiled);
+    const bosses = resolveDungeonBosses(compiled, options.templates);
     return { definition, bosses, draft: structuredClone(draft) };
 }
 
-export function resolveDungeonBosses(compiled: ReturnType<typeof compileDungeonDraft>): BossDefinition[] {
+export function resolveDungeonBosses(compiled: ReturnType<typeof compileDungeonDraft>, templates = BOSS_TEMPLATE_BY_ID as ReadonlyMap<string, BossTemplate>): BossDefinition[] {
     return compiled.bosses.map(placement => {
-        const template = BOSS_TEMPLATE_BY_ID.get(placement.template);
+        const template = templates.get(placement.template);
         if (!template)
             throw new Error(`${placement.name}: segnaposto senza comportamento. Seleziona un boss disponibile prima di installare.`);
         const boss: BossDefinition = { ...structuredClone(template), id: placement.id, dungeonId: compiled.definition.id,
-            templateId: template.templateId ?? template.id, name: placement.name, radius: placement.radius };
+            templateId: template.templateId ?? template.id, name: placement.name, radius: placement.inheritRadius ? template.radius : placement.radius };
         if (boss.behavior.unstuck)
             boss.behavior.unstuck.probeDistance = Math.max(boss.behavior.unstuck.probeDistance, boss.radius + 16);
         return boss;

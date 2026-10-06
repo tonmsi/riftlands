@@ -1,4 +1,5 @@
 import './world-maker.css';
+import { installBossEditor } from './boss-editor';
 import { field, tools, terrains, worldMakerLayout } from './world-maker-layout';
 import { drawWorldEditorMap, drawAssetGrid as renderAssetGrid, assetView as assetGridView } from './world-editor-canvas';
 import { WORLD_DOCUMENT } from '../../../shared/world-content';
@@ -19,6 +20,7 @@ import { AssetGridCamera } from '../../render/world-asset-view';
 import { loadWorldCheckpoint, saveWorldCheckpoint } from './world-editor-storage';
 const root = document.getElementById('world-maker')!;
 root.innerHTML = worldMakerLayout;
+installBossEditor();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const input = (id: string) => el<HTMLInputElement>(id);
 const val = (id: string) => (el(id) as HTMLInputElement | HTMLSelectElement).value;

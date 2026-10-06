@@ -4,6 +4,9 @@ import { acquireDataLease } from '../server/data-lease';
 import { installDungeon } from './dungeon-library';
 import { readCatalog, removeDungeon } from './dungeon-removal';
 import { listDungeonBackups, removeDungeonBackups } from './dungeon-backups';
+import { readActorProject } from './actor-library';
+import { dirname, join } from 'node:path';
+import { compactDungeonDraft } from '../shared/dungeon-draft';
 
 /** The same protected library is used by both editor entry points. */
 export function dungeonStudioRoutes(options: { root: string; catalogPath: string; dataPath: string; documentPath?: string; managedPlacement?: boolean }, invalidate: () => void) {
@@ -17,7 +20,8 @@ export function dungeonStudioRoutes(options: { root: string; catalogPath: string
         void (async () => {
             if (request.method === 'GET') {
                 const catalog = await readCatalog(options.catalogPath);
-                reply(200, { token, dungeons: catalog.bundles.map(b => ({ id: b.definition.id, name: b.definition.name, draft: b.draft })), backups: await listDungeonBackups(options) });
+                reply(200, { token, actors: (await readActorProject(join(dirname(options.catalogPath), 'actor-catalog.json'))).catalog,
+                  dungeons: catalog.bundles.map(b => ({ id: b.definition.id, name: b.definition.name, draft: b.draft ? compactDungeonDraft(b.draft) : undefined })), backups: await listDungeonBackups(options) });
                 return;
             }
             const supplied = Buffer.from(String(request.headers['x-studio-token'] ?? ''));

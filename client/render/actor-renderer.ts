@@ -1,8 +1,9 @@
+import { BossSpriteRenderer } from "./boss-sprite-renderer";
 import { rasterizeSpriteSheet, type RasterSpriteSheet } from './sprite-sheet';
 import { circle, polygon } from './render-primitives';
 import { CLASSES, PLAYER_RADIUS } from '../../shared/config';
 import type { Actor, ClassId, Vec2 } from '../../shared/types';
-import { BOSS_WAKE_MS, type BossWindup } from '../../shared/bosses';
+import { type BossWindup } from '../../shared/bosses';
 import { playerSpriteDirectionRow } from './sprite-direction';
 import { NPC_DEFINITIONS } from '../../shared/npcs';
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
@@ -20,27 +21,11 @@ const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = 
     const kind = path.match(/\/npc-([^/]+)\.(svg|png)$/)?.[1]; return kind && Object.hasOwn(NPC_DEFINITIONS, kind) ? [[kind, url]] : [];
   })),
 };
-const BOSS_SPRITE_URLS: Record<string, string> = {
-  'stone-warden': new URL('../../assets/boss-warden.png', import.meta.url).href,
-  'maze-stalker': new URL('../../assets/maze-stalker.svg', import.meta.url).href,
-};
-// Sequential attack sheets; melee has one four-frame animation per direction.
-const BOSS_ATTACK_SPRITES: Record<string, { url: string; cols: number; rows: number }> = {
-  'stone-warden:charge': { url: new URL('../../assets/boss-warden-charge.png', import.meta.url).href, cols: 4, rows: 2 },
-  'stone-warden:slam': { url: new URL('../../assets/boss-warden-slam.png', import.meta.url).href, cols: 4, rows: 2 },
-  'stone-warden:nova': { url: new URL('../../assets/boss-warden-nova.png', import.meta.url).href, cols: 4, rows: 2 },
-  'stone-warden:prep': { url: new URL('../../assets/boss-warden-prep.png', import.meta.url).href, cols: 4, rows: 2 },
-  'stone-warden:melee': { url: new URL('../../assets/boss-warden-melee.png', import.meta.url).href, cols: 4, rows: 4 },
-  'stone-warden:death': { url: new URL('../../assets/boss-warden-death.png', import.meta.url).href, cols: 4, rows: 1 },
-};
-const BOSS_MELEE_ANIMATION_MS = 520;
-const BOSS_DEATH_ANIMATION_MS = 1000;
-
 const FRAME_SIZE = 256;
 const PLAYER_DRAW_SIZE = 48;
 const NPC_FRAME_SIZE = 256;
 const NPC_DRAW_SIZE = 48;
-const BOSS_DRAW_SIZE = 140;
+
 const SPRITE_COLUMNS = 4;
 
 const TAU = Math.PI * 2;
@@ -49,6 +34,7 @@ export class ActorRenderer {
   private readonly classSprites = new Map<ClassId, RasterSpriteSheet>();
   private readonly npcSprites = new Map<string, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
+  private readonly bossSprites = new BossSpriteRenderer();
   readonly spritesReady: Promise<void>;
   constructor(private readonly ctx: CanvasRenderingContext2D, private readonly touchQuery: MediaQueryList) {
     this.spritesReady = this.prepareSprites();
@@ -70,16 +56,7 @@ export class ActorRenderer {
         .then(sprite => { this.npcSprites.set(npcKind, sprite); })
         .catch(error => { console.warn(error); }));
     }
-    for (const [skin, url] of Object.entries(BOSS_SPRITE_URLS)) {
-      jobs.push(rasterizeSpriteSheet(url, NPC_FRAME_SIZE, BOSS_DRAW_SIZE)
-        .then(sprite => { this.npcSprites.set(`boss:${skin}`, sprite); })
-        .catch(error => { console.warn(error); }));
-    }
-    for (const [key, config] of Object.entries(BOSS_ATTACK_SPRITES)) {
-      jobs.push(rasterizeSpriteSheet(config.url, NPC_FRAME_SIZE, BOSS_DRAW_SIZE, config.cols, config.rows)
-        .then(sprite => { this.npcSprites.set(`boss:${key}`, sprite); })
-        .catch(error => { console.warn(`Sprite attacco mancante: ${key}`); }));
-    }
+    jobs.push(this.bossSprites.prepare());
     await Promise.all(jobs);
   }
   drawActor(
@@ -127,7 +104,7 @@ export class ActorRenderer {
       ctx.stroke();
     }
     if (dead) ctx.globalAlpha = actor.npcKind === 'boss' ? 0.75 : 0.45;
-    if (detailed) {
+    if (detailed && !(actor.npcKind === "boss" && this.bossSprites.shadow(ctx, actor))) {
       ctx.fillStyle = 'rgba(36, 48, 37, 0.28)';
       ctx.beginPath();
       ctx.ellipse(1, 13, r + 5, r * 0.56, 0, 0, TAU);
@@ -326,11 +303,7 @@ export class ActorRenderer {
   private drawNpc(actor: Actor, time: number, color: string, windup?: BossWindup): void {
     const { ctx } = this;
     const r = actor.radius;
-    let spriteKey = actor.npcKind === 'boss' ? `boss:${actor.bossSkin}` : actor.npcKind;
-    let isAttacking = false;
-    let isMelee = false;
-    let isWakingUp = false;
-    let isAsleep = false;
+    const spriteKey = actor.npcKind;
 
     // --- LOGICA DI MOVIMENTO (spostata in alto per sapere subito se si muove) ---
     const previous = this.classMotion.get(actor.id);
@@ -348,78 +321,17 @@ export class ActorRenderer {
     }
     // -------------------------------------------------------------------------
 
-    if (actor.npcKind === 'boss') {
-      const prepKey = `boss:${actor.bossSkin}:prep`;
-
-      if (windup) {
-        // PRIORITÀ 1: Sta attaccando
-        const attackKey = `boss:${actor.bossSkin}:${windup.kind}`;
-        if (this.npcSprites.has(attackKey)) {
-          spriteKey = attackKey;
-          isAttacking = true;
-        }
-      } else if (actor.bossMeleeAt !== undefined && time >= actor.bossMeleeAt && time < actor.bossMeleeAt + BOSS_MELEE_ANIMATION_MS
-        && this.npcSprites.has(`boss:${actor.bossSkin}:melee`)) {
-        spriteKey = `boss:${actor.bossSkin}:melee`;
-        row = playerSpriteDirectionRow(Math.cos(actor.aim), Math.sin(actor.aim), row, true);
-        isMelee = true;
-      } else if (actor.bossAwakenedAt !== undefined && time < actor.bossAwakenedAt + BOSS_WAKE_MS) {
-        // Il server autorizza il risveglio solo dopo l'avvio del dungeon.
-        if (this.npcSprites.has(prepKey)) {
-          spriteKey = prepKey;
-          isWakingUp = true;
-        }
-      } else if (actor.bossAwakenedAt === undefined) {
-        // Anche durante ingresso e teletrasporto resta sul primo frame del prep.
-        if (this.npcSprites.has(prepKey)) {
-          spriteKey = prepKey;
-          isAsleep = true;
-        }
-      }
-    }
-
-    const deathKey = `boss:${actor.bossSkin}:death`;
-    const isDying = actor.npcKind === 'boss' && actor.hp <= 0 && this.npcSprites.has(deathKey);
-    if (isDying) spriteKey = deathKey;
+    if (actor.npcKind === "boss" && this.bossSprites.draw(ctx, actor, time, moving, row, windup)) return;
     const sprite = spriteKey ? this.npcSprites.get(spriteKey) : undefined;
-    if (sprite && (actor.hp > 0 || isDying)) {
+    if (sprite && actor.hp > 0) {
       let frameIndex = 0;
+      const startedAt = moving && (!previous || !previous.moving || previous.row !== row)
+        ? time : previous?.startedAt ?? time;
+      this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
 
-      if (isDying) {
-        const progress = actor.bossDiedAt === undefined ? 1 : Math.max(0, (time - actor.bossDiedAt) / BOSS_DEATH_ANIMATION_MS);
-        frameIndex = Math.min(sprite.frames.length - 1, Math.floor(progress * sprite.frames.length));
-      } else if (isMelee) {
-        const progress = (time - actor.bossMeleeAt!) / BOSS_MELEE_ANIMATION_MS;
-        frameIndex = row * SPRITE_COLUMNS + Math.min(SPRITE_COLUMNS - 1, Math.floor(progress * SPRITE_COLUMNS));
-      } else if (isAttacking && windup) {
-        // Animazione Attacco
-        const duration = windup.resolvesAt - windup.startedAt;
-        const progress = Math.max(0, Math.min(1, (time - windup.startedAt) / duration));
-        const totalFrames = sprite.frames.length;
-        frameIndex = Math.min(totalFrames - 1, Math.floor(progress * totalFrames));
-
-      } else if (isWakingUp) {
-        // Risveglio eseguito una volta, sincronizzato con il server.
-        const totalFrames = sprite.frames.length;
-        const progress = Math.max(0, Math.min(1, (time - actor.bossAwakenedAt!) / BOSS_WAKE_MS));
-        frameIndex = Math.min(totalFrames - 1, Math.floor(progress * totalFrames));
-
-      } else if (isAsleep) {
-        // Dorme: Immagine fissa sul PRIMO frame (indice 0)
-        frameIndex = 0;
-
-      } else {
-        // Movimento / Combattimento standard
-        // Aggiorniamo il tracking ora che sappiamo la direzione corretta
-        const startedAt = moving && (!previous || !previous.moving || previous.row !== row)
-          ? time : previous?.startedAt ?? time;
-        this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
-
-        const frame = moving ? Math.floor((time - startedAt) / 130) % SPRITE_COLUMNS : 0;
-        frameIndex = row * SPRITE_COLUMNS + frame;
-      }
-
-      const drawSize = actor.npcKind === 'boss' ? BOSS_DRAW_SIZE : NPC_DRAW_SIZE;
+      const frame = moving ? Math.floor((time - startedAt) / 130) % SPRITE_COLUMNS : 0;
+      frameIndex = row * SPRITE_COLUMNS + frame;
+      const drawSize = NPC_DRAW_SIZE;
       const cachedFrame = sprite.frames[frameIndex];
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';

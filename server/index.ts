@@ -14,6 +14,7 @@ import { acquireDataLease } from './data-lease';
 import { SnapshotEncoder, type SnapshotPacket } from '../shared/snapshot-stream';
 import { newNarrativeProgress } from '../shared/narrative';
 import { OrderedSaveWriter } from './save-writer';
+import { ACTOR_CATALOG } from '../shared/actor-catalog';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
@@ -38,6 +39,10 @@ const mime: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js
 const server = createServer((request, response) => {
   const path = (request.url ?? '/').split('?')[0];
   response.setHeader('X-Content-Type-Options', 'nosniff');
+  if (path === '/api/actor-catalog' && request.method === 'GET') {
+    response.setHeader('Cache-Control', 'no-store'); response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify({ catalog: ACTOR_CATALOG })); return;
+  }
   if (path === '/api/build' && request.method === 'POST') {
     response.setHeader('Cache-Control', 'no-store'); response.setHeader('Content-Type', 'application/json');
     if (!healthy || closing) { response.writeHead(503); response.end(); return; }
@@ -150,6 +155,13 @@ const server = createServer((request, response) => {
   if (request.method !== 'GET' && request.method !== 'HEAD') { response.writeHead(405); response.end(); return; }
   let relative: string;
   try { relative = decodeURIComponent(path); } catch { response.writeHead(400); response.end(); return; }
+  if (/^\/(actor-assets|world-assets)\/[a-zA-Z0-9_-]+\.(png|svg)$/.test(relative)) {
+    const asset = resolve(ROOT, 'public', relative.slice(1));
+    if (!existsSync(asset) || !statSync(asset).isFile()) { response.writeHead(404); response.end(); return; }
+    response.writeHead(200, { 'Content-Type': mime[extname(asset)], 'Cache-Control': 'no-cache' });
+    if (request.method === 'HEAD') response.end(); else createReadStream(asset).on('error', () => response.destroy()).pipe(response);
+    return;
+  }
   let file = resolve(dist, `.${relative}`);
   if (file !== dist && !file.startsWith(dist + sep)) { response.writeHead(403); response.end(); return; }
   if (file === dist || !extname(file)) file = resolve(dist, 'index.html');

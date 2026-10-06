@@ -1,4 +1,5 @@
 import { BOSS_BY_ID } from './bosses';
+import { packDraftTiles, unpackDraftTiles } from './dungeon-storage';
 import { TILE_SIZE } from './config';
 import { assertValidDungeonDefinition, dungeonEncounters, flameBarrierFromTiles, dungeonTile, DEFAULT_DUNGEON_THEME, type DungeonDefinition, type DungeonRegion } from './dungeons';
 import { NPC_DEFINITIONS, type NpcTemplateId } from './npcs';
@@ -20,7 +21,7 @@ export const PICKUP_CATALOG: Record<PickupKind, { name: string; color: string }>
   power: { name: 'Potenza +30% · 10 s', color: '#e5cc81' }, weakness: { name: 'Debolezza −30% · 7 s', color: '#bb99cb' },
 };
 export interface DraftEntity extends Vec2 {
-  id: string; kind: 'npc' | 'boss' | 'party' | 'activation' | 'flame' | 'pickup'; encounterId?: string; span?: number; vertical?: boolean; aggroRadius?: number; template: string; label: string; level: number; radius: number;
+  id: string; kind: 'npc' | 'boss' | 'party' | 'activation' | 'flame' | 'pickup'; inheritRadius?: boolean; encounterId?: string; span?: number; vertical?: boolean; aggroRadius?: number; template: string; label: string; level: number; radius: number;
 }
 export const DEFAULT_BOSS_AGGRO_RADIUS = 288;
 export interface DraftEncounter { id: string; name: string; x: number; y: number; width: number; height: number; visitorTiles?: Vec2[]; }
@@ -29,6 +30,8 @@ export interface DungeonDraft {
   encounters: DraftEncounter[]; origin: Vec2; tiles: TileKind[]; entities: DraftEntity[];
   assetPlacements?: AssetPlacement[];
 }
+export function compactDungeonDraft(draft: DungeonDraft) { const { tiles, ...rest } = draft; return { ...rest, tileRuns: packDraftTiles(tiles) }; }
+export const serializeDungeonDraft = (draft: DungeonDraft) => JSON.stringify(compactDungeonDraft(draft)) + "\n";
 export function newDungeonDraft(width = 24, height = 18): DungeonDraft {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 8 || height < 8 || width > 96 || height > 96) throw new Error('Dimensioni consentite: 8–96 caselle.');
   return { version: 1, id: 'nuovo-dungeon', name: 'Dungeon senza nome', width, height, origin: { x: 0, y: -144 }, encounters: [{ id: 'main', name: 'Incontro 1', x: 0, y: 0, width, height }],
@@ -40,6 +43,8 @@ export function newDungeonDraft(width = 24, height = 18): DungeonDraft {
 export function parseDungeonDraft(raw: string): DungeonDraft {
   if (raw.length > 2_000_000) throw new Error('File troppo grande (massimo 2 MB).');
   const value = JSON.parse(raw) as DungeonDraft;
+  const compressed = value as DungeonDraft & { tileRuns?: unknown };
+  if (compressed?.tileRuns !== undefined) value.tiles = unpackDraftTiles(compressed.tileRuns, value.width * value.height);
   const fail = (): never => { throw new Error('Bozza non valida: controlla versione, dimensioni, terreno ed entità.'); };
   if (!value || value.version !== 1 || typeof value.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(value.id)
     || typeof value.name !== 'string' || !value.name.trim() || value.name.length > 80) fail();
@@ -74,12 +79,13 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
       || !Number.isFinite(entity.radius) || entity.radius < 1 || entity.radius > 96
       || (entity.kind === 'npc' && !Object.hasOwn(NPC_DEFINITIONS, entity.template))
       || (entity.kind === 'pickup' && !Object.hasOwn(PICKUP_CATALOG, entity.template))) fail();
+    if (entity.inheritRadius !== undefined && typeof entity.inheritRadius !== "boolean") fail();
     if (entity.encounterId !== undefined && !groupIds.has(entity.encounterId)) fail();
     if (entity.aggroRadius !== undefined && (entity.kind !== 'boss' || !Number.isFinite(entity.aggroRadius) || entity.aggroRadius <= 0 || entity.aggroRadius > 10000)) fail();
     if (entity.kind === 'flame' && ((!Number.isInteger(entity.span ?? 1) || (entity.span ?? 1) < 1 || (entity.span ?? 1) > 96)
       || (entity.vertical !== undefined && typeof entity.vertical !== 'boolean'))) fail();
     ids.add(entity.id);
-    return { ...(entity.aggroRadius !== undefined ? { aggroRadius: entity.aggroRadius } : {}), ...(entity.encounterId !== undefined ? { encounterId: entity.encounterId } : {}), ...(entity.kind === 'flame' ? { span: entity.span ?? 1, vertical: entity.vertical ?? false } : {}), id: entity.id, kind: entity.kind, template: entity.template, label: entity.label, x: entity.x, y: entity.y, level: entity.level,
+    return { ...(entity.inheritRadius !== undefined ? { inheritRadius: entity.inheritRadius } : {}), ...(entity.aggroRadius !== undefined ? { aggroRadius: entity.aggroRadius } : {}), ...(entity.encounterId !== undefined ? { encounterId: entity.encounterId } : {}), ...(entity.kind === 'flame' ? { span: entity.span ?? 1, vertical: entity.vertical ?? false } : {}), id: entity.id, kind: entity.kind, template: entity.template, label: entity.label, x: entity.x, y: entity.y, level: entity.level,
       radius: entity.kind === 'npc' ? NPC_DEFINITIONS[entity.template as NpcTemplateId].radius : entity.kind === 'pickup' ? 12 : entity.kind === 'party' ? 15 : entity.radius };
   });
   const placements = value.assetPlacements;
@@ -279,6 +285,6 @@ export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldA
   definition.additionalEncounters = placements.slice(1);
   for (const encounter of dungeonEncounters(definition)) assertValidDungeonDefinition(encounter);
   return { definition, bossTemplate: boss.template, bossPlaceholder: { name: boss.label, radius: boss.radius },
-    bosses: bosses.map((entity, i) => ({ id: placements[i].bossId, template: entity.template, name: entity.label, radius: entity.radius })) };
+    bosses: bosses.map((entity, i) => ({ id: placements[i].bossId, template: entity.template, name: entity.label, radius: entity.radius, inheritRadius: entity.inheritRadius })) };
 
 }

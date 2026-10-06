@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage } from 'node:http';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
+import { readActorProject, saveActorProject, listActorAssets } from './actor-library';
 import { createServer as createViteServer } from 'vite';
 import { importWorldImage, readWorldProject, readWorldDungeonCatalog, saveWorldProject } from './world-library';
 import { dungeonStudioRoutes } from './dungeon-studio-routes';
@@ -28,8 +29,12 @@ export async function startWorldStudio(options: { root: string; documentPath: st
           'Cache-Control': /^[a-f0-9]{64}\./.test(image[1]) ? 'public, max-age=31536000, immutable' : 'no-cache' }); response.end(bytes);
       }).catch(() => { response.writeHead(404); response.end(); }); return;
     }
-    if (!['/__world/project', '/__world/images'].includes(path)) { vite.middlewares(request, response, () => { response.writeHead(404); response.end(); }); return; }
+    if (!['/__world/project', '/__world/images', '/__world/actors', '/api/actor-catalog'].includes(path)) { vite.middlewares(request, response, () => { response.writeHead(404); response.end(); }); return; }
     void (async () => {
+      if (request.method === 'GET' && (path === '/__world/actors' || path === '/api/actor-catalog')) {
+        const { catalog, revision } = await readActorProject(join(dirname(options.documentPath), 'actor-catalog.json'));
+        reply(200, { token, catalog, revision, assets: await listActorAssets(options.root) }); return;
+      }
       if (request.method === 'GET' && path === '/__world/project') {
         reply(200, { token, ...await readWorldProject(options.documentPath), dungeons: await readWorldDungeonCatalog(options.dungeonPath) }); return;
       }
@@ -40,7 +45,8 @@ export async function startWorldStudio(options: { root: string; documentPath: st
       busy = true;
       try {
         const payload = await readBody(request);
-        if (path === '/__world/images') reply(200, { image: await importWorldImage(options.root, payload.mime, payload.base64) });
+        if (path === '/__world/actors') { const result = await saveActorProject(options, payload.catalog, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
+        else if (path === '/__world/images') reply(200, { image: await importWorldImage(options.root, payload.mime, payload.base64) });
         else { const result = await saveWorldProject(options, payload.document, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
       } finally { busy = false; }
     })().catch(e => { if (!response.headersSent) reply(400, { error: e instanceof Error ? e.message : String(e) }); });

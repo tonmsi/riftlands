@@ -1,13 +1,21 @@
-import { parseDungeonDraft, type DungeonDraft } from '../../../shared/dungeon-draft';
+import { parseDungeonDraft, compactDungeonDraft, type DungeonDraft } from '../../../shared/dungeon-draft';
+import { parseActorCatalog } from '../../../shared/actor-catalog';
+import { BOSS_TEMPLATES, BOSS_TEMPLATE_BY_ID } from '../../../shared/boss-templates';
 
-export async function setupDungeonLibrary(getDraft: () => DungeonDraft, open: (draft: DungeonDraft) => void, status: (message: string) => void): Promise<void> {
+export async function setupDungeonLibrary(getDraft: () => DungeonDraft, open: (draft: DungeonDraft) => void, status: (message: string) => void, actorsUpdated?: () => void): Promise<void> {
     const panel = document.querySelector<HTMLElement>('#dungeon-library')!;
     try {
         const response = await fetch('/__studio/library');
         if (!response.ok) return;
-        const library = await response.json() as { token: string; dungeons: { id: string; name: string; draft?: DungeonDraft }[];
+        const library = await response.json() as { token: string; actors?: unknown; dungeons: { id: string; name: string; draft?: DungeonDraft }[];
             backups: { scope: string; label: string; count: number; bytes: number; files: string[] }[] };
         if (!library.token || !Array.isArray(library.dungeons)) return;
+        if (library.actors) {
+          const catalog = parseActorCatalog(library.actors);
+          (BOSS_TEMPLATES as typeof catalog.bosses).splice(0, BOSS_TEMPLATES.length, ...catalog.bosses);
+          BOSS_TEMPLATE_BY_ID.clear(); for (const b of catalog.bosses) BOSS_TEMPLATE_BY_ID.set(b.id, b);
+          actorsUpdated?.();
+        }
         panel.hidden = false;
         const buttons = () => document.querySelectorAll<HTMLButtonElement>('#dungeon-library button, #dungeon-backups button');
         const backupPanel = document.querySelector<HTMLElement>('#dungeon-backups')!;

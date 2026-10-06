@@ -6,13 +6,14 @@ import { loadWorldCheckpoint } from '../world/world-editor-storage';
 import { WorldAssetCatalog } from '../world/world-asset-catalog';
 import { WorldAssetArt } from '../../render/world-asset-art';
 import { parseDungeonFile } from '../../../shared/dungeon-import';
-import { BOSS_TEMPLATES as BOSS_DEFINITIONS } from '../../../shared/boss-templates';
+import { BOSS_TEMPLATES as BOSS_DEFINITIONS, BOSS_TEMPLATE_BY_ID } from '../../../shared/boss-templates';
+import { parseActorCatalog } from '../../../shared/actor-catalog';
 import { DUNGEON_DEFINITIONS, flameBarrierFromTiles, inwardFlameAngle } from '../../../shared/dungeons';
 import { NPC_DEFINITIONS, type NpcTemplateId } from '../../../shared/npcs';
 import { CLASSES } from '../../../shared/config';
 import { createDungeonPlaytest, type DungeonPlaytest } from './dungeon-playtest';
 import { Renderer } from '../../render/render';
-import { DEFAULT_BOSS_AGGRO_RADIUS, PICKUP_CATALOG, compileDungeonDraft, draftFlameTiles, draftFromDungeon, newDungeonDraft, parseDungeonDraft, TERRAIN_CATALOG, validateDungeonDraft, type DraftEntity, type DungeonDraft } from '../../../shared/dungeon-draft';
+import { serializeDungeonDraft, compactDungeonDraft, DEFAULT_BOSS_AGGRO_RADIUS, PICKUP_CATALOG, compileDungeonDraft, draftFlameTiles, draftFromDungeon, newDungeonDraft, parseDungeonDraft, TERRAIN_CATALOG, validateDungeonDraft, type DraftEntity, type DungeonDraft } from '../../../shared/dungeon-draft';
 import type { AbilitySlot, ClassId, PickupKind, TileKind, Vec2 } from '../../../shared/types';
 const root = document.querySelector<HTMLDivElement>('#maker')!;
 const field = (id: string, label: string, type = 'text') => `<label>${label}<input id="${id}" type="${type}"></label>`;
@@ -22,7 +23,7 @@ root.innerHTML = `
 <main><aside class="palette panel"><h2>01 <span>Strumenti</span></h2><div class="tool-grid"><button data-tool="select">↖ Seleziona</button><button data-tool="erase">⌫ Rimuovi entità</button></div><h3>Terreno</h3><div id="terrain" class="tool-grid"></div><h3>Creature</h3><div id="npcs" class="tool-list"></div><h3>Boss disponibili</h3><div id="bosses" class="tool-list"></div><h3>Incontro</h3><div class="tool-list"><button data-tool="boss">◇ Boss / segnaposto</button><button data-tool="party">⊕ Spawn solo / gruppo · opzionale</button><button data-tool="activation">◇ Punto di attivazione</button><button data-tool="flame">Fiamme</button><button data-tool="visitors">▧ Zona visitatori</button><button data-tool="visitors-erase">Cancella zona visitatori</button></div><p class="hint">Blu trasparente: zona accessibile a nemici e compagni esclusi dallo scontro, per l’incontro selezionato. Fuori dalla zona vengono espulsi. Trascina per dipingere o spostare. Rotella per zoom; tasto destro per spostare la vista.</p></aside>
 <section class="workspace panel"><div class="canvas-toolbar"><div><button id="undo" aria-label="Annulla modifica">↶</button><button id="redo" aria-label="Ripeti modifica">↷</button></div><span id="tool-name"></span><div><button id="zoom-out">−</button><button id="fit">Adatta</button><button id="zoom-in">+</button></div></div><div class="viewport"><canvas id="map" tabindex="0" aria-label="Mappa dungeon modificabile"></canvas><div id="preview-label" hidden>ANTEPRIMA MOVIMENTO · WASD / FRECCE · ESC PER USCIRE</div></div><div class="canvas-footer"><span id="map-info"></span><button id="preview">Prova movimento</button></div></section>
 <aside class="inspector panel"><section id="dungeon-library" hidden><h2>Catalogo installato</h2><select aria-label="Dungeon installato"></select><div class="tool-list"><button data-library="open">Apri nel maker</button><button data-action="install">Installa bozza</button><button data-action="update">Aggiorna bozza installata</button><button data-action="remove">Elimina dungeon selezionato</button></div><p class="hint">Modifiche locali a server fermo. Aggiornare azzera lo stato dei boss del dungeon.</p></section><section id="dungeon-backups" hidden><h2>Backup locali</h2><label>Backup da eliminare<select id="backup-scope"></select></label><p id="backup-summary" class="hint"></p><details><summary>File inclusi</summary><ul id="backup-files"></ul></details><button id="delete-backups">Elimina backup selezionati</button><p class="hint">Elimina solo le copie di recupero. Catalogo e account attuali restano invariati. I backup sono copie complete dei file, anche quando associati a un solo dungeon.</p></section><h2>02 <span>Proprietà</span></h2>${field('name', 'Nome dungeon')}${field('map-id', 'ID mappa')}<p class="hint">Posizione sulla mappa gestita dal World Maker.</p><h3>Incontri</h3><label>Incontro attivo<select id="encounter"></select></label><button id="add-encounter">Nuovo incontro separato</button><button id="remove-encounter">Rimuovi incontro vuoto</button>${field('encounter-name', 'Nome incontro')}<div class="two-fields">${field('encounter-x', 'Colonna regione', 'number')}${field('encounter-y', 'Riga regione', 'number')}${field('encounter-width', 'Larghezza', 'number')}${field('encounter-height', 'Altezza', 'number')}</div><p class="hint">Zona visitatori blu: accesso durante lo scontro senza diventare partecipanti. Più boss nello stesso incontro: fiamme fino alla morte dell’ultimo. Incontri separati: regioni senza sovrapposizioni.</p>
-<div id="entity-properties" hidden><h3>Entità selezionata</h3>${field('entity-label', 'Etichetta')}<div class="two-fields">${field('entity-x', 'Colonna', 'number')}${field('entity-y', 'Riga', 'number')}</div><div id="level-label">${field('entity-level', 'Livello', 'number')}</div><label id="template-label">Boss<select id="entity-template"><option value="">Segnaposto · da creare</option></select></label><div id="radius-label">${field('entity-radius', 'Raggio boss', 'number')}</div><div id="aggro-label">${field('entity-aggroRadius', 'Raggio aggro (unità; 48 = 1 tile)', 'number')}</div><label id="entity-encounter-label">Incontro dell’entità<select id="entity-encounter"></select></label><div id="flame-properties">${field('entity-span', 'Lunghezza (tile)', 'number')}<label>Direzione<select id="entity-vertical"><option value="false">Orizzontale</option><option value="true">Verticale</option></select></label></div><button id="delete">Rimuovi entità</button></div><h3>Controllo mappa</h3><ul id="issues"></ul><p class="hint">Installa la bozza nel progetto: npm run dungeon:import -- percorso/file.draft.json. Poi ricompila e riavvia. I segnaposto richiedono un boss implementato. Punti di attivazione o aggro avviano il dungeon: subito in solo, dopo 5 secondi in gruppo. All’avvio i giocatori vengono posizionati sugli spawn gruppo (metti 5 punti distinti per un team completo). I boss lontani attendono il proprio aggro. I punti di attivazione non hanno il limite di 5. Le fiamme appaiono solo dove le disegni, puntano verso l’interno e sono letali durante lo scontro. Per gestire il catalogo direttamente qui: npm run dungeon:studio.</p></aside></main>
+<div id="entity-properties" hidden><h3>Entità selezionata</h3>${field('entity-label', 'Etichetta')}<div class="two-fields">${field('entity-x', 'Colonna', 'number')}${field('entity-y', 'Riga', 'number')}</div><div id="level-label">${field('entity-level', 'Livello', 'number')}</div><label id="template-label">Boss<select id="entity-template"><option value="">Segnaposto · da creare</option></select></label><label id="inherit-radius-label"><input id="entity-inherit-radius" type="checkbox">Eredita hitbox dal catalogo boss</label><div id="radius-label">${field('entity-radius', 'Raggio boss', 'number')}</div><div id="aggro-label">${field('entity-aggroRadius', 'Raggio aggro (unità; 48 = 1 tile)', 'number')}</div><label id="entity-encounter-label">Incontro dell’entità<select id="entity-encounter"></select></label><div id="flame-properties">${field('entity-span', 'Lunghezza (tile)', 'number')}<label>Direzione<select id="entity-vertical"><option value="false">Orizzontale</option><option value="true">Verticale</option></select></label></div><button id="delete">Rimuovi entità</button></div><h3>Controllo mappa</h3><ul id="issues"></ul><p class="hint">Installa la bozza nel progetto: npm run dungeon:import -- percorso/file.draft.json. Poi ricompila e riavvia. I segnaposto richiedono un boss implementato. Punti di attivazione o aggro avviano il dungeon: subito in solo, dopo 5 secondi in gruppo. All’avvio i giocatori vengono posizionati sugli spawn gruppo (metti 5 punti distinti per un team completo). I boss lontani attendono il proprio aggro. I punti di attivazione non hanno il limite di 5. Le fiamme appaiono solo dove le disegni, puntano verso l’interno e sono letali durante lo scontro. Per gestire il catalogo direttamente qui: npm run dungeon:studio.</p></aside></main>
 <footer><div class="new-map"><label>Nuova mappa <input id="width" type="number" value="24" min="8" max="96"> × <input id="height" type="number" value="18" min="8" max="96"></label><button id="new">Crea</button><select id="example"><option value="">Copia da catalogo…</option></select></div><span id="status" role="status">Pronto</span></footer><input id="file" type="file" accept=".json,application/json" hidden>`;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const input = (id: string) => el<HTMLInputElement>(id);
@@ -91,14 +92,17 @@ for (const [id, item] of Object.entries(NPC_DEFINITIONS))
     palette('npcs', item.name, `npc:${id}`, item.color);
 for (const [id, item] of Object.entries(PICKUP_CATALOG))
     palette('pickups', item.name, `pickup:${id}`, item.color);
+function refreshBossPalette() { el("bosses").replaceChildren(); el("entity-template").replaceChildren(new Option("Segnaposto · da creare",""));
 for (const boss of BOSS_DEFINITIONS) {
     palette('bosses', boss.name, `boss:${boss.id}`, '#df946f');
     el<HTMLSelectElement>('entity-template').add(new Option(boss.name, boss.id));
 }
+}
+refreshBossPalette();
 for (const dungeon of DUNGEON_DEFINITIONS)
     el<HTMLSelectElement>('example').add(new Option(dungeon.name, dungeon.id));
 function save(): void { try {
-    localStorage.setItem(KEY, JSON.stringify(draft));
+    localStorage.setItem(KEY, serializeDungeonDraft(draft));
     status('Bozza salvata su questo dispositivo');
 }
 catch {
@@ -120,7 +124,7 @@ catch (error) {
 } }
 function setTool(next: string): void { stopPreview(); tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.tool === tool)); if (b.dataset.tool === tool)
     el('tool-name').textContent = b.textContent; }); if (tool.startsWith('asset:')) el('tool-name').textContent = `Asset · ${sharedAssets.find(a => a.id === tool.slice(6))?.name ?? tool.slice(6)}`; }
-root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool!)));
+root.addEventListener("click", event => { const b = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tool]"); if(b) setTool(b.dataset.tool!); });
 function refresh(): void {
     const animated = new Set(sharedAssets.filter(a => worldAssetVisual(a).kind === 'fire').map(a => a.id));
     animatedAssets = (draft.assetPlacements ?? []).some(p => animated.has(p.assetId));
@@ -155,7 +159,9 @@ function refresh(): void {
         el('aggro-label').hidden = e.kind !== 'boss';
         input('entity-vertical').value = String(e.vertical ?? false);
         el('level-label').hidden = e.kind !== 'npc';
-        el('template-label').hidden = el('radius-label').hidden = e.kind !== 'boss';
+        el('template-label').hidden = el('radius-label').hidden = el('inherit-radius-label').hidden = e.kind !== 'boss';
+        input('entity-inherit-radius').checked = e.inheritRadius === true;
+        input('entity-radius').disabled = e.inheritRadius === true;
         el('entity-encounter-label').hidden = e.kind === 'npc' || e.kind === 'pickup';
         el('flame-properties').hidden = e.kind !== 'flame';
     }
@@ -337,7 +343,7 @@ function paint(p: Vec2): void {
         if (kind === 'flame' && (p.x === 0 || p.y === 0 || p.x === draft.width - 1 || p.y === draft.height - 1)) { status('Il bordo si chiude con i massi: posiziona le fiamme all’interno.'); return; }
         const template = kind === 'pickup' ? tool.slice(7) : kind === 'npc' ? tool.slice(4) : tool.startsWith('boss:') ? tool.slice(5) : '';
         const npc = kind === 'npc' ? NPC_DEFINITIONS[template as NpcTemplateId] : undefined, boss = BOSS_DEFINITIONS.find(b => b.id === template);
-        const e: DraftEntity = { id: crypto.randomUUID(), kind, template, label: npc?.name ?? boss?.name ?? (kind === 'boss' ? 'Boss da creare' : kind === 'flame' ? 'Fiamme' : kind === 'activation' ? 'Punto di attivazione' : 'Spawn gruppo'), ...p, level: 1, radius: npc?.radius ?? boss?.radius ?? (kind === 'boss' ? 36 : 15), ...(kind !== 'npc' ? { encounterId: activeEncounter } : {}), ...(kind === 'boss' ? { aggroRadius: DEFAULT_BOSS_AGGRO_RADIUS } : {}), ...(kind === 'flame' ? { span: 1, vertical: false } : {}) };
+        const e: DraftEntity = { id: crypto.randomUUID(), kind, template, label: npc?.name ?? boss?.name ?? (kind === 'boss' ? 'Boss da creare' : kind === 'flame' ? 'Fiamme' : kind === 'activation' ? 'Punto di attivazione' : 'Spawn gruppo'), ...p, level: 1, radius: npc?.radius ?? boss?.radius ?? (kind === 'boss' ? 36 : 15), ...(kind !== 'npc' ? { encounterId: activeEncounter } : {}), ...(kind === 'boss' ? { inheritRadius: true, aggroRadius: DEFAULT_BOSS_AGGRO_RADIUS } : {}), ...(kind === 'flame' ? { span: 1, vertical: false } : {}) };
         draft.entities.push(e);
         if (kind === 'pickup') { e.label = PICKUP_CATALOG[template as PickupKind].name; e.radius = 12; delete e.encounterId; }
         selected = e.id;
@@ -402,11 +408,11 @@ for (const f of ['label', 'x', 'y', 'level', 'radius', 'template', 'encounter', 
     else if (f === 'vertical')
         e.vertical = value('entity-vertical') === 'true';
     else
-        e[f] = Number(value(`entity-${f}`)); if (f === 'template') {
+        e[f] = Number(value(`entity-${f}`)); if (f === 'radius') e.inheritRadius = false; if (f === 'template') {
         const b = BOSS_DEFINITIONS.find(b => b.id === e.template);
         if (b) {
             e.label = b.name;
-            e.radius = b.radius;
+            e.radius = b.radius; e.inheritRadius = true;
         }
     } }));
 const remove = () => change(() => { draft.entities = draft.entities.filter(e => e.id !== selected); if (draft.assetPlacements) draft.assetPlacements = draft.assetPlacements.filter(p => p.id !== selected); selected = null; });
@@ -415,7 +421,7 @@ button('new', () => { change(() => { draft = newDungeonDraft(Number(value('width
 el('example').addEventListener('change', () => { const d = DUNGEON_DEFINITIONS.find(d => d.id === value('example')); if (!d)
     return; change(() => { draft = draftFromDungeon(d, BOSS_DEFINITIONS.find(b => b.id === d.bossId)?.radius); selected = null; }); fit(); status('Geometria copiata: verifica regioni e ingressi prima di esportare.'); input('example').value = ''; });
 function download(data: unknown, name: string): void { const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-button('download', () => download(draft, `${draft.id}.draft.json`));
+button('download', () => download(compactDungeonDraft(draft), `${draft.id}.draft.json`));
 button('compile', () => { try {
     download(compileDungeonDraft(draft, sharedAssets), `${draft.id}.runtime.json`);
     status('Runtime esportato. Installa usando dungeon:import con la bozza JSON.');
@@ -522,13 +528,28 @@ async function refreshSharedAssets(): Promise<void> {
             const project = await response.json(), local = await loadWorldCheckpoint();
             sharedAssets = local && local.revision === project.revision ? local.document.assets : parseWorldDocument(project.document).assets;
         }
+        const library = await fetch('/__studio/library', { cache: 'no-store' });
+        if (library.ok) {
+            const actors = (await library.json()).actors;
+            if (actors) {
+                const bosses = parseActorCatalog(actors).bosses;
+                (BOSS_DEFINITIONS as typeof bosses).splice(0, BOSS_DEFINITIONS.length, ...bosses);
+                BOSS_TEMPLATE_BY_ID.clear(); for (const b of bosses) BOSS_TEMPLATE_BY_ID.set(b.id, b);
+                refreshBossPalette();
+                for (const entity of draft.entities) if (entity.kind === 'boss' && entity.inheritRadius)
+                    entity.radius = BOSS_TEMPLATE_BY_ID.get(entity.template)?.radius ?? entity.radius;
+            }
+        }
         refresh();
     } catch { /* The published client uses the bundled shared catalog. */ }
 }
 if (studioChannel) studioChannel.onmessage = event => {
+    if (event.data?.type === 'actors') { stopPreview(); void refreshSharedAssets(); }
     if (event.data?.type === 'assets') {
         try { const document = newWorldDocument(); document.assets = event.data.assets; sharedAssets = parseWorldDocument(document).assets; stopPreview(); refresh(); } catch { /* Ignore invalid catalog updates. */ }
     }
 };
 window.addEventListener('focus', () => { void refreshSharedAssets(); });
-void refreshSharedAssets().then(() => setupDungeonLibrary(() => draft, incoming => { change(() => { draft = incoming; selected = null; }); fit(); status('Dungeon aperto dal catalogo. Modifica e premi Aggiorna bozza installata.'); }, status));
+void refreshSharedAssets().then(() => setupDungeonLibrary(() => draft, incoming => { change(() => { draft = incoming; selected = null; }); fit(); status('Dungeon aperto dal catalogo. Modifica e premi Aggiorna bozza installata.'); }, status, refreshBossPalette));
+
+el("entity-inherit-radius").addEventListener("change", () => change(() => { const e=draft.entities.find(e=>e.id===selected); if(!e) return; e.inheritRadius=input("entity-inherit-radius").checked; if(e.inheritRadius) e.radius=BOSS_DEFINITIONS.find(b=>b.id===e.template)?.radius??e.radius; }));
