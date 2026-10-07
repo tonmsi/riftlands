@@ -3,6 +3,7 @@ import type { GroundItem } from '../../shared/interactions';
 import type { Inventory } from '../../shared/items';
 import type { BossDrop, BossLockState, BossPreparationState, BossWindup } from '../../shared/bosses';
 export interface RenderFrame {
+  ambientSpeechBlocked?: boolean;
   spectating?: boolean;
   fishing?: import('../../shared/fishing/model').FishingView | null;
   fishingTarget?: Vec2;

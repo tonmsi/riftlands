@@ -3385,6 +3385,13 @@
   ],
   "npcs": [
     {
+      "x": -2,
+      "y": 24,
+      "id": "npc-dock-skeptic",
+      "npcKind": "dock-skeptic",
+      "level": 1
+    },
+    {
       "x": -15,
       "y": 114,
       "id": "npc-arena-bookmaker",

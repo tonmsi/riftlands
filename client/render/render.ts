@@ -22,10 +22,17 @@ import { arenaViewSign, cameraZoom, parseCameraSettings, viewVector, type Camera
 import { TerrainRenderer } from './terrain-renderer';
 import { drawFishingWorld } from '../fishing/world-art';
 import { ActorRenderer } from './actor-renderer';
+import { AmbientSpeech } from '../core/ambient-speech';
+import { drawSpeechBubble } from './speech-bubble';
+import { hasLineOfSight } from '../../shared/physics';
 import type { RenderFrame } from './render-types';
 export type { RenderFrame } from './render-types';
 const TAU = Math.PI * 2;
 export class Renderer {
+  private readonly ambientSpeech = new AmbientSpeech({
+    getItem: key => localStorage.getItem(key),
+    setItem: (key, value) => localStorage.setItem(key, value),
+  });
   private matchResult: { result: MatchResult; elapsed: number } | null = null;
   showMatchResult(result: MatchResult): void { this.matchResult = { result, elapsed: 0 }; }
   clearMatchResult(): void { this.matchResult = null; }
@@ -79,6 +86,7 @@ export class Renderer {
     this.hasCamera = false;
     this.viewSign = 1;
     this.characters.reset();
+    this.ambientSpeech.reset();
     this.resize();
   }
 
@@ -387,6 +395,18 @@ export class Renderer {
 
    // this.drawVignette();
     this.drawTeamIndicators(frame);
+    const speechNow = Date.now();
+    const bubble = this.ambientSpeech.update(frame.self, frame.actors, speechNow,
+      frame.playing && !frame.spectating && this.world.mode === 'world' && !frame.ambientSpeechBlocked,
+      actor => this.visible(actor) && !!frame.self && hasLineOfSight(frame.self, actor, this.world));
+    if (bubble) {
+      const actor = frame.actors.find(a => a.id === bubble.actorId)!;
+      const x = this.width / 2 + (actor.x - this.camera.x) * this.zoom;
+      const headY = this.height / 2 + (actor.y - this.camera.y) * this.zoom * this.viewSign - 46 * this.zoom;
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      drawSpeechBubble(ctx, bubble.text, x, headY, this.width, this.height,
+        Math.min(1, (speechNow - bubble.startedAt) / 180, (bubble.endsAt - speechNow) / 300));
+    }
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawDungeonEntry(frame, true);
