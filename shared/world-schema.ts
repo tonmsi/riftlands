@@ -36,6 +36,8 @@ export interface WorldZone {
   id: string; name: string; priority: number; shape: ZoneShape;
   temperature?: number; moisture?: number; pvp?: boolean; generateAssets?: boolean;
   npcs?: NpcRule; arenaId?: string;
+  /** Entering this area advances the matching reach-area quest, on the server. */
+  questId?: string;
 }
 export interface WorldNpc extends Vec2 { id: string; npcKind: NpcTemplateId; level: number; }
 /** One placement per installed dungeon, preserving encounter/boss identity and persistence. */
@@ -142,6 +144,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     for (const k of ['temperature', 'moisture']) if (z[k] !== undefined && !finite(z[k], 0, 1)) fail(`clima di ${z.id}`);
     for (const k of ['pvp', 'generateAssets']) if (z[k] !== undefined && !boolean(z[k])) fail(`regole di ${z.id}`);
     if (z.arenaId !== undefined && !id(z.arenaId)) fail('arena');
+    if (z.questId !== undefined && !id(z.questId)) fail('missione zona');
     if (z.npcs !== undefined) {
       const n = z.npcs;
       if (!object(n) || !finite(n.density, 0, 1) || !integer(n.maxPerChunk, 0, 24) || !object(n.weights)

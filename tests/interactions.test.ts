@@ -419,7 +419,9 @@ test('quest giver is authored content accepted by the world boundary parser', ()
 
 test('dialogue and loot content reference real nodes, quests and item definitions', () => {
   for (const quest of Object.values(QUEST_DEFINITIONS)) {
-    assert.ok(Object.hasOwn(ITEM_DEFINITIONS, quest.objective.itemId)); assert.ok(quest.objective.quantity > 0);
+    if (quest.objective.kind !== 'reach-area') assert.ok(Object.hasOwn(ITEM_DEFINITIONS, quest.objective.itemId));
+    else assert.ok(quest.objective.description);
+    assert.ok(quest.objective.quantity > 0);
     for (const reward of quest.reward?.items ?? []) {
       assert.ok(Object.hasOwn(ITEM_DEFINITIONS, reward.itemId)); assert.ok(Number.isSafeInteger(reward.quantity) && reward.quantity > 0 && reward.quantity <= ITEM_DEFINITIONS[reward.itemId].maxStack);
     }

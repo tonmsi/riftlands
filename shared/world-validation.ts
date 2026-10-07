@@ -5,6 +5,7 @@ import { relocateDungeon } from './dungeon-relocation';
 import { World } from './world';
 import { collidesWorld } from './physics';
 import type { WorldDocument } from './world-schema';
+import { QUEST_DEFINITIONS } from './narrative';
 
 export function worldDungeons(document: WorldDocument, catalog: readonly DungeonDefinition[]): DungeonDefinition[] {
   return catalog.filter(d => document.dungeons.find(p => p.dungeonId === d.id)?.enabled !== false)
@@ -13,6 +14,8 @@ export function worldDungeons(document: WorldDocument, catalog: readonly Dungeon
 /** Referential and spatial checks supplement format validation before installation. */
 export function validateWorld(document: WorldDocument, catalog: readonly DungeonDefinition[]): string[] {
   const issues: string[] = [], dungeons = worldDungeons(document, catalog), known = new Set(catalog.map(d => d.id));
+  for (const zone of document.zones) if (zone.questId && QUEST_DEFINITIONS[zone.questId]?.objective.kind !== 'reach-area')
+    issues.push(`${zone.name}: missione di esplorazione non disponibile: ${zone.questId}.`);
   for (const p of document.dungeons) if (!known.has(p.dungeonId)) issues.push(`Dungeon assente dal catalogo: ${p.dungeonId}.`);
   const assets = new Map(document.assets.map(a => [a.id, a]));
   for (const d of catalog) for (const p of d.assetPlacements ?? []) {

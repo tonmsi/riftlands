@@ -3381,6 +3381,28 @@
       },
       "temperature": 1,
       "moisture": 1
+    },
+    {
+      "id": "zone-north-road",
+      "name": "Strada delle pietre vive",
+      "priority": 30,
+      "shape": {
+        "kind": "rect",
+        "x": -4,
+        "y": 4,
+        "width": 8,
+        "height": 7
+      },
+      "questId": "north-road",
+      "npcs": {
+        "density": 0,
+        "maxPerChunk": 0,
+        "weights": {
+          "slime": 0,
+          "wisp": 0,
+          "sentinel": 0
+        }
+      }
     }
   ],
   "npcs": [
@@ -3418,6 +3440,34 @@
       "id": "npc-0b871cd1-6e29-4400-8fe3-5601360b1a30",
       "npcKind": "outpost-vendor",
       "level": 1
+    },
+    {
+      "id": "npc-north-scout",
+      "npcKind": "north-scout",
+      "x": 0,
+      "y": 16,
+      "level": 1
+    },
+    {
+      "id": "npc-north-sentinel-0",
+      "npcKind": "sentinel",
+      "x": -2,
+      "y": 6,
+      "level": 8
+    },
+    {
+      "id": "npc-north-sentinel-1",
+      "npcKind": "sentinel",
+      "x": 2,
+      "y": 5,
+      "level": 8
+    },
+    {
+      "id": "npc-north-sentinel-2",
+      "npcKind": "sentinel",
+      "x": 0,
+      "y": 3,
+      "level": 8
     }
   ],
   "dungeons": [

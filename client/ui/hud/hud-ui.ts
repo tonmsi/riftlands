@@ -301,6 +301,7 @@ export class HudUI {
     this.root.querySelector('.combat-caption > span:last-child')!.textContent = `${settings.bindings.basic.map(bindingLabel).join(' / ')} per attaccare`;
   }
   setPlaying(playing: boolean): void {
+    if (!playing) this.journal.resetFeedback();
     if (!playing) { this.xpFeedback?.reset(); this.goldFeedback.reset(); this.activeBuild = ''; }
     if (!playing) this.popups.dismiss();
     if (!playing) this.setMapVisible(false);
@@ -323,6 +324,7 @@ export class HudUI {
     }
   }
   setConnection(status: 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline', detail?: string): void {
+    if (status === 'reconnecting' || status === 'offline') this.journal.resetFeedback();
     if (status === 'reconnecting' || status === 'offline') { this.xpFeedback?.reset(); this.goldFeedback.reset(); }
     const banner = this.ref('connection-banner');
     banner.hidden = !this.isPlaying || (status !== 'offline' && status !== 'reconnecting');

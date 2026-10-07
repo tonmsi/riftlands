@@ -223,6 +223,7 @@ function refreshZone(z: WorldZone): void {
     set('zone-pvp', z.pvp);
     set('zone-generation', z.generateAssets);
     set('zone-arena', z.arenaId);
+    set('zone-quest', z.questId);
     input('zone-npcs').checked = !!z.npcs;
     set('zone-density', z.npcs ? z.npcs.density * 100 : 100);
     set('zone-limit', z.npcs?.maxPerChunk ?? 3);
@@ -552,7 +553,9 @@ on('zone-update', () => change(() => { const z = draft.zones.find(z => z.id === 
 } if (val('zone-arena').trim())
     z.arenaId = val('zone-arena').trim();
 else
-    delete z.arenaId; if (input('zone-npcs').checked)
+    delete z.arenaId;
+if (val('zone-quest')) z.questId = val('zone-quest'); else delete z.questId;
+if (input('zone-npcs').checked)
     z.npcs = { density: num('zone-density') / 100, maxPerChunk: num('zone-limit'), weights: { slime: num('zone-slime'), wisp: num('zone-wisp'), sentinel: num('zone-sentinel') } };
 else
     delete z.npcs; }));

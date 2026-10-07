@@ -6,10 +6,12 @@ import { shapeBounds } from '../../shared/world-authoring';
 import { mapTerrainColor } from './terrain-style';
 import { renderDpr } from '../core/frame-budget';
 import { PICKUP_COLORS, circle, noise } from './render-primitives';
+import { activeQuestAreas } from '../../shared/quest-areas';
+import type { NarrativeProgress } from '../../shared/narrative';
 
 /** Mappa locale limitata del terreno procedurale noto. */
 const minimapTerrainViews = new WeakMap<HTMLCanvasElement, { world: World; key: string; canvas: HTMLCanvasElement; width: number; height: number }>();
-export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600, viewSign = 1): void {
+export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600, viewSign = 1, narrative?: NarrativeProgress): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const rect = canvas.getBoundingClientRect(), dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
@@ -90,6 +92,28 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
     }
   }
 
+  const questAreas = world.mode === 'world' ? activeQuestAreas(world.authoring.document.zones, narrative) : [];
+  canvas.dataset.questTargetCount = String(questAreas.length);
+  for (const zone of questAreas) {
+    const b = shapeBounds(zone.shape), tx = ((b.left + b.right) / 2 * TILE_SIZE - left) * scale;
+    const ty = ((b.top + b.bottom) / 2 * TILE_SIZE - top) * scale;
+    const dx = tx - width / 2, dy = ty - height / 2;
+    const onMap = tx >= 12 && tx <= width - 12 && ty >= 12 && ty <= height - 12;
+    const edge = Math.min(1, (width / 2 - 12) / Math.max(.001, Math.abs(dx)), (height / 2 - 12) / Math.max(.001, Math.abs(dy)));
+    ctx.save(); ctx.fillStyle = '#ffe087'; ctx.strokeStyle = '#302919'; ctx.lineWidth = 1.5;
+    if (onMap) {
+      ctx.globalAlpha = .2; ctx.beginPath();
+      if (zone.shape.kind === 'circle') circle(ctx, tx, ty, zone.shape.radius * TILE_SIZE * scale);
+      else ctx.rect((b.left * TILE_SIZE - left) * scale, (b.top * TILE_SIZE - top) * scale,
+        (b.right - b.left) * TILE_SIZE * scale, (b.bottom - b.top) * TILE_SIZE * scale);
+      ctx.fill(); ctx.globalAlpha = 1; ctx.translate(tx, ty); ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-5, -5, 10, 10); ctx.strokeRect(-5, -5, 10, 10);
+    } else {
+      ctx.translate(width / 2 + dx * edge, height / 2 + dy * edge); ctx.rotate(Math.atan2(dy, dx));
+      ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(-5, -5); ctx.lineTo(-2, 0); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
   for (const actor of actors) {
     if (actor.id === self?.id || actor.hp <= 0) continue;
     ctx.fillStyle = actor.kind === 'npc' ? '#ccbb8d' : actor.teamId && actor.teamId === self?.teamId ? '#a6dcb4' : '#e6a08c';

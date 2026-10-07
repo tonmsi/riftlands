@@ -2,6 +2,9 @@ import type { Actor } from '../shared/types';
 import { randomUUID } from '../shared/id';
 import { hasLineOfSight, collidesWorld } from '../shared/physics';
 import type { World } from '../shared/world';
+import { TILE_SIZE } from '../shared/config';
+import { insideShape } from '../shared/world-authoring';
+import { activeQuestAreas } from '../shared/quest-areas';
 import type { Account } from './store';
 import { canCollectItem, collectItem, insertItem, ITEM_DEFINITIONS, newInventory, type ItemStack } from '../shared/items';
 import { VENDOR_DEFINITIONS, type VendorOffer } from '../shared/vendors';
@@ -100,7 +103,7 @@ export class InteractionSystem {
     // A requested item is consumed through the same interaction path future objects/portals can use.
     const quest = node.itemRequest ? QUEST_DEFINITIONS[node.itemRequest.questId] : undefined;
     const stack = account.inventory!.slots[command.slot];
-    if (!quest || questStatus(account.narrative!, quest.id, now) !== 'active' || !stack || stack.itemId !== command.itemId || stack.itemId !== quest.objective.itemId) throw new Error('Questo oggetto non è richiesto qui.');
+    if (!quest || quest.objective.kind === 'reach-area' || questStatus(account.narrative!, quest.id, now) !== 'active' || !stack || stack.itemId !== command.itemId || stack.itemId !== quest.objective.itemId) throw new Error('Questo oggetto non è richiesto qui.');
     const progress = account.narrative!.quests[quest.id], delivered = progress.objectives[quest.objective.id] ?? 0;
     const consumed = Math.min(stack.quantity, quest.objective.quantity - delivered);
     if (consumed <= 0) throw new Error('Consegna già completata.');
@@ -140,14 +143,15 @@ export class InteractionSystem {
     if (vendor) return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: vendor.greeting, choices: [],
       shop: vendor.offers.map(offer => ({ ...offer, disabledReason: this.purchaseBlocked(account, offer) })) };
     const dialogue = DIALOGUE_DEFINITIONS[session.dialogueId], node = dialogue.nodes[session.node];
-    const quest = node.itemRequest ? QUEST_DEFINITIONS[node.itemRequest.questId] : undefined;
+    const requested = node.itemRequest ? QUEST_DEFINITIONS[node.itemRequest.questId] : undefined;
+    const quest = requested?.objective.kind !== 'reach-area' ? requested : undefined;
     const remaining = quest ? Math.max(0, quest.objective.quantity - (account.narrative!.quests[quest.id]?.objectives[quest.objective.id] ?? 0)) : 0;
     const rewardQuest = node.rewardQuestId ? QUEST_DEFINITIONS[node.rewardQuestId] : undefined;
     const rewardProgress = rewardQuest ? account.narrative!.quests[rewardQuest.id] : undefined;
     const rewards = rewardQuest && rewardProgress ? session.rewards ?? [] : undefined;
     return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: node.text.replace('{remaining}', String(remaining)).replace('{rewardDelivery}', session.rewardNote ?? ''),
       choices: node.choices.filter(choice => !choice.condition || conditionMatches(account.narrative!, choice.condition, now)).map(({ id, label }) => ({ id, label })),
-      ...(quest && remaining ? { request: { itemId: quest.objective.itemId, remaining } } : {}),
+      ...(quest && quest.objective.kind !== 'reach-area' && remaining ? { request: { itemId: quest.objective.itemId, remaining } } : {}),
       ...(rewards ? { rewards, rewardGold: questReward(rewardQuest!, Math.max(0, questCompletions(rewardProgress!) - 1)).gold } : {}) };
   }
   private purchaseBlocked(account: Account, offer: VendorOffer): string | undefined {
@@ -158,7 +162,11 @@ export class InteractionSystem {
     return undefined;
   }
   marker(id: string, dialogueId: string, now: number): Actor['questMarker'] {
-    const dialogue = DIALOGUE_DEFINITIONS[dialogueId]; return dialogue ? questStatus(this.account(id).narrative!, dialogue.questId, now) : undefined;
+    const dialogue = DIALOGUE_DEFINITIONS[dialogueId];
+    if (!dialogue) return undefined;
+    const progress = this.account(id).narrative!, quest = QUEST_DEFINITIONS[dialogue.questId];
+    if (quest?.requiresQuest && !conditionMatches(progress, { kind: 'quest-completed', questId: quest.requiresQuest }, now)) return undefined;
+    return questStatus(progress, dialogue.questId, now);
   }
   killed(victim: Actor, killer: Actor | undefined, now: number): void {
     if (killer?.kind !== 'player' || !this.host.connected(killer.id)) return;
@@ -212,6 +220,22 @@ export class InteractionSystem {
     this.drops.set(drop.id, drop); this.host.changed(id);
   }
   step(now: number): void {
+    for (const player of this.host.players.values()) {
+      if (player.hp <= 0 || !this.host.connected(player.id)) continue;
+      const account = this.account(player.id);
+      for (const zone of activeQuestAreas(this.host.world.authoring.document.zones, account.narrative)) {
+        if (!insideShape(zone.shape, player.x / TILE_SIZE, player.y / TILE_SIZE)) continue;
+        const quest = QUEST_DEFINITIONS[zone.questId!], progress = account.narrative!.quests[quest.id];
+        // Another zone may already have completed the same quest in this tick.
+        if (progress.status !== 'active') continue;
+        const previous = questCompletions(progress);
+        advanceQuest(account.narrative!, quest, 1, now);
+        const reward = questReward(quest, previous);
+        account.gold = (account.gold ?? 0) + reward.gold;
+        this.host.rewardXp(player.id, reward.xp);
+        this.host.changed(player.id);
+      }
+    }
     for (const [id, drop] of this.drops) {
       if (now >= drop.expiresAt) { this.drops.delete(id); continue; }
       if (drop.requireOwnerExit) {

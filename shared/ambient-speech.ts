@@ -3,6 +3,7 @@ import type { NpcTemplateId } from './npcs';
 export interface AmbientSpeechDefinition { intro: string; lines: readonly string[]; }
 /** Personal flavour only: never changes quests, rewards or reputation. */
 export const AMBIENT_SPEECH: Partial<Record<NpcTemplateId, AmbientSpeechDefinition>> = {
+  'north-scout': { intro: 'Un’altra Leggenda. Vediamo quanto duri.', lines: ['Non tutte le rocce restano ferme.', 'Guarda dove metti i piedi.'] },
   'dock-skeptic': {
     intro: 'Ah, un’altra “Leggenda”. Tornatene dai tuoi amici. Qui non vi vogliamo.',
     lines: [

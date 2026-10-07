@@ -27,6 +27,11 @@
 .rift-app .player-panel .vital-row,.rift-app .player-panel .xp-meter { grid-column:2; margin:0 }
 .rift-app .player-panel { left:calc(var(--safe-left) + 18px) }
 .rift-app .game-hud .player-panel.has-active-quests { border-color:#efdaa078; box-shadow:inset 0 1px #fff2,inset 0 0 0 3px #0a182950,0 6px 18px #04101e55,0 0 18px #f8d47814; }
+.rift-app .game-hud .player-panel.quest-completed { border-color:#ffe597; box-shadow:0 0 0 2px #efce7970,0 0 24px #ffd77990; animation:quest-completed-glow 1.1s ease-in-out infinite alternate; }
+.rift-app .quest-completion-feedback { position:absolute; top:calc(100% + 8px); left:0; z-index:4; width:max-content; max-width:min(310px,calc(100vw - 28px)); padding:7px 10px; border:1px solid #edcf82; border-radius:7px; background:#182a3af2; color:#ffe5a0; font-size:11px; line-height:1.4; pointer-events:none; }
+.rift-app .quest-completion-feedback[hidden] { display:none; }
+@keyframes quest-completed-glow { from { box-shadow:0 0 0 2px #efce7950,0 0 12px #ffd77950; } to { box-shadow:0 0 0 2px #efce79a0,0 0 28px #ffd779b0; } }
+@media (prefers-reduced-motion:reduce) { .rift-app .game-hud .player-panel.quest-completed { animation:none; } }
 .rift-app .game-hud .player-journal-toggle { position:absolute; inset:0; z-index:1; padding:0; border:0; border-radius:inherit; background:transparent; }
 .rift-app .game-hud .player-panel>.character-effects { z-index:2; }
 .rift-app .game-hud .quest-journal { position:absolute; z-index:45; left:calc(var(--safe-left) + 18px); top:calc(var(--safe-top) + 114px); width:min(360px,calc(100% - 32px)); max-height:min(440px,calc(var(--game-height,100dvh) - 300px)); display:flex; flex-direction:column; padding:12px; pointer-events:auto; background:linear-gradient(145deg,#203447f5,#101e2cf5); }

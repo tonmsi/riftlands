@@ -22,6 +22,10 @@ export class QuestJournalUI {
   private signature = '';
   private panel = document.createElement('section');
   private toggle = document.createElement('button');
+  private completion = document.createElement('div');
+  private completionCounts: Record<string, number> = {};
+  private hasBaseline = false;
+  private completionTimer = 0;
   constructor(hud: HTMLElement, private player: HTMLElement, popups: PopupManager) {
     this.panel.className = 'quest-journal glass'; this.panel.id = 'quest-journal'; this.panel.hidden = true;
     this.panel.setAttribute('role', 'region'); this.panel.setAttribute('aria-label', 'Il tuo viaggio');
@@ -29,14 +33,37 @@ export class QuestJournalUI {
     hud.append(this.panel);
     this.toggle.type = 'button'; this.toggle.className = 'player-journal-toggle'; this.toggle.setAttribute('aria-label', 'Apri missioni e traguardi');
     this.toggle.setAttribute('aria-controls', this.panel.id); this.toggle.setAttribute('aria-expanded', 'false'); this.player.append(this.toggle);
+    this.completion.className = 'quest-completion-feedback'; this.completion.hidden = true;
+    this.completion.setAttribute('role', 'status'); this.completion.setAttribute('aria-live', 'polite');
+    this.completion.setAttribute('aria-atomic', 'true'); this.player.append(this.completion);
     this.toggle.addEventListener('click', () => this.setOpen(this.panel.hidden));
     this.panel.querySelector('button')!.addEventListener('click', () => this.setOpen(false));
     popups.register(this.panel, () => !this.panel.hidden, () => this.setOpen(false), this.toggle);
     this.update();
   }
   private setOpen(open: boolean): void { this.panel.hidden = !open; this.toggle.setAttribute('aria-expanded', String(open)); }
-  reset(): void { this.narrative = newNarrativeProgress(); this.inventory = newInventory(); this.signature = ''; this.setOpen(false); this.update(); }
+  reset(): void {
+    this.narrative = newNarrativeProgress(); this.inventory = newInventory(); this.signature = ''; this.setOpen(false);
+    this.resetFeedback(); this.update();
+  }
+  resetFeedback(): void {
+    clearTimeout(this.completionTimer); this.completionTimer = 0; this.completion.hidden = true;
+    this.player.classList.remove('quest-completed'); this.hasBaseline = false; this.completionCounts = {};
+  }
   update(narrative?: NarrativeProgress, inventory?: Inventory): void {
+    if (narrative) {
+      const counts = Object.fromEntries(Object.entries(narrative.quests).map(([id, q]) => [id, questCompletions(q)]));
+      const completed = Object.keys(counts).filter(id => this.hasBaseline && counts[id] > (this.completionCounts[id] ?? 0));
+      this.completionCounts = counts; this.hasBaseline = true;
+      if (completed.length) {
+        this.completion.textContent = `Missione completata · ${completed.map(id => QUEST_DEFINITIONS[id]?.name ?? id).join(', ')}`;
+        this.completion.hidden = false; this.player.classList.add('quest-completed');
+        clearTimeout(this.completionTimer);
+        this.completionTimer = window.setTimeout(() => {
+          this.completion.hidden = true; this.player.classList.remove('quest-completed'); this.completionTimer = 0;
+        }, 4500);
+      }
+    }
     if (narrative) this.narrative = narrative; if (inventory) this.inventory = inventory;
     const active = Object.entries(this.narrative.quests).filter(([, quest]) => quest.status === 'active');
     this.player.classList.toggle('has-active-quests', active.length > 0);
@@ -46,6 +73,10 @@ export class QuestJournalUI {
     for (const [id, progress] of active) {
       const quest = QUEST_DEFINITIONS[id]; if (!quest) continue;
       const row = document.createElement('article'); row.className = 'journal-quest'; row.dataset.questId = id;
+      if (quest.objective.kind === 'reach-area') {
+        row.append(text('strong', quest.name), text('p', quest.objective.description), text('small', 'Zona indicata sulla mappa · Si completa all’arrivo'));
+        list.append(row); continue;
+      }
       const delivered = progress.objectives[quest.objective.id] ?? 0, collected = inventoryCount(this.inventory, quest.objective.itemId);
       const meter = document.createElement('progress'); meter.max = quest.objective.quantity; meter.value = Math.min(meter.max, delivered + collected);
       meter.setAttribute('aria-label', quest.name);

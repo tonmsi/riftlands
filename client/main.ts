@@ -10,6 +10,7 @@ import { INTERACTION_RANGE } from '../shared/interactions';
 import { CLASSES, TICK_RATE } from '../shared/config';
 import { equippedAbility } from '../shared/progression';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
+import type { NarrativeProgress } from '../shared/narrative';
 import { GameConnection } from './core/net';
 import { predictMovement, reconcile } from './core/prediction';
 import { LocalMovementView } from './core/motion';
@@ -30,6 +31,7 @@ import { BettingUI } from './ui/betting-ui';
 
 let playing = false;
 let latest: Snapshot | null = null;
+let questProgress: NarrativeProgress | undefined;
 let predicted: Actor | null = null;
 let pending: InputCommand[] = [];
 let seq = 0;
@@ -146,6 +148,7 @@ const connection = new GameConnection({
   },
   message: message => {
     if (message.type === 'welcome') {
+      questProgress = undefined;
       lobbyToken = message.token;
       renderer.setSeed(message.seed);
       saveProfile(message.account);
@@ -185,6 +188,7 @@ const connection = new GameConnection({
       for (const [id, effect] of effects) if (message.time > effect.at + effect.duration + 250) effects.delete(id);
       while (effects.size > 1024) effects.delete(effects.keys().next().value!);
       ui.setSnapshot(message, connection.ping);
+      if (message.narrative) questProgress = message.narrative;
       bettingUI.update(message);
       fishingUI.update(message);
       const { id, name, xp, kills, deaths } = message.self;
@@ -379,8 +383,8 @@ function frame(now: number): void {
     })() : null,
   });
   if (self && playing && now - lastMinimap > 250) {
-    drawMinimap(ui.compactMinimap, renderer.world, self, actors, latest?.pickups ?? [], 1600, renderer.orientation);
-    if (ui.minimapVisible) drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? [], 4800, renderer.orientation);
+    drawMinimap(ui.compactMinimap, renderer.world, self, actors, latest?.pickups ?? [], 1600, renderer.orientation, questProgress);
+    if (ui.minimapVisible) drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? [], 4800, renderer.orientation, questProgress);
     lastMinimap = now;
   }
 }

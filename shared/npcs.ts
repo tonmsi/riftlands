@@ -18,6 +18,7 @@ const hostileTemplates = Object.fromEntries(Object.entries(NPC_CATALOG).map(([id
 };
 export const NPC_DEFINITIONS = {
   ...hostileTemplates,
+  'north-scout': { name: 'Rovan, esploratore', radius: 18, speed: 0, classId: 'warrior' as const, color: '#8c9270', disposition: 'neutral' as const, dialogueId: 'north-scout', behavior: undefined },
   'dock-skeptic': { name: 'Brugo, abitante del porto', radius: 18, speed: 0, classId: 'warrior' as const, color: '#9b785e', disposition: 'neutral' as const, dialogueId: undefined, behavior: undefined },
   'arena-bookmaker': { name: 'Silas, maestro delle quote', radius: 18, speed: 0, classId: 'mage' as const, color: '#e3b95d', disposition: 'neutral' as const, dialogueId: 'arena-bookmaker', behavior: undefined },
   'old-fisher': { name: 'Nereo, vecchio pescatore', radius: 18, speed: 30, classId: 'warrior' as const, color: '#bfa988', disposition: 'neutral' as const, dialogueId: 'old-fisher', behavior: { kind: 'wander', radius: 96, pauseMs: [2000, 4000] } },

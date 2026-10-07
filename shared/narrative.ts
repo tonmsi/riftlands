@@ -1,17 +1,42 @@
 export interface QuestProgress { status: 'active' | 'completed'; objectives: Record<string, number>; completions?: number; completedAt?: number; }
 export interface NarrativeProgress { version: 1; quests: Record<string, QuestProgress>; revision?: number; gifts?: string[]; }
 export const newNarrativeProgress = (): NarrativeProgress => ({ version: 1, quests: {} });
-export type NarrativeCondition = { kind: 'quest-status'; questId: string; status: 'available' | 'active' | 'completed' } | { kind: 'gift-unclaimed'; id: string };
+export type NarrativeCondition = { kind: 'quest-status'; questId: string; status: 'available' | 'active' | 'completed' } | { kind: 'quest-completed'; questId: string } | { kind: 'gift-unclaimed'; id: string };
 export type NarrativeAction = { kind: 'accept-quest'; questId: string } | { kind: 'give-item'; itemId: string; giftId: string };
-export interface QuestDefinition { id: string; name: string; repeatable?: boolean; repeatAfterMs?: number; reward?: { xp: number; minXp: number; firstGold: number; items?: readonly { itemId: string; quantity: number; firstOnly?: boolean; toInventory?: boolean; giftId?: string }[] }; objective: { id: string; itemId: string; quantity: number }; }
+export type QuestObjective = { kind?: 'deliver-item'; id: string; itemId: string; quantity: number }
+  | { kind: 'reach-area'; id: string; quantity: 1; description: string };
+export interface QuestDefinition { id: string; name: string; requiresQuest?: string; repeatable?: boolean; repeatAfterMs?: number; reward?: { xp: number; minXp: number; firstGold: number; items?: readonly { itemId: string; quantity: number; firstOnly?: boolean; toInventory?: boolean; giftId?: string }[] }; objective: QuestObjective; }
 export interface DialogueChoice { id: string; label: string; next?: string; action?: NarrativeAction; condition?: NarrativeCondition; }
 export interface DialogueNode { text: string; choices: readonly DialogueChoice[]; itemRequest?: { questId: string; completedNext: string; progressNext: string }; rewardQuestId?: string; }
 export interface DialogueDefinition { id: string; questId: string; entries: readonly { condition: NarrativeCondition; node: string }[]; nodes: Readonly<Record<string, DialogueNode>>; }
 export const QUEST_DEFINITIONS: Readonly<Record<string, QuestDefinition>> = {
+  'north-road': { id: 'north-road', name: 'Pietre che camminano', requiresQuest: 'stinking-bait',
+    reward: { xp: 100, minXp: 100, firstGold: 0 },
+    objective: { kind: 'reach-area', id: 'road-reached', quantity: 1, description: 'Raggiungi la strada a nord. Non occorre combattere i guardiani.' } },
   'stinking-bait': { id: 'stinking-bait', name: 'Esche puzzolenti', repeatable: true, repeatAfterMs: 5 * 60 * 1000, reward: { xp: 150, minXp: 5, firstGold: 20, items: [{ itemId: 'backpack-2', quantity: 1, firstOnly: true }, { itemId: 'fishing-rod', quantity: 1, firstOnly: true, toInventory: true, giftId: 'nereo-first-rod' }] }, objective: { id: 'innards-delivered', itemId: 'slime-innards', quantity: 3 } },
 };
 const questCondition = (status: 'available' | 'active' | 'completed'): NarrativeCondition => ({ kind: 'quest-status', questId: 'stinking-bait', status });
 export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> = {
+  'north-scout': {
+    id: 'north-scout', questId: 'north-road',
+    entries: [
+      { condition: { kind: 'quest-status', questId: 'north-road', status: 'completed' }, node: 'after' },
+      { condition: { kind: 'quest-status', questId: 'north-road', status: 'active' }, node: 'active' },
+      { condition: { kind: 'quest-completed', questId: 'stinking-bait' }, node: 'intro' },
+      { condition: { kind: 'quest-status', questId: 'north-road', status: 'available' }, node: 'locked' },
+    ],
+    nodes: {
+      locked: { text: 'Un’altra Leggenda. Prima di andare a cercare guai, renditi utile al porto. Nereo ha bisogno di una mano.', choices: [{ id: 'leave', label: 'Va bene.' }] },
+      intro: { text: 'Nereo dice che sai renderti utile. Vediamo. Sulla strada a nord ci sono uomini che non sono tornati. E quelle che sembrano rocce… si muovono. Vai a vedere con i tuoi occhi. Non devi affrontarle: resta vivo, per una volta.', choices: [
+        { id: 'accept', label: 'Andrò a vedere.', next: 'accepted', action: { kind: 'accept-quest', questId: 'north-road' } },
+        { id: 'leave', label: 'Non adesso.' },
+      ] },
+      accepted: { text: 'Segui la strada verso nord. Ti ho segnato il tratto sulla mappa. Basta arrivarci: non portarmi trofei e non farti ammazzare per impressionarmi.', choices: [{ id: 'leave', label: 'Ho capito.' }] },
+      active: { text: 'La strada è a nord, dove ti ho indicato. Guarda quei corpi e quelle pietre. Non ti ho chiesto di combattere.', choices: [{ id: 'leave', label: 'Vado.' }] },
+      after: { text: 'Adesso capisci perché sorvegliamo la strada. Non erano semplici rocce. Sei ancora vivo… bene. Forse sai anche ascoltare.', choices: [{ id: 'leave', label: 'Quelle cose da dove arrivano?' , next: 'mystery' }] },
+      mystery: { text: 'Da più a nord. Oltre quel tratto non sappiamo più cosa succeda. Per ora tieni gli occhi aperti.', choices: [{ id: 'leave', label: 'Lo farò.' }] },
+    },
+  },
   'old-fisher': {
     id: 'old-fisher', questId: 'stinking-bait',
     entries: [{ condition: questCondition('completed'), node: 'after' }, { condition: questCondition('active'), node: 'delivery' }, { condition: questCondition('available'), node: 'intro' }],
@@ -40,7 +65,11 @@ export function questStatus(progress: NarrativeProgress, id: string, now = Date.
   if (current?.status === 'completed' && quest?.repeatable && quest.repeatAfterMs !== undefined && cooldownElapsed(current, quest, now)) return 'available';
   return current?.status ?? 'available';
 }
-export function conditionMatches(progress: NarrativeProgress, condition: NarrativeCondition, now = Date.now()): boolean { return condition.kind === 'gift-unclaimed' ? !progress.gifts?.includes(condition.id) : questStatus(progress, condition.questId, now) === condition.status; }
+export function conditionMatches(progress: NarrativeProgress, condition: NarrativeCondition, now = Date.now()): boolean {
+  if (condition.kind === 'gift-unclaimed') return !progress.gifts?.includes(condition.id);
+  if (condition.kind === 'quest-completed') return !!progress.quests[condition.questId] && questCompletions(progress.quests[condition.questId]) > 0;
+  return questStatus(progress, condition.questId, now) === condition.status;
+}
 /** Legacy completed missions count once, without requiring an account reset. */
 export function questCompletions(quest: QuestProgress): number { return quest.completions ?? (quest.status === 'completed' ? 1 : 0); }
 export function questReward(quest: QuestDefinition, previousCompletions: number): { xp: number; gold: number } {
@@ -48,6 +77,7 @@ export function questReward(quest: QuestDefinition, previousCompletions: number)
   return { xp: Math.max(quest.reward.minXp, Math.floor(quest.reward.xp / 2 ** Math.min(30, previousCompletions))), gold: previousCompletions === 0 ? quest.reward.firstGold : 0 };
 }
 export function acceptQuest(progress: NarrativeProgress, quest: QuestDefinition, now = Date.now()): void {
+  if (quest.requiresQuest && !conditionMatches(progress, { kind: 'quest-completed', questId: quest.requiresQuest }, now)) throw new Error('Completa prima la missione precedente.');
   const previous = progress.quests[quest.id];
   if (previous && (previous.status === 'active' || !quest.repeatable || !cooldownElapsed(previous, quest, now))) throw new Error('Missione già accettata o conclusa.');
   progress.quests[quest.id] = { status: 'active', objectives: {}, completions: previous ? questCompletions(previous) : 0 };
