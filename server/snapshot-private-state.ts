@@ -17,6 +17,7 @@ function copyInventory(source: Inventory): Inventory {
 function copyNarrative(source: NarrativeProgress): NarrativeProgress {
   const result = structuredClone(source);
   if (result.gifts) Object.freeze(result.gifts);
+  if (result.flags) Object.freeze(result.flags);
   for (const quest of Object.values(result.quests)) { Object.freeze(quest.objectives); Object.freeze(quest); }
   Object.freeze(result.quests); return Object.freeze(result);
 }

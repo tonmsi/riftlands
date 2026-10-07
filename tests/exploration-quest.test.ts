@@ -25,11 +25,11 @@ function fixture() {
   return { sim, world, a, player, talk, unlock, accept };
 }
 
-test('scout requires a historical Nereo completion even after the repeat cooldown expires', () => {
-  const f = fixture(); assert.match(f.talk().text, /Nereo/);
-  assert.equal(f.sim.interactions.marker(f.a.id, 'north-scout', f.sim.now), undefined);
-  assert.throws(() => acceptQuest(f.a.narrative!, QUEST_DEFINITIONS['north-road'], f.sim.now));
-  f.unlock(); assert.ok(f.talk().choices.some(c => c.id === 'accept'));
+test('scout offers an optional quest without requiring Nereo and remembers Nereo in the alternate dialogue', () => {
+  const f = fixture(); assert.match(f.talk().text, /Un’altra Leggenda/);
+  assert.equal(f.sim.interactions.marker(f.a.id, 'north-scout', f.sim.now), 'available');
+  assert.ok(f.talk().choices.some(c => c.id === 'accept'));
+  f.unlock(); assert.match(f.talk().text, /Nereo/);
   f.accept(); assert.equal(f.a.narrative!.quests['north-road'].status, 'active');
 });
 
@@ -69,7 +69,8 @@ test('zone links survive parsing; invalid exploration links are reported by Worl
   const f = fixture(); assert.equal(parseWorldDocument(f.world.authoring.document).zones[0].questId, 'north-road');
   f.world.authoring.document.zones[0].questId = 'stinking-bait';
   assert.ok(validateWorld(f.world.authoring.document, []).some(issue => issue.includes('missione di esplorazione')));
-  const progress = newNarrativeProgress(); assert.throws(() => acceptQuest(progress, QUEST_DEFINITIONS['north-road']));
+  const progress = newNarrativeProgress(); acceptQuest(progress, QUEST_DEFINITIONS['north-road']);
+  assert.equal(progress.quests['north-road'].status, 'active');
 });
 
 test('authored scouts and level-eight sentinels are walkable; arrival is south of the main monsters', () => {

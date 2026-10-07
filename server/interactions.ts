@@ -62,6 +62,11 @@ export class InteractionSystem {
       }
       const dialogue = DIALOGUE_DEFINITIONS[target.dialogueId!];
       if (!dialogue) throw new Error('Questo personaggio non ha ancora un dialogo.');
+      if (dialogue.onTalkFlag && !account.narrative!.flags?.includes(dialogue.onTalkFlag)) {
+        (account.narrative!.flags ??= []).push(dialogue.onTalkFlag);
+        account.narrative!.revision = (account.narrative!.revision ?? 0) + 1;
+        this.host.changed(id);
+      }
       const node = dialogue.entries.find(entry => conditionMatches(account.narrative!, entry.condition, now))?.node;
       if (!node) throw new Error('Nessuna conversazione disponibile.');
       this.sessions.set(id, { id: randomUUID(), targetId: target.id, dialogueId: dialogue.id, node, startedAt: now, expiresAt: now + 120_000 }); return;
@@ -164,7 +169,9 @@ export class InteractionSystem {
   marker(id: string, dialogueId: string, now: number): Actor['questMarker'] {
     const dialogue = DIALOGUE_DEFINITIONS[dialogueId];
     if (!dialogue) return undefined;
+    if (dialogue.showQuestMarker === false) return undefined;
     const progress = this.account(id).narrative!, quest = QUEST_DEFINITIONS[dialogue.questId];
+    if (dialogue.questMarkerCondition && !conditionMatches(progress, dialogue.questMarkerCondition, now)) return undefined;
     if (quest?.requiresQuest && !conditionMatches(progress, { kind: 'quest-completed', questId: quest.requiresQuest }, now)) return undefined;
     return questStatus(progress, dialogue.questId, now);
   }

@@ -1,32 +1,69 @@
 export interface QuestProgress { status: 'active' | 'completed'; objectives: Record<string, number>; completions?: number; completedAt?: number; }
-export interface NarrativeProgress { version: 1; quests: Record<string, QuestProgress>; revision?: number; gifts?: string[]; }
+export interface NarrativeProgress { version: 1; quests: Record<string, QuestProgress>; revision?: number; gifts?: string[]; flags?: string[]; }
 export const newNarrativeProgress = (): NarrativeProgress => ({ version: 1, quests: {} });
-export type NarrativeCondition = { kind: 'quest-status'; questId: string; status: 'available' | 'active' | 'completed' } | { kind: 'quest-completed'; questId: string } | { kind: 'gift-unclaimed'; id: string };
+export type NarrativeCondition = { kind: 'quest-status'; questId: string; status: 'available' | 'active' | 'completed' } | { kind: 'quest-completed'; questId: string } | { kind: 'flag'; id: string; value: boolean } | { kind: 'gift-unclaimed'; id: string };
 export type NarrativeAction = { kind: 'accept-quest'; questId: string } | { kind: 'give-item'; itemId: string; giftId: string };
 export type QuestObjective = { kind?: 'deliver-item'; id: string; itemId: string; quantity: number }
   | { kind: 'reach-area'; id: string; quantity: 1; description: string };
 export interface QuestDefinition { id: string; name: string; requiresQuest?: string; repeatable?: boolean; repeatAfterMs?: number; reward?: { xp: number; minXp: number; firstGold: number; items?: readonly { itemId: string; quantity: number; firstOnly?: boolean; toInventory?: boolean; giftId?: string }[] }; objective: QuestObjective; }
 export interface DialogueChoice { id: string; label: string; next?: string; action?: NarrativeAction; condition?: NarrativeCondition; }
 export interface DialogueNode { text: string; choices: readonly DialogueChoice[]; itemRequest?: { questId: string; completedNext: string; progressNext: string }; rewardQuestId?: string; }
-export interface DialogueDefinition { id: string; questId: string; entries: readonly { condition: NarrativeCondition; node: string }[]; nodes: Readonly<Record<string, DialogueNode>>; }
+export interface DialogueDefinition { id: string; questId: string; onTalkFlag?: string; showQuestMarker?: boolean; questMarkerCondition?: NarrativeCondition; entries: readonly { condition: NarrativeCondition; node: string }[]; nodes: Readonly<Record<string, DialogueNode>>; }
 export const QUEST_DEFINITIONS: Readonly<Record<string, QuestDefinition>> = {
-  'north-road': { id: 'north-road', name: 'Pietre che camminano', requiresQuest: 'stinking-bait',
+  'find-platos': { id: 'find-platos', name: 'Ascolta il vecchio', reward: { xp: 150, minXp: 150, firstGold: 0 },
+    objective: { kind: 'reach-area', id: 'platos-reached', quantity: 1, description: 'Raggiungi Platos a nord. Il viaggio è lungo: porta provviste. Non occorre combattere.' } },
+  'north-road': { id: 'north-road', name: 'Pietre che camminano',
     reward: { xp: 100, minXp: 100, firstGold: 0 },
     objective: { kind: 'reach-area', id: 'road-reached', quantity: 1, description: 'Raggiungi la strada a nord. Non occorre combattere i guardiani.' } },
   'stinking-bait': { id: 'stinking-bait', name: 'Esche puzzolenti', repeatable: true, repeatAfterMs: 5 * 60 * 1000, reward: { xp: 150, minXp: 5, firstGold: 20, items: [{ itemId: 'backpack-2', quantity: 1, firstOnly: true }, { itemId: 'fishing-rod', quantity: 1, firstOnly: true, toInventory: true, giftId: 'nereo-first-rod' }] }, objective: { id: 'innards-delivered', itemId: 'slime-innards', quantity: 3 } },
 };
 const questCondition = (status: 'available' | 'active' | 'completed'): NarrativeCondition => ({ kind: 'quest-status', questId: 'stinking-bait', status });
 export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> = {
+  'wounded-scout': {
+    id: 'wounded-scout', questId: 'find-platos', questMarkerCondition: { kind: 'flag', id: 'met-platos', value: false },
+    entries: [
+      { condition: { kind: 'flag', id: 'met-platos', value: true }, node: 'wounded' },
+      { condition: { kind: 'quest-status', questId: 'find-platos', status: 'completed' }, node: 'wounded' },
+      { condition: { kind: 'quest-status', questId: 'find-platos', status: 'active' }, node: 'active' },
+      { condition: { kind: 'quest-status', questId: 'find-platos', status: 'available' }, node: 'intro' },
+    ],
+    nodes: {
+      intro: { text: 'Vengo da nord. Quelle cose mi hanno quasi spezzato una gamba. Il vecchio Platos ci aveva avvertiti di non passare… e io non gli ho dato retta.', choices: [
+        { id: 'platos', label: 'Chi è Platos?', next: 'advice' }, { id: 'leave', label: 'Riposa. Devo andare.' },
+      ] },
+      advice: { text: 'Un vecchio che ricorda cose che noi preferiamo dimenticare. Se vuoi capire cosa sta succedendo, raggiungilo. Ti segno il posto sulla mappa. La strada è tortuosa e il viaggio è lungo: portati delle provviste. Non fare il mio stesso errore.', choices: [
+        { id: 'accept', label: 'Andrò da Platos.', next: 'accepted', action: { kind: 'accept-quest', questId: 'find-platos' }, condition: { kind: 'flag', id: 'met-platos', value: false } },
+        { id: 'leave', label: 'Terrò a mente il consiglio.' },
+      ] },
+      accepted: { text: 'Prenditi il tempo di prepararti. Platos è più a nord, lontano da questa strada. Se una roccia si muove, girale al largo.', choices: [{ id: 'leave', label: 'Farò attenzione.' }] },
+      active: { text: 'Hai già la strada per Platos segnata sulla mappa. Portati provviste… io ho pensato di potermela cavare senza ascoltare nessuno.', choices: [{ id: 'leave', label: 'Riposa.' }] },
+      wounded: { text: 'Vengo da nord. Sono stato ferito sulla strada. Ora devo solo recuperare le forze.', choices: [{ id: 'leave', label: 'Ti lascio riposare.' }] },
+    },
+  },
+  platos: {
+    id: 'platos', questId: 'find-platos', onTalkFlag: 'met-platos', showQuestMarker: false,
+    entries: [{ condition: { kind: 'flag', id: 'met-platos', value: true }, node: 'intro' }],
+    nodes: {
+      intro: { text: 'Una Leggenda fin quassù. Qualcuno ti ha mandato, oppure sai ancora seguire la tua curiosità?', choices: [
+        { id: 'stones', label: 'Ho visto delle rocce muoversi.', next: 'stones' },
+        { id: 'north', label: 'Che cosa succede a nord?', next: 'north' }, { id: 'leave', label: 'Ripasserò.' },
+      ] },
+      stones: { text: 'Quando ero bambino, ci dicevano di non disturbare le pietre delle montagne. Nelle storie, i loro custodi avevano un nome: Warden. Non so se quelli che hai visto siano proprio loro… ma adesso ascolterei quelle storie.', choices: [{ id: 'north', label: 'E a nord?', next: 'north' }, { id: 'leave', label: 'Devo pensarci.' }] },
+      north: { text: 'Qualcosa ha interrotto il passaggio. Da allora le creature scendono verso sud e le pattuglie non tornano. Non ho risposte per tutto. Ho soltanto memoria… e qualche avvertimento che nessuno ha voluto ascoltare.', choices: [{ id: 'leave', label: 'Io ti ascolterò.' }] },
+    },
+  },
   'north-scout': {
     id: 'north-scout', questId: 'north-road',
     entries: [
       { condition: { kind: 'quest-status', questId: 'north-road', status: 'completed' }, node: 'after' },
       { condition: { kind: 'quest-status', questId: 'north-road', status: 'active' }, node: 'active' },
       { condition: { kind: 'quest-completed', questId: 'stinking-bait' }, node: 'intro' },
-      { condition: { kind: 'quest-status', questId: 'north-road', status: 'available' }, node: 'locked' },
+      { condition: { kind: 'quest-status', questId: 'north-road', status: 'available' }, node: 'independent' },
     ],
     nodes: {
-      locked: { text: 'Un’altra Leggenda. Prima di andare a cercare guai, renditi utile al porto. Nereo ha bisogno di una mano.', choices: [{ id: 'leave', label: 'Va bene.' }] },
+      independent: { text: 'Un’altra Leggenda. Se vuoi renderti utile, guarda la strada a nord. Ci sono uomini che non sono tornati e rocce che si muovono. Vai a vedere, ma non ti ho chiesto di fare l’eroe.', choices: [
+        { id: 'accept', label: 'Andrò a vedere.', next: 'accepted', action: { kind: 'accept-quest', questId: 'north-road' } }, { id: 'leave', label: 'Non adesso.' },
+      ] },
       intro: { text: 'Nereo dice che sai renderti utile. Vediamo. Sulla strada a nord ci sono uomini che non sono tornati. E quelle che sembrano rocce… si muovono. Vai a vedere con i tuoi occhi. Non devi affrontarle: resta vivo, per una volta.', choices: [
         { id: 'accept', label: 'Andrò a vedere.', next: 'accepted', action: { kind: 'accept-quest', questId: 'north-road' } },
         { id: 'leave', label: 'Non adesso.' },
@@ -66,6 +103,7 @@ export function questStatus(progress: NarrativeProgress, id: string, now = Date.
   return current?.status ?? 'available';
 }
 export function conditionMatches(progress: NarrativeProgress, condition: NarrativeCondition, now = Date.now()): boolean {
+  if (condition.kind === 'flag') return !!progress.flags?.includes(condition.id) === condition.value;
   if (condition.kind === 'gift-unclaimed') return !progress.gifts?.includes(condition.id);
   if (condition.kind === 'quest-completed') return !!progress.quests[condition.questId] && questCompletions(progress.quests[condition.questId]) > 0;
   return questStatus(progress, condition.questId, now) === condition.status;
@@ -99,6 +137,7 @@ export function validNarrativeProgress(value: unknown): value is NarrativeProgre
   const id = (text: string) => /^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(text);
   return !!progress && progress.version === 1 && !!progress.quests && typeof progress.quests === 'object' && !Array.isArray(progress.quests)
     && (progress.gifts === undefined || Array.isArray(progress.gifts) && progress.gifts.length <= 512 && progress.gifts.every(gift => typeof gift === 'string' && id(gift)))
+    && (progress.flags === undefined || Array.isArray(progress.flags) && progress.flags.length <= 512 && progress.flags.every(flag => typeof flag === 'string' && id(flag)))
     && (progress.revision === undefined || Number.isSafeInteger(progress.revision) && progress.revision >= 0)
     && Object.keys(progress.quests).length <= 512 && Object.entries(progress.quests).every(([key, quest]) => id(key) && !!quest
       && (quest.completions === undefined || Number.isSafeInteger(quest.completions) && quest.completions >= 0 && quest.completions <= 1_000_000)

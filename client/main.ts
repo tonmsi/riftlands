@@ -6,7 +6,7 @@ import './ui/hud/hud.css';
 import './ui/interactions/interactions.css';
 import './fishing/fishing.css';
 import { FishingUI } from './fishing/fishing-ui';
-import { INTERACTION_RANGE } from '../shared/interactions';
+import { canTalkToNpc } from './core/npc-interaction';
 import { CLASSES, TICK_RATE } from '../shared/config';
 import { equippedAbility } from '../shared/progression';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
@@ -247,8 +247,8 @@ window.addEventListener('keydown', event => {
   if (!playing || !connection.connected || ui.inputBlocked || bettingUI.visible || latest?.betting?.spectating || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
   if (latest?.fishing && ['Space', 'Enter', 'Escape'].includes(event.code)) { event.preventDefault(); if (!event.repeat) { if (event.code === 'Escape') fishingUI.close(); else fishingUI.press(); } return; }
   if (event.code === 'KeyF' && !event.repeat && predicted) {
-    const target = renderedActors.filter(actor => actor.dialogueId && Math.hypot(actor.x - predicted!.x, actor.y - predicted!.y) <= INTERACTION_RANGE).sort((a, b) => Math.hypot(a.x - predicted!.x, a.y - predicted!.y) - Math.hypot(b.x - predicted!.x, b.y - predicted!.y))[0];
-    if (target) { event.preventDefault(); if (target.id === 'authored:npc-arena-bookmaker') bettingUI.open(); else connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
+    const target = renderedActors.filter(actor => canTalkToNpc(predicted, actor, renderer.world)).sort((a, b) => Math.hypot(a.x - predicted!.x, a.y - predicted!.y) - Math.hypot(b.x - predicted!.x, b.y - predicted!.y))[0];
+    if (target) { event.preventDefault(); selectedId = target.id; ui.setSelected(target); if (target.npcKind === 'arena-bookmaker') bettingUI.open(); else connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
   }
   if (controls.press(event.code)) {
     event.preventDefault();
@@ -272,9 +272,12 @@ ui.canvas.addEventListener('pointerdown', event => {
   const position = renderer.screenToWorld(event.clientX, event.clientY);
   if (latest?.fishing) { fishingUI.aim(position); return; }
   const target = renderedActors.find(actor => actor.id !== predicted?.id && Math.hypot(actor.x - position.x, actor.y - position.y) < actor.radius + 14);
-  if (target?.dialogueId) { if (target.id === 'authored:npc-arena-bookmaker') bettingUI.open(); else connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } }); return; }
   if (target) { selectedId = target.id; ui.setSelected(target); }
   else if (selectedId) { selectedId = null; ui.setSelected(null); }
+  if (target && canTalkToNpc(predicted, target, renderer.world)) {
+    if (target.npcKind === 'arena-bookmaker') bettingUI.open();
+    else connection.send({ type: 'interaction', command: { kind: 'talk', targetId: target.id } });
+  } else if (target?.dialogueId) ui.toast('Avvicinati al personaggio per parlare.', 'error');
 });
 
 // Mouse events fire for every button in a chord; pointerdown/up only fire for the first/last.

@@ -18,9 +18,11 @@ const hostileTemplates = Object.fromEntries(Object.entries(NPC_CATALOG).map(([id
 };
 export const NPC_DEFINITIONS = {
   ...hostileTemplates,
-  'north-scout': { name: 'Rovan, esploratore', radius: 18, speed: 0, classId: 'warrior' as const, color: '#8c9270', disposition: 'neutral' as const, dialogueId: 'north-scout', behavior: undefined },
-  'dock-skeptic': { name: 'Brugo, abitante del porto', radius: 18, speed: 0, classId: 'warrior' as const, color: '#9b785e', disposition: 'neutral' as const, dialogueId: undefined, behavior: undefined },
-  'arena-bookmaker': { name: 'Silas, maestro delle quote', radius: 18, speed: 0, classId: 'mage' as const, color: '#e3b95d', disposition: 'neutral' as const, dialogueId: 'arena-bookmaker', behavior: undefined },
+  'wounded-scout': { name: 'Daro, soldato ferito', radius: 18, speed: 14, classId: 'warrior' as const, color: '#947f72', disposition: 'neutral' as const, dialogueId: 'wounded-scout', behavior: { kind: 'wander', radius: 48, pauseMs: [3500, 6000] } },
+  platos: { name: 'Platos, il vecchio', radius: 18, speed: 18, classId: 'mage' as const, color: '#a79e83', disposition: 'neutral' as const, dialogueId: 'platos', behavior: { kind: 'wander', radius: 80, pauseMs: [2500, 4500] } },
+  'north-scout': { name: 'Rovan, esploratore', radius: 18, speed: 30, classId: 'warrior' as const, color: '#8c9270', disposition: 'neutral' as const, dialogueId: 'north-scout', behavior: { kind: 'wander', radius: 72, pauseMs: [2000, 4000] } },
+  'dock-skeptic': { name: 'Brugo, abitante del porto', radius: 18, speed: 26, classId: 'warrior' as const, color: '#9b785e', disposition: 'neutral' as const, dialogueId: undefined, behavior: { kind: 'wander', radius: 64, pauseMs: [2000, 4000] } },
+  'arena-bookmaker': { name: 'Silas, maestro delle quote', radius: 18, speed: 24, classId: 'mage' as const, color: '#e3b95d', disposition: 'neutral' as const, dialogueId: 'arena-bookmaker', behavior: { kind: 'wander', radius: 48, pauseMs: [2000, 4000] } },
   'old-fisher': { name: 'Nereo, vecchio pescatore', radius: 18, speed: 30, classId: 'warrior' as const, color: '#bfa988', disposition: 'neutral' as const, dialogueId: 'old-fisher', behavior: { kind: 'wander', radius: 96, pauseMs: [2000, 4000] } },
   'outpost-vendor': { name: 'Ada, mercante', radius: 18, speed: 0, classId: 'warrior' as const, color: '#ab89c2', disposition: 'neutral' as const, dialogueId: 'outpost-shop', behavior: undefined },
 } satisfies Readonly<Record<string, NpcTemplate>>;

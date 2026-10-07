@@ -28,7 +28,7 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
         const snapshot = { type: 'snapshot', tick: 1, time: Date.now(), ack: 0, self, actors: [self, npc], projectiles: [], pickups: [], events: [], online: 1, activeChunks: 1,
           narrative: { version: 1, quests: { 'stinking-bait': { status: 'active', objectives: {}, completions: 0 } } },
           inventory: { version: 1, capacity: 1, slots: [{ itemId: 'slime-innards', quantity: 600 }] }, dialogue: { sessionId: 'review', targetId: 'nereo', speaker: npc.name, text: 'Da quella notte il mondo ha un altro odore. '.repeat(40), choices: [{ id: 'leave', label: 'Torno presto.' }] } };
-        ui.setSnapshot(snapshot, 24);
+        ui.setSelected(npc); ui.setSnapshot(snapshot, 24);
         const mobile = new MobileControls(root, { enabled: () => !ui.inputBlocked, ability: (slot: 'basic' | 'q' | 'e' | 'r') => CLASSES.mage.abilities[slot], move: (vector: { x: number; y: number }) => { movement = vector; }, aim: noop, cast: noop });
         const renderer = new Renderer(ui.canvas); renderer.world = new World(); await renderer.spritesReady;
         // A configured sheet must take precedence over the round neutral fallback.
@@ -39,6 +39,9 @@ test('interaction panels: central scroll, compact stepper, zero, accelerating ho
         (window as any).interactionFixture = { ui, mobile, renderer, snapshot, commands, initialReleases: releases, releases: () => releases, movement: () => movement, pixel };
       });
       await expect(page.locator('.npc-dialogue')).toBeVisible();
+      await expect(page.locator('.target-panel')).toBeVisible();
+      await expect(page.locator('.target-summary')).toContainText('Nereo');
+      await page.evaluate(() => (window as any).interactionFixture.ui.setSelected(null));
       const box = (await page.locator('.npc-dialogue').boundingBox())!;
       assert.ok(box.width <= (touch ? 440 : 600) + 1); assert.ok(Math.abs(box.x + box.width / 2 - width / 2) < 1);
       assert.ok(Math.abs(box.y + box.height / 2 - height / 2) < 1); assert.ok(box.height <= (touch && width > height ? 240 : 320) + 1);

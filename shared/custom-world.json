@@ -3298,6 +3298,18 @@
   "tiles": [],
   "zones": [
     {
+      "id": "zone-platos",
+      "name": "Rifugio di Platos",
+      "priority": 30,
+      "shape": {
+        "kind": "circle",
+        "x": 30.5,
+        "y": -49.5,
+        "radius": 4
+      },
+      "questId": "find-platos"
+    },
+    {
       "id": "zone-ff975e10-3362-40f3-9407-118bbef7b2d5",
       "name": "Southern Docks",
       "priority": 20,
@@ -3326,7 +3338,7 @@
       "priority": 20,
       "shape": {
         "kind": "rect",
-        "x": -150,
+        "x": -146,
         "y": -135,
         "width": 233,
         "height": 152
@@ -3406,6 +3418,20 @@
     }
   ],
   "npcs": [
+    {
+      "id": "npc-wounded-scout",
+      "npcKind": "wounded-scout",
+      "x": -1,
+      "y": -3,
+      "level": 1
+    },
+    {
+      "id": "npc-platos",
+      "npcKind": "platos",
+      "x": 30,
+      "y": -50,
+      "level": 1
+    },
     {
       "x": -2,
       "y": 24,

@@ -3,6 +3,8 @@ import type { NpcTemplateId } from './npcs';
 export interface AmbientSpeechDefinition { intro: string; lines: readonly string[]; }
 /** Personal flavour only: never changes quests, rewards or reputation. */
 export const AMBIENT_SPEECH: Partial<Record<NpcTemplateId, AmbientSpeechDefinition>> = {
+  'wounded-scout': { intro: 'Dovevo ascoltare quel vecchio…', lines: ['Vengo da nord. Non ci tornerei impreparato.', 'La gamba fa ancora male.'] },
+  platos: { intro: 'Le pietre ricordano più di noi.', lines: ['C’è chi ascolta solo dopo essersi fatto male.', 'Il vento porta brutte notizie da nord.'] },
   'north-scout': { intro: 'Un’altra Leggenda. Vediamo quanto duri.', lines: ['Non tutte le rocce restano ferme.', 'Guarda dove metti i piedi.'] },
   'dock-skeptic': {
     intro: 'Ah, un’altra “Leggenda”. Tornatene dai tuoi amici. Qui non vi vogliamo.',
