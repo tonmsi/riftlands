@@ -1,6 +1,11 @@
 export interface QuestProgress { status: 'active' | 'completed'; objectives: Record<string, number>; completions?: number; completedAt?: number; }
 export interface NarrativeProgress { version: 1; quests: Record<string, QuestProgress>; revision?: number; gifts?: string[]; flags?: string[]; }
 export const newNarrativeProgress = (): NarrativeProgress => ({ version: 1, quests: {} });
+export function hasWorldMap(progress?: NarrativeProgress): boolean { return !!progress?.flags?.includes('world-map'); }
+export function grantWorldMap(progress: NarrativeProgress): void {
+  if (hasWorldMap(progress)) return;
+  (progress.flags ??= []).push('world-map'); progress.revision = (progress.revision ?? 0) + 1;
+}
 export type NarrativeCondition = { kind: 'quest-status'; questId: string; status: 'available' | 'active' | 'completed' } | { kind: 'quest-completed'; questId: string } | { kind: 'flag'; id: string; value: boolean } | { kind: 'gift-unclaimed'; id: string };
 export type NarrativeAction = { kind: 'accept-quest'; questId: string } | { kind: 'give-item'; itemId: string; giftId: string };
 export type QuestObjective = { kind?: 'deliver-item'; id: string; itemId: string; quantity: number }
@@ -35,7 +40,7 @@ export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> 
         { id: 'accept', label: 'Andrò da Platos.', next: 'accepted', action: { kind: 'accept-quest', questId: 'find-platos' }, condition: { kind: 'flag', id: 'met-platos', value: false } },
         { id: 'leave', label: 'Terrò a mente il consiglio.' },
       ] },
-      accepted: { text: 'Prenditi il tempo di prepararti. Platos è più a nord, lontano da questa strada. Se una roccia si muove, girale al largo.', choices: [{ id: 'leave', label: 'Farò attenzione.' }] },
+      accepted: { text: '{mapGift} Prenditi il tempo di prepararti. Platos è più a nord, lontano da questa strada. Se una roccia si muove, girale al largo.', choices: [{ id: 'leave', label: 'Farò attenzione.' }] },
       active: { text: 'Hai già la strada per Platos segnata sulla mappa. Portati provviste… io ho pensato di potermela cavare senza ascoltare nessuno.', choices: [{ id: 'leave', label: 'Riposa.' }] },
       wounded: { text: 'Vengo da nord. Sono stato ferito sulla strada. Ora devo solo recuperare le forze.', choices: [{ id: 'leave', label: 'Ti lascio riposare.' }] },
     },
@@ -68,7 +73,7 @@ export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> 
         { id: 'accept', label: 'Andrò a vedere.', next: 'accepted', action: { kind: 'accept-quest', questId: 'north-road' } },
         { id: 'leave', label: 'Non adesso.' },
       ] },
-      accepted: { text: 'Segui la strada verso nord. Ti ho segnato il tratto sulla mappa. Basta arrivarci: non portarmi trofei e non farti ammazzare per impressionarmi.', choices: [{ id: 'leave', label: 'Ho capito.' }] },
+      accepted: { text: '{mapGift} Segui la strada verso nord. Basta arrivarci: non portarmi trofei e non farti ammazzare per impressionarmi.', choices: [{ id: 'leave', label: 'Ho capito.' }] },
       active: { text: 'La strada è a nord, dove ti ho indicato. Guarda quei corpi e quelle pietre. Non ti ho chiesto di combattere.', choices: [{ id: 'leave', label: 'Vado.' }] },
       after: { text: 'Adesso capisci perché sorvegliamo la strada. Non erano semplici rocce. Sei ancora vivo… bene. Forse sai anche ascoltare.', choices: [{ id: 'leave', label: 'Quelle cose da dove arrivano?' , next: 'mystery' }] },
       mystery: { text: 'Da più a nord. Oltre quel tratto non sappiamo più cosa succeda. Per ora tieni gli occhi aperti.', choices: [{ id: 'leave', label: 'Lo farò.' }] },

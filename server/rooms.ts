@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { DT, WORLD_SEED } from '../shared/config';
+import { DT, WORLD_SEED, levelFromXp } from '../shared/config';
+import { characterFor } from './character-progress';
 import { ARENA_GATE, ARENA_DURATION_SECONDS } from '../shared/arena';
 import type { ClassId, InputCommand, RoomMode, RoomState, SocialState, ArenaGateState, MatchResult } from '../shared/types';
 import type { Account } from './store';
@@ -390,7 +391,11 @@ export class RoomManager {
     }
     return { markets: [...this.rooms.values()].flatMap(r => r.market ? [r.market] : []),
       bets, inCombat: this.bettingInCombat(id), bookmakerNearby: !watched && member.roomId === 'world' && this.bookmakerNearby(id),
-      spectating: watched, startsAt: this.rooms.get(watched ?? member.roomId)?.startsAt };
+      canWatch: this.canWatchArena(id), spectating: watched, startsAt: this.rooms.get(watched ?? member.roomId)?.startsAt };
+  }
+  private canWatchArena(id: string): boolean {
+    const member = this.membership(id);
+    return (this.global.players.get(id)?.level ?? levelFromXp(characterFor(member.account, member.classId).xp)) >= 20;
   }
 
   bettingAction(id: string, action: BettingAction): void {
@@ -400,6 +405,7 @@ export class RoomManager {
     const room = this.rooms.get(action.matchId);
     if (!room?.market || room.members.has(id)) throw new Error('Duello non disponibile per questa azione.');
     if (action.kind === 'watch') {
+      if (!this.canWatchArena(id)) throw new Error('La tribuna delle arene si sblocca al livello 20.');
       if (this.spectators.has(id)) this.stopWatching(id);
       if (member.roomId !== 'world' || !this.global.canTransfer(id)) throw new Error('Devi essere vivo e fuori combattimento da 10 secondi.');
       this.global.checkpoint(); this.global.detachPlayer(id); this.global.awayPlayers.add(id);

@@ -4,7 +4,7 @@ import { newInventory, type Inventory } from './items';
 import { newNarrativeProgress, type NarrativeProgress } from './narrative';
 
 export type SpellId = 'q' | 'e' | 'r';
-export interface Loadout { q: SpellId; e: SpellId | null; }
+export interface Loadout { q: SpellId | null; e: SpellId | null; }
 export interface CharacterProgress {
   xp: number;
   loadout: Loadout;
@@ -16,12 +16,12 @@ export interface CharacterSummary { xp: number; loadout: Loadout; freeBuild: boo
 export const BUILD_COST = 10;
 export const DEVELOPER_LEVEL = MAX_LEVEL;
 export const DEVELOPER_XP = xpForLevel(MAX_LEVEL - 1);
-export function unlockTier(level: number): number { return level >= 10 ? 3 : level >= 5 ? 2 : level >= 2 ? 1 : 0; }
-export function availableSpells(level: number): SpellId[] { return level >= 10 ? ['q', 'e', 'r'] : level >= 2 ? ['q', 'e'] : ['q']; }
+export function unlockTier(level: number): number { return level >= 10 ? 3 : level >= 6 ? 2 : level >= 3 ? 1 : 0; }
+export function availableSpells(level: number): SpellId[] { return level >= 10 ? ['q', 'e', 'r'] : level >= 6 ? ['q', 'e'] : level >= 3 ? ['q'] : []; }
 export function normalizeLoadout(value: Loadout | undefined, level: number, classId: ClassId): Loadout {
   const available = availableSpells(level);
-  const q = value && available.includes(value.q) ? value.q : 'q';
-  const e = level < 5 ? null : value?.e && value.e !== q && available.includes(value.e) ? value.e : available.find(id => id !== q)!;
+  const q = level < 3 ? null : value?.q && available.includes(value.q) ? value.q : 'q';
+  const e = level < 6 ? null : value?.e && value.e !== q && available.includes(value.e) ? value.e : available.find(id => id !== q)!;
   return { q, e };
 }
 export function newCharacter(classId: ClassId): CharacterProgress {
@@ -31,7 +31,7 @@ export function newCharacter(classId: ClassId): CharacterProgress {
 export function validLoadout(value: unknown, level: number, classId: ClassId): value is Loadout {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const v = value as Loadout;
-  return availableSpells(level).includes(v.q) && (level < 5 ? v.e === null : !!v.e && v.e !== v.q && availableSpells(level).includes(v.e));
+  return (level < 3 ? v.q === null : !!v.q && availableSpells(level).includes(v.q)) && (level < 6 ? v.e === null : !!v.e && v.e !== v.q && availableSpells(level).includes(v.e));
 }
 /** NPCs and editor fixtures without a loadout retain their catalog abilities. */
 export function equippedAbility(actor: Pick<Actor, 'classId' | 'loadout'>, slot: AbilitySlot): AbilityDef | undefined {

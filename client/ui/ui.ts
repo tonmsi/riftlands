@@ -56,6 +56,8 @@ export class GameUI {
   get interactions() { return this.hud.interactions; }
   get selectedClass(): ClassId { return this.lobby.selectedClass; }
   get minimapVisible(): boolean { return this.hud.minimapVisible; }
+  get mapUnlocked(): boolean { return this.hud.mapUnlocked; }
+  dismissLevelUp(): void { this.hud.dismissLevelUp(); }
   get inputBlocked(): boolean { return this.hud.inputBlocked; }
   setControls(settings: ControlSettings): void {
     if (this.isPlaying) return;

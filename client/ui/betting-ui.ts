@@ -23,7 +23,9 @@ export class BettingUI {
   private readonly intro = el('p', 'betting-intro');
   private readonly foot = el('p', 'betting-foot');
   private readonly wins: BetWinFeedback;
+  private readonly arenaLauncher = el('button', 'glass hud-menu-button arena-watch-launcher', '◉ Arene');
   get visible() { return this.dialog.open || this.wins.visible; }
+  private get canWatch(): boolean { return this.snapshot?.betting?.canWatch ?? (this.snapshot?.self.level ?? 0) >= 20; }
   constructor(private root: HTMLElement, private send: (action: BettingAction) => void, private release: () => void) {
     this.banner.hidden = true;
     this.wins = new BetWinFeedback(root, release);
@@ -33,7 +35,7 @@ export class BettingUI {
     const close = el('button', 'betting-close', '×'); close.type = 'button'; close.setAttribute('aria-label', 'Chiudi scommesse');
     close.onclick = () => this.close(); head.append(title, close);
     this.dialog.append(head, this.intro, this.balance, this.content, this.foot); root.append(this.dialog, this.banner);
-    const arenas = el('button', 'glass hud-menu-button arena-watch-launcher', '◉ Arene'); arenas.type = 'button'; arenas.setAttribute('aria-label', 'Assisti alle arene');
+    const arenas = this.arenaLauncher; arenas.hidden = true; arenas.type = 'button'; arenas.setAttribute('aria-label', 'Assisti alle arene · Livello 20');
     arenas.onclick = () => this.open('arena');
     (root.querySelector('.game-top-right .menu-buttons') ?? root).append(arenas);
     this.dialog.addEventListener('cancel', () => this.release());
@@ -45,6 +47,7 @@ export class BettingUI {
     }
   }
   open(tab: 'markets' | 'bets' | 'arena' = 'markets') {
+    if (tab === 'arena' && !this.canWatch) return;
     this.tab = tab; this.release(); this.signature = '';
     this.eyebrow.textContent = tab === 'bets' ? 'IL TUO PORTAFOGLIO' : tab === 'arena' ? 'ARENA 1VS1 · TRIBUNA' : 'SILAS · MAESTRO DELLE QUOTE';
     this.title.textContent = tab === 'bets' ? 'Le tue puntate' : tab === 'arena' ? 'Duelli in diretta' : 'Il banco dell’arena';
@@ -55,7 +58,7 @@ export class BettingUI {
     this.render();
   }
   close() { this.dialog.close(); }
-  reset() { this.close(); this.wins.reset(); this.snapshot = undefined; this.broadcastSignature = ''; this.banner.replaceChildren(); this.banner.hidden = true; this.root.classList.remove('arena-spectating'); }
+  reset() { this.close(); this.wins.reset(); this.snapshot = undefined; this.arenaLauncher.hidden = true; this.broadcastSignature = ''; this.banner.replaceChildren(); this.banner.hidden = true; this.root.classList.remove('arena-spectating'); }
   win(win: BetWin) {
     const celebrate = win.celebrate && !this.snapshot?.betting?.inCombat;
     if (celebrate) this.close();
@@ -63,6 +66,8 @@ export class BettingUI {
   }
   update(snapshot: Snapshot) {
     this.snapshot = snapshot;
+    this.arenaLauncher.hidden = !this.canWatch;
+    if (!this.canWatch && this.tab === 'arena') this.close();
     this.wins.combat(!!snapshot.betting?.inCombat);
     this.root.classList.toggle('arena-spectating', !!snapshot.betting?.spectating);
     this.balance.textContent = `${snapshot.gold ?? 0} GOLD DISPONIBILI`;
@@ -71,7 +76,7 @@ export class BettingUI {
   private render() {
     const snapshot = this.snapshot, view = snapshot?.betting;
     if (!this.dialog.open || !snapshot || !view) return;
-    const signature = JSON.stringify([this.tab, view.markets, view.bets, view.bookmakerNearby, snapshot.gold]);
+    const signature = JSON.stringify([this.tab, view.markets, view.bets, view.bookmakerNearby, snapshot.gold, this.canWatch]);
     if (signature !== this.signature) {
       this.signature = signature; this.content.replaceChildren();
       if (this.tab === 'arena') {
@@ -94,8 +99,7 @@ export class BettingUI {
           const labels = { active: 'IN CORSO', won: 'VINTA', lost: 'PERSA', refunded: 'RIMBORSATA' };
           card.append(el('small', 'bet-status', labels[bet.status]), el('h3', '', bet.playerName), el('p', '', `${bet.stake} gold × ${bet.odds.toFixed(2)} · ${bet.status === 'active' ? 'Vincita possibile' : 'Accreditati'}: ${bet.status === 'active' ? Math.floor(bet.stake * bet.odds) : bet.payout} gold`));
           if (bet.status === 'active' && view.markets.some(m => m.id === bet.matchId)) {
-            const watch = el('button', 'bet-watch', '◉ Assisti al duello'); watch.type = 'button';
-            watch.onclick = () => { this.send({ kind: 'watch', matchId: bet.matchId }); this.close(); }; card.append(watch);
+            card.append(this.watchButton(view.markets.find(m => m.id === bet.matchId)!));
           }
           this.content.append(card);
         }
@@ -139,6 +143,7 @@ export class BettingUI {
   }
   private watchButton(market: ArenaMarket) {
     const watch = el('button', 'bet-watch', '◉ Assisti al duello'); watch.type = 'button';
+    watch.hidden = !this.canWatch;
     watch.disabled = !this.snapshot?.betting?.spectating && market.contenders.some(p => p.id === this.snapshot?.self.id);
     watch.onclick = () => { this.send({ kind: 'watch', matchId: market.id }); this.close(); }; return watch;
   }

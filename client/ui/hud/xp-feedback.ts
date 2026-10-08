@@ -9,6 +9,7 @@ export class XpFeedback {
   private frame = 0;
   private gainTimer = 0;
   private levelTimer = 0;
+  private dismissAt = 0;
   private accumulated = 0;
   private readonly animations = new Set<Animation>();
   private readonly gain = document.createElement('span');
@@ -25,6 +26,12 @@ export class XpFeedback {
     this.celebration.setAttribute('role', 'status'); this.celebration.setAttribute('aria-live', 'polite');
     this.celebration.innerHTML = '<div class="level-up-emblem" aria-hidden="true">✦</div><span class="level-up-heading">LIVELLO RAGGIUNTO</span><strong class="level-up-number"></strong><span class="level-up-unlock"></span><div class="level-up-rule" aria-hidden="true"></div>';
     (fill.closest('.game-hud') ?? document.body).append(this.celebration);
+    document.addEventListener('pointerdown', () => this.dismiss(), true);
+    document.addEventListener('keydown', event => { if (['Space', 'KeyQ', 'KeyE', 'KeyR'].includes(event.code)) this.dismiss(); }, true);
+  }
+  dismiss(): void {
+    if (this.celebration.hidden || performance.now() < this.dismissAt) return;
+    clearTimeout(this.levelTimer); this.levelTimer = 0; this.celebration.hidden = true;
   }
   reset(): void {
     cancelAnimationFrame(this.frame); clearTimeout(this.gainTimer); clearTimeout(this.levelTimer);
@@ -80,17 +87,16 @@ export class XpFeedback {
     clearTimeout(this.levelTimer);
     this.celebration.getAnimations({ subtree: true }).forEach(animation => animation.cancel());
     this.celebration.querySelector('.level-up-number')!.textContent = String(level);
-    this.celebration.querySelector('.level-up-unlock')!.textContent = level === 2 ? 'Una nuova abilità da scegliere' : level === 5 ? 'Secondo slot sbloccato' : level === 10 ? 'Nuovi attacchi disponibili' : level === 20 ? 'Livello massimo raggiunto' : 'Il viaggio continua';
+    this.celebration.querySelector('.level-up-unlock')!.textContent = level === 20 ? 'Arene e duelli in diretta sbloccati' : level === 10 ? 'Scelta ampliata: puoi equipaggiare anche la terza abilità' : level === 6 ? 'Secondo attacco speciale sbloccato · Nuove scelte al livello 10' : level === 3 ? 'Primo attacco speciale sbloccato · Il secondo al livello 6' : level < 3 ? 'Primo attacco speciale al livello 3 · Secondo al livello 6' : level < 6 ? 'Secondo attacco speciale al livello 6' : level < 10 ? 'La scelta degli attacchi si amplia al livello 10' : 'Arene e duelli in diretta al livello 20';
     this.celebration.hidden = false;
+    this.dismissAt = performance.now() + 4000;
     this.animate(this.celebration, [
       { opacity: 0, transform: 'translate(-50%, -44%) scale(.82)', filter: 'blur(6px)' },
-      { opacity: 1, transform: 'translate(-50%, -50%) scale(1.04)', filter: 'blur(0)', offset: .18 },
-      { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', filter: 'blur(0)', offset: .72 },
-      { opacity: 0, transform: 'translate(-50%, -56%) scale(1.02)', filter: 'blur(2px)' },
-    ], 2400);
+      { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', filter: 'blur(0)' },
+    ], 350);
     this.level.getAnimations().forEach(animation => animation.cancel());
     this.animate(this.level, [{ scale: '1', filter: 'brightness(1)' }, { scale: '1.18', filter: 'brightness(1.25)', offset: .4 }, { scale: '1', filter: 'brightness(1)' }], 450);
-    this.levelTimer = window.setTimeout(() => { this.celebration.hidden = true; this.levelTimer = 0; }, 2400);
+    this.levelTimer = window.setTimeout(() => { this.celebration.hidden = true; this.levelTimer = 0; }, 10000);
     if (!this.reducedMotion()) this.burst();
   }
   private burst(): void {

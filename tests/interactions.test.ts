@@ -10,7 +10,7 @@ import { World } from '../shared/world';
 import { newWorldDocument, parseWorldDocument } from '../shared/world-schema';
 import { canCollectItem, collectItem, insertItem, newInventory, validInventory } from '../shared/items';
 import { VENDOR_DEFINITIONS } from '../shared/vendors';
-import { questStatus } from '../shared/narrative';
+import { questStatus, hasWorldMap, grantWorldMap } from '../shared/narrative';
 import { DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS } from '../shared/narrative';
 import { ITEM_DEFINITIONS } from '../shared/items';
 import { NPC_LOOT_TABLES } from '../shared/loot';
@@ -39,6 +39,35 @@ function fixture(random = () => 0) {
   };
   return { sim, world, a, b, player, other, npc, talk, accept, kill };
 }
+
+test('exploration grants a persistent map before departure, and acknowledges an owned map', () => {
+  for (const owned of [false, true]) {
+    const f = fixture(); f.npc.dialogueId = 'north-scout';
+    if (owned) grantWorldMap(f.a.narrative!);
+    const before = structuredClone(f.a.inventory!);
+    const view = f.talk(); f.sim.interact(f.a.id, { kind: 'choose', sessionId: view.sessionId, choiceId: 'accept' });
+    assert.ok(hasWorldMap(f.a.narrative!));
+    assert.deepEqual(f.a.inventory, before);
+    assert.equal(f.a.narrative!.quests['north-road'].status, 'active');
+    assert.match(f.sim.interactions.view(f.a.id, f.sim.now)!.text, owned ? /Hai già una mappa/ : /Tieni, prendi questa mappa/);
+    f.sim.checkpoint(); f.sim.addPlayer(f.a, 'mage'); assert.ok(hasWorldMap(f.a.narrative!));
+  }
+});
+
+test('map purchase costs 1000 gold even with a full bag, and rejects duplicates and insufficient funds', () => {
+  const f = fixture(); f.npc.dialogueId = 'outpost-shop'; insertItem(f.a.inventory!, 'slime-innards', 3);
+  const before = structuredClone(f.a.inventory!); f.a.gold = 999;
+  let view = f.talk();
+  assert.throws(() => f.sim.interact(f.a.id, { kind: 'buy-item', sessionId: view.sessionId, offerId: 'world-map' }), /Gold insufficienti/);
+  assert.equal(f.a.gold, 999); assert.equal(hasWorldMap(f.a.narrative!), false);
+  f.a.gold = 1100;
+  f.sim.interact(f.a.id, { kind: 'buy-item', sessionId: view.sessionId, offerId: 'world-map' });
+  assert.equal(f.a.gold, 100); assert.ok(hasWorldMap(f.a.narrative!)); assert.deepEqual(f.a.inventory, before);
+  assert.throws(() => f.sim.interact(f.a.id, { kind: 'buy-item', sessionId: view.sessionId, offerId: 'world-map' }));
+  view = f.talk(); f.a.gold = 2000;
+  assert.throws(() => f.sim.interact(f.a.id, { kind: 'buy-item', sessionId: view.sessionId, offerId: 'world-map' }), /già la mappa/);
+  assert.equal(f.a.gold, 2000);
+});
 
 test('authored neutral NPC wanders near home, remains invulnerable and has a per-player quest outline', () => {
   const { sim, a, b, npc, player, accept } = fixture();
@@ -260,7 +289,7 @@ test('vendor validates server prices, balance, capacity and session tokens; upgr
   const merchant: Actor = { ...npc, id: 'vendor', name: 'Ada, mercante', npcKind: 'outpost-vendor', dialogueId: 'outpost-shop' };
   sim.npcs.set(merchant.id, merchant); a.gold = 200; insertItem(a.inventory!, 'slime-innards', 9999);
   const talk = () => { sim.interact(a.id, { kind: 'talk', targetId: merchant.id }); return sim.interactions.view(a.id, sim.now)!; };
-  const first = talk(); assert.equal(first.shop!.length, 6);
+  const first = talk(); assert.equal(first.shop!.length, 7);
   const buy = { kind: 'buy-item', sessionId: first.sessionId, offerId: 'bag-2' } as const;
   sim.interact(a.id, buy); assert.equal(a.gold, 190); assert.equal(a.inventory!.backpackId, 'backpack-2');
   assert.throws(() => sim.interact(a.id, buy), /terminata/); assert.equal(a.gold, 190);
@@ -280,7 +309,7 @@ test('vendor validates server prices, balance, capacity and session tokens; upgr
   player.x = merchant.x + 200;
   assert.throws(() => sim.interact(a.id, { ...buy, sessionId: next.sessionId, offerId: 'bag-5' }), /Avvicinati/); assert.equal(a.gold, 200);
   for (const vendor of Object.values(VENDOR_DEFINITIONS)) for (const offer of vendor.offers) {
-    assert.ok(ITEM_DEFINITIONS[offer.itemId]); assert.ok(Number.isSafeInteger(offer.price) && offer.price > 0);
+    assert.ok(offer.unlock === 'world-map' || ITEM_DEFINITIONS[offer.itemId]); assert.ok(Number.isSafeInteger(offer.price) && offer.price > 0);
   }
 });
 

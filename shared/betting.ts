@@ -3,7 +3,7 @@ import type { ClassId } from './types';
 export interface ArenaContender { id: string; name: string; classId: ClassId; level: number; kills: number; deaths: number; odds: number; }
 export interface ArenaMarket { id: string; startsAt: number; phase: 'open' | 'live'; contenders: ArenaContender[]; }
 export interface ArenaBet { id: string; matchId: string; playerId: string; playerName: string; stake: number; odds: number; payout: number; status: 'active' | 'won' | 'lost' | 'refunded'; placedAt: number; }
-export interface BettingView { markets: ArenaMarket[]; bets: ArenaBet[]; bookmakerNearby: boolean; inCombat?: boolean; spectating?: string; startsAt?: number; }
+export interface BettingView { markets: ArenaMarket[]; bets: ArenaBet[]; bookmakerNearby: boolean; canWatch?: boolean; inCombat?: boolean; spectating?: string; startsAt?: number; }
 export interface BetWin { id: string; amount: number; celebrate: boolean; }
 export type BettingAction = { kind: 'bet'; matchId: string; playerId: string; stake: number } | { kind: 'watch'; matchId: string } | { kind: 'exit' };
 

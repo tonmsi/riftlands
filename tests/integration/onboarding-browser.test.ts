@@ -1,0 +1,103 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
+import { chromium, expect } from '@playwright/test';
+import { createServer } from 'vite';
+import type { AbilitySlot } from '../../shared/types';
+
+test('onboarding feedback, locked map, ability progression and arena controls fit desktop and mobile landscape', { timeout: 60_000 }, async () => {
+  const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' });
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  try {
+    await server.listen(); browser = await chromium.launch({ channel: 'chrome', headless: true });
+    mkdirSync('test-results', { recursive: true });
+    for (const [width, height, touch] of [[1440, 900, false], [844, 390, true], [667, 375, true]] as const) {
+      const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch, isMobile: touch });
+      await page.clock.install();
+      await page.addInitScript('window.__name = value => value');
+      const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+      await page.route('**/onboarding-review', route => route.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div>' }));
+      await page.route('**/api/lobby', route => route.fulfill({ json: { account: null, friends: [], leaderboard: [] } }));
+      await page.goto(`${server.resolvedUrls!.local[0]}onboarding-review`);
+      await page.evaluate(async () => {
+        for (const file of ['styles/style.css', 'styles/mobile.css', 'ui/hud/team.css', 'ui/lobby/lobby.css', 'ui/hud/hud.css', 'ui/interactions/interactions.css']) await import(`/client/${file}`);
+        const { GameUI } = await import('/client/ui/ui.ts' as string);
+        const { BettingUI } = await import('/client/ui/betting-ui.ts' as string);
+        const { MobileControls } = await import('/client/controls/mobile-controls.ts' as string);
+        const { normalizeLoadout, equippedAbility } = await import('/shared/progression.ts' as string);
+        const { xpForLevel } = await import('/shared/config.ts' as string);
+        const root = document.querySelector<HTMLElement>('#app')!, noop = () => {};
+        const ui = new GameUI(root, { joinCredentials: noop, joinSaved: noop, logout: noop, leave: noop, social: noop, select: noop, cast: noop });
+        ui.setAssetProgress(1, 1, 0); ui.setPlaying(true);
+        const betting = new BettingUI(root, noop, noop);
+        const self = { id: 'self', name: 'Viaggiatore', kind: 'player', classId: 'mage', level: 1, xp: 0, kills: 0, deaths: 0, teamId: null, x: 0, y: 0, aim: 0, speed: 180, radius: 15, hp: 100, maxHp: 100, resource: 100, maxResource: 100, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 }, loadout: { q: null, e: null } };
+        const snapshot = { type: 'snapshot', tick: 1, time: Date.now(), ack: 0, self, actors: [self], projectiles: [], pickups: [], events: [], online: 1, activeChunks: 1, gold: 1200, narrative: { version: 1, quests: {}, flags: [] }, betting: { markets: [], bets: [], bookmakerNearby: false } };
+        const update = () => { ui.setSnapshot(structuredClone(snapshot), 20); betting.update(snapshot); };
+        new MobileControls(root, { enabled: () => true, ability: (slot: AbilitySlot) => equippedAbility(self, slot), move: noop, aim: noop, cast: () => ui.dismissLevelUp() });
+        update();
+        (window as any).onboarding = { ui, snapshot, update, setLevel: (level: number) => { self.level = level; self.xp = xpForLevel(level - 1); self.loadout = normalizeLoadout(self.loadout, level, 'mage'); update(); } };
+      });
+      await expect(page.locator('.ability-button')).toHaveCount(1);
+      await expect(page.locator('.arena-watch-launcher')).toBeHidden();
+      assert.equal(await page.locator('.compact-minimap').evaluate(e => getComputedStyle(e).opacity), '0');
+      await page.locator('.compact-map').click();
+      await expect(page.locator('.minimap-panel')).toBeVisible();
+      assert.equal(await page.locator('.minimap').evaluate(e => getComputedStyle(e).opacity), '0');
+      await expect(page.locator('.map-actions [data-ref="leave"]')).toBeVisible();
+      await expect(page.locator('.map-actions .fullscreen-toggle')).toBeVisible();
+      await page.screenshot({ path: `test-results/onboarding-locked-map-${width}x${height}.png` });
+      await page.locator('[data-ref="map-close"]').click();
+      await page.evaluate(() => { const f = (window as any).onboarding; f.snapshot.narrative.quests['north-road'] = { status: 'active', objectives: {} }; f.snapshot.narrative.flags.push('world-map'); f.snapshot.dialogue = { sessionId: 'accepted', targetId: 'scout', speaker: 'Esploratore', text: 'Tieni, prendi questa mappa. Ti ho segnato la destinazione: consultala prima di partire.', choices: [{ id: 'leave', label: 'Ho capito.' }] }; f.update(); });
+      await page.clock.runFor(300);
+      await expect(page.locator('.quest-acceptance-feedback')).toBeVisible();
+      await expect(page.locator('.quest-acceptance-feedback')).toContainText('Missione accettata: Pietre che camminano');
+      await expect(page.locator('.player-panel')).toHaveClass(/quest-accepted/);
+      if (touch) assert.ok((await page.locator('.npc-dialogue').boundingBox())!.y >= 80, 'dialogue leaves a top band for the compact acceptance banner');
+      assert.equal(await page.locator('.compact-minimap').evaluate(e => getComputedStyle(e).opacity), '1');
+      await page.screenshot({ path: `test-results/onboarding-quest-${width}x${height}.png` });
+      await page.clock.runFor(4500);
+      await expect(page.locator('.quest-acceptance-feedback')).toBeHidden();
+      await page.evaluate(() => { const f = (window as any).onboarding; f.snapshot.dialogue = null; f.update(); });
+      await page.evaluate(() => (window as any).onboarding.setLevel(3));
+      await page.clock.runFor(1200);
+      await expect(page.locator('.ability-button')).toHaveCount(2);
+      await expect(page.locator('.xp-level-up')).toBeVisible();
+      await expect(page.locator('.level-up-unlock')).toContainText('Primo attacco speciale sbloccato');
+      // Browser animations use a separate timeline from the installed timer clock.
+      await page.locator('.xp-level-up').evaluate(e => e.getAnimations({ subtree: true }).forEach(a => a.finish()));
+      const levelBox = (await page.locator('.xp-level-up').boundingBox())!;
+      assert.ok(levelBox.x >= 0 && levelBox.y >= 0 && levelBox.x + levelBox.width <= width && levelBox.y + levelBox.height < height);
+      if (touch) {
+        const controls = (await page.locator('[data-slot="basic"]').boundingBox())!;
+        assert.ok(levelBox.y + levelBox.height < controls.y, 'level feedback clears the mobile combat controls');
+      }
+      await page.screenshot({ path: `test-results/onboarding-level-${width}x${height}.png` });
+      await page.mouse.click(width / 2, height / 2);
+      await expect(page.locator('.xp-level-up')).toBeVisible();
+      await page.clock.runFor(4100);
+      await expect(page.locator('.xp-level-up')).toBeVisible();
+      await page.mouse.click(levelBox.x + levelBox.width / 2, levelBox.y + 10);
+      await expect(page.locator('.xp-level-up')).toBeHidden();
+      await page.evaluate(() => (window as any).onboarding.setLevel(6));
+      await page.clock.runFor(1200);
+      await expect(page.locator('.ability-button')).toHaveCount(3);
+      await expect(page.locator('.level-up-unlock')).toContainText('Secondo attacco speciale sbloccato');
+      await page.clock.runFor(4100);
+      await page.evaluate(() => (window as any).onboarding.ui.dismissLevelUp());
+      await expect(page.locator('.xp-level-up')).toBeHidden();
+      await page.evaluate(() => (window as any).onboarding.setLevel(10));
+      await page.clock.runFor(1200);
+      await expect(page.locator('.level-up-unlock')).toContainText('Scelta ampliata');
+      await page.clock.runFor(10000);
+      await expect(page.locator('.xp-level-up')).toBeHidden();
+      await page.evaluate(() => (window as any).onboarding.setLevel(20));
+      await page.clock.runFor(1200);
+      await expect(page.locator('.arena-watch-launcher')).toBeVisible();
+      await expect(page.locator('.level-up-unlock')).toContainText('Arene e duelli in diretta sbloccati');
+      await page.locator('.xp-level-up').evaluate(e => e.getAnimations({ subtree: true }).forEach(a => a.finish()));
+      await page.screenshot({ path: `test-results/onboarding-level20-${width}x${height}.png` });
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+  } finally { await browser?.close(); await server.close(); }
+});

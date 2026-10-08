@@ -7,6 +7,9 @@ export interface TransitionOverlay {
   opacity: number;
   veil: number;
   position?: number;
+  minY?: number;
+  panelWidth?: number;
+  scale?: number;
   vignette?: boolean;
 }
 
@@ -21,20 +24,21 @@ export function drawTransitionOverlay(ctx: CanvasRenderingContext2D, width: numb
   } else ctx.fillStyle = `rgba(12,18,18,${overlay.veil})`;
   ctx.fillRect(0, 0, width, height);
   ctx.globalAlpha = overlay.opacity;
-  const y = Math.max(100, height * (overlay.position ?? .22));
-  const panelWidth = Math.min(600, width - 32);
+  const y = Math.max(overlay.minY ?? 100, height * (overlay.position ?? .22));
+  const panelWidth = Math.min(overlay.panelWidth ?? 600, width - 32);
+  const scale = overlay.scale ?? 1;
   const gradient = ctx.createLinearGradient(width / 2 - panelWidth / 2, 0, width / 2 + panelWidth / 2, 0);
   gradient.addColorStop(0, '#101b1b00'); gradient.addColorStop(.2, '#101b1be8');
   gradient.addColorStop(.8, '#101b1be8'); gradient.addColorStop(1, '#101b1b00');
   ctx.fillStyle = gradient;
-  ctx.fillRect(width / 2 - panelWidth / 2, y - 34, panelWidth, 112);
+  ctx.fillRect(width / 2 - panelWidth / 2, y - 34 * scale, panelWidth, 112 * scale);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#efcf87'; ctx.font = '600 13px system-ui';
+  ctx.fillStyle = '#efcf87'; ctx.font = `600 ${13 * scale}px system-ui`;
   ctx.fillText(overlay.heading, width / 2, y, panelWidth - 24);
-  ctx.fillStyle = '#fff3d5'; ctx.font = '600 30px Georgia';
-  ctx.fillText(overlay.title, width / 2, y + 32, panelWidth - 24);
-  ctx.fillStyle = '#c5c7b8'; ctx.font = '13px system-ui';
-  ctx.fillText(overlay.detail, width / 2, y + 59, panelWidth - 24);
+  ctx.fillStyle = '#fff3d5'; ctx.font = `600 ${30 * scale}px Georgia`;
+  ctx.fillText(overlay.title, width / 2, y + 32 * scale, panelWidth - 24);
+  ctx.fillStyle = '#c5c7b8'; ctx.font = `${13 * scale}px system-ui`;
+  ctx.fillText(overlay.detail, width / 2, y + 59 * scale, panelWidth - 24);
   ctx.restore();
 }
 

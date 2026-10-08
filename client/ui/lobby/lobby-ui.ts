@@ -304,7 +304,7 @@ export class LobbyUI {
     ];
     this.ref('class-detail').innerHTML = `<div class="class-detail-heading"><span class="eyebrow">PROFILO DEL CAMPIONE</span><h3>${chosen.subtitle}</h3></div><p>${chosen.description}</p><dl class="champion-stats" aria-label="Statistiche base di ${chosen.name}">${stats.map(([label, value, unit]) => `<div><dt>${label}</dt><dd>${value}<small>${unit}</small></dd></div>`).join('')}</dl><p class="gem-note">Statistiche base · potenziamenti con gemme in arrivo</p><div class="lobby-abilities">${SLOTS.map(slot => {
       const ability = chosen.abilities[slot];
-      const unlock = slot === 'basic' ? 'Base' : slot === 'q' ? 'LV 1' : slot === 'e' ? 'LV 2' : 'LV 10';
+      const unlock = slot === 'basic' ? 'Base' : slot === 'q' ? 'LV 3' : slot === 'e' ? 'LV 6' : 'LV 10';
       return `<div class="lobby-ability" title="${ability.description}"><kbd>${unlock}</kbd><span><strong>${ability.name}</strong><small>Ricarica ${number(ability.cooldown)} s${ability.cost ? ` · ${ability.cost} ${chosen.resource === 'rage' ? 'rabbia' : 'mana'}` : ' · nessun costo'}</small></span></div>`;
     }).join('')}</div>`;
     this.renderBuild(draft);
@@ -335,10 +335,10 @@ export class LobbyUI {
       card.style.setProperty('--spell-color', ability?.color ?? '#8fa4b6');
       card.innerHTML = `<span class="build-slot-orb">${ability ? icon(ABILITY_ICONS[ability.kind]) : icon('<path d="M8 11V7a4 4 0 0 1 8 0v4"/><rect x="5" y="11" width="14" height="10" rx="3"/>')}<kbd>${slot === 'basic' ? 'BASE' : this.keyLabel(slot)}</kbd></span>`;
       const copy = document.createElement('span'); copy.className = 'build-slot-copy';
-      copy.append(textElement('small', '', slot === 'basic' ? 'SEMPRE EQUIPAGGIATO' : slot === 'q' ? 'PRIMO SLOT' : 'SECONDO SLOT'), textElement('strong', '', ability?.name ?? 'Slot bloccato'), textElement('span', '', slot === 'basic' ? 'Attacco fisso' : !ability ? 'Si sblocca al livello 5' : level < 2 ? 'Prima scelta al livello 2' : 'Tocca per scegliere'));
+      copy.append(textElement('small', '', slot === 'basic' ? 'SEMPRE EQUIPAGGIATO' : slot === 'q' ? 'PRIMO SLOT' : 'SECONDO SLOT'), textElement('strong', '', ability?.name ?? 'Slot bloccato'), textElement('span', '', slot === 'basic' ? 'Attacco fisso' : !ability ? 'Si sblocca al livello ' + (slot === 'q' ? 3 : 6) : level < 3 ? 'Primo attacco al livello 3' : 'Tocca per scegliere'));
       card.append(copy);
       if (card instanceof HTMLButtonElement) {
-        card.type = 'button'; card.disabled = this.savingBuild || !this.savedAccount || !ability || level < 2;
+        card.type = 'button'; card.disabled = this.savingBuild || !this.savedAccount || !ability || level < 3;
         card.setAttribute('aria-label', `Abilità ${slot.toUpperCase()}: ${ability?.name ?? 'bloccata'}`);
         card.setAttribute('aria-haspopup', 'dialog');
         card.dataset.spell = id ?? '';
@@ -355,13 +355,13 @@ export class LobbyUI {
     save.addEventListener('click', () => void this.saveBuild());
     const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Annulla'; cancel.disabled = this.savingBuild || !this.buildChanged(); cancel.addEventListener('click', () => this.renderBuild());
     actions.append(save, cancel);
-    const hint = level < 2 ? 'Livello 2: prima scelta · Livello 5: secondo slot · Livello 10: terza abilità' : summary?.freeBuild ? 'Una configurazione gratuita disponibile dopo lo sblocco.' : 'Cambiare combinazione costa 10 gold. Invertire gli slot è gratuito.';
+    const hint = level < 3 ? 'Livello 1: attacco base · Livello 3: primo attacco · Livello 6: secondo attacco · Livello 10: scelta ampliata' : summary?.freeBuild ? 'Una configurazione gratuita disponibile dopo lo sblocco.' : 'Cambiare combinazione costa 10 gold. Invertire gli slot è gratuito.';
     const footer = document.createElement('footer'); footer.className = 'build-footer';
     footer.append(textElement('small', 'build-hint', hint), actions); container.append(footer, textElement('span', 'build-status', ''));
   }
   private openBuildPicker(slot: 'q' | 'e'): void {
     const level = levelFromXp(this.characterXp()), chosen = CLASSES[this.currentClass];
-    if (!this.savedAccount || this.savingBuild || level < 2 || (slot === 'e' && level < 5)) return;
+    if (!this.savedAccount || this.savingBuild || level < 3 || (slot === 'e' && level < 6)) return;
     this.buildPicker?.close();
     const dialog = document.createElement('dialog'); dialog.className = 'build-picker'; this.buildPicker = dialog;
     dialog.dataset.classId = this.currentClass; dialog.dataset.level = String(level);
@@ -371,7 +371,7 @@ export class LobbyUI {
     const wheel = dialog.querySelector('.spell-wheel')!, detail = dialog.querySelector<HTMLElement>('.spell-preview')!;
     const available = availableSpells(level);
     const describe = (id: SpellId) => {
-      const ability = chosen.abilities[id], required = id === 'q' ? 1 : id === 'e' ? 2 : 10;
+      const ability = chosen.abilities[id], required = id === 'q' ? 3 : id === 'e' ? 6 : 10;
       detail.replaceChildren(textElement('strong', '', ability.name), textElement('p', '', ability.description), textElement('small', '', `${level < required ? `Si sblocca al livello ${required} · ` : ''}${ability.damage ? `${ability.damage} danni · ` : ''}${ability.cooldown} s di recupero${ability.cost ? ` · ${ability.cost} ${chosen.resource === 'rage' ? 'rabbia' : 'mana'}` : ''}`));
       detail.style.setProperty('--spell-color', ability.color);
     };
@@ -382,7 +382,7 @@ export class LobbyUI {
       button.dataset.spell = id; button.dataset.position = String(index); button.style.setProperty('--spell-color', ability.color);
       button.disabled = locked; button.setAttribute('aria-pressed', String(current)); button.setAttribute('aria-label', ability.name);
       button.innerHTML = `<span class="spell-choice-orb">${icon(ABILITY_ICONS[ability.kind])}${current ? '<i aria-hidden="true">✓</i>' : ''}</span>`;
-      button.append(textElement('strong', '', ability.name), textElement('small', '', locked ? 'LIVELLO ' + (id === 'e' ? 2 : 10) : current ? 'EQUIPAGGIATO' : moves ? 'SPOSTA DA ' + this.keyLabel(other) : 'DISPONIBILE'));
+      button.append(textElement('strong', '', ability.name), textElement('small', '', locked ? 'LIVELLO ' + (id === 'q' ? 3 : id === 'e' ? 6 : 10) : current ? 'EQUIPAGGIATO' : moves ? 'SPOSTA DA ' + this.keyLabel(other) : 'DISPONIBILE'));
       button.addEventListener('mouseenter', () => describe(id)); button.addEventListener('focus', () => describe(id));
       button.addEventListener('click', () => {
         const next = { ...this.draftBuild, [slot]: id };

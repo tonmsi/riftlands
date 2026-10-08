@@ -178,10 +178,10 @@ export class InteractionUI {
     shop.replaceChildren(...(dialogue.shop ?? []).map(offer => {
       const card = document.createElement('div'); card.className = 'vendor-offer';
       const image = document.createElement('canvas'); image.width = image.height = 48; drawItemArt(image.getContext('2d')!, offer.itemId, 48);
-      const name = document.createElement('strong'); name.textContent = ITEM_DEFINITIONS[offer.itemId].name;
+      const name = document.createElement('strong'); name.textContent = offer.unlock === 'world-map' ? 'Mappa del mondo' : ITEM_DEFINITIONS[offer.itemId].name;
       const button = document.createElement('button'); button.type = 'button'; button.dataset.offer = offer.id;
       button.textContent = `${offer.price} gold · Compra`; button.disabled = !!offer.disabledReason;
-      const reason = document.createElement('small'); reason.textContent = offer.disabledReason ?? ITEM_DEFINITIONS[offer.itemId].description;
+      const reason = document.createElement('small'); reason.textContent = offer.disabledReason ?? (offer.unlock === 'world-map' ? 'Sblocca la mappa. Non occupa spazio nello zaino.' : ITEM_DEFINITIONS[offer.itemId].description);
       button.onclick = () => { button.disabled = true; this.send({ kind: 'buy-item', sessionId: dialogue.sessionId, offerId: offer.id }); };
       card.append(image, name, reason, button); return card;
     }));

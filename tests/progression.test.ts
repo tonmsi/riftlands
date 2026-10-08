@@ -62,22 +62,25 @@ test('a restart preserves all class progress and paid builds', () => {
     assert.equal(characterFor(restored, 'warrior').xp, 100);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
 test('build changes validate unlocks, cost once, allow free reorder and reject insufficient gold without mutations', () => {
   const a = account(), c = characterFor(a, 'mage');
   assert.throws(() => saveCharacterBuild(a, 'mage', { q: 'e', e: null }));
-  c.xp = 100; assert.equal(saveCharacterBuild(a, 'mage', { q: 'e', e: null }), 0);
-  assert.throws(() => saveCharacterBuild(a, 'mage', { q: 'q', e: null }));
-  assert.equal(c.loadout.q, 'e'); a.gold = 20;
-  assert.equal(saveCharacterBuild(a, 'mage', { q: 'q', e: null }), 10);
+  c.xp = xpForLevel(2); assert.equal(saveCharacterBuild(a, 'mage', { q: 'q', e: null }), 0);
   assert.equal(saveCharacterBuild(a, 'mage', { q: 'q', e: null }), 0);
-  c.xp = xpForLevel(4); assert.equal(saveCharacterBuild(a, 'mage', { q: 'e', e: 'q' }), 0);
+  c.xp = xpForLevel(5); assert.equal(saveCharacterBuild(a, 'mage', { q: 'e', e: 'q' }), 0);
   assert.equal(saveCharacterBuild(a, 'mage', { q: 'q', e: 'e' }), 0);
   assert.throws(() => saveCharacterBuild(a, 'mage', { q: 'r', e: 'e' }));
   assert.throws(() => saveCharacterBuild(a, 'mage', { q: 'q', e: 'q' }));
+  c.xp = xpForLevel(9); assert.equal(saveCharacterBuild(a, 'mage', { q: 'r', e: 'e' }), 0);
+  assert.throws(() => saveCharacterBuild(a, 'mage', { q: 'q', e: 'e' }));
+  assert.equal(c.loadout.q, 'r'); a.gold = 20;
+  assert.equal(saveCharacterBuild(a, 'mage', { q: 'q', e: 'e' }), 10);
+  assert.equal(saveCharacterBuild(a, 'mage', { q: 'q', e: 'e' }), 0);
 });
 test('locked casts are rejected and frost/ultimate mechanics follow the ability when placed in another slot', () => {
   const sim = simulation(), a = account(), player = sim.addPlayer(a, 'mage');
-  assert.equal(sim.cast(player, 'e'), false); assert.equal(sim.cast(player, 'r'), false);
+  assert.equal(sim.cast(player, 'q'), false); assert.equal(sim.cast(player, 'e'), false); assert.equal(sim.cast(player, 'r'), false);
   sim.awardXp(a.id, xpForLevel(9)); player.loadout = { q: 'r', e: 'q' };
   assert.equal(equippedAbility(player, 'q')!.kind, 'shield');
   assert.equal(sim.cast(player, 'e'), true); assert.equal([...sim.projectiles.values()][0].slow, 2000);
@@ -126,6 +129,8 @@ test('Nereo repeats every five minutes, halves XP to a floor and pays gold only 
     assert.equal(player.xp - before, xp); assert.equal(a.gold, 20);
     assert.throws(() => sim.interact(a.id, { kind: 'use-item', sessionId: view.sessionId, slot: 0, itemId: 'slime-innards' }));
     assert.equal(questReward(QUEST_DEFINITIONS['stinking-bait'], index).xp, xp);
+    // Leave room for the next batch after Nereo gives the first rod.
+    a.inventory!.slots.fill(null);
     sim.now += 300_000;
   }
   sim.addPlayer(a, 'warrior'); assert.deepEqual(a.narrative!.quests, {});

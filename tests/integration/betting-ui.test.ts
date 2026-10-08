@@ -6,12 +6,14 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { RoomManager } from '../../server/rooms';
 import type { Account } from '../../server/store';
+import { xpForLevel } from '../../shared/config';
 
 test('betting panel: gold access, quote selection, tickets, spectator updates and mobile layout', async () => {
   const bundle = await build({ entryPoints: ['client/ui/betting-ui.ts'], bundle: true, write: false, format: 'iife', globalName: 'BettingModule', outfile: 'betting.js' });
   const manager = new RoomManager(undefined, 734291, 1_000_000);
   const accounts: Account[] = ['Arden', 'Lyra', 'Viewer'].map(name => ({ id: name, name, nameLower: name.toLowerCase(), salt: '', passwordHash: '', kills: 10, deaths: 4, xp: 0, gold: 100, friends: [], requests: [], lastSeen: 0 }));
   accounts.forEach(a => manager.connect(a, 'mage'));
+  manager.global.awardXp(accounts[2].id, xpForLevel(19));
   for (let i = 0; i < 110; i++) manager.step(.1);
   const matchId = await manager.createMatch('arena', [[accounts[0].id], [accounts[1].id]]);
   const snapshot = manager.snapshotFor(accounts[2].id)!; snapshot.betting!.bookmakerNearby = true;

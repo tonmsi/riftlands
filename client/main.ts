@@ -305,6 +305,7 @@ function inputTick(): void {
     ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined, autoAim: false })
     : controls.sample(predicted, predicted.aim, (x, y) => renderer.screenToWorld(x, y), renderer.orientation);
   const castTime = connection.serverTime(), castLead = Math.min(150, connection.ping / 2);
+  if (cast) ui.dismissLevelUp();
   const readyCast = latest?.fishing || cast === 'basic' && !localCombat.basicReady(predicted, castTime + castLead) ? undefined : cast;
   const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, analogMovement: matchMedia('(pointer: coarse)').matches || controls.settings.movement !== 'keyboard', ...(readyCast ? { cast: readyCast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
   if (connection.send({ type: 'input', input })) {
@@ -385,7 +386,7 @@ function frame(now: number): void {
       return { x: input.dx, y: input.dy };
     })() : null,
   });
-  if (self && playing && now - lastMinimap > 250) {
+  if (self && playing && ui.mapUnlocked && now - lastMinimap > 250) {
     drawMinimap(ui.compactMinimap, renderer.world, self, actors, latest?.pickups ?? [], 1600, renderer.orientation, questProgress);
     if (ui.minimapVisible) drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? [], 4800, renderer.orientation, questProgress);
     lastMinimap = now;

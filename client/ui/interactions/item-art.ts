@@ -2,6 +2,11 @@ import { ITEM_DEFINITIONS } from '../../../shared/items';
 import { drawFishingItem } from '../../fishing/item-art';
 /** Shared procedural artwork for world drops and the inventory; no external image needed. */
 export function drawItemArt(ctx: CanvasRenderingContext2D, itemId: string, size: number, time = 0): void {
+  if (itemId === 'world-map') {
+    ctx.save(); ctx.scale(size / 48, size / 48); ctx.fillStyle = '#dbc58e'; ctx.strokeStyle = '#967044'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(5, 10); ctx.lineTo(17, 5); ctx.lineTo(31, 10); ctx.lineTo(43, 5); ctx.lineTo(43, 38); ctx.lineTo(31, 43); ctx.lineTo(17, 38); ctx.lineTo(5, 43); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(17, 5); ctx.lineTo(17, 38); ctx.moveTo(31, 10); ctx.lineTo(31, 43); ctx.stroke(); ctx.restore(); return;
+  }
   if (!Object.hasOwn(ITEM_DEFINITIONS, itemId)) return;
   ctx.save(); ctx.scale(size / 48, size / 48);
   const item = ITEM_DEFINITIONS[itemId];

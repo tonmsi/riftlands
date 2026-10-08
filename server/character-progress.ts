@@ -2,6 +2,7 @@ import type { Account } from './store';
 import type { ClassId } from '../shared/types';
 import { levelFromXp } from '../shared/config';
 import { newCharacter, normalizeLoadout, unlockTier, validLoadout, buildCost, type CharacterProgress } from '../shared/progression';
+import { grantWorldMap, QUEST_DEFINITIONS } from '../shared/narrative';
 
 /** Pure state operations, also used by the browser's isolated dungeon simulation. */
 export function characterFor(account: Account, classId: ClassId): CharacterProgress {
@@ -15,7 +16,10 @@ export function characterFor(account: Account, classId: ClassId): CharacterProgr
     legacy.loadout = normalizeLoadout(account.body?.loadout, levelFromXp(legacy.xp), legacyClass);
     account.characters[legacyClass] = legacy;
   }
-  return account.characters[classId] ??= newCharacter(classId);
+  const character = account.characters[classId] ??= newCharacter(classId);
+  // Existing explorers keep the map granted by their already accepted missions.
+  if (Object.keys(character.narrative.quests).some(id => QUEST_DEFINITIONS[id]?.objective.kind === 'reach-area')) grantWorldMap(character.narrative);
+  return character;
 }
 export function activateCharacter(account: Account, classId: ClassId): CharacterProgress {
   const character = characterFor(account, classId);

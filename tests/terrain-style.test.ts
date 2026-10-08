@@ -20,6 +20,18 @@ test('scenery uses only square 1x1 or 2x2 footprints with exactly four samples',
   }
 });
 
+test('solid bush blocks draw foliage on every tile, including negative block boundaries', () => {
+  for (const [tx, ty] of [[0, 0], [-1, -1], [15, 16]]) {
+    const x = Math.floor(tx / 2) * 2, y = Math.floor(ty / 2) * 2;
+    assert.deepEqual(sceneryGroups(() => 'bush', tx, ty), [
+      { x, y, width: 1, height: 1, tile: 'bush' },
+      { x: x + 1, y, width: 1, height: 1, tile: 'bush' },
+      { x, y: y + 1, width: 1, height: 1, tile: 'bush' },
+      { x: x + 1, y: y + 1, width: 1, height: 1, tile: 'bush' },
+    ]);
+  }
+});
+
 test('mixed blocks never merge materials, holes, horizontal strips or vertical strips', () => {
   for (const tiles of [ ['rock', 'grass', 'rock', 'grass'], ['bush', 'bush', 'grass', 'grass'],
     ['rock', 'bush', 'rock', 'bush'], ['bush', 'bush', 'bush', 'grass'] ] as const) {

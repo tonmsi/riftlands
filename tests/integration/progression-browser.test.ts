@@ -76,7 +76,7 @@ test('real menu saves paid builds, class levels stay independent and quest XP an
     await page.locator('[data-class=mage]').click(); await expect(page.locator('[data-ref=build-editor]')).toContainText('Livello 1');
     await expect(q).toBeDisabled(); await expect(e).toBeDisabled();
     await page.locator('[data-ref=join]').click(); await expect(page.locator('[data-ref=world-entrance]')).toBeHidden(); await expect(page.locator('.game-hud')).toBeVisible();
-    await expect(page.locator('.ability-bar [data-slot]')).toHaveCount(2);
+    await expect(page.locator('.ability-bar [data-slot]')).toHaveCount(1);
     const online = await page.request.post(origin + '/api/build', { headers, data: { classId: 'hunter', loadout: { q: 'q', e: 'r' } } }); assert.equal(online.status(), 400);
     await page.keyboard.press('KeyF'); await expect(page.locator('.npc-dialogue')).toBeVisible();
     await page.locator('.backpack-toggle').click(); await page.locator('.inventory-slot').click(); await expect(page.locator('.xp-gain')).toHaveText('+150 XP');
@@ -97,7 +97,7 @@ test('real menu saves paid builds, class levels stay independent and quest XP an
     assert.equal(await page.locator('[data-ref=player-level]').evaluate(node => getComputedStyle(node).borderRadius), '50%');
     assert.equal(await page.locator('[data-ref=player-level]').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(23, 41, 53)');
     await page.waitForTimeout(1400); await expect(page.locator('.xp-level-up')).toBeVisible();
-    await expect(page.locator('.xp-level-up')).toBeHidden(); await expect(page.locator('.xp-confetti>i')).toHaveCount(0);
+    await expect(page.locator('.xp-level-up')).toBeHidden({ timeout: 11000 }); await expect(page.locator('.xp-confetti>i')).toHaveCount(0);
     const state = await page.request.get(origin + '/api/lobby?classId=mage', { headers }), data = await state.json();
     assert.equal(data.account.characters.mage.xp, 240); assert.equal(data.account.characters.warrior.xp, 0); assert.equal(data.narrative.quests['stinking-bait'].completions, 1);
     // Exercise compact HUD and the same editor on a narrow touch viewport.
@@ -124,8 +124,9 @@ test('real menu saves paid builds, class levels stay independent and quest XP an
     await expect(page.locator('.game-hud')).toBeHidden();
     await expect(page.locator('[data-ref=build-editor]')).toContainText('Livello 3');
     await q.click(); await expect(page.locator('.spell-choice[data-spell=r]')).toBeDisabled();
-    await page.locator('.spell-choice[data-spell=e]').click(); await expect(q).toHaveAttribute('data-spell', 'e');
-    await page.getByRole('button', { name: 'Annulla', exact: true }).click(); await expect(q).toHaveAttribute('data-spell', 'q');
+    await expect(page.locator('.spell-choice[data-spell=e]')).toBeDisabled();
+    await expect(page.locator('.spell-choice[data-spell=e]')).toContainText('LIVELLO 6');
+    await page.keyboard.press('Escape'); await expect(q).toHaveAttribute('data-spell', 'q');
     // Feedback lifecycle: no fake gain on entry, reduced motion and session reset.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.evaluate(async () => {

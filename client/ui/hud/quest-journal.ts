@@ -1,6 +1,7 @@
 import { QUEST_DEFINITIONS, newNarrativeProgress, questCompletions, type NarrativeProgress } from '../../../shared/narrative';
 import { ITEM_DEFINITIONS, inventoryCount, newInventory, type Inventory } from '../../../shared/items';
 import type { PopupManager } from '../popups';
+import { drawTransitionOverlay } from '../transition-overlay';
 
 const text = (tag: string, value: string) => { const node = document.createElement(tag); node.textContent = value; return node; };
 
@@ -26,11 +27,15 @@ export class QuestJournalUI {
   private completionCounts: Record<string, number> = {};
   private hasBaseline = false;
   private completionTimer = 0;
+  private acceptance = document.createElement('canvas');
+  private acceptanceFrame = 0;
   constructor(hud: HTMLElement, private player: HTMLElement, popups: PopupManager) {
     this.panel.className = 'quest-journal glass'; this.panel.id = 'quest-journal'; this.panel.hidden = true;
     this.panel.setAttribute('role', 'region'); this.panel.setAttribute('aria-label', 'Il tuo viaggio');
     this.panel.innerHTML = '<header><strong>Il tuo viaggio</strong><button type="button" aria-label="Chiudi diario">×</button></header><div class="quest-journal-scroll"><h3>Missioni attive</h3><div data-active-quests></div><h3>Traguardi in corso</h3><p>Non ci sono traguardi in corso.</p></div>';
     hud.append(this.panel);
+    this.acceptance.className = 'quest-acceptance-feedback'; this.acceptance.hidden = true;
+    this.acceptance.setAttribute('role', 'status'); this.acceptance.setAttribute('aria-live', 'polite'); hud.append(this.acceptance);
     this.toggle.type = 'button'; this.toggle.className = 'player-journal-toggle'; this.toggle.setAttribute('aria-label', 'Apri missioni e traguardi');
     this.toggle.setAttribute('aria-controls', this.panel.id); this.toggle.setAttribute('aria-expanded', 'false'); this.player.append(this.toggle);
     this.completion.className = 'quest-completion-feedback'; this.completion.hidden = true;
@@ -47,11 +52,34 @@ export class QuestJournalUI {
     this.resetFeedback(); this.update();
   }
   resetFeedback(): void {
+    cancelAnimationFrame(this.acceptanceFrame); this.acceptanceFrame = 0; this.acceptance.hidden = true;
     clearTimeout(this.completionTimer); this.completionTimer = 0; this.completion.hidden = true;
-    this.player.classList.remove('quest-completed'); this.hasBaseline = false; this.completionCounts = {};
+    this.player.classList.remove('quest-completed', 'quest-accepted'); this.hasBaseline = false; this.completionCounts = {};
+  }
+  private announceAccepted(names: string[]): void {
+    cancelAnimationFrame(this.acceptanceFrame);
+    this.acceptance.hidden = false; this.acceptance.textContent = `Missione accettata: ${names.join(', ')}`;
+    const started = performance.now();
+    const draw = (now: number) => {
+      const elapsed = now - started;
+      if (elapsed >= 4500) { this.acceptance.hidden = true; this.acceptanceFrame = 0; this.player.classList.remove('quest-accepted'); return; }
+      this.acceptance.width = this.acceptance.clientWidth; this.acceptance.height = this.acceptance.clientHeight;
+      const landscape = this.acceptance.height <= 600 && this.acceptance.width > this.acceptance.height;
+      const dialogueTop = this.acceptance.parentElement?.parentElement?.querySelector<HTMLElement>('.npc-dialogue:not([hidden])')?.getBoundingClientRect().top;
+      const headingY = Math.max(10, Math.min(35, (dialogueTop ?? 120) - 72));
+      drawTransitionOverlay(this.acceptance.getContext('2d')!, this.acceptance.width, this.acceptance.height, {
+        heading: 'MISSIONE ACCETTATA', title: names.join(', '), detail: 'Apri il tuo box per consultare il diario',
+        opacity: Math.min(1, elapsed / 200, (4500 - elapsed) / 500), veil: 0,
+        ...(landscape ? { minY: 0, position: headingY / this.acceptance.height, panelWidth: Math.max(250, this.acceptance.width - 380), scale: .8 } : { position: .22 }),
+      });
+      this.acceptanceFrame = requestAnimationFrame(draw);
+    };
+    this.player.classList.add('quest-accepted'); this.acceptanceFrame = requestAnimationFrame(draw);
   }
   update(narrative?: NarrativeProgress, inventory?: Inventory): void {
     if (narrative) {
+      const accepted = Object.entries(narrative.quests).filter(([id, q]) => this.hasBaseline && q.status === 'active' && this.narrative.quests[id]?.status !== 'active');
+      if (accepted.length) this.announceAccepted(accepted.map(([id]) => QUEST_DEFINITIONS[id]?.name ?? id));
       const counts = Object.fromEntries(Object.entries(narrative.quests).map(([id, q]) => [id, questCompletions(q)]));
       const completed = Object.keys(counts).filter(id => this.hasBaseline && counts[id] > (this.completionCounts[id] ?? 0));
       this.completionCounts = counts; this.hasBaseline = true;

@@ -60,7 +60,8 @@ export function sceneryGroups(getTile: (x: number, y: number) => TileKind, tx: n
   const x = Math.floor(tx / 2) * 2, y = Math.floor(ty / 2) * 2;
   const tiles = [getTile(x, y), getTile(x + 1, y), getTile(x, y + 1), getTile(x + 1, y + 1)];
   const obstacle = (tile: TileKind) => tile === 'rock' || tile === 'bush';
-  if (obstacle(tiles[0]) && tiles.every(tile => tile === tiles[0])) {
+  // Rocks scale to the grouped footprint; foliage sprites occupy one tile each.
+  if (tiles[0] === 'rock' && tiles.every(tile => tile === 'rock')) {
     return [{ x, y, width: 2, height: 2, tile: tiles[0] }];
   }
   return tiles.flatMap((tile, i) => obstacle(tile)
