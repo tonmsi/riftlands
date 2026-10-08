@@ -72,8 +72,8 @@ export async function saveWorldProject(options: { root: string; documentPath: st
   }
 }
 
-/** Images are content-addressed and immutable. SVGs cannot reference external resources or execute code. */
-export async function importWorldImage(root: string, mime: string, base64: string): Promise<string> {
+/** Readable filenames; existing images can be reused but never silently overwritten. */
+export async function importWorldImage(root: string, mime: string, base64: string, folder: 'world-assets' | 'actor-assets' = 'world-assets', filename: string = 'asset'): Promise<string> {
   if (typeof base64 !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length > 7_000_000) throw new Error('Immagine non valida o oltre 5 MB.');
   const bytes = Buffer.from(base64, 'base64');
   if (!bytes.length || bytes.length > 5_000_000) throw new Error('Immagine oltre 5 MB.');
@@ -90,9 +90,16 @@ export async function importWorldImage(root: string, mime: string, base64: strin
       || [...svg.matchAll(/url\s*\(\s*(['"]?)(.*?)\1\s*\)/gi)].some(match => !match[2].trim().startsWith('#'))) throw new Error('SVG non supportato: usa solo forme, senza script o risorse esterne.');
     ext = 'svg';
   } else throw new Error('Importa un PNG o SVG.');
-  const hash = createHash('sha256').update(bytes).digest('hex'), directory = resolve(root, 'public/world-assets');
+  if (typeof filename !== 'string' || filename.length > 200 || /[/\\]/.test(filename)) throw new Error('Nome file non valido.');
+  const stem = filename.replace(/\.(png|svg)$/i, '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120);
+  if (!stem) throw new Error('Il nome file deve contenere lettere o numeri.');
+  const name = `${stem}.${ext}`, directory = resolve(root, 'public', folder), path = resolve(directory, name);
   await mkdir(directory, { recursive: true });
-  try { await writeFile(resolve(directory, `${hash}.${ext}`), bytes, { flag: 'wx' }); }
-  catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e; }
-  return `/world-assets/${hash}.${ext}`;
+  try { await writeFile(path, bytes, { flag: 'wx' }); }
+  catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+    if (!(await readFile(path)).equals(bytes)) throw new Error(`Esiste già un asset diverso chiamato ${name}. Rinomina il file prima di importarlo.`);
+  }
+  return `/${folder}/${name}`;
 }

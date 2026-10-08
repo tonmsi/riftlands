@@ -21,15 +21,15 @@ export async function startWorldStudio(options: { root: string; documentPath: st
     if (`http://${request.headers.host}` !== origin || (request.headers.origin && request.headers.origin !== origin)) { reply(403, { error: 'World Studio accessibile dalla propria pagina locale.' }); return; }
     const path = (request.url ?? '').split('?')[0];
     if (library(request, response, origin)) return;
-    const image = /^\/world-assets\/([a-zA-Z0-9_-]+\.(png|svg))$/.exec(path);
+    const image = /^\/(world-assets|actor-assets)\/([a-zA-Z0-9_-]+\.(png|svg))$/.exec(path);
     if (image && request.method === 'GET') {
       // New immutable uploads are available immediately, independent of Vite's public-file watcher.
-      void readFile(resolve(options.root, 'public/world-assets', image[1])).then(bytes => {
-        response.writeHead(200, { 'Content-Type': image[2] === 'png' ? 'image/png' : 'image/svg+xml', 'X-Content-Type-Options': 'nosniff',
-          'Cache-Control': /^[a-f0-9]{64}\./.test(image[1]) ? 'public, max-age=31536000, immutable' : 'no-cache' }); response.end(bytes);
+      void readFile(resolve(options.root, 'public', image[1], image[2])).then(bytes => {
+        response.writeHead(200, { 'Content-Type': image[3] === 'png' ? 'image/png' : 'image/svg+xml', 'X-Content-Type-Options': 'nosniff',
+          'Cache-Control': /^[a-f0-9]{64}\./.test(image[2]) ? 'public, max-age=31536000, immutable' : 'no-cache' }); response.end(bytes);
       }).catch(() => { response.writeHead(404); response.end(); }); return;
     }
-    if (!['/__world/project', '/__world/images', '/__world/actors', '/api/actor-catalog'].includes(path)) { vite.middlewares(request, response, () => { response.writeHead(404); response.end(); }); return; }
+    if (!['/__world/project', '/__world/images', '/__world/actor-images', '/__world/actors', '/api/actor-catalog'].includes(path)) { vite.middlewares(request, response, () => { response.writeHead(404); response.end(); }); return; }
     void (async () => {
       if (request.method === 'GET' && (path === '/__world/actors' || path === '/api/actor-catalog')) {
         const { catalog, revision } = await readActorProject(join(dirname(options.documentPath), 'actor-catalog.json'));
@@ -46,7 +46,7 @@ export async function startWorldStudio(options: { root: string; documentPath: st
       try {
         const payload = await readBody(request);
         if (path === '/__world/actors') { const result = await saveActorProject(options, payload.catalog, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
-        else if (path === '/__world/images') reply(200, { image: await importWorldImage(options.root, payload.mime, payload.base64) });
+        else if (path === '/__world/images' || path === '/__world/actor-images') reply(200, { image: await importWorldImage(options.root, payload.mime, payload.base64, path === '/__world/actor-images' ? 'actor-assets' : 'world-assets', payload.filename) });
         else { const result = await saveWorldProject(options, payload.document, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
       } finally { busy = false; }
     })().catch(e => { if (!response.headersSent) reply(400, { error: e instanceof Error ? e.message : String(e) }); });

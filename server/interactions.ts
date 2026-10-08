@@ -99,7 +99,7 @@ export class InteractionSystem {
         if (!quest) throw new Error('Missione non disponibile.');
         acceptQuest(account.narrative!, quest, now);
         if (quest.objective.kind === 'reach-area') {
-          session.mapGift = hasWorldMap(account.narrative!) ? 'Hai già una mappa: ti segno la destinazione.' : 'Tieni, prendi questa mappa. Ti ho segnato la destinazione: consultala prima di partire.';
+          session.mapGift = hasWorldMap(account.narrative!) ? 'Hai già una mappa: usiamola per orientarci.' : 'Tieni, prendi questa mappa. È tua: puoi aprirla dal cerchio in alto a destra, anche dopo aver chiuso questo dialogo.';
           grantWorldMap(account.narrative!);
         }
         this.host.changed(id);

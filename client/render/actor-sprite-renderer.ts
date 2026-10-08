@@ -1,6 +1,6 @@
 import { loadImage } from './sprite-sheet';
 import type { ActorVisual, SpriteAnimation } from '../../shared/actor-catalog';
-import { animationFrame, type AnimationState } from './actor-animation';
+import { animationFrame, resolveAnimation, type AnimationState } from './actor-animation';
 
 /** Shared by the game and the visual editor; all image slicing happens outside draw(). */
 export class ActorSpriteRenderer {
@@ -21,7 +21,8 @@ export class ActorSpriteRenderer {
         }
         this.sheets.set(key, { frames, ratio: height / width });
       });
-      this.jobs.set(key, job); return job;
+      const retryable = job.catch(error => { this.jobs.delete(key); throw error; });
+      this.jobs.set(key, retryable); return retryable;
     }));
   }
   bounds(visual: ActorVisual, animation: SpriteAnimation) {
@@ -30,7 +31,8 @@ export class ActorSpriteRenderer {
     return { x: -width * anchor.x + offset.x, y: -height * anchor.y + offset.y, width, height };
   }
   draw(ctx: CanvasRenderingContext2D, visual: ActorVisual, state: AnimationState, row = 0): boolean {
-    const a = visual.animations[state.name] ?? visual.animations.idle;
+    const resolved = resolveAnimation(visual, state); if (!resolved) return false;
+    const a = resolved.animation; state = resolved.state;
     const sheet = this.sheets.get(this.key(a)); if (!sheet) return false;
     const frame = sheet.frames[animationFrame(a, state, row)]; if (!frame) return false;
     const b = this.bounds(visual, a);

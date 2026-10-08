@@ -91,6 +91,14 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     assert.equal(saved.assets[0].cells[3].visibility, 'hide-fade'); assert.equal(saved.assets[0].group, 'Natura'); assert.equal(saved.assets[0].generation.category, 'vegetation');
     assert.equal(saved.assets[0].fade.opacity, .2);
     assert.equal(saved.assets[0].imageTransform.scale, 1.75);
+    await page.locator('#asset-list [data-asset="Albero"]').click();
+    await page.locator('#asset-replace-file').setInputFiles({ name: 'Albero-replacement.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg.replace('#819a55', '#719a55')) });
+    await expect(page.locator('#status')).toContainText('Immagine sostituita');
+    await page.locator('#apply-world').click(); await expect(page.locator('#status')).toContainText('Progetto applicato');
+    const replaced = JSON.parse(await readFile(options.documentPath, 'utf8'));
+    assert.deepEqual(replaced.assets[0], { ...saved.assets[0], image: '/world-assets/Albero-replacement.svg' });
+    assert.deepEqual(replaced.placements, saved.placements);
+    saved.assets[0].image = replaced.assets[0].image;
     assert.ok(Math.abs(saved.assets[0].imageTransform.x) < .01); assert.ok(Math.abs(saved.assets[0].imageTransform.y + .25) < .01);
     assert.ok(saved.placements.length > 3); assert.equal(saved.zones[0].npcs.density, 0); assert.equal(saved.npcs.length, 1);
     const world = new World(saved.seed, 16, 'world', saved, []); assert.equal(world.isBlocked(100, 100), true); assert.equal(world.isHiding(101 * 48 + 24, 100 * 48 + 24), true);

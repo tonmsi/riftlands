@@ -263,6 +263,211 @@
           "loop": true
         }
       }
+    },
+    "npc-slime": {
+      "drawSize": 48,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 1,
+        "y": 13,
+        "width": 18,
+        "height": 7.28,
+        "opacity": 0.28
+      },
+      "animations": {
+        "moving": {
+          "asset": "/actor-assets/slime.svg",
+          "columns": 4,
+          "rows": 4,
+          "directional": true,
+          "loop": true,
+          "frameMs": 130
+        }
+      }
+    },
+    "npc-wisp": {
+      "drawSize": 48,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 1,
+        "y": 13,
+        "width": 18,
+        "height": 7.28,
+        "opacity": 0.28
+      },
+      "animations": {
+        "moving": {
+          "asset": "/actor-assets/wisp.svg",
+          "columns": 4,
+          "rows": 4,
+          "directional": true,
+          "loop": true,
+          "frameMs": 130
+        }
+      }
+    },
+    "npc-sentinel": {
+      "drawSize": 48,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 1,
+        "y": 13,
+        "width": 24,
+        "height": 10.64,
+        "opacity": 0.28
+      },
+      "animations": {
+        "moving": {
+          "asset": "/actor-assets/sentinel.svg",
+          "columns": 4,
+          "rows": 4,
+          "directional": true,
+          "loop": true,
+          "frameMs": 130
+        }
+      }
+    },
+    "npc-old-fisher": {
+      "drawSize": 48,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 1,
+        "y": 13,
+        "width": 23,
+        "height": 10.08,
+        "opacity": 0.28
+      },
+      "animations": {
+        "moving": {
+          "asset": "/actor-assets/npc-old-fisher.png",
+          "columns": 4,
+          "rows": 4,
+          "directional": true,
+          "loop": true,
+          "frameMs": 130
+        }
+      }
+    },
+    "npc-north-scout": {
+      "drawSize": 48,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 1,
+        "y": 13,
+        "width": 23,
+        "height": 10.08,
+        "opacity": 0.28
+      },
+      "animations": {
+        "moving": {
+          "asset": "/actor-assets/npc-explorer-rovan.png",
+          "columns": 4,
+          "rows": 4,
+          "directional": true,
+          "loop": true,
+          "frameMs": 130
+        }
+      }
+    },
+    "npc-wounded-scout": {
+      "drawSize": 48,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 1,
+        "y": 13,
+        "width": 23,
+        "height": 10.08,
+        "opacity": 0.28
+      },
+      "animations": {
+        "moving": {
+          "asset": "/actor-assets/npc-wounded-daro.png",
+          "columns": 4,
+          "rows": 4,
+          "directional": true,
+          "loop": true,
+          "frameMs": 200
+        }
+      }
+    },
+    "npc-platos": {
+      "drawSize": 48,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 1,
+        "y": 13,
+        "width": 23,
+        "height": 10.08,
+        "opacity": 0.28
+      },
+      "animations": {
+        "moving": {
+          "asset": "/actor-assets/npc-platos.png",
+          "columns": 4,
+          "rows": 4,
+          "directional": true,
+          "loop": true,
+          "frameMs": 180
+        }
+      }
     }
+  },
+  "npcSkins": {
+    "slime": "npc-slime",
+    "wisp": "npc-wisp",
+    "sentinel": "npc-sentinel",
+    "old-fisher": "npc-old-fisher",
+    "north-scout": "npc-north-scout",
+    "wounded-scout": "npc-wounded-scout",
+    "platos": "npc-platos"
   }
 }

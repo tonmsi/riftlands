@@ -50,6 +50,11 @@ test('exploration grants a persistent map before departure, and acknowledges an 
     assert.deepEqual(f.a.inventory, before);
     assert.equal(f.a.narrative!.quests['north-road'].status, 'active');
     assert.match(f.sim.interactions.view(f.a.id, f.sim.now)!.text, owned ? /Hai già una mappa/ : /Tieni, prendi questa mappa/);
+    const gift = f.sim.interactions.view(f.a.id, f.sim.now)!;
+    assert.doesNotMatch(gift.text, /Segui la strada/);
+    assert.equal(gift.choices[0].id, 'directions');
+    f.sim.interact(f.a.id, { kind: 'choose', sessionId: gift.sessionId, choiceId: 'directions' });
+    assert.match(f.sim.interactions.view(f.a.id, f.sim.now)!.text, /Ho segnato la destinazione/);
     f.sim.checkpoint(); f.sim.addPlayer(f.a, 'mage'); assert.ok(hasWorldMap(f.a.narrative!));
   }
 });

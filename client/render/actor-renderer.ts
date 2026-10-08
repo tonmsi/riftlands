@@ -1,30 +1,17 @@
-import { BossSpriteRenderer } from "./boss-sprite-renderer";
+import { CatalogSpriteRenderer } from './catalog-sprite-renderer';
 import { rasterizeSpriteSheet, type RasterSpriteSheet } from './sprite-sheet';
 import { circle, polygon } from './render-primitives';
 import { CLASSES, PLAYER_RADIUS } from '../../shared/config';
 import type { Actor, ClassId, Vec2 } from '../../shared/types';
 import { type BossWindup } from '../../shared/bosses';
 import { playerSpriteDirectionRow } from './sprite-direction';
-import { NPC_DEFINITIONS } from '../../shared/npcs';
+import { DEFAULT_PLAYER_DRAW_SIZE } from '../../shared/actor-catalog';
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: new URL('../../assets/paladino256.png', import.meta.url).href,
   mage: new URL('../../assets/mage256.png', import.meta.url).href,
   warrior: new URL('../../assets/warrior256.png', import.meta.url).href,
 };
-// Optional character sheets use the same 4x4 raster cache and animation as hostile NPCs.
-const optionalNpcSprites = import.meta.glob<string>('../../assets/npc-*.{svg,png}', { eager: true, query: '?url', import: 'default' });
-const NPC_SPRITE_URLS: Partial<Record<NonNullable<Actor['npcKind']>, string>> = {
-  wisp: new URL('../../assets/wisp.svg', import.meta.url).href,
-  slime: new URL('../../assets/slime.svg', import.meta.url).href,
-  sentinel: new URL('../../assets/sentinel.svg', import.meta.url).href,
-  ...Object.fromEntries(Object.entries(optionalNpcSprites).flatMap(([path, url]) => {
-    const kind = path.match(/\/npc-([^/]+)\.(svg|png)$/)?.[1]; return kind && Object.hasOwn(NPC_DEFINITIONS, kind) ? [[kind, url]] : [];
-  })),
-};
 const FRAME_SIZE = 256;
-const PLAYER_DRAW_SIZE = 48;
-const NPC_FRAME_SIZE = 256;
-const NPC_DRAW_SIZE = 48;
 
 const SPRITE_COLUMNS = 4;
 
@@ -32,9 +19,12 @@ const TAU = Math.PI * 2;
 /** Character sheets, procedural fallbacks and per-actor animation history. */
 export class ActorRenderer {
   private readonly classSprites = new Map<ClassId, RasterSpriteSheet>();
-  private readonly npcSprites = new Map<string, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
-  private readonly bossSprites = new BossSpriteRenderer();
+  private readonly actorSprites = new CatalogSpriteRenderer();
+  private playerSizes?: Partial<Record<ClassId, number>>;
+  /** Preview overrides; gameplay reads the saved shared catalog. */
+  setPlayerDrawSizes(sizes: Partial<Record<ClassId, number>>): void { this.playerSizes = { ...sizes }; }
+  playerDrawSize(classId: ClassId): number { return this.playerSizes?.[classId] ?? this.actorSprites.playerDrawSize(classId); }
   readonly spritesReady: Promise<void>;
   constructor(private readonly ctx: CanvasRenderingContext2D, private readonly touchQuery: MediaQueryList) {
     this.spritesReady = this.prepareSprites();
@@ -44,19 +34,14 @@ export class ActorRenderer {
     for (const id of this.classMotion.keys()) if (!ids.has(id)) this.classMotion.delete(id);
   }
   private async prepareSprites(): Promise<void> {
+    await this.actorSprites.prepare();
     const jobs: Promise<void>[] = [];
 
     for (const [classId, url] of Object.entries(CLASS_SPRITE_URLS) as [ClassId, string][]) {
-      jobs.push(rasterizeSpriteSheet(url, FRAME_SIZE, PLAYER_DRAW_SIZE)
+      jobs.push(rasterizeSpriteSheet(url, FRAME_SIZE, Math.min(FRAME_SIZE / 2, this.playerDrawSize(classId)))
         .then(sprite => { this.classSprites.set(classId, sprite); })
         .catch(error => { console.warn(error); }));
     }
-    for (const [npcKind, url] of Object.entries(NPC_SPRITE_URLS) as [NonNullable<Actor['npcKind']>, string][]) {
-      jobs.push(rasterizeSpriteSheet(url, NPC_FRAME_SIZE, NPC_DRAW_SIZE)
-        .then(sprite => { this.npcSprites.set(npcKind, sprite); })
-        .catch(error => { console.warn(error); }));
-    }
-    jobs.push(this.bossSprites.prepare());
     await Promise.all(jobs);
   }
   drawActor(
@@ -104,7 +89,7 @@ export class ActorRenderer {
       ctx.stroke();
     }
     if (dead) ctx.globalAlpha = actor.npcKind === 'boss' ? 0.75 : 0.45;
-    if (detailed && !(actor.npcKind === "boss" && this.bossSprites.shadow(ctx, actor))) {
+    if (detailed && !(actor.kind === 'npc' && this.actorSprites.shadow(ctx, actor))) {
       ctx.fillStyle = 'rgba(36, 48, 37, 0.28)';
       ctx.beginPath();
       ctx.ellipse(1, 13, r + 5, r * 0.56, 0, 0, TAU);
@@ -216,7 +201,7 @@ export class ActorRenderer {
   }
   private drawPlayer(actor: Actor, color: string, dead: boolean, time: number, moveDirection?: Vec2 | null): void {
     const { ctx } = this;
-    const r = actor.radius;
+    const drawSize = this.playerDrawSize(actor.classId);
     const sprite = this.classSprites.get(actor.classId);
     if (sprite && !dead) {
       const previous = this.classMotion.get(actor.id);
@@ -238,9 +223,15 @@ export class ActorRenderer {
       const cachedFrame = sprite.frames[row * SPRITE_COLUMNS + frame];
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(cachedFrame, -PLAYER_DRAW_SIZE / 2, -PLAYER_DRAW_SIZE / 2, PLAYER_DRAW_SIZE, PLAYER_DRAW_SIZE);
+      ctx.drawImage(cachedFrame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
       return;
     }
+    ctx.save(); ctx.scale(drawSize / DEFAULT_PLAYER_DRAW_SIZE, drawSize / DEFAULT_PLAYER_DRAW_SIZE);
+    this.drawPlayerFallback(actor, color, dead);
+    ctx.restore();
+  }
+  private drawPlayerFallback(actor: Actor, color: string, dead: boolean): void {
+    const { ctx } = this, r = actor.radius;
     ctx.fillStyle = dead ? '#697066' : '#333e35';
     circle(ctx, 0, 0, r); ctx.fill();
     ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
@@ -303,7 +294,6 @@ export class ActorRenderer {
   private drawNpc(actor: Actor, time: number, color: string, windup?: BossWindup): void {
     const { ctx } = this;
     const r = actor.radius;
-    const spriteKey = actor.npcKind;
 
     // --- LOGICA DI MOVIMENTO (spostata in alto per sapere subito se si muove) ---
     const previous = this.classMotion.get(actor.id);
@@ -321,25 +311,13 @@ export class ActorRenderer {
     }
     // -------------------------------------------------------------------------
 
-    if (actor.npcKind === "boss" && this.bossSprites.draw(ctx, actor, time, moving, row, windup)) return;
-    const sprite = spriteKey ? this.npcSprites.get(spriteKey) : undefined;
-    if (sprite && actor.hp > 0) {
-      let frameIndex = 0;
-      const startedAt = moving && (!previous || !previous.moving || previous.row !== row)
-        ? time : previous?.startedAt ?? time;
-      this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
-
-      const frame = moving ? Math.floor((time - startedAt) / 130) % SPRITE_COLUMNS : 0;
-      frameIndex = row * SPRITE_COLUMNS + frame;
-      const drawSize = NPC_DRAW_SIZE;
-      const cachedFrame = sprite.frames[frameIndex];
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(cachedFrame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+    if (actor.npcKind === "boss" && this.actorSprites.draw(ctx, actor, time, moving, row, windup)) return;
+    const motionStartedAt = previous && previous.moving === moving && previous.row === row ? previous.startedAt : time;
+    this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt: motionStartedAt, moving });
+    if (actor.npcKind !== 'boss' && this.actorSprites.drawNpc(ctx, actor, time - motionStartedAt, moving, row)) {
       if (actor.disposition === 'neutral') { ctx.fillStyle = '#eee7ce'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(actor.name.split(',')[0], 0, r + 19); }
       return;
     }
-
     // === VECCHIO CODICE GRAFICA PROCEDURALE DI FALLBACK ===
     if (actor.disposition === 'neutral') {
       ctx.save(); if (moving) ctx.translate(0, Math.sin(time * .008) * 1.2);

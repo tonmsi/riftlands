@@ -1,5 +1,5 @@
-import { ACTOR_CATALOG, parseActorCatalog, type ActorCatalog, type ActorVisual } from '../../shared/actor-catalog';
-import type { Actor } from '../../shared/types';
+import { ACTOR_CATALOG, parseActorCatalog, playerDrawSize, type ActorCatalog, type ActorVisual } from '../../shared/actor-catalog';
+import type { Actor, ClassId } from '../../shared/types';
 import type { BossWindup } from '../../shared/bosses';
 import { playerSpriteDirectionRow } from './sprite-direction';
 import { ActorSpriteRenderer } from './actor-sprite-renderer';
@@ -11,14 +11,22 @@ function loadCatalog(): Promise<ActorCatalog> {
     return parseActorCatalog((await response.json()).catalog);
   }).catch(error => { console.warn('Catalogo attori non disponibile', error); return ACTOR_CATALOG; });
 }
-export class BossSpriteRenderer {
+export class CatalogSpriteRenderer {
   private catalog = ACTOR_CATALOG;
   private readonly sprites = new ActorSpriteRenderer();
+  playerDrawSize(classId: ClassId): number { return playerDrawSize(this.catalog, classId); }
   async prepare(): Promise<void> {
     this.catalog = await loadCatalog();
-    await Promise.all(Object.values(this.catalog.skins).map(v => this.sprites.prepare(v).catch(error => console.warn(error))));
+    await Promise.all(Object.values({ ...ACTOR_CATALOG.skins, ...this.catalog.skins }).map(v => this.sprites.prepare(v).catch(error => console.warn(error))));
   }
-  visual(actor: Actor): ActorVisual | undefined { return actor.bossSkin ? this.catalog.skins[actor.bossSkin] : undefined; }
+  visual(actor: Actor): ActorVisual | undefined {
+    const skin = actor.npcKind === 'boss' ? actor.bossSkin : actor.npcKind ? this.catalog.npcSkins?.[actor.npcKind] ?? ACTOR_CATALOG.npcSkins?.[actor.npcKind] : undefined;
+    return skin ? this.catalog.skins[skin] ?? ACTOR_CATALOG.skins[skin] : undefined;
+  }
+  drawNpc(ctx: CanvasRenderingContext2D, actor: Actor, elapsed: number, moving: boolean, row: number): boolean {
+    const visual = this.visual(actor); if (!visual || actor.hp <= 0) return false;
+    return this.sprites.draw(ctx, visual, { name: moving ? 'moving' : 'idle', elapsed }, row);
+  }
   draw(ctx: CanvasRenderingContext2D, actor: Actor, time: number, moving: boolean, row: number, windup?: BossWindup): boolean {
     const visual = this.visual(actor); if (!visual) return false;
     if (actor.hp <= 0 && !visual.animations.death) return false;

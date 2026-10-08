@@ -8,58 +8,6 @@
   },
   "assets": [
     {
-      "id": "bush",
-      "name": "Cespuglio",
-      "image": "/world-assets/dd324b6dbf853d069808b239cc1028773b783c3d33552af535be56ccb8ae6d0f.svg",
-      "width": 1,
-      "height": 1,
-      "columns": 1,
-      "rows": 1,
-      "cells": [
-        {
-          "blocked": false,
-          "visibility": "hide-fade"
-        }
-      ],
-      "layer": "object",
-      "pivot": {
-        "x": 0.5,
-        "y": 1
-      },
-      "generation": {
-        "enabled": true,
-        "category": "vegetation",
-        "terrains": [
-          "grass",
-          "mud",
-          "snow"
-        ],
-        "temperature": [
-          0,
-          1
-        ],
-        "moisture": [
-          0.6,
-          1
-        ],
-        "density": 0.38,
-        "spacing": 0
-      },
-      "fade": {
-        "opacity": 0.28,
-        "feather": 0.35,
-        "durationMs": 180
-      },
-      "visual": {
-        "kind": "image"
-      },
-      "imageTransform": {
-        "x": -0.15,
-        "y": -0.15,
-        "scale": 1.3
-      }
-    },
-    {
       "id": "brazier",
       "name": "Braciere",
       "image": "/world-assets/ddbdb1a40dac723ae93c5f978cedc1c19c6f7efae2f819ce09f37d0cbb6fe65b.svg",
@@ -99,6 +47,11 @@
       "visual": {
         "kind": "fire",
         "style": "brazier"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
       }
     },
     {
@@ -2250,242 +2203,6 @@
       }
     },
     {
-      "id": "asset-cb5eb4ff-b623-44ac-8033-96269f84dd44",
-      "name": "Capanna del pescatore sul molo-1",
-      "image": "/world-assets/5a30a2773b86e69e6bee8ba7885ebb7b3ca13c3fa6b55108ecaebf0f1097ce7a.png",
-      "width": 8,
-      "height": 5.333,
-      "columns": 8,
-      "rows": 6,
-      "cells": [
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        }
-      ],
-      "layer": "object",
-      "pivot": {
-        "x": 0.5,
-        "y": 1
-      },
-      "generation": {
-        "enabled": false,
-        "category": "vegetation",
-        "terrains": [
-          "grass",
-          "bush",
-          "mud"
-        ],
-        "temperature": [
-          0,
-          1
-        ],
-        "moisture": [
-          0,
-          1
-        ],
-        "density": 0.2,
-        "spacing": 1
-      },
-      "group": "Importati",
-      "visual": {
-        "kind": "image"
-      },
-      "fade": {
-        "opacity": 0.28,
-        "feather": 0.35,
-        "durationMs": 180
-      }
-    },
-    {
       "id": "asset-45b79977-10c6-461f-b63e-a96c8dffcb6e",
       "name": "Casa_da_Pesca_sul_Molo-2-removebg-preview",
       "image": "/world-assets/4943997037e6c317935a48f253e04efdf79fe154a28e1d3618cd69494af392a8.png",
@@ -2880,6 +2597,538 @@
         }
       ],
       "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "bush",
+      "name": "Cespuglio",
+      "image": "/world-assets/bush.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "hide-fade"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": true,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "mud",
+          "snow"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0.6,
+          1
+        ],
+        "density": 0.38,
+        "spacing": 0
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": -0.15,
+        "y": -0.15,
+        "scale": 1.3
+      }
+    },
+    {
+      "id": "deadwarriors-1",
+      "name": "deadwarriors (1)",
+      "image": "/world-assets/deadwarriors-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "deadwarriors-2",
+      "name": "deadwarriors (2)",
+      "image": "/world-assets/deadwarriors-2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "deadwarriors-3",
+      "name": "deadwarriors (3)",
+      "image": "/world-assets/deadwarriors-3.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "deadwarriors-4",
+      "name": "deadwarriors (4)",
+      "image": "/world-assets/deadwarriors-4.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "deadwarriors-5",
+      "name": "deadwarriors (5)",
+      "image": "/world-assets/deadwarriors-5.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "deadwarriors-6",
+      "name": "deadwarriors (6)",
+      "image": "/world-assets/deadwarriors-6.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "deadwarriors-7",
+      "name": "deadwarriors (7)",
+      "image": "/world-assets/deadwarriors-7.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "deadwarriors-8",
+      "name": "deadwarriors (8)",
+      "image": "/world-assets/deadwarriors-8.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "deadwarriors-9",
+      "name": "deadwarriors (9)",
+      "image": "/world-assets/deadwarriors-9.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "deadwarriors-10",
+      "name": "deadwarriors (10)",
+      "image": "/world-assets/deadwarriors-10.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
       "pivot": {
         "x": 0.5,
         "y": 1
@@ -3376,6 +3625,42 @@
       "assetId": "asset-45b79977-10c6-461f-b63e-a96c8dffcb6e",
       "x": 62,
       "y": 113
+    },
+    {
+      "id": "asset-b4a69f7f-960f-4fc4-b009-0f1448daaf3d",
+      "assetId": "deadwarriors-6",
+      "x": -16,
+      "y": 31
+    },
+    {
+      "id": "asset-471b44c3-090b-4d4e-ae38-01b255dd1da9",
+      "assetId": "deadwarriors-8",
+      "x": -9,
+      "y": 25
+    },
+    {
+      "id": "asset-28aa7a00-b283-447a-9576-de12931fe018",
+      "assetId": "deadwarriors-10",
+      "x": -5,
+      "y": 30
+    },
+    {
+      "id": "asset-f9ff0360-d0e6-4928-982a-7124d4474ffc",
+      "assetId": "deadwarriors-9",
+      "x": -21,
+      "y": 26
+    },
+    {
+      "id": "asset-3268cff8-5fa0-4b0a-bc7c-290001b87e4e",
+      "assetId": "deadwarriors-1",
+      "x": -2,
+      "y": 17
+    },
+    {
+      "id": "asset-8aacc3ba-6e47-40d7-a8be-78dc59b69bcd",
+      "assetId": "deadwarriors-2",
+      "x": -4,
+      "y": 20
     }
   ],
   "tiles": [],
@@ -3422,8 +3707,7 @@
           "sentinel": 0
         }
       },
-      "temperature": 0.01,
-      "questId": "find-platos"
+      "temperature": 0.01
     },
     {
       "id": "zone-d13cc017-3f38-4249-bc07-6d81707c2d2e",

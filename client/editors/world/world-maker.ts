@@ -1,5 +1,7 @@
 import './world-maker.css';
-import { installBossEditor } from './boss-editor';
+import { installActorEditor } from './boss-editor';
+import { installPlayerEditor } from './player-editor';
+import { importWorldAsset } from './world-asset-import';
 import { field, tools, terrains, worldMakerLayout } from './world-maker-layout';
 import { drawWorldEditorMap, drawAssetGrid as renderAssetGrid, assetView as assetGridView } from './world-editor-canvas';
 import { WORLD_DOCUMENT } from '../../../shared/world-content';
@@ -20,7 +22,8 @@ import { AssetGridCamera } from '../../render/world-asset-view';
 import { loadWorldCheckpoint, saveWorldCheckpoint } from './world-editor-storage';
 const root = document.getElementById('world-maker')!;
 root.innerHTML = worldMakerLayout;
-installBossEditor();
+installActorEditor();
+installPlayerEditor();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const input = (id: string) => el<HTMLInputElement>(id);
 const val = (id: string) => (el(id) as HTMLInputElement | HTMLSelectElement).value;
@@ -539,7 +542,10 @@ input('asset-height').addEventListener('input', () => { const a = active(); if (
 on('fill-cells', () => change(() => { const a = active()!; a.cells = a.cells.map(() => ({ blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as AssetCell['visibility'] })); }));
 on('asset-fade-update', () => change(() => { active()!.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') }; }));
 on('gen-update', () => change(() => { const a = active()!; a.generation = { enabled: input('gen-enabled').checked, category: val('gen-category').trim(), temperature: [num('gen-temp-min'), num('gen-temp-max')], moisture: [num('gen-moist-min'), num('gen-moist-max')], density: num('gen-density') / 100, spacing: num('gen-spacing'), terrains: [...el('gen-terrains').querySelectorAll<HTMLInputElement>('input:checked')].map(c => c.value as TileKind) }; }));
-on('asset-delete', () => change(() => { const a = active()!; draft.placements = draft.placements.filter(p => p.assetId !== a.id); draft.assets = draft.assets.filter(other => other.id !== a.id); activeAsset = ''; }));
+on('asset-delete', () => change(() => { const a = active()!;
+    const users = catalog.filter(d => d.assetPlacements?.some(p => p.assetId === a.id));
+    if (users.length) throw new Error(`Asset usato in ${users.map(d => d.name).join(', ')}. Usa “Sostituisci immagine” oppure rimuovi prima le istanze dai dungeon.`);
+    draft.placements = draft.placements.filter(p => p.assetId !== a.id); draft.assets = draft.assets.filter(other => other.id !== a.id); activeAsset = ''; }));
 on('zone-update', () => change(() => { const z = draft.zones.find(z => z.id === selected?.id)!; z.name = val('zone-name').trim(); z.priority = num('zone-priority'); z.shape = val('zone-shape') === 'circle' ? { kind: 'circle', x: num('zone-x'), y: num('zone-y'), radius: num('zone-width') } : { kind: 'rect', x: num('zone-x'), y: num('zone-y'), width: num('zone-width'), height: num('zone-height') }; for (const [key, id] of [['temperature', 'zone-temperature'], ['moisture', 'zone-moisture']] as const) {
     if (val(id) === '')
         delete z[key];
@@ -606,26 +612,33 @@ document.addEventListener('keyup', e => keys.delete(e.code));
 window.addEventListener('blur', () => { keys.clear(); finishGesture(undefined, true); });
 async function api(path: string, payload: unknown): Promise<any> { const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-World-Token': token }, body: JSON.stringify(payload) }); const result = await response.json(); if (!response.ok)
     throw new Error(result.error ?? 'Operazione fallita.'); return result; }
-async function upload(file: Blob, mime: string): Promise<string> { if (!token)
+async function upload(file: File, mime: string): Promise<string> { if (!token)
     throw new Error('Importazione immagini disponibile con npm run world:studio.'); const bytes = new Uint8Array(await file.arrayBuffer()); let binary = ''; for (let i = 0; i < bytes.length; i += 8192)
-    binary += String.fromCharCode(...bytes.subarray(i, i + 8192)); return (await api('/__world/images', { mime, base64: btoa(binary) })).image; }
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192)); return (await api('/__world/images', { mime, base64: btoa(binary), filename: file.name })).image; }
 async function imageSize(src: string): Promise<{
     width: number;
     height: number;
 }> { return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight }); image.onerror = () => reject(new Error('Immagine non leggibile.')); image.src = src; }); }
 on('import-assets', () => input('asset-files').click());
-input('asset-files').addEventListener('change', () => { void (async () => { const files = [...input('asset-files').files ?? []]; const imported: WorldAsset[] = []; for (const file of files) {
+input('asset-files').addEventListener('change', () => { void (async () => { const files = [...input('asset-files').files ?? []]; const imported: { name: string; image: string; width: number; height: number }[] = []; for (const file of files) {
     status(`Importazione ${file.name}…`);
     if (file.size > 5000000)
         throw new Error('Massimo 5 MB per immagine.');
     const mime = file.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/png';
     const image = await upload(file, mime), size = await imageSize(image);
-    const a = newWorldAsset(uid('asset'), file.name.replace(/\.(png|svg)$/i, ''), image);
-    a.group = 'Importati'; a.visual = { kind: 'image' };
-    const ratio = size.height / size.width;
-    resizeWorldAsset(a, ratio > 32 ? Math.max(.25, 32 / ratio) : 1, Math.min(32, Math.max(.25, ratio)));
-    imported.push(a);
-} await settleGesture(); change(() => { draft.assets.push(...imported); activeAsset = imported.at(-1)?.id ?? activeAsset; if (imported.length) assetCatalog.reveal(imported.at(-1)!); selected = null; selectTool('asset'); }); status(`Importati ${imported.length} asset. Imposta dimensioni e proprietà delle celle.`); })().catch(report).finally(() => { input('asset-files').value = ''; }); });
+    imported.push({ name: file.name.replace(/\.(png|svg)$/i, ''), image, ...size });
+} await settleGesture(); change(() => { for (const data of imported) { const a = importWorldAsset(draft, installedDocument, catalog, data); activeAsset = a.id; assetCatalog.reveal(a); } selected = null; selectTool('asset'); }); status(`Importati ${imported.length} asset. Riferimenti e proprietà esistenti conservati.`); })().catch(report).finally(() => { input('asset-files').value = ''; }); });
+const replaceFile = document.createElement('input'); replaceFile.id = 'asset-replace-file'; replaceFile.type = 'file'; replaceFile.accept = '.png,.svg,image/png,image/svg+xml'; replaceFile.hidden = true;
+const replaceButton = document.createElement('button'); replaceButton.id = 'asset-replace-image'; replaceButton.className = 'wide'; replaceButton.textContent = 'Sostituisci immagine';
+el('asset-update').after(replaceButton); root.append(replaceFile);
+replaceButton.onclick = () => { replaceFile.value = ''; replaceFile.click(); };
+replaceFile.addEventListener('change', () => { void (async () => {
+    const file = replaceFile.files?.[0], id = active()?.id; if (!file || !id) return;
+    const mime = file.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/png';
+    const image = await upload(file, mime); await imageSize(image); await settleGesture();
+    change(() => { const a = draft.assets.find(a => a.id === id); if (!a) throw new Error('Asset non più presente.'); a.image = image; });
+    status('Immagine sostituita. ID, celle e riferimenti ai dungeon conservati.');
+})().catch(report); });
 on('apply-world', async () => { if (gesture)
     finishGesture(); while (gesture?.ending) await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); const document = parseWorldDocument(draft); const issues = validateWorld(document, catalog); if (issues.length) {
     el('validate').click();
@@ -663,7 +676,7 @@ input('world-file').addEventListener('change', () => { void (async () => { const
         const match = /^data:(image\/(?:png|svg\+xml));base64,(.+)$/.exec(data);
         if (!match)
             throw new Error('Immagine esportata non valida.');
-        a.image = (await api('/__world/images', { mime: match[1], base64: match[2] })).image;
+        a.image = (await api('/__world/images', { mime: match[1], base64: match[2], filename: a.image.split('/').at(-1) ?? a.name })).image;
     }
 } change(() => { draft = document; selected = null; }); status('Progetto importato nella bozza locale.'); })().catch(report).finally(() => { input('world-file').value = ''; }); });
 async function load(reload = false): Promise<void> {

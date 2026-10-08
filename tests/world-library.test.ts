@@ -10,13 +10,16 @@ import { engineBundle } from './fixtures/dungeon-engine';
 import { worldDungeons } from '../shared/world-validation';
 import { compactWorldFile } from '../scripts/compact-world';
 
-test('image import is immutable, content addressed, and accepts local gradients while rejecting active or external SVG content', async () => {
+test('image import preserves readable names, prevents overwrites, and rejects active or external SVG content', async () => {
   const root = await mkdtemp(join(tmpdir(), 'riftlands-world-images-'));
   try {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><defs><linearGradient id="g"><stop stop-color="#fff"/></linearGradient></defs><rect width="48" height="48" fill="url(\'#g\')"/></svg>';
     const encoded = Buffer.from(svg).toString('base64');
-    const path = await importWorldImage(root, 'image/svg+xml', encoded);
-    assert.equal(await importWorldImage(root, 'image/svg+xml', encoded), path);
+    const path = await importWorldImage(root, 'image/svg+xml', encoded, 'world-assets', 'Cespuglio estivo.svg');
+    assert.equal(path, '/world-assets/Cespuglio-estivo.svg');
+    assert.equal(await importWorldImage(root, 'image/svg+xml', encoded, 'world-assets', 'Cespuglio estivo.svg'), path);
+    await assert.rejects(importWorldImage(root, 'image/svg+xml', Buffer.from('<svg/>').toString('base64'), 'world-assets', 'Cespuglio estivo.svg'), /Esiste già un asset diverso/);
+    await assert.rejects(importWorldImage(root, 'image/svg+xml', encoded, 'world-assets', '../escape.svg'), /Nome file/);
     assert.equal(await readFile(join(root, 'public', path), 'utf8'), svg);
     for (const bad of ['<svg onload="alert(1)"/>', '<svg><script/></svg>', '<svg><image href="https://example.com/a.png"/></svg>', '<svg><foreignObject/></svg>', '<!DOCTYPE svg><svg/>', '<svg><style>x{fill:url(https://example.com/a)}</style></svg>', '<svg><animate attributeName="href" values="javascript:alert(1)"/></svg>']) {
       await assert.rejects(importWorldImage(root, 'image/svg+xml', Buffer.from(bad).toString('base64')), /SVG/);
