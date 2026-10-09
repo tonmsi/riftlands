@@ -8,6 +8,7 @@ import type { InteractionSystem } from './interactions';
 import type { FishingSystem } from './fishing/fishing-system';
 import { actorVisibleTo } from './actor-visibility';
 import { SnapshotPrivateState } from './snapshot-private-state';
+import { SOUL_QUEST_ID } from '../shared/soul-escort';
 
 interface SnapshotSource {
   players: ReadonlyMap<string, Actor>; npcs: ReadonlyMap<string, Actor>;
@@ -70,6 +71,9 @@ export class SnapshotBuilder {
     if (!self || !connection) return undefined;
     const actors = this.near(self).map(actor => {
       const projected = this.actor(actor);
+      if (actor.npcKind === 'fallen-soldier' && s.accounts.get(id)?.narrative?.quests[SOUL_QUEST_ID]?.objectives['eren-released']) {
+        return Object.freeze({ ...projected, hp: 0, deadUntil: Number.MAX_SAFE_INTEGER, dialogueId: undefined, questMarker: undefined });
+      }
       if (actor.dialogueId) return Object.freeze({ ...projected, questMarker: s.interactions.marker(id, actor.dialogueId, s.now) });
       return projected;
     });

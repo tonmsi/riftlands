@@ -459,6 +459,42 @@
           "frameMs": 180
         }
       }
+    },
+    "npc-fallen-soldier": {
+      "drawSize": 66,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.6
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 0,
+        "y": 5,
+        "width": 24,
+        "height": 8,
+        "opacity": 0.25
+      },
+      "animations": {
+        "moving": {
+          "asset": "/world-assets/deadwarriors-6.png",
+          "columns": 1,
+          "rows": 1,
+          "directional": false,
+          "loop": false,
+          "frameMs": 1000
+        },
+        "idle": {
+          "asset": "/world-assets/deadwarriors-6.png",
+          "columns": 1,
+          "rows": 1,
+          "directional": false,
+          "loop": false,
+          "frameMs": 1000
+        }
+      }
     }
   },
   "npcSkins": {
@@ -468,6 +504,7 @@
     "old-fisher": "npc-old-fisher",
     "north-scout": "npc-north-scout",
     "wounded-scout": "npc-wounded-scout",
-    "platos": "npc-platos"
+    "platos": "npc-platos",
+    "fallen-soldier": "npc-fallen-soldier"
   }
 }

@@ -3775,6 +3775,29 @@
           "sentinel": 0
         }
       }
+    },
+    {
+      "id": "zone-8dc61550-2433-42b5-a334-5a0b1d525a0e",
+      "name": "Nuova zona",
+      "priority": 20,
+      "shape": {
+        "kind": "rect",
+        "x": 2,
+        "y": 70,
+        "width": 5,
+        "height": 4
+      },
+      "generateAssets": false,
+      "questId": "souls-home",
+      "npcs": {
+        "density": 0,
+        "maxPerChunk": 3,
+        "weights": {
+          "slime": 100,
+          "wisp": 0,
+          "sentinel": 0
+        }
+      }
     }
   ],
   "npcs": [
@@ -3968,17 +3991,17 @@
       "level": 1
     },
     {
-      "x": -2,
-      "y": 89,
-      "id": "npc-2f210ef6-3d03-49f0-9e66-fc7dbfbe8ba4",
-      "npcKind": "slime",
-      "level": 1
-    },
-    {
       "x": -18,
       "y": 92,
       "id": "npc-c023dd81-3ad0-4e36-8f1b-74163afec1c7",
       "npcKind": "slime",
+      "level": 1
+    },
+    {
+      "x": -15,
+      "y": 26,
+      "id": "npc-dcbe2510-52d5-402f-9b66-02a61e74c43a",
+      "npcKind": "fallen-soldier",
       "level": 1
     }
   ],

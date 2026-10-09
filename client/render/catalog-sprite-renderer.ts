@@ -24,7 +24,7 @@ export class CatalogSpriteRenderer {
     return skin ? this.catalog.skins[skin] ?? ACTOR_CATALOG.skins[skin] : undefined;
   }
   drawNpc(ctx: CanvasRenderingContext2D, actor: Actor, elapsed: number, moving: boolean, row: number): boolean {
-    const visual = this.visual(actor); if (!visual || actor.hp <= 0) return false;
+    const visual = this.visual(actor); if (!visual || actor.hp <= 0 && actor.npcKind !== 'fallen-soldier') return false;
     return this.sprites.draw(ctx, visual, { name: moving ? 'moving' : 'idle', elapsed }, row);
   }
   draw(ctx: CanvasRenderingContext2D, actor: Actor, time: number, moving: boolean, row: number, windup?: BossWindup): boolean {

@@ -5,6 +5,7 @@ import type { World } from '../shared/world';
 import { TILE_SIZE } from '../shared/config';
 import { insideShape } from '../shared/world-authoring';
 import { activeQuestAreas } from '../shared/quest-areas';
+import { SOUL_QUEST_ID } from '../shared/soul-escort';
 import type { Account } from './store';
 import { canCollectItem, collectItem, ITEM_DEFINITIONS, newInventory, type ItemStack } from '../shared/items';
 import { VENDOR_DEFINITIONS, type VendorOffer } from '../shared/vendors';
@@ -44,6 +45,7 @@ export class InteractionSystem {
     const player = this.host.players.get(id), target = this.host.npcs.get(targetId);
     if (!player || !this.host.connected(id) || player.hp <= 0 || !target || target.hp <= 0 || !target.dialogueId
       || distance(player, target) > INTERACTION_RANGE || !hasLineOfSight(player, target, this.host.world)) throw new Error('Avvicinati al personaggio per parlare.');
+    if (target.npcKind === 'fallen-soldier' && this.host.accounts.get(id)?.narrative?.quests[SOUL_QUEST_ID]?.objectives['eren-released']) throw new Error('Eren riposa. La sua anima ha lasciato questo corpo.');
     return target;
   }
   private session(id: string, sessionId: string, now: number): Session {
@@ -97,7 +99,9 @@ export class InteractionSystem {
       if (choice.action?.kind === 'accept-quest') {
         const quest = QUEST_DEFINITIONS[choice.action.questId];
         if (!quest) throw new Error('Missione non disponibile.');
+        if (quest.id === SOUL_QUEST_ID && !this.host.world.authoring.document.zones.some(zone => zone.questId === quest.id)) throw new Error('Le anime non riescono ancora a ritrovare il loro luogo di riposo. Torna più tardi.');
         acceptQuest(account.narrative!, quest, now);
+        if (quest.id === SOUL_QUEST_ID) account.narrative!.quests[quest.id].objectives['eren-released'] = 1;
         if (quest.objective.kind === 'reach-area') {
           grantWorldMap(account.narrative!);
         }
@@ -164,7 +168,8 @@ export class InteractionSystem {
     const completions = rewardProgress ? questCompletions(rewardProgress) : 0;
     const rewards = rewardQuest?.reward?.items?.filter(item => (!item.firstOnly || completions === 0) && (!item.giftId || !account.narrative!.gifts?.includes(item.giftId))).map(({ itemId, quantity }) => ({ itemId, quantity }));
     const mapOffer = hasWorldMap(account.narrative!) ? 'Ti segnerò il posto sulla tua mappa.' : 'Ti regalerò una mappa e ti segnerò il posto. Potrai aprirla dal cerchio in alto a destra.';
-    return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: node.text.replace('{remaining}', String(remaining)).replace('{mapOffer}', mapOffer),
+    const soulMapOffer = hasWorldMap(account.narrative!) ? 'Il nostro luogo di riposo sarà segnato sulla tua mappa.' : 'Prendi la mia mappa: ti segnerò il nostro luogo di riposo.';
+    return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: node.text.replace('{remaining}', String(remaining)).replace('{mapOffer}', mapOffer).replace('{soulMapOffer}', soulMapOffer),
       choices: node.choices.filter(choice => !choice.condition || conditionMatches(account.narrative!, choice.condition, now)).map(({ id, label }) => ({ id, label })),
       ...(quest && quest.objective.kind !== 'reach-area' && remaining ? { request: { itemId: quest.objective.itemId, remaining } } : {}),
       ...(rewardQuest ? { rewards, rewardGold: questReward(rewardQuest, completions).gold, rewardXp: questReward(rewardQuest, completions).xp } : {}) };
@@ -248,6 +253,10 @@ export class InteractionSystem {
         if (progress.status !== 'active') continue;
         const previous = questCompletions(progress);
         advanceQuest(account.narrative!, quest, 1, now);
+        if (quest.id === SOUL_QUEST_ID) {
+          player.soulFarewellAt = now; player.soulFarewellX = player.x; player.soulFarewellY = player.y;
+          this.sessions.delete(player.id);
+        }
         const reward = questReward(quest, previous);
         account.gold = (account.gold ?? 0) + reward.gold;
         this.host.rewardXp(player.id, reward.xp);

@@ -20,10 +20,28 @@ export const QUEST_DEFINITIONS: Readonly<Record<string, QuestDefinition>> = {
   'north-road': { id: 'north-road', name: 'Pietre che camminano',
     reward: { xp: 100, minXp: 100, firstGold: 0 },
     objective: { kind: 'reach-area', id: 'road-reached', quantity: 1, description: 'Raggiungi la strada a nord. Non occorre combattere i guardiani.' } },
+  'souls-home': { id: 'souls-home', name: 'Le anime ritrovano casa', reward: { xp: 200, minXp: 200, firstGold: 0 },
+    objective: { kind: 'reach-area', id: 'souls-returned', quantity: 1, description: 'Accompagna le cinque anime al luogo di riposo segnato sulla mappa. La loro luce ti dona il 25% di vita massima in più durante il viaggio.' } },
   'stinking-bait': { id: 'stinking-bait', name: 'Esche puzzolenti', repeatable: true, repeatAfterMs: 5 * 60 * 1000, reward: { xp: 150, minXp: 5, firstGold: 20, items: [{ itemId: 'backpack-2', quantity: 1, firstOnly: true, toInventory: true }, { itemId: 'fishing-rod', quantity: 1, firstOnly: true, toInventory: true, giftId: 'nereo-first-rod' }] }, objective: { id: 'innards-delivered', itemId: 'slime-innards', quantity: 3 } },
 };
 const questCondition = (status: 'available' | 'active' | 'completed'): NarrativeCondition => ({ kind: 'quest-status', questId: 'stinking-bait', status });
 export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> = {
+  'fallen-soldier': {
+    id: 'fallen-soldier', questId: 'souls-home',
+    entries: [
+      { condition: { kind: 'quest-status', questId: 'souls-home', status: 'completed' }, node: 'after' },
+      { condition: { kind: 'quest-status', questId: 'souls-home', status: 'active' }, node: 'active' },
+      { condition: { kind: 'quest-status', questId: 'souls-home', status: 'available' }, node: 'intro' },
+    ],
+    nodes: {
+      intro: { text: 'Non mi rialzerò. Uccidimi… lascia che mi unisca ai miei quattro fratelli. Poi accompagnaci a casa. {soulMapOffer}', choices: [
+        { id: 'accept', label: 'Ti darò pace. Vi accompagnerò a casa.', action: { kind: 'accept-quest', questId: 'souls-home' } },
+        { id: 'leave', label: 'Tornerò quando sarò pronto.' },
+      ] },
+      active: { text: 'Eren riposa. La sua anima viaggia con i fratelli.', choices: [{ id: 'leave', label: 'Li accompagnerò.' }] },
+      after: { text: 'Eren e i suoi fratelli sono tornati a casa.', choices: [{ id: 'leave', label: 'Riposate in pace.' }] },
+    },
+  },
   'wounded-scout': {
     id: 'wounded-scout', questId: 'find-platos', questMarkerCondition: { kind: 'flag', id: 'met-platos', value: false },
     entries: [

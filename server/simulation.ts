@@ -15,6 +15,7 @@ import { FishingSystem } from './fishing/fishing-system';
 import { validInteractionCommand, type InteractionCommand } from '../shared/interactions';
 import { newInventory } from '../shared/items';
 import { newNarrativeProgress } from '../shared/narrative';
+import { syncSoulEscort, SOUL_FAREWELL_MS } from '../shared/soul-escort';
 import { BossEncounter } from './boss-encounter';
 import type { Account } from './store';
 import type { GameplayPersistence } from './gameplay-persistence';
@@ -92,7 +93,7 @@ export class WorldSimulation {
     this.store = store;
     this.interactions = new InteractionSystem({ players: this.players, npcs: this.npcs, accounts: this.accounts, world: this.world,
       connected: id => !!this.connections.get(id)?.connected, combatAt: id => this.connections.get(id)?.combatAt ?? 0,
-      changed: id => this.persistPlayer(id), nearbyPlayers: (point, radius) => this.near(point, radius).filter(actor => actor.kind === 'player'),
+      changed: id => { const actor = this.players.get(id); if (actor) syncSoulEscort(actor, this.accounts.get(id)?.narrative, this.mode === 'world'); this.snapshots.invalidate(); this.persistPlayer(id); }, nearbyPlayers: (point, radius) => this.near(point, radius).filter(actor => actor.kind === 'player'),
       rewardXp: (id, amount) => this.awardXp(id, amount),
       heal: (player, amount) => this.heal(player, amount),
     }, environment?.lootRandom);
@@ -157,6 +158,7 @@ export class WorldSimulation {
       connection.inputs = [];
       connection.ack = 0;
       connection.highestSeq = 0;
+      syncSoulEscort(current, account.narrative, this.mode === 'world');
       return current;
     }
     if (this.players.size + this.awayPlayers.size - Number(this.awayPlayers.has(account.id)) >= 128) throw new Error('Il mondo ha raggiunto il limite di 128 giocatori.');
@@ -184,6 +186,7 @@ export class WorldSimulation {
     if (collidesWorld(player.x, player.y, player.radius, this.world)) Object.assign(player, spawn);
     if (this.mode === 'world' && this.world.pvpAt(player.x, player.y)) player.spawnProtectedUntil = 0;
     if (player.hp <= 0 && player.deadUntil <= 0) player.deadUntil = this.now + 5000;
+    syncSoulEscort(player, account.narrative, this.mode === 'world');
     this.players.set(player.id, player);
     this.connections.set(player.id, { account, connected: true, removeAt: 0, inputs: [], ack: 0, highestSeq: 0, combatAt: this.now });
     this.updateChunks();
@@ -256,6 +259,9 @@ export class WorldSimulation {
         continue;
       }
       actor.effects = actor.effects.filter(effect => effect.until > this.now);
+      if (actor.soulFarewellAt !== undefined && this.now >= actor.soulFarewellAt + SOUL_FAREWELL_MS) {
+        delete actor.soulFarewellAt; delete actor.soulFarewellX; delete actor.soulFarewellY;
+      }
       const input = connection.inputs.shift();
       actor.spriteMoving = actor.hp > 0 && !!input && Math.hypot(input.dx, input.dy) > 0;
       if (input) connection.ack = input.seq;
@@ -992,6 +998,7 @@ export class WorldSimulation {
   private persistPlayer(id: string): void {
     const actor = this.players.get(id), account = this.accounts.get(id);
     if (!actor || !account) return;
+    syncSoulEscort(actor, account.narrative, this.mode === 'world');
     account.body = copyActor(actor);
     const character = characterFor(account, actor.classId);
     character.xp = actor.xp;

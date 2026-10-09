@@ -6,6 +6,7 @@ import type { Actor, ClassId, Vec2 } from '../../shared/types';
 import { type BossWindup } from '../../shared/bosses';
 import { playerSpriteDirectionRow } from './sprite-direction';
 import { DEFAULT_PLAYER_DRAW_SIZE } from '../../shared/actor-catalog';
+import { drawSoulLights } from './soul-lights';
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
   paladin: '/actor-assets/paladino256.png',
   mage: '/actor-assets/mage256.png',
@@ -166,6 +167,7 @@ export class ActorRenderer {
       ctx.fill();
       ctx.restore();
     }
+    if (actor.kind === 'player') drawSoulLights(ctx, actor, time);
     if (actor.disposition !== 'neutral' && (actor.kind === 'player' || selected || actor.hp < actor.maxHp || actor.npcKind === 'boss')) {
       const barWidth = actor.kind === 'player' ? 42 : 32;
       const barY = -r - 11;

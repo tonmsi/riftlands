@@ -63,7 +63,7 @@ test('remote talk cannot mark Platos as met, and story flags remain personal', (
   assert.equal(validNarrativeProgress({ version: 1, quests: {}, flags: ['invalid flag'] }), false);
 });
 
-test('every neutral NPC except vendors moves and pauses inside its authored radius', () => {
+test('neutral NPCs wander inside their authored radius, while stationary NPCs stay at home', () => {
   const doc = newWorldDocument(); const neutral = Object.entries(NPC_DEFINITIONS).filter(([, n]) => n.disposition === 'neutral');
   const world = new World(doc.seed, 16, 'world', doc, []); world.getTile = () => 'grass';
   const original = world.getChunk.bind(world);
@@ -75,12 +75,12 @@ test('every neutral NPC except vendors moves and pauses inside its authored radi
     sim.step(.1);
     for (const [id, spec] of neutral) {
       const npc = sim.npcs.get(id)!, home = sim.npcMeta.get(id)!.home;
-      if (spec.dialogueId && VENDOR_DEFINITIONS[spec.dialogueId]) { assert.equal(npc.x, home.x); assert.equal(npc.y, home.y); continue; }
+      if (spec.speed === 0) { assert.equal(npc.x, home.x); assert.equal(npc.y, home.y); continue; }
       assert.ok(spec.speed > 0 && spec.behavior); assert.ok(Math.hypot(npc.x - home.x, npc.y - home.y) <= spec.behavior!.radius + .01);
       if (npc.spriteMoving) moved.add(id); else paused.add(id);
     }
   }
-  for (const [id, spec] of neutral) if (!spec.dialogueId || !VENDOR_DEFINITIONS[spec.dialogueId]) { assert.ok(moved.has(id), id); assert.ok(paused.has(id), id); }
+  for (const [id, spec] of neutral) if (spec.speed > 0) { assert.ok(moved.has(id), id); assert.ok(paused.has(id), id); }
 });
 
 test('NPC interaction opens dialogue only within range and line of sight', () => {

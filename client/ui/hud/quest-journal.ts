@@ -2,6 +2,8 @@ import { QUEST_DEFINITIONS, newNarrativeProgress, questCompletions, type Narrati
 import { ITEM_DEFINITIONS, inventoryCount, newInventory, type Inventory } from '../../../shared/items';
 import type { PopupManager } from '../popups';
 import { drawTransitionOverlay } from '../transition-overlay';
+import { SOUL_QUEST_ID } from '../../../shared/soul-escort';
+import { SoulFarewellUI } from './soul-farewell';
 
 const text = (tag: string, value: string) => { const node = document.createElement(tag); node.textContent = value; return node; };
 
@@ -29,7 +31,9 @@ export class QuestJournalUI {
   private completionTimer = 0;
   private acceptance = document.createElement('canvas');
   private acceptanceFrame = 0;
+  private readonly soulFarewell: SoulFarewellUI;
   constructor(hud: HTMLElement, private player: HTMLElement, popups: PopupManager) {
+    this.soulFarewell = new SoulFarewellUI(hud);
     this.panel.className = 'quest-journal glass'; this.panel.id = 'quest-journal'; this.panel.hidden = true;
     this.panel.setAttribute('role', 'region'); this.panel.setAttribute('aria-label', 'Diario delle missioni');
     this.panel.innerHTML = '<header><div><small>IL TUO VIAGGIO</small><strong>Diario delle missioni</strong></div><button type="button" aria-label="Chiudi diario">×</button></header><div class="quest-journal-scroll"><h3>Missioni attive <span data-active-count>0</span></h3><div data-active-quests></div><h3>Missioni completate <span data-completed-count>0</span></h3><div data-completed-quests></div></div>';
@@ -54,6 +58,7 @@ export class QuestJournalUI {
     this.resetFeedback(); this.update();
   }
   resetFeedback(): void {
+    this.soulFarewell.reset();
     cancelAnimationFrame(this.acceptanceFrame); this.acceptanceFrame = 0; this.acceptance.hidden = true;
     clearTimeout(this.completionTimer); this.completionTimer = 0; this.completion.hidden = true;
     this.player.classList.remove('quest-completed', 'quest-accepted'); this.hasBaseline = false; this.completionCounts = {};
@@ -86,6 +91,7 @@ export class QuestJournalUI {
       const completed = Object.keys(counts).filter(id => this.hasBaseline && counts[id] > (this.completionCounts[id] ?? 0));
       this.completionCounts = counts; this.hasBaseline = true;
       if (completed.length) {
+        if (completed.includes(SOUL_QUEST_ID)) this.soulFarewell.start();
         const open = document.createElement('button'); open.type = 'button'; open.textContent = 'Apri il diario →';
         open.addEventListener('click', () => this.setOpen(true));
         this.completion.replaceChildren(text('strong', completed.length > 1 ? '✓ Missioni completate!' : '✓ Missione completata!'),

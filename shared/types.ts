@@ -10,6 +10,7 @@ export type AbilitySlot = 'basic' | 'q' | 'e' | 'r';
 export type Vec2 = { x: number; y: number };
 export type RoomMode = 'world' | 'arena' | 'battleground';
 export interface Actor { pvpUntil?: number; }
+export interface Actor { soulEscort?: boolean; soulFarewellAt?: number; soulFarewellX?: number; soulFarewellY?: number; }
 export interface RoomState { id: string; epoch: number; mode: RoomMode; seed: number; spectating?: boolean; }
 export interface ArenaGateState { phase: 'waiting' | 'countdown' | 'combat' | 'reenter' | 'full'; players: number; startsAt?: number; }
 export type TileKind = 'grass' | 'path' | 'water' | 'rock' | 'bush' | 'mud' | 'snow' | 'ice';
