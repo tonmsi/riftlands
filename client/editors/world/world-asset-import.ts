@@ -18,8 +18,8 @@ export function importWorldAsset(document: WorldDocument, installed: WorldDocume
     const ratio = input.height / input.width;
     resizeWorldAsset(asset, ratio > 32 ? Math.max(.25, 32 / ratio) : 1, Math.min(32, Math.max(.25, ratio)));
   }
-  if (existing && existing.id !== id) for (const placement of document.placements)
-    if (placement.assetId === existing.id) placement.assetId = id;
+  if (existing && existing.id !== id) for (const surface of [document, ...(document.interiors ?? []).map(m => m.document)])
+    for (const placement of surface.placements) if (placement.assetId === existing.id) placement.assetId = id;
   document.assets = document.assets.filter(a => a.id !== id && a.id !== existing?.id);
   document.assets.push(asset);
   return asset;

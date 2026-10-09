@@ -24,6 +24,7 @@ function coverTileBleed(ctx: CanvasRenderingContext2D, vx: number, vy: number, c
 
 /** Terrain painting and scrolling cache. No camera, gameplay or actor animation state. */
 export class TerrainRenderer {
+  private activeWorld?: World;
   private readonly environmentArt = new EnvironmentArt();
   private terrainCache?: {
     canvas: HTMLCanvasElement;
@@ -41,20 +42,21 @@ export class TerrainRenderer {
   }
   invalidate(): void { this.terrainCache = undefined; }
   private outsideLocalMap(tx: number, ty: number): boolean {
+    const interior = this.activeWorld?.authoring.document.interiorBounds;
+    if (interior && (tx < 0 || ty < 0 || tx >= interior.width || ty >= interior.height)) return true;
     return !!this.localDungeons && !this.localDungeons.some(d => {
       const b = d.layout.bounds;
       return tx >= b.minTx - 2 && tx <= b.maxTx + 2 && ty >= b.minTy - 2 && ty <= b.maxTy + 2;
     });
   }
   private dungeonAt(tx: number, ty: number): DungeonDefinition | undefined {
-    return this.localDungeons
-      ? this.localDungeons.find(d => {
+    return (this.localDungeons ?? this.activeWorld?.dungeons)?.find(d => {
           const b = d.layout.bounds;
           return tx >= b.minTx && tx <= b.maxTx && ty >= b.minTy && ty <= b.maxTy;
-        })
-      : dungeonAtTile(tx, ty);
+        });
   }
   drawCachedTerrain(world: World, view: TerrainViewport, time: number): void {
+    this.activeWorld = world;
     if (this.lockRevision !== world.lockRevision) {
       this.invalidate();
       this.lockRevision = world.lockRevision;

@@ -181,7 +181,10 @@ export class HudUI {
   get touch(): boolean { return this.display.touch; }
   enterFullscreen(): void { if (this.display.touch) void this.display.enterFullscreen(); }
   resetJournal(): void { this.journal.reset(); this.updateMapOwnership(); }
-  updateJournal(progress: NarrativeProgress): void { this.journal.update(progress); this.updateMapOwnership(progress); }
+  updateJournal(progress: NarrativeProgress): void {
+    // Lobby previews load saved history; they are not gameplay completion events.
+    this.journal.resetFeedback(); this.journal.update(progress); this.updateMapOwnership(progress);
+  }
   private updateMapOwnership(progress?: NarrativeProgress): void {
     this.mapOwned = hasWorldMap(progress); this.root.classList.toggle('map-locked', !this.mapOwned);
     this.minimap.setAttribute('aria-label', this.mapOwned ? 'Mappa estesa' : 'Mappa non ancora ottenuta');
@@ -343,7 +346,7 @@ export class HudUI {
   }
   setSnapshot(snapshot: Snapshot, ping: number): void {
     this.interactions.update(snapshot);
-    this.journal.update(snapshot.narrative, snapshot.inventory);
+    this.journal.update(snapshot.narrative, snapshot.inventory, snapshot.self.id + ':' + snapshot.self.classId);
     if (snapshot.narrative) this.updateMapOwnership(snapshot.narrative);
     this.latest = snapshot;
     const player = snapshot.self;

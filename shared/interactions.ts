@@ -8,6 +8,7 @@ export interface InventoryAction { id: string; kind: 'purchase' | 'consume' | 'd
 export interface GroundItem { id: string; x: number; y: number; stack: ItemStack; expiresAt: number; ownerId?: string; availableAt?: number; requireOwnerExit?: boolean; droppedBy?: string; ownerPickupAt?: number; }
 export interface DialogueView { sessionId: string; targetId: string; speaker: string; text: string; choices: { id: string; label: string }[]; request?: { itemId: string; remaining: number }; shop?: (VendorOffer & { disabledReason?: string })[]; rewards?: ItemStack[]; rewardGold?: number; rewardXp?: number; }
 export type InteractionCommand =
+  | { kind: 'warp'; warpId: string }
   | { kind: 'fishing'; command: FishingCommand }
   | { kind: 'talk'; targetId: string }
   | { kind: 'choose'; sessionId: string; choiceId: string }
@@ -22,6 +23,7 @@ export function validInteractionCommand(value: unknown): value is InteractionCom
   const text = (value: unknown) => typeof value === 'string' && value.length > 0 && value.length <= 160;
   const slot = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) < 64;
   switch (command.kind) {
+    case 'warp': return text(command.warpId);
     case 'fishing': return validFishingCommand(command.command);
     case 'talk': return text(command.targetId);
     case 'choose': return text(command.sessionId) && text(command.choiceId);

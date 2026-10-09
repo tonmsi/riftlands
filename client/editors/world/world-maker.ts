@@ -9,7 +9,7 @@ import { World } from '../../../shared/world';
 import { coordinateHash } from '../../../shared/coordinate-random';
 import type { TileKind, Vec2 } from '../../../shared/types';
 import { NPC_DEFINITIONS } from '../../../shared/npcs';
-import { DUNGEON_DEFINITIONS, type DungeonDefinition } from '../../../shared/dungeons';
+import { INSTALLED_DUNGEON_DEFINITIONS as DUNGEON_DEFINITIONS, type DungeonDefinition } from '../../../shared/dungeons';
 import { worldDungeons, validateWorld } from '../../../shared/world-validation';
 import { shapeBounds, insideShape, placementVisualBounds, overlaps } from '../../../shared/world-authoring';
 import { newWorldAsset, parseWorldDocument, resizeWorldAsset, worldAssetVisual, worldAssetImageBounds, DEFAULT_ASSET_FADE, WORLD_TERRAINS, type WorldDocument, type WorldAsset, type WorldZone, type AssetCell, type AssetPlacement } from '../../../shared/world-schema';
@@ -20,6 +20,8 @@ import { WorldEditorHistory } from './world-editor-history';
 import { WorldAssetCatalog } from './world-asset-catalog';
 import { AssetGridCamera } from '../../render/world-asset-view';
 import { loadWorldCheckpoint, saveWorldCheckpoint } from './world-editor-storage';
+import { mapDocument } from '../../../shared/warps';
+import { installWarpEditor } from './warp-editor';
 const root = document.getElementById('world-maker')!;
 root.innerHTML = worldMakerLayout;
 installActorEditor();
@@ -55,6 +57,27 @@ const assetCatalog = new WorldAssetCatalog(el('asset-list'), id => {
 });
 const art = new WorldAssetArt(() => schedule());
 let view = { x: 0, y: 0, scale: 24 }, pointerTile: Vec2 | null = null;
+let activeMap = 'world';
+function surface(): WorldDocument {
+    if (activeMap === 'world') return draft;
+    const m = draft.interiors?.find(m => m.id === activeMap);
+    if (!m) return draft;
+    m.document.assets = draft.assets; m.document.seed = draft.seed;
+    return m.document;
+}
+const warpEditor = installWarpEditor(root, {
+    catalog: () => catalog,
+    project: () => draft, mapId: () => activeMap, tool: () => tool, selectTool,
+    change, center: p => centerAt(p.x + .5, p.y + .5),
+    inspect: () => { selected = null; selectedGenerated = undefined; refresh(); schedule(); },
+    switchMap: id => {
+        finishGesture(); if (gesture) throw new Error('Attendi la fine della modifica prima di cambiare mappa.');
+        mapDocument(draft, id);
+        activeMap = id; selected = null; selectedGenerated = undefined;
+        worldDirty = true;
+        refresh(); schedule(true); centerAt(surface().spawn.x, surface().spawn.y);
+    },
+});
 let gesture: {
     pointer: number;
     before: WorldDocument;
@@ -78,9 +101,9 @@ set('brush-radius', 1);
 set('brush-density', 100);
 function ensureWorld(): void {
   const updated = gesture?.brush?.flushTiles() ?? [];
-  if (updated.length && world && !worldDirty) world.updateAuthoredTiles(draft, updated);
+  if (updated.length && world && !worldDirty) world.updateAuthoredTiles(mapDocument(draft, activeMap), updated);
   if (worldDirty) {
-    world = new World(draft.seed, 96, 'world', draft, worldDungeons(draft, catalog));
+    world = new World(draft.seed, 96, 'world', mapDocument(draft, activeMap), worldDungeons(mapDocument(draft, activeMap), catalog));
     worldDirty = false;
 } }
 function schedule(rebuild = false): void { worldDirty ||= rebuild; if (!framePending) {
@@ -123,8 +146,8 @@ window.addEventListener('pagehide', () => { void flushCheckpoint(); });
 function commit(before: WorldDocument, nativeTiles = false): void {
     try {
         if (nativeTiles) {
-            const counts = worldTileMetrics(draft);
-            if (counts.cells > 20_000_000 || counts.runs > 2_000_000 || draft.tileChunks!.length > 100_000) throw new Error('Budget terreno raggiunto: annulla o riduci gli interventi.');
+            const counts = worldTileMetrics(surface());
+            if (counts.cells > 20_000_000 || counts.runs > 2_000_000 || surface().tileChunks!.length > 100_000) throw new Error('Budget terreno raggiunto: annulla o riduci gli interventi.');
         } else draft = parseWorldDocument(draft);
     }
     catch (e) {
@@ -158,12 +181,14 @@ function change(action: () => void): void {
     }
 }
 function selectTool(next: string): void { tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === next))); el('tool-label').textContent = tools.find(t => t[0] === next)?.[2] ?? next; schedule(); }
-root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.onclick = () => selectTool(b.dataset.tool!));
+root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.onclick = () => { warpEditor.clearSelection(); selectTool(b.dataset.tool!); refresh(); });
 function active(): WorldAsset | undefined { return draft.assets.find(a => a.id === activeAsset); }
 function palette(): void {
     assetCatalog.update(draft.assets, activeAsset, val('asset-search'));
 }
 function refresh(): void {
+    if (activeMap !== 'world' && !draft.interiors?.some(m => m.id === activeMap)) activeMap = 'world';
+    warpEditor.refresh();
     if (!active())
         activeAsset = draft.assets[0]?.id ?? '';
     palette();
@@ -171,22 +196,22 @@ function refresh(): void {
     el<HTMLButtonElement>('undo').disabled = !history.canUndo;
     el<HTMLButtonElement>('redo').disabled = !history.canRedo;
     el<HTMLButtonElement>('apply-world').disabled = !token || !ready;
-    const cells = worldTileMetrics(draft).cells;
-    el('map-info').textContent = `${cells.toLocaleString('it-IT')} celle · ${draft.placements.length} asset · ${draft.zones.length} zone`;
+    const cells = worldTileMetrics(surface()).cells;
+    el('map-info').textContent = `${cells.toLocaleString('it-IT')} celle · ${surface().placements.length} asset · ${surface().zones.length} zone`;
     const dungeonSelect = el<HTMLSelectElement>('dungeon'), previous = dungeonSelect.value;
     dungeonSelect.replaceChildren(...catalog.map(d => new Option(d.name, d.id)));
     dungeonSelect.value = catalog.some(d => d.id === previous) ? previous : catalog[0]?.id ?? '';
-    const zone = selected?.kind === 'zone' ? draft.zones.find(z => z.id === selected!.id) : undefined;
+    const zone = selected?.kind === 'zone' ? surface().zones.find(z => z.id === selected!.id) : undefined;
     el('zone-inspector').hidden = !zone;
     if (zone)
         refreshZone(zone);
     el('selection-inspector').hidden = !selected || selected.kind === 'zone';
     if (selected && selected.kind !== 'zone')
         refreshSelection();
-    el('asset-inspector').hidden = !!selected || !active();
+    el('asset-inspector').hidden = !!selected || !active() || warpEditor.hasSelection();
     if (!selected && active())
         refreshAsset(active()!);
-    el('zone-list').replaceChildren(...draft.zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
+    el('zone-list').replaceChildren(...surface().zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
 }
 function refreshAsset(a: WorldAsset): void {
     const visual = worldAssetVisual(a);
@@ -236,8 +261,8 @@ function refreshZone(z: WorldZone): void {
 function selectionEntity(): any {
     if (!selected)
         return;
-    return selected.kind === 'placement' ? draft.placements.find(p => p.id === selected!.id) ?? (selectedGenerated?.id === selected.id ? selectedGenerated : undefined) : selected.kind === 'npc' ? draft.npcs.find(n => n.id === selected!.id)
-        : selected.kind === 'dungeon' ? draft.dungeons.find(d => d.dungeonId === selected!.id) ?? (() => { const d = worldDungeons(draft, catalog).find(d => d.id === selected!.id); return d ? { dungeonId: d.id, x: d.layout.bounds.minTx, y: d.layout.bounds.minTy } : undefined; })() : draft.zones.find(z => z.id === selected!.id);
+    return selected.kind === 'placement' ? surface().placements.find(p => p.id === selected!.id) ?? (selectedGenerated?.id === selected.id ? selectedGenerated : undefined) : selected.kind === 'npc' ? surface().npcs.find(n => n.id === selected!.id)
+        : selected.kind === 'dungeon' ? surface().dungeons.find(d => d.dungeonId === selected!.id) ?? (() => { const d = worldDungeons(mapDocument(draft, activeMap), catalog).find(d => d.id === selected!.id); return d ? { dungeonId: d.id, x: d.layout.bounds.minTx, y: d.layout.bounds.minTy } : undefined; })() : surface().zones.find(z => z.id === selected!.id);
 }
 function refreshSelection(): void {
     const e = selectionEntity();
@@ -247,9 +272,10 @@ function refreshSelection(): void {
         return;
     }
     el('selection-title').textContent = selected?.kind === 'dungeon' ? 'Posizione dungeon' : selected?.kind === 'npc' ? 'NPC manuale' : 'Istanza asset';
-    el('selection-fields').innerHTML = `<div class="pair">${field('entity-x', 'X · celle')}${field('entity-y', 'Y · celle')}</div>${selected?.kind === 'npc' ? field('entity-level', 'Livello') : ''}`;
+    el('selection-fields').innerHTML = `<div class="pair">${field('entity-x', 'X · celle')}${field('entity-y', 'Y · celle')}</div>${selected?.kind === 'npc' ? field('entity-level', 'Livello') : ''}${selected?.kind === 'dungeon' ? '<label>PvP del dungeon<select id="entity-pvp"><option value="">Eredita dalla mappa</option><option value="false">Disabilitato</option><option value="true">Abilitato</option></select></label><p class="hint">Le zone con una regola PvP esplicita hanno precedenza.</p>' : ''}`;
     set('entity-x', e.x);
     set('entity-y', e.y);
+    if (selected?.kind === 'dungeon') set('entity-pvp', e.pvp === undefined ? '' : String(e.pvp));
     if (selected?.kind === 'npc')
         set('entity-level', e.level);
     if (selected?.kind === 'placement') {
@@ -261,10 +287,11 @@ function refreshSelection(): void {
 }
 function draw(): void {
     ensureWorld();
-    const animated = drawWorldEditorMap(canvas, world, draft, view, art, { grid: input('show-grid').checked, cells: input('show-cells').checked,
+    const animated = drawWorldEditorMap(canvas, world, mapDocument(draft, activeMap), view, art, { grid: input('show-grid').checked, cells: input('show-cells').checked,
         zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, gesture, pointerTile, tool, activeAsset: active() });
     if ((animated || (!el('asset-inspector').hidden && active() && worldAssetVisual(active()!).kind === 'fire')) && animationTimer === undefined)
         animationTimer = setTimeout(() => { animationTimer = undefined; schedule(); }, 33);
+    warpEditor.draw(canvas, view);
     el('zoom-label').textContent = Math.round(view.scale / 24 * 100) + '%';
 }
 function drawAssetGrid(): void {
@@ -288,9 +315,9 @@ function centerAt(x: number, y: number): void { const r = canvas.getBoundingClie
 function zoom(factor: number, x?: number, y?: number): void { const r = canvas.getBoundingClientRect(); x ??= r.width / 2; y ??= r.height / 2; const next = Math.max(.75, Math.min(96, view.scale * factor)); view.x = x - (x - view.x) * next / view.scale; view.y = y - (y - view.y) * next / view.scale; view.scale = next; schedule(); }
 function selectAt(p: Vec2): void {
     ensureWorld();
-    const n = draft.npcs.find(n => n.x === p.x && n.y === p.y);
+    const n = surface().npcs.find(n => n.x === p.x && n.y === p.y);
     const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 });
-    const asset = placements.filter(p => draft.placements.some(a => a.id === p.id)).at(-1), dungeon = world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
+    const asset = placements.filter(p => surface().placements.some(a => a.id === p.id)).at(-1), dungeon = world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
     const zone = world.authoring.zonesAt(p.x + .5, p.y + .5)[0];
     selectedGenerated = placements.filter(a => a.id.startsWith('generated:')).at(-1);
     selected = n ? { kind: 'npc', id: n.id } : asset ? { kind: 'placement', id: asset.id } : dungeon ? { kind: 'dungeon', id: dungeon.id }
@@ -300,9 +327,9 @@ function selectAt(p: Vec2): void {
 }
 function materializeSelection(): void {
     if (selected?.kind !== 'placement' || selectedGenerated?.id !== selected.id) return;
-    const generated = selectedGenerated, brush = new WorldBrush(draft, true), terrain = world.authoring.tiles.at(generated.x, generated.y)?.terrain;
+    const generated = selectedGenerated, brush = new WorldBrush(surface(), true), terrain = world.authoring.tiles.at(generated.x, generated.y)?.terrain;
     brush.tile(generated, { suppressAssets: true, ...(terrain ? { terrain } : {}) }); brush.flushTiles();
-    const placement = { ...generated, id: uid('asset') }; draft.placements.push(placement);
+    const placement = { ...generated, id: uid('asset') }; surface().placements.push(placement);
     selected = { kind: 'placement', id: placement.id }; selectedGenerated = undefined;
 }
 function selectionContains(p: Vec2): boolean {
@@ -321,7 +348,8 @@ function paint(p: Vec2): void {
     const asset = gesture.settings?.asset;
     const points = gesture.tool === 'asset' && !gesture.mass ? [p] : brushTiles(p, radius);
     for (const q of points) {
-        if (Math.abs(q.x) > 10_000_000 || Math.abs(q.y) > 10_000_000) continue;
+        const limits = mapDocument(draft, activeMap).interiorBounds;
+        if (Math.abs(q.x) > 10_000_000 || Math.abs(q.y) > 10_000_000 || (limits && (q.x < 0 || q.y < 0 || q.x >= limits.width || q.y >= limits.height))) continue;
         if (!gesture.brush!.visit(q))
             continue;
         if (gesture.tool === 'asset' && coordinateHash(q.x, q.y, draft.seed + gesture.before.placements.length + 2001) >= (gesture.settings?.density ?? 1))
@@ -346,6 +374,10 @@ canvas.addEventListener('pointerdown', event => {
     canvas.focus();
     const p = position(event);
     ensureWorld();
+    if (event.button === 0 && !keys.has('Space')) {
+        try { if (warpEditor.place(p)) { schedule(true); return; } }
+        catch (e) { report(e); return; }
+    }
     if (event.button === 0 && tool === 'select' && !keys.has('Space')) {
         if (!selectionContains(p)) { selectAt(p); return; }
         if (selected) {
@@ -353,8 +385,8 @@ canvas.addEventListener('pointerdown', event => {
             draft = forkWorldDocument(draft);
             materializeSelection();
             let entity = selectionEntity();
-            if (selected.kind === 'dungeon' && !draft.dungeons.some(d => d.dungeonId === selected!.id)) {
-                draft.dungeons.push(entity);
+            if (selected.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id)) {
+                surface().dungeons.push(entity);
                 entity = selectionEntity();
             }
             const position = selected.kind === 'zone' ? entity.shape : entity;
@@ -376,27 +408,27 @@ canvas.addEventListener('pointerdown', event => {
     }
     const before = draft;
     const tilesOnly = tool === 'terrain' || tool === 'restore';
-    draft = forkWorldDocument(draft, tilesOnly);
-    gesture = { pointer: event.pointerId, before, start: p, last: p, tool, mass: event.ctrlKey || input('mass').checked, brush: new WorldBrush(draft, tilesOnly) };
+    draft = forkWorldDocument(draft, tilesOnly && activeMap === 'world');
+    gesture = { pointer: event.pointerId, before, start: p, last: p, tool, mass: event.ctrlKey || input('mass').checked, brush: new WorldBrush(surface(), tilesOnly) };
     gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, asset: active() };
     canvas.setPointerCapture(event.pointerId);
     if (tool === 'npc') {
-        if (!draft.npcs.some(n => n.x === p.x && n.y === p.y))
-            draft.npcs.push({ ...p, id: uid('npc'), npcKind: val('npc') as import('../../../shared/npcs').NpcTemplateId, level: 1 });
+        if (!surface().npcs.some(n => n.x === p.x && n.y === p.y))
+            surface().npcs.push({ ...p, id: uid('npc'), npcKind: val('npc') as import('../../../shared/npcs').NpcTemplateId, level: 1 });
     }
     else if (tool === 'dungeon') {
         const dungeonId = val('dungeon');
         if (dungeonId) {
-            const existing = draft.dungeons.find(d => d.dungeonId === dungeonId);
+            const existing = surface().dungeons.find(d => d.dungeonId === dungeonId);
             if (existing)
             Object.assign(existing, p, { enabled: true });
             else
-                draft.dungeons.push({ ...p, dungeonId });
+                surface().dungeons.push({ ...p, dungeonId });
             selected = { kind: 'dungeon', id: dungeonId };
         }
     }
     else if (tool === 'spawn')
-        draft.spawn = p;
+        surface().spawn = p;
     else if (tool !== 'zone')
         paint(p);
     schedule(true);
@@ -460,12 +492,12 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
         }
         if (template === 'population')
             z.npcs = { density: 1, maxPerChunk: 3, weights: { slime: 100, wisp: 0, sentinel: 0 } };
-        draft.zones.push(z);
+        surface().zones.push(z);
         selected = { kind: 'zone', id: z.id };
     }
     gesture = null;
     if (!g.pan)
-        commit(g.before, !!draft.tileChunks && (g.tool === 'terrain' || g.tool === 'restore'));
+        commit(g.before, !!surface().tileChunks && (g.tool === 'terrain' || g.tool === 'restore'));
     else
         schedule();
 }
@@ -545,8 +577,9 @@ on('gen-update', () => change(() => { const a = active()!; a.generation = { enab
 on('asset-delete', () => change(() => { const a = active()!;
     const users = catalog.filter(d => d.assetPlacements?.some(p => p.assetId === a.id));
     if (users.length) throw new Error(`Asset usato in ${users.map(d => d.name).join(', ')}. Usa “Sostituisci immagine” oppure rimuovi prima le istanze dai dungeon.`);
-    draft.placements = draft.placements.filter(p => p.assetId !== a.id); draft.assets = draft.assets.filter(other => other.id !== a.id); activeAsset = ''; }));
-on('zone-update', () => change(() => { const z = draft.zones.find(z => z.id === selected?.id)!; z.name = val('zone-name').trim(); z.priority = num('zone-priority'); z.shape = val('zone-shape') === 'circle' ? { kind: 'circle', x: num('zone-x'), y: num('zone-y'), radius: num('zone-width') } : { kind: 'rect', x: num('zone-x'), y: num('zone-y'), width: num('zone-width'), height: num('zone-height') }; for (const [key, id] of [['temperature', 'zone-temperature'], ['moisture', 'zone-moisture']] as const) {
+    for (const doc of [draft, ...(draft.interiors ?? []).map(m => m.document)]) doc.placements = doc.placements.filter(p => p.assetId !== a.id);
+    draft.assets = draft.assets.filter(other => other.id !== a.id); activeAsset = ''; }));
+on('zone-update', () => change(() => { const z = surface().zones.find(z => z.id === selected?.id)!; z.name = val('zone-name').trim(); z.priority = num('zone-priority'); z.shape = val('zone-shape') === 'circle' ? { kind: 'circle', x: num('zone-x'), y: num('zone-y'), radius: num('zone-width') } : { kind: 'rect', x: num('zone-x'), y: num('zone-y'), width: num('zone-width'), height: num('zone-height') }; for (const [key, id] of [['temperature', 'zone-temperature'], ['moisture', 'zone-moisture']] as const) {
     if (val(id) === '')
         delete z[key];
     else
@@ -565,17 +598,17 @@ if (input('zone-npcs').checked)
     z.npcs = { density: num('zone-density') / 100, maxPerChunk: num('zone-limit'), weights: { slime: num('zone-slime'), wisp: num('zone-wisp'), sentinel: num('zone-sentinel') } };
 else
     delete z.npcs; }));
-on('zone-delete', () => change(() => { draft.zones = draft.zones.filter(z => z.id !== selected?.id); selected = null; }));
+on('zone-delete', () => change(() => { surface().zones = surface().zones.filter(z => z.id !== selected?.id); selected = null; }));
 on('selection-update', () => change(() => { materializeSelection(); const e = selectionEntity(); if (!e)
-    return; if (selected?.kind === 'dungeon' && !draft.dungeons.some(d => d.dungeonId === selected!.id))
-    draft.dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'npc')
-    e.level = num('entity-level'); }));
+    return; if (selected?.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id))
+    surface().dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'npc')
+    e.level = num('entity-level'); if (selected?.kind === 'dungeon') { if (val('entity-pvp') === '') delete e.pvp; else e.pvp = val('entity-pvp') === 'true'; } }));
 on('selection-delete', () => change(() => { materializeSelection(); if (selected?.kind === 'placement')
-    draft.placements = draft.placements.filter(p => p.id !== selected!.id); if (selected?.kind === 'npc')
-    draft.npcs = draft.npcs.filter(n => n.id !== selected!.id); if (selected?.kind === 'dungeon') {
-    const existing = draft.dungeons.find(d => d.dungeonId === selected!.id);
+    surface().placements = surface().placements.filter(p => p.id !== selected!.id); if (selected?.kind === 'npc')
+    surface().npcs = surface().npcs.filter(n => n.id !== selected!.id); if (selected?.kind === 'dungeon') {
+    const existing = surface().dungeons.find(d => d.dungeonId === selected!.id);
     if (existing) existing.enabled = false;
-    else { const dungeon = catalog.find(d => d.id === selected!.id)!; draft.dungeons.push({ dungeonId: dungeon.id, x: dungeon.layout.bounds.minTx, y: dungeon.layout.bounds.minTy, enabled: false }); }
+    else { const dungeon = catalog.find(d => d.id === selected!.id)!; surface().dungeons.push({ dungeonId: dungeon.id, x: dungeon.layout.bounds.minTx, y: dungeon.layout.bounds.minTy, enabled: false }); }
     status('Dungeon tolto dal mondo. Puoi riposizionarlo dal catalogo.');
 } selected = null; }));
 on('seed-update', () => change(() => { draft.seed = num('seed'); }));
@@ -583,7 +616,7 @@ on('undo', () => { draft = history.undo(draft); dirty = true; checkpoint(); sele
 on('redo', () => { draft = history.redo(draft); dirty = true; checkpoint(); selected = null; refresh(); schedule(true); });
 on('zoom-in', () => zoom(1.3));
 on('zoom-out', () => zoom(1 / 1.3));
-on('home', () => centerAt(draft.spawn.x, draft.spawn.y));
+on('home', () => centerAt(surface().spawn.x, surface().spawn.y));
 on('goto', () => { set('goto-x', 0); set('goto-y', 0); el<HTMLDialogElement>('goto-dialog').showModal(); });
 on('goto-close', () => el<HTMLDialogElement>('goto-dialog').close());
 on('goto-confirm', () => { const x = num('goto-x'), y = num('goto-y'); if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 10000000 || Math.abs(y) > 10000000)
@@ -724,7 +757,7 @@ async function load(reload = false): Promise<void> {
     finally {
         ready = true;
         refresh();
-        centerAt(draft.spawn.x, draft.spawn.y);
+        centerAt(surface().spawn.x, surface().spawn.y);
         schedule(true);
     }
 }
@@ -748,16 +781,16 @@ async function refreshDungeonCatalog(): Promise<void> {
     const known = new Set(catalog.map(d => d.id));
     catalog = project.dungeons;
     const ids = new Set(catalog.map(d => d.id));
-    const before = draft.dungeons;
+    const before = JSON.stringify([draft.dungeons, ...(draft.interiors ?? []).map(m => m.document.dungeons)]);
     draft = forkWorldDocument(draft);
-    draft.dungeons = draft.dungeons.filter(p => ids.has(p.dungeonId));
+    for (const doc of [draft, ...(draft.interiors ?? []).map(m => m.document)]) doc.dungeons = doc.dungeons.filter(p => ids.has(p.dungeonId));
     for (const p of document.dungeons) if (!known.has(p.dungeonId) && !draft.dungeons.some(d => d.dungeonId === p.dungeonId)) draft.dungeons.push(p);
     if (project.revision !== installedRevision) {
         if (revision === installedRevision && worldDocumentsEqual({ ...document, dungeons: [] }, { ...installedDocument, dungeons: [] })) revision = project.revision;
         else status('Il progetto è cambiato in un’altra scheda: esporta la bozza e ricarica prima di applicare.');
         installedRevision = project.revision; installedDocument = document;
     }
-    if (JSON.stringify(before) !== JSON.stringify(draft.dungeons)) history.clear();
+    if (before !== JSON.stringify([draft.dungeons, ...(draft.interiors ?? []).map(m => m.document.dungeons)])) history.clear();
     await checkpoint(true);
     refresh(); schedule(true);
 }

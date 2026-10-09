@@ -59,8 +59,8 @@ export function compactWorldTiles(document: WorldDocument): WorldDocument {
 /** Keep metadata readable and each encoded chunk on one line, without per-cell JSON overhead. */
 export function serializeWorldDocument(document: WorldDocument): string {
   const compact = compactWorldTiles(document), chunks = compact.tileChunks!;
-  const text = JSON.stringify({ ...compact, tileChunks: [] }, null, 2);
-  return text.replace('"tileChunks": []', `"tileChunks": [${chunks.length ? '\n' + chunks.map(c => '    ' + JSON.stringify(c)).join(',\n') + '\n  ' : ''}]`) + '\n';
+  const text = JSON.stringify({ ...compact, tileChunks: '__RIFTLANDS_ROOT_CHUNKS__' }, null, 2);
+  return text.replace('"tileChunks": "__RIFTLANDS_ROOT_CHUNKS__"', `"tileChunks": [${chunks.length ? '\n' + chunks.map(c => '    ' + JSON.stringify(c)).join(',\n') + '\n  ' : ''}]`) + '\n';
 }
 /** Storage key order is not authored content: IndexedDB may return chunks in a different order. */
 export function worldDocumentsEqual(first: WorldDocument, second: WorldDocument): boolean {

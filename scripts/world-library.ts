@@ -6,6 +6,7 @@ import { validateWorld } from '../shared/world-validation';
 import type { DungeonDefinition } from '../shared/dungeons';
 import { acquireDataLease } from '../server/data-lease';
 import { worldDungeons } from '../shared/world-validation';
+import { mapDocument } from '../shared/warps';
 import { compactWorldTiles, serializeWorldDocument } from '../shared/world-tiles';
 import { readCatalog } from './dungeon-removal';
 
@@ -42,11 +43,13 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     await writeFile(backup, current, { flag: 'wx' });
     // A moved encounter must not invalidate unrelated boss persistence on the next startup.
     // Targeted cleanup happens first: an interruption still leaves a loadable old world.
-    const oldDungeons = worldDungeons(parseWorldDocument(current), catalog), newDungeons = worldDungeons(next, catalog);
+    const placements = (project: WorldDocument) => ['world', ...(project.interiors ?? []).map(m => m.id)].flatMap(mapId =>
+      worldDungeons(mapDocument(project, mapId), catalog).map(dungeon => ({ mapId, dungeon })));
+    const oldDungeons = placements(parseWorldDocument(current)), newDungeons = placements(next);
     const movedBossIds = new Set(oldDungeons.filter(old => {
-      const d = newDungeons.find(d => d.id === old.id);
-      return !d || old.layout.bounds.minTx !== d.layout.bounds.minTx || old.layout.bounds.minTy !== d.layout.bounds.minTy;
-    }).flatMap(d => [d.bossId, ...(d.additionalEncounters ?? []).map(e => e.bossId)]));
+      const next = newDungeons.find(d => d.dungeon.id === old.dungeon.id);
+      return !next || next.mapId !== old.mapId || old.dungeon.layout.bounds.minTx !== next.dungeon.layout.bounds.minTx || old.dungeon.layout.bounds.minTy !== next.dungeon.layout.bounds.minTy;
+    }).flatMap(({ dungeon }) => [dungeon.bossId, ...(dungeon.additionalEncounters ?? []).map(e => e.bossId)]));
     if (movedBossIds.size) {
       let savePath = resolve(dirname(options.dataPath), 'dungeon.json'), saveText: string | undefined;
       try { saveText = await readFile(savePath, 'utf8'); }

@@ -46,7 +46,7 @@ export class World {
     for (const d of dungeons.flatMap(dungeonEncounters)) this.lockedTiles.set(d.bossId, new Set(dungeonStoneTiles(d).map(t => `${t.x},${t.y}`)));
     this.generationEnvironment = { tile: (x, y) => this.generateTile(x, y), temperature: (x, y) => this.getTemperature(x, y),
       moisture: (x, y) => this.getMoisture((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE),
-      reserved: (x, y) => configuredDungeonTile(x, y, this.dungeons) !== undefined
+      reserved: (x, y) => !!document.interiorBounds || configuredDungeonTile(x, y, this.dungeons) !== undefined
         || this.dungeons.some(d => onDungeonApproach(d, { x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE }))
         || this.arenaAt((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE) !== undefined };
   }
@@ -58,7 +58,7 @@ export class World {
     for (const c of chunks) for (let y = 0; y < EDIT_CHUNK_SIZE / CHUNK_TILES; y++) for (let x = 0; x < EDIT_CHUNK_SIZE / CHUNK_TILES; x++)
       this.cache.delete(chunkKey(c[0] * EDIT_CHUNK_SIZE / CHUNK_TILES + x, c[1] * EDIT_CHUNK_SIZE / CHUNK_TILES + y));
   }
-  locationAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE)[0]?.name : undefined; }
+  locationAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE)[0]?.name ?? this.authoring.document.interiorBounds?.name : undefined; }
   isBlocked(tx: number, ty: number): boolean {
     return isSolid(this.getTile(tx, ty)) || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false).some(p => this.authoring.cell(p, tx, ty)?.blocked);
   }
@@ -66,7 +66,15 @@ export class World {
     const tx = Math.floor(x / TILE_SIZE), ty = Math.floor(y / TILE_SIZE);
     return this.getTile(tx, ty) === 'bush' || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false).some(p => ['hide', 'hide-fade'].includes(this.authoring.cell(p, tx, ty)?.visibility ?? ''));
   }
-  pvpAt(x: number, y: number): boolean { return this.mode !== 'world' || (this.authoring.rule(x / TILE_SIZE, y / TILE_SIZE, 'pvp') ?? true); }
+  pvpAt(x: number, y: number): boolean {
+    if (this.mode !== 'world') return true;
+    const tx = x / TILE_SIZE, ty = y / TILE_SIZE, document = this.authoring.document;
+    const zone = this.authoring.rule(tx, ty, 'pvp'); if (zone !== undefined) return zone;
+    const dungeon = this.dungeons.find(d => tx >= d.layout.bounds.minTx && tx < d.layout.bounds.maxTx + 1
+      && ty >= d.layout.bounds.minTy && ty < d.layout.bounds.maxTy + 1);
+    const override = dungeon && document.dungeons.find(p => p.dungeonId === dungeon.id)?.pvp;
+    return override ?? document.interiorBounds?.pvp ?? !document.interiorBounds;
+  }
   arenaAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE).find(z => z.arenaId)?.id : undefined; }
   get cacheSize(): number { return this.cache.size; }
   setBossLocked(id: string, locked: boolean): void { if (this.lockedBosses.has(id) !== locked) this.lockRevision++; if (locked) this.lockedBosses.add(id); else this.lockedBosses.delete(id); }
@@ -101,6 +109,8 @@ export class World {
   }
 
   private generateTile(tx: number, ty: number): TileKind {
+    const bounds = this.authoring.document.interiorBounds;
+    if (bounds && (tx < 0 || ty < 0 || tx >= bounds.width || ty >= bounds.height)) return 'rock';
     // Bounded test maps shared by prediction, renderer and authority.
     if (this.mode !== 'world') {
       if (this.mode === 'arena') return arenaTileIsWall(tx, ty) ? 'rock' : 'grass';
@@ -113,6 +123,7 @@ export class World {
     if (curatedTile) return curatedTile;
     const authored = this.authoring.tiles.at(tx, ty)?.terrain;
     if (authored !== undefined) return authored;
+    if (bounds) return 'grass';
     const curatedDungeonApproach = this.dungeons.some(definition => inDungeonApproachCorridor(definition, { x, y }));
     if (this.dungeons.some(definition => onDungeonApproach(definition, { x, y }))) return 'path';
     // An uninterrupted road network guarantees routes through terrain in every direction.
@@ -152,7 +163,7 @@ export class World {
     for (let y = 0; y < CHUNK_TILES; y++) for (let x = 0; x < CHUNK_TILES; x++) tiles.push(this.generateTile(cx * CHUNK_TILES + x, cy * CHUNK_TILES + y));
     const chunk: Chunk = { key, cx, cy, tiles, npcs: [], pickups: [] };
     // Try a bounded number of positions and place on walkable tile centres.
-    for (let i = 0; this.mode === 'world' && i < 48; i++) {
+    for (let i = 0; this.mode === 'world' && !this.authoring.document.interiorBounds && i < 48; i++) {
       const tx = Math.floor(coordinateHash(cx * 41 + i, cy, this.seed + 88) * CHUNK_TILES);
       const ty = Math.floor(coordinateHash(cx, cy * 41 + i, this.seed + 97) * CHUNK_TILES);
       const tile = tiles[ty * CHUNK_TILES + tx];
@@ -173,8 +184,8 @@ export class World {
         chunk.pickups.push({ id: `pickup:${key}:${index}`, x, y, radius: 12, kind: (['heal', 'haste', 'power', 'weakness'] as const)[Math.floor(coordinateHash(cx + i, cy, this.seed + 345) * 4)] });
       }
     }
-    if (this.mode === 'world' && cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
-    if (this.mode === 'world' && cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
+    if (this.mode === 'world' && !this.authoring.document.interiorBounds && cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
+    if (this.mode === 'world' && !this.authoring.document.interiorBounds && cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
     if (this.mode === 'world') for (const n of this.manualNpcs.get(key) ?? []) if (!this.isBlocked(Math.floor(n.x / TILE_SIZE), Math.floor(n.y / TILE_SIZE))) chunk.npcs.push({ ...n });
     if (this.mode === 'world') for (const dungeon of this.dungeons) for (const npc of dungeon.npcSpawns ?? []) {
       const position = chunkCoords(npc.x, npc.y);

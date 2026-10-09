@@ -55,6 +55,7 @@ export class InteractionSystem {
   }
   private advance(session: Session, node: string, now: number): void { session.node = node; session.id = randomUUID(); session.expiresAt = now + 120_000; }
   command(id: string, command: InteractionCommand, now: number): void {
+    if (command.kind === 'warp') throw new Error('Usa il gestore dei passaggi.');
     if (command.kind === 'fishing') throw new Error('Usa il modulo pesca.');
     const account = this.account(id);
     if (command.kind === 'talk') {

@@ -6,6 +6,9 @@ export const SOUL_QUEST_ID = 'souls-home';
 export const SOUL_COUNT = 5;
 export const SOUL_HEALTH_MULTIPLIER = 1.25;
 export const SOUL_FAREWELL_MS = 9000;
+export function clearSoulFarewell(actor: Actor): void {
+  delete actor.soulFarewellAt; delete actor.soulFarewellX; delete actor.soulFarewellY;
+}
 /** Derive the bonus from persisted quest progress, never from a timer or client command. */
 export function syncSoulEscort(actor: Actor, progress: NarrativeProgress | undefined, world: boolean): void {
   const active = world && progress?.quests[SOUL_QUEST_ID]?.status === 'active';

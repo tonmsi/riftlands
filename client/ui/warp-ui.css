@@ -1,0 +1,5 @@
+.warp-veil { position: fixed; inset: 0; z-index: 1000; pointer-events: none; background: #080b0d; opacity: 0; transition: opacity 280ms ease; }
+.warp-veil.visible { opacity: 1; pointer-events: auto; }
+.warp-enter { position: fixed; left: 50%; bottom: max(150px, 22vh); transform: translateX(-50%); z-index: 40; padding: 12px 20px; border: 1px solid #d2b875; border-radius: 10px; background: #182321ed; color: #fff2ce; cursor: pointer; font: 600 15px system-ui; }
+.warp-enter[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .warp-veil { transition-duration: 100ms; } }

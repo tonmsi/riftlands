@@ -74,12 +74,18 @@ export async function changeCatalog(options: { id: string; catalogPath: string; 
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     if (worldText !== undefined) {
         const document = parseWorldDocument(worldText), ids = new Set(next.map(b => b.definition.id));
+        let interiorChanged = false;
+        for (const m of document.interiors ?? []) {
+            const remaining = m.document.dungeons.filter(p => ids.has(p.dungeonId));
+            interiorChanged ||= remaining.length !== m.document.dungeons.length;
+            m.document.dungeons = remaining;
+        }
         const placements = document.dungeons.filter(d => ids.has(d.dungeonId));
         if (options.unplacedDungeonId && !placements.some(p => p.dungeonId === options.unplacedDungeonId)) {
             const dungeon = next.find(b => b.definition.id === options.unplacedDungeonId)!.definition;
             placements.push({ dungeonId: dungeon.id, x: dungeon.layout.bounds.minTx, y: dungeon.layout.bounds.minTy, enabled: false });
         }
-        if (JSON.stringify(placements) !== JSON.stringify(document.dungeons)) {
+        if (interiorChanged || JSON.stringify(placements) !== JSON.stringify(document.dungeons)) {
             document.dungeons = placements;
             files.push({ path: worldPath, before: worldText, after: serializeWorldDocument(document) });
         }

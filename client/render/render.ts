@@ -4,6 +4,9 @@ import { equippedAbility } from '../../shared/progression';
 import type { Actor, ClassId, GameEvent, Pickup, Projectile, Trap, Vec2, RoomMode, MatchResult } from '../../shared/types';
 import { drawTransitionOverlay, matchResultText, MATCH_RESULT_DURATION_MS } from '../ui/transition-overlay';
 import { World } from '../../shared/world';
+import { WORLD_DOCUMENT } from '../../shared/world-content';
+import { mapDocument } from '../../shared/warps';
+import { worldDungeons } from '../../shared/world-validation';
 import { ARENA_GATE } from '../../shared/arena';
 import { WorldAssetArt } from './world-asset-art';
 import { drawItemArt } from '../ui/interactions/item-art';
@@ -12,7 +15,7 @@ import { shapeBounds } from '../../shared/world-authoring';
 import { activeAssetFades } from './asset-visibility';
 import { clipAssetCells } from './asset-cell-regions';
 import type { ArenaGateState } from '../../shared/types';
-import { DUNGEON_BY_BOSS_ID, DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonFlames, inwardFlameAngle } from '../../shared/dungeons';
+import { DUNGEON_BY_BOSS_ID, INSTALLED_DUNGEON_DEFINITIONS as DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonFlames, inwardFlameAngle } from '../../shared/dungeons';
 import type { DungeonDefinition } from '../../shared/dungeons';
 import { DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossLockState } from '../../shared/bosses';
 import { renderDpr } from '../core/frame-budget';
@@ -80,8 +83,9 @@ export class Renderer {
     this.resize();
   }
 
-  setSeed(seed: number, mode: RoomMode = 'world'): void {
-    this.world = new World(seed, 160, mode);
+  setSeed(seed: number, mode: RoomMode = 'world', mapId = 'world'): void {
+    const document = mapDocument(WORLD_DOCUMENT, mapId);
+    this.world = new World(seed, 160, mode, document, worldDungeons(document, DUNGEON_DEFINITIONS));
     this.terrain.invalidate();
     this.hasCamera = false;
     this.viewSign = 1;
@@ -457,7 +461,7 @@ export class Renderer {
       }
     } else {
       const dungeon = this.localDungeons?.flatMap(dungeonEncounters).find(d => d.bossId === (preparation?.bossId ?? lock?.bossId))
-        ?? DUNGEON_BY_BOSS_ID.get((preparation?.bossId ?? lock?.bossId)!);
+        ?? this.world.dungeons.flatMap(dungeonEncounters).find(d => d.bossId === (preparation?.bossId ?? lock?.bossId));
       drawTransitionOverlay(ctx, this.width, this.height, {
         heading: preparation ? 'IL DUNGEON SI RISVEGLIA' : 'DUNGEON INIZIATO',
         title: dungeon?.name ?? preparation?.name ?? 'La sfida ha inizio',
@@ -699,7 +703,7 @@ export class Renderer {
     const drawn = new Set<string>();
     for (const lock of locks) {
       if (!lock.locked) continue;
-      const dungeon = this.localDungeons ? this.localDungeons.flatMap(dungeonEncounters).find(d => d.bossId === lock.bossId) : DUNGEON_BY_BOSS_ID.get(lock.bossId);
+      const dungeon = (this.localDungeons ?? this.world.dungeons).flatMap(dungeonEncounters).find(d => d.bossId === lock.bossId);
       if (!dungeon) continue;
       const group = `${dungeon.id}:${dungeon.encounterGroupId ?? dungeon.bossId}`;
       if (drawn.has(group)) continue;
@@ -739,7 +743,7 @@ export class Renderer {
   }
 
   private drawDungeons(): void {
-    for (const definition of this.localDungeons ?? DUNGEON_DEFINITIONS) this.drawDungeon(definition);
+    for (const definition of this.localDungeons ?? this.world.dungeons) this.drawDungeon(definition);
   }
 
   private drawDungeon(definition: DungeonDefinition): void {

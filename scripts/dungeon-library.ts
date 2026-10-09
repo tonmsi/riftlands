@@ -18,8 +18,11 @@ export async function installDungeon(draft: DungeonDraft, options: { catalogPath
     try { worldDocument = parseWorldDocument(await readFile(options.documentPath ?? join(dirname(options.catalogPath), 'custom-world.json'), 'utf8')); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     let placed = true;
+    let internal = false;
     if (worldDocument) {
-        const placement = worldDocument.dungeons.find(p => p.dungeonId === parsed.id);
+        const interiorPlacement = worldDocument.interiors?.flatMap(m => m.document.dungeons).find(p => p.dungeonId === parsed.id && p.enabled !== false);
+        internal = !!interiorPlacement;
+        const placement = interiorPlacement ?? worldDocument.dungeons.find(p => p.dungeonId === parsed.id);
         if (placement) parsed.origin = { x: placement.x, y: placement.y };
         else if (options.managedPlacement && old) parsed.origin = { x: old.definition.layout.bounds.minTx, y: old.definition.layout.bounds.minTy };
         placed = placement?.enabled !== false && (!!placement || !!old || !options.managedPlacement);
@@ -29,7 +32,7 @@ export async function installDungeon(draft: DungeonDraft, options: { catalogPath
         }
     }
     const bundle = buildDungeonBundle(parsed, worldDocument ? worldDungeons(worldDocument, remaining.map(b => b.definition)) : remaining.map(b => b.definition),
-        { assets: worldDocument?.assets, checkPlacement: placed,
+        { assets: worldDocument?.assets, checkPlacement: placed && !internal,
           templates: new Map((await readActorProject(join(dirname(options.catalogPath), 'actor-catalog.json'))).catalog.bosses.map(b => [b.id, b])) });
     if (worldDocument) {
         const issues = validateWorld(worldDocument, [...remaining, bundle].map(b => b.definition));

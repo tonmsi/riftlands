@@ -28,6 +28,7 @@ export class QuestJournalUI {
   private completion = document.createElement('div');
   private completionCounts: Record<string, number> = {};
   private hasBaseline = false;
+  private characterKey = '';
   private completionTimer = 0;
   private acceptance = document.createElement('canvas');
   private acceptanceFrame = 0;
@@ -54,6 +55,7 @@ export class QuestJournalUI {
   }
   private setOpen(open: boolean): void { this.panel.hidden = !open; this.toggle.setAttribute('aria-expanded', String(open)); }
   reset(): void {
+    this.characterKey = '';
     this.narrative = newNarrativeProgress(); this.inventory = newInventory(); this.signature = ''; this.setOpen(false);
     this.resetFeedback(); this.update();
   }
@@ -83,7 +85,10 @@ export class QuestJournalUI {
     };
     this.player.classList.add('quest-accepted'); this.acceptanceFrame = requestAnimationFrame(draw);
   }
-  update(narrative?: NarrativeProgress, inventory?: Inventory): void {
+  update(narrative?: NarrativeProgress, inventory?: Inventory, characterKey?: string): void {
+    if (characterKey !== undefined && characterKey !== this.characterKey) {
+      this.reset(); this.characterKey = characterKey;
+    }
     if (narrative) {
       const accepted = Object.entries(narrative.quests).filter(([id, q]) => this.hasBaseline && q.status === 'active' && this.narrative.quests[id]?.status !== 'active');
       if (accepted.length) this.announceAccepted(accepted.map(([id]) => QUEST_DEFINITIONS[id]?.name ?? id));

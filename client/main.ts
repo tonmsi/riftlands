@@ -27,6 +27,8 @@ import { prepareLobbyArt } from './ui/lobby/lobby-assets';
 import { CAMERA_STORAGE_KEY, parseCameraSettings } from './controls/camera-settings';
 import { CameraOptions } from './controls/camera-options';
 import { matchResultText } from './ui/transition-overlay';
+import { WarpUI } from './ui/warp-ui';
+import { WORLD_DOCUMENT } from '../shared/world-content';
 import { BettingUI } from './ui/betting-ui';
 
 let playing = false;
@@ -50,6 +52,8 @@ let joinGeneration = 0;
 let lobbyToken: string | undefined;
 let mobileControls: MobileControls | undefined;
 const releaseControls = (): void => { controls.clear(); mobileControls?.reset(); };
+let activeMapId = 'world', warpRoomReceived = false;
+const warpUI = new WarpUI(warpId => { connection.send({ type: 'interaction', command: { kind: 'warp', warpId } }); });
 
 const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   releaseControls,
@@ -137,7 +141,7 @@ const connection = new GameConnection({
   reset: () => { fishingUI.reset(); renderer.clearMatchResult(); releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
   status: (status, detail) => {
     ui.setConnection(status, detail);
-    if (status === 'offline' || status === 'reconnecting') { fishingUI.reset(); releaseControls(); localCombat.reset(); }
+    if (status === 'offline' || status === 'reconnecting') { fishingUI.reset(); releaseControls(); localCombat.reset(); warpUI.cancel(); }
     if (status === 'offline') { bettingUI.reset(); playing = false; ui.setPlaying(false); if (detail) ui.toast(detail, 'error'); }
   },
   authExpired: () => {
@@ -160,8 +164,14 @@ const connection = new GameConnection({
       effects.clear();
       audio.reset();
       latest = null;
+    } else if (message.type === 'warp-transition') {
+      releaseControls();
+      if (message.phase === 'start') { warpRoomReceived = false; warpUI.start(); ui.interactions.reset(); fishingUI.reset(); }
+      else warpUI.cancel();
     } else if (message.type === 'room') {
-      renderer.setSeed(message.room.seed, message.room.mode);
+      activeMapId = message.room.mapId ?? 'world';
+      renderer.setSeed(message.room.seed, message.room.mode, activeMapId);
+      warpRoomReceived = warpUI.blocked;
       latest = null;
       selectedId = null;
       releaseControls();
@@ -172,6 +182,7 @@ const connection = new GameConnection({
       ui.interactions.reset();
       fishingUI.reset();
     } else if (message.type === 'snapshot') {
+      if (warpRoomReceived) { warpRoomReceived = false; warpUI.arrive(); }
       const old = predicted;
       latest = message;
       renderer.world.setBossLocks((message.bossLocks ?? []).filter(lock => lock.locked).map(lock => lock.bossId));
@@ -296,7 +307,7 @@ ui.canvas.addEventListener('contextmenu', event => event.preventDefault());
 ui.canvas.addEventListener('auxclick', event => event.preventDefault());
 
 function inputTick(): void {
-  if (!playing || !connection.connected || !predicted || document.hidden || latest?.betting?.spectating) return;
+  if (!playing || !connection.connected || !predicted || document.hidden || latest?.betting?.spectating || warpUI.blocked) return;
   // Do not fill the reconciliation queue while the arena simulation is paused.
   if ((latest?.betting?.startsAt ?? 0) > connection.serverTime()) { releaseControls(); return; }
   localMovement.advance(predicted, predicted);
@@ -329,7 +340,7 @@ setInterval(() => advanceInputs(performance.now()), 8);
 
 mobileControls = new MobileControls(document.querySelector<HTMLElement>('.rift-app')!, {
   ability: slot => equippedAbility(predicted ?? { classId: ui.selectedClass }, slot),
-  enabled: () => playing && connection.connected && !ui.inputBlocked && !bettingUI.visible && !latest?.betting?.spectating && !!predicted && predicted.hp > 0,
+  enabled: () => playing && connection.connected && !ui.inputBlocked && !warpUI.blocked && !bettingUI.visible && !latest?.betting?.spectating && !!predicted && predicted.hp > 0,
   move: vector => controls.setTouchMovement(vector),
   aim: angle => controls.setTouchAim(angle),
   cast: slot => controls.cast(slot),
@@ -350,6 +361,8 @@ function frame(now: number): void {
   const immediateSelf = predicted ? localMovement.sample(predicted, inputAccumulator / (1000 / TICK_RATE), delta) : latest?.self ?? null;
   // Never switch the owner's body onto the delayed remote timeline near enemies.
   const self = latest?.betting?.spectating ? actors.find(a => a.id === latest!.self.id) ?? latest.self : immediateSelf;
+  warpUI.update(renderer.world, self, WORLD_DOCUMENT.warps ?? [], activeMapId,
+    playing && connection.connected && renderer.world.mode === 'world' && !ui.inputBlocked && !latest?.dialogue && !latest?.fishing && !bettingUI.visible);
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const combat = localCombat.sample(self, remoteFrame?.projectiles ?? [], [...effects.values()], renderer.world, time);
   const projectiles = combat.projectiles;

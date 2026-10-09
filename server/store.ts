@@ -30,6 +30,7 @@ export interface Account {
   requests: string[];
   lastSeen: number;
   body?: Actor;
+  location?: { mapId: string; returnTo: { x: number; y: number } };
 }
 
 export function publicAccount(account: Account): PublicAccount {
@@ -117,6 +118,8 @@ export class AccountStore implements GameplayPersistence {
         }
 
         const account = entry as Account;
+        if (account.location && (typeof account.location.mapId !== 'string' || account.location.mapId.length > 128 || !account.location.returnTo
+          || ![account.location.returnTo.x, account.location.returnTo.y].every(Number.isFinite))) throw new Error('Posizione interna non valida.');
         if (account.gold !== undefined && (!Number.isSafeInteger(account.gold) || account.gold < 0)) throw new Error('Saldo gold non valido.');
         account.gold ??= 0;
         if (account.arenaBets !== undefined && (!Array.isArray(account.arenaBets) || account.arenaBets.some(b => !b || typeof b.id !== 'string' || typeof b.matchId !== 'string' || typeof b.playerId !== 'string' || typeof b.playerName !== 'string' || !Number.isSafeInteger(b.stake) || b.stake < 1 || b.stake > 10000 || !Number.isFinite(b.odds) || b.odds < 1 || b.odds > 10 || !Number.isSafeInteger(b.payout) || b.payout < 0 || !Number.isFinite(b.placedAt) || !['active', 'won', 'lost', 'refunded'].includes(b.status)))) throw new Error('Scommesse non valide.');

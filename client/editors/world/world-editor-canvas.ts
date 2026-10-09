@@ -144,14 +144,16 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
     }
     ctx.strokeStyle = '#fff1b4';
     ctx.lineWidth = 2;
+    const spawnX = (draft.spawn.x + (draft.interiorBounds ? .5 : 0)) * s;
+    const spawnY = (draft.spawn.y + (draft.interiorBounds ? .5 : 0)) * s;
     ctx.beginPath();
-    ctx.arc(draft.spawn.x * s, draft.spawn.y * s, Math.max(4, s * .35), 0, Math.PI * 2);
+    ctx.arc(spawnX, spawnY, Math.max(4, s * .35), 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(draft.spawn.x * s - 8, draft.spawn.y * s);
-    ctx.lineTo(draft.spawn.x * s + 8, draft.spawn.y * s);
-    ctx.moveTo(draft.spawn.x * s, draft.spawn.y * s - 8);
-    ctx.lineTo(draft.spawn.x * s, draft.spawn.y * s + 8);
+    ctx.moveTo(spawnX - 8, spawnY);
+    ctx.lineTo(spawnX + 8, spawnY);
+    ctx.moveTo(spawnX, spawnY - 8);
+    ctx.lineTo(spawnX, spawnY + 8);
     ctx.stroke();
     if (gesture?.tool === 'zone' && !gesture.pan) {
         ctx.fillStyle = '#d5e99a20';

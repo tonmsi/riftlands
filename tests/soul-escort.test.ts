@@ -92,3 +92,26 @@ test('bonus follows the selected character and does not apply in arena simulatio
   const arenaPlayer = arena.addPlayer(structuredClone(f.account), 'mage');
   assert.equal(arenaPlayer.maxHp, CLASSES.mage.maxHp); assert.equal(arenaPlayer.soulEscort, undefined);
 });
+
+test('completed farewell is discarded on disconnect, reconnect and switching characters', () => {
+  for (const action of ['disconnect', 'switch'] as const) {
+    const f = fixture(); f.accept(); f.player.x = 6 * TILE_SIZE; f.sim.interactions.step(f.sim.now);
+    assert.notEqual(f.player.soulFarewellAt, undefined);
+    if (action === 'disconnect') {
+      f.sim.disconnectPlayer(f.player.id);
+      assert.equal(f.player.soulFarewellAt, undefined);
+      // Reconnect before the body expires: the same actor must not replay the scene.
+      assert.equal(f.sim.addPlayer(f.account, 'mage'), f.player);
+    } else { f.sim.addPlayer(f.account, 'warrior'); f.sim.addPlayer(f.account, 'mage'); }
+    const snapshot = f.sim.snapshotFor(f.player.id)!;
+    for (const actor of [snapshot.self, ...snapshot.actors.filter(a => a.id === f.player.id)]) {
+      assert.equal(actor.soulFarewellAt, undefined); assert.equal(actor.soulFarewellX, undefined); assert.equal(actor.soulFarewellY, undefined);
+      assert.equal(actor.soulEscort, undefined);
+    }
+    assert.equal(f.account.narrative!.quests[SOUL_QUEST_ID].status, 'completed');
+    f.sim.interactions.step(f.sim.now); assert.equal(f.player.soulFarewellAt, undefined);
+    const restarted = new WorldSimulation(f.doc.seed, f.sim.now, undefined, 'world', f.environment);
+    assert.equal(restarted.addPlayer(f.account, 'mage').soulFarewellAt, undefined);
+    assert.equal(f.account.narrative!.quests[SOUL_QUEST_ID].completions, 1);
+  }
+});

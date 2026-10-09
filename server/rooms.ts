@@ -10,6 +10,16 @@ import type { InteractionCommand } from '../shared/interactions';
 import { INTERACTION_RANGE } from '../shared/interactions';
 import { arenaOdds, type ArenaMarket, type ArenaBet, type BettingAction, type BetWin } from '../shared/betting';
 import { projectActor } from '../shared/snapshot-actor';
+import { WORLD_DOCUMENT } from '../shared/world-content';
+import { World } from '../shared/world';
+import { INSTALLED_DUNGEON_DEFINITIONS as DUNGEON_DEFINITIONS, dungeonEncounters } from '../shared/dungeons';
+import { INSTALLED_BOSS_BY_ID as BOSS_BY_ID } from '../shared/bosses';
+import { worldDungeons } from '../shared/world-validation';
+import { collidesWorld } from '../shared/physics';
+import { TILE_SIZE, PLAYER_RADIUS } from '../shared/config';
+import { atWarp, mapDocument, warpPosition, WARP_FADE_MS } from '../shared/warps';
+import { validInteractionCommand } from '../shared/interactions';
+import type { WorldDocument, WorldWarp } from '../shared/world-schema';
 
 type Membership = { roomId: string; epoch: number; account: Account; classId: ClassId; connected: boolean; expiresAt?: number };
 export interface MatchRoom {
@@ -41,9 +51,29 @@ export class RoomManager {
   private readonly wagerAccounts = new Map<string, Account>();
   private readonly recentBets = new Map<string, ArenaBet[]>();
   private readonly betWins = new Map<string, BetWin[]>();
-  constructor(private readonly store?: GameplayPersistence, seed = WORLD_SEED, now = Date.now()) {
-    this.global = new WorldSimulation(seed, now, store);
+  readonly interiors = new Map<string, WorldSimulation>();
+  private readonly warpRequests = new Map<string, { warp: WorldWarp; readyAt: number; epoch: number; saved: boolean }>();
+  private readonly warpMessages = new Map<string, Extract<import('../shared/types').ServerMessage, { type: 'warp-transition' }>>();
+  private readonly warpRearm = new Set<string>();
+  constructor(private readonly store?: GameplayPersistence, seed = WORLD_SEED, now = Date.now(), readonly project: WorldDocument = WORLD_DOCUMENT) {
+    const world = new World(seed, 160, 'world', project, worldDungeons(project, DUNGEON_DEFINITIONS));
+    this.global = new WorldSimulation(seed, now, store, 'world', { world, dungeons: world.dungeons.flatMap(dungeonEncounters), bosses: BOSS_BY_ID,
+      spawn: { x: project.spawn.x * TILE_SIZE, y: project.spawn.y * TILE_SIZE } });
   }
+
+  private interior(id: string): WorldSimulation {
+    let sim = this.interiors.get(id);
+    if (!sim) {
+      const document = mapDocument(this.project, id), world = new World(this.global.seed, 160, 'world', document, worldDungeons(document, DUNGEON_DEFINITIONS));
+      sim = new WorldSimulation(this.global.seed, this.global.now, this.store, 'world', { world, dungeons: world.dungeons.flatMap(dungeonEncounters), bosses: BOSS_BY_ID, spawn: warpPosition(document.spawn) });
+      this.interiors.set(id, sim);
+    }
+    sim.teams.clear(); for (const [key, team] of this.global.teams) sim.teams.set(key, { ...team, members: new Set(team.members) });
+    for (const actor of sim.players.values()) actor.teamId = [...sim.teams.values()].find(t => t.members.size > 1 && t.members.has(actor.id))?.id ?? null;
+    return sim;
+  }
+
+  private mapId(id: string): string { const room = this.membership(id).roomId; return room.startsWith('interior:') ? room.slice(9) : 'world'; }
 
   private membership(id: string): Membership {
     const member = this.memberships.get(id);
@@ -53,22 +83,31 @@ export class RoomManager {
 
   simulationFor(id: string): WorldSimulation {
     const member = this.membership(id);
-    return member.roomId === 'world' ? this.global : this.rooms.get(member.roomId)!.simulation;
+    return member.roomId === 'world' ? this.global : member.roomId.startsWith('interior:') ? this.interior(member.roomId.slice(9)) : this.rooms.get(member.roomId)!.simulation;
   }
 
   stateFor(id: string): RoomState {
     const member = this.membership(id), sim = this.simulationFor(id);
     const watched = this.spectators.get(id);
     if (watched) return { id: watched, epoch: member.epoch, mode: 'arena', seed: this.global.seed, spectating: true };
-    return { id: member.roomId, epoch: member.epoch, mode: sim.mode, seed: sim.seed };
+    return { id: member.roomId, epoch: member.epoch, mode: sim.mode, seed: sim.seed, ...(member.roomId.startsWith('interior:') ? { mapId: member.roomId.slice(9) } : {}) };
   }
 
   connect(account: Account, classId: ClassId) {
     let member = this.memberships.get(account.id);
-    if (member?.roomId !== 'world' && member?.expiresAt !== undefined && member.expiresAt <= this.global.now) this.returnToWorld(account.id, true);
+    if (!member && account.location) {
+      if (this.project.interiors?.some(m => m.id === account.location!.mapId)) {
+        member = { roomId: `interior:${account.location.mapId}`, epoch: 0, account, classId, connected: true };
+        this.memberships.set(account.id, member); this.global.awayPlayers.add(account.id);
+      } else {
+        if (account.body) Object.assign(account.body, account.location.returnTo);
+        delete account.location; this.store?.touch();
+      }
+    }
+    if (member?.roomId !== 'world' && !member?.roomId.startsWith('interior:') && member?.expiresAt !== undefined && member.expiresAt <= this.global.now) this.returnToWorld(account.id, true);
     member = this.memberships.get(account.id);
     const sim = member ? this.simulationFor(account.id) : this.global;
-    const actor = sim.addPlayer(member && member.roomId !== 'world' ? sim.accounts.get(account.id)! : account,
+    const actor = sim.addPlayer(member && member.roomId !== 'world' && !member.roomId.startsWith('interior:') ? sim.accounts.get(account.id)! : account,
       member && member.roomId !== 'world' ? member.classId : classId);
     if (!member) {
       // Reconnecting/restarting inside the entrance must not silently opt into another match.
@@ -80,10 +119,12 @@ export class RoomManager {
     member.classId = actor.classId;
     member.connected = true;
     member.expiresAt = undefined;
+    this.warpRearm.add(account.id);
     return actor;
   }
 
   disconnect(id: string, voluntary = false): void {
+    this.warpRequests.delete(id); this.warpMessages.delete(id);
     this.recentBets.delete(id);
     if (this.spectators.has(id)) this.stopWatching(id);
     const member = this.memberships.get(id);
@@ -95,6 +136,9 @@ export class RoomManager {
     if (member.roomId === 'world') {
       // Preserve the existing open-world combat-logout grace for every exit.
       this.global.disconnectPlayer(id);
+      member.expiresAt = this.global.now + 20_000;
+    } else if (member.roomId.startsWith('interior:')) {
+      this.simulationFor(id).disconnectPlayer(id);
       member.expiresAt = this.global.now + 20_000;
     } else if (voluntary) {
       this.returnToWorld(id, true);
@@ -109,6 +153,12 @@ export class RoomManager {
     if (this.spectators.has(id)) return true;
     // In-flight packets from a previous instance are harmless, not malformed input.
     if (roomId !== member.roomId || epoch !== member.epoch) return true;
+    if (this.warpRequests.has(id)) {
+      const sim = this.simulationFor(id);
+      if (!sim.enqueueInput(id, input)) return false;
+      const connection = sim.connections.get(id)!; connection.inputs.length = 0; connection.ack = input.seq;
+      return true;
+    }
     if ((this.rooms.get(member.roomId)?.startsAt ?? 0) > this.global.now) {
       const sim = this.simulationFor(id);
       if (!sim.enqueueInput(id, input)) return false;
@@ -125,6 +175,13 @@ export class RoomManager {
     if (this.spectators.has(id)) return false;
     if (command?.kind === 'talk' && command.targetId === 'authored:npc-arena-bookmaker') return false;
     if (!member.connected || roomId !== member.roomId || epoch !== member.epoch) return false;
+    if (!validInteractionCommand(command)) return false;
+    if (this.warpRequests.has(id)) return false;
+    if (command.kind === 'warp') {
+      const warp = this.project.warps?.find(w => w.id === command.warpId && w.from === this.mapId(id) && w.activation === 'interact');
+      if (!warp) throw new Error('Passaggio non disponibile.');
+      this.requestWarp(id, warp); return true;
+    }
     this.simulationFor(id).interact(id, command); return true;
   }
 
@@ -200,6 +257,15 @@ export class RoomManager {
   returnToWorld(id: string, forfeit = false): void {
     const member = this.membership(id);
     if (member.roomId === 'world') return;
+    if (member.roomId.startsWith('interior:')) {
+      const sim = this.simulationFor(id); sim.detachPlayer(id);
+      if (member.account.body && member.account.location) Object.assign(member.account.body, member.account.location.returnTo);
+      delete member.account.location;
+      member.roomId = 'world'; member.epoch++; this.global.awayPlayers.delete(id);
+      if (member.connected) this.global.addPlayer(member.account, member.classId);
+      else { this.global.leaveTeam(id); this.memberships.delete(id); }
+      this.store?.touch(); return;
+    }
     const room = this.rooms.get(member.roomId)!;
     if (forfeit) this.matchResults.set(id, { roomId: room.id, mode: room.mode, outcome: 'loss', reason: 'forfeit' });
     this.mustExitGate.add(id);
@@ -252,13 +318,15 @@ export class RoomManager {
 
   step(dt = DT): void {
     this.global.step(dt);
+    for (const id of this.interiors.keys()) this.interior(id).step(dt);
     for (const room of this.rooms.values()) {
       if ((room.startsAt ?? 0) > this.global.now) { room.simulation.now = this.global.now; continue; }
       if (room.market) room.market.phase = 'live';
       room.simulation.step(dt);
     }
     for (const [id, member] of this.memberships) if (!member.connected && member.expiresAt !== undefined && member.expiresAt <= this.global.now) {
-      if (member.roomId !== 'world') this.returnToWorld(id, true);
+      if (member.roomId.startsWith('interior:')) { this.simulationFor(id).detachPlayer(id); this.global.awayPlayers.delete(id); this.global.leaveTeam(id); this.memberships.delete(id); this.warpRearm.delete(id); }
+      else if (member.roomId !== 'world') this.returnToWorld(id, true);
       else { this.memberships.delete(id); this.mustExitGate.delete(id); }
     }
     for (const room of [...this.rooms.values()]) {
@@ -266,6 +334,7 @@ export class RoomManager {
       if (this.global.now >= room.endsAt || teams.size < 2) this.closeMatch(room.id, this.global.now >= room.endsAt ? 'timeout' : 'elimination');
     }
     this.stepArenaGate();
+    this.stepWarps();
   }
 
   private stepArenaGate(): void {
@@ -377,6 +446,79 @@ export class RoomManager {
     return !!actor && !!npc && Math.hypot(actor.x - npc.x, actor.y - npc.y) <= INTERACTION_RANGE;
   }
 
+  private requestWarp(id: string, warp: WorldWarp): void {
+    const member = this.membership(id), sim = this.simulationFor(id), actor = sim.players.get(id);
+    if (this.transfersStopped || this.pendingPlayers.has(id) || this.warpRequests.has(id) || this.spectators.has(id)
+      || !member.connected || sim.mode !== 'world' || !actor || actor.hp <= 0 || !atWarp(actor, warp) || this.mapId(id) !== warp.from)
+      throw new Error('Avvicinati al passaggio per attraversarlo.');
+    if (this.warpRearm.has(id)) throw new Error('Allontanati dalla porta e rientra per attraversarla di nuovo.');
+    if (sim.fishing.busy(id)) throw new Error('Ritira la lenza prima di attraversare.');
+    if (Math.max(sim.connections.get(id)?.combatUntil ?? 0, actor.pvpUntil ?? 0) > sim.now
+      || [...sim.bosses.values()].some(b => b.participantIds.has(id) && b.ownerId)) throw new Error('Non puoi attraversare durante un combattimento.');
+    const target = warp.to === 'world' ? this.global : this.interior(warp.to), arrival = warpPosition(warp.arrival);
+    if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world)) throw new Error('Arrivo del passaggio bloccato.');
+    sim.checkpoint(); this.store?.flush();
+    sim.interactions.close(id); sim.fishing.close(id); sim.connections.get(id)!.inputs.length = 0;
+    const request = { warp, readyAt: this.global.now + WARP_FADE_MS + 80, epoch: member.epoch, saved: !this.store };
+    this.warpRequests.set(id, request);
+    if (this.store) void this.store.drain().then(() => { request.saved = true; }).catch(error => {
+      if (this.warpRequests.get(id) !== request) return;
+      this.warpRequests.delete(id); this.warpRearm.add(id);
+      this.warpMessages.set(id, { type: 'warp-transition', phase: 'cancel' });
+      this.notices.set(id, `Passaggio annullato: ${(error as Error).message}`);
+    });
+    this.warpMessages.set(id, { type: 'warp-transition', phase: 'start', name: warp.name });
+  }
+
+  private stepWarps(): void {
+    for (const [id, member] of this.memberships) {
+      if (!member.connected || this.spectators.has(id) || this.simulationFor(id).mode !== 'world') continue;
+      const actor = this.simulationFor(id).players.get(id); if (!actor) continue;
+      const nearby = (this.project.warps ?? []).filter(w => w.from === this.mapId(id) && atWarp(actor, w));
+      if (this.warpRearm.has(id)) { if (!nearby.length) this.warpRearm.delete(id); continue; }
+      if (!this.warpRequests.has(id)) {
+        const warp = nearby.find(w => w.activation === 'walk');
+        if (warp && actor.hp > 0 && !this.simulationFor(id).fishing.busy(id)) {
+          try { this.requestWarp(id, warp); } catch (e) { this.notices.set(id, (e as Error).message); this.warpRearm.add(id); }
+        }
+      }
+    }
+    for (const [id, request] of this.warpRequests) if (request.saved && this.global.now >= request.readyAt) {
+      this.warpRequests.delete(id);
+      const member = this.memberships.get(id); if (!member?.connected) continue;
+      const source = this.simulationFor(id), actor = source.players.get(id), { warp } = request;
+      if (this.transfersStopped || member.epoch !== request.epoch || !actor || actor.hp <= 0 || !atWarp(actor, warp)
+        || Math.max(source.connections.get(id)?.combatUntil ?? 0, actor.pvpUntil ?? 0) > source.now) {
+        this.warpRearm.add(id); this.notices.set(id, 'Passaggio interrotto.');
+        this.warpMessages.set(id, { type: 'warp-transition', phase: 'cancel' }); continue;
+      }
+      const target = warp.to === 'world' ? this.global : this.interior(warp.to), arrival = warpPosition(warp.arrival);
+      const oldBody = structuredClone(actor), oldLocation = member.account.location;
+      try {
+        if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world)) throw new Error('Arrivo bloccato.');
+        source.detachPlayer(id);
+        Object.assign(member.account.body!, arrival);
+        if (warp.to === 'world') delete member.account.location;
+        else member.account.location = { mapId: warp.to, returnTo: oldLocation?.returnTo ?? { x: oldBody.x, y: oldBody.y } };
+        target.addPlayer(member.account, member.classId);
+        member.roomId = warp.to === 'world' ? 'world' : `interior:${warp.to}`; member.epoch++;
+        if (warp.to === 'world') this.global.awayPlayers.delete(id); else this.global.awayPlayers.add(id);
+        target.checkpoint(); this.store?.touch(); this.store?.flush(); this.warpRearm.add(id);
+      } catch (error) {
+        if (target.players.has(id)) target.detachPlayer(id);
+        member.account.body = oldBody; member.account.location = oldLocation;
+        member.roomId = warp.from === 'world' ? 'world' : `interior:${warp.from}`;
+        source.addPlayer(member.account, member.classId); member.epoch++;
+        if (warp.from === 'world') this.global.awayPlayers.delete(id); else this.global.awayPlayers.add(id);
+        this.store?.touch(); this.warpRearm.add(id);
+        this.notices.set(id, `Passaggio annullato: ${(error as Error).message}`);
+        this.warpMessages.set(id, { type: 'warp-transition', phase: 'cancel' });
+      }
+    }
+  }
+
+  takeWarpTransition(id: string) { const message = this.warpMessages.get(id); this.warpMessages.delete(id); return message; }
+
   private bettingView(id: string) {
     const member = this.membership(id), watched = this.spectators.get(id);
     let bets = this.recentBets.get(id);
@@ -450,7 +592,7 @@ export class RoomManager {
     this.store?.flush();
   }
 
-  checkpoint(): void { this.global.checkpoint(); }
+  checkpoint(): void { this.global.checkpoint(); for (const sim of this.interiors.values()) sim.checkpoint(); }
   private bettingInCombat(id: string): boolean {
     const member = this.memberships.get(id);
     if (!member || this.spectators.has(id)) return false;

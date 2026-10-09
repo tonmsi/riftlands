@@ -119,8 +119,10 @@ export function inwardFlameAngle(flame: DungeonFlameBarrier, bounds: DungeonTile
 }
 export const DEFAULT_DUNGEON_THEME: DungeonTheme = { floor: '#918567', wall: '#5c5d52', wallTop: '#92917e', minimap: '#d8bd79', markerStone: '#777864', markerEdge: '#464e42', markerRune: '#d0b97999' };
 
+export const INSTALLED_DUNGEON_DEFINITIONS = unpackDungeonCatalog(customDungeons).map(entry => entry.definition);
+const indoorDungeonIds = new Set((WORLD_DOCUMENT.interiors ?? []).flatMap(m => m.document.dungeons.filter(p => p.enabled !== false).map(p => p.dungeonId)));
 export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] =
-  unpackDungeonCatalog(customDungeons).filter(entry => WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id)?.enabled !== false).map(entry => {
+  unpackDungeonCatalog(customDungeons).filter(entry => !indoorDungeonIds.has(entry.definition.id) && WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id)?.enabled !== false).map(entry => {
     const placement = WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id);
     return placement ? relocateDungeon(entry.definition, placement) : entry.definition;
   });
@@ -133,6 +135,10 @@ if (new Set(DUNGEON_DEFINITIONS.map(dungeon => dungeon.id)).size !== DUNGEON_DEF
 }
 export const DUNGEON_BY_ID = new Map(DUNGEON_DEFINITIONS.map(definition => [definition.id, definition]));
 export const DUNGEON_BY_BOSS_ID = new Map(DUNGEON_DEFINITIONS.flatMap(dungeonEncounters).map(definition => [definition.bossId, definition]));
+export const PERSISTENT_DUNGEON_BY_BOSS_ID = new Map([...DUNGEON_DEFINITIONS,
+  ...(WORLD_DOCUMENT.interiors ?? []).flatMap(m => m.document.dungeons.filter(p => p.enabled !== false).flatMap(p => {
+    const definition = INSTALLED_DUNGEON_DEFINITIONS.find(d => d.id === p.dungeonId); return definition ? [relocateDungeon(definition, p)] : [];
+  }))].flatMap(dungeonEncounters).map(d => [d.bossId, d]));
 if (DUNGEON_BY_BOSS_ID.size !== DUNGEON_DEFINITIONS.flatMap(dungeonEncounters).length) throw new Error('ID boss duplicato nel catalogo dungeon.');
 
 const insideRect = (tx: number, ty: number, rect: DungeonTileRect): boolean =>

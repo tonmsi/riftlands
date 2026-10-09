@@ -144,7 +144,7 @@ const server = createServer((request, response) => {
   }
   if (path === '/health') {
     response.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    response.end(JSON.stringify({ ok: healthy, online: byAccount.size, worldOnline: simulation.online, matchRooms: rooms.rooms.size, tick: simulation.tick, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE, activeChunks: simulation.activeChunks.size + [...rooms.rooms.values()].reduce((sum, room) => sum + room.simulation.activeChunks.size, 0), npcs: simulation.npcs.size, tickCostMs: Math.round(tickCostMs * 100) / 100, metrics: metrics.read() }));
+    response.end(JSON.stringify({ ok: healthy, online: byAccount.size, worldOnline: simulation.online, matchRooms: rooms.rooms.size, interiorRooms: rooms.interiors.size, tick: simulation.tick, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE, activeChunks: simulation.activeChunks.size + [...rooms.rooms.values()].reduce((sum, room) => sum + room.simulation.activeChunks.size, 0) + [...rooms.interiors.values()].reduce((sum, sim) => sum + sim.activeChunks.size, 0), npcs: simulation.npcs.size + [...rooms.interiors.values()].reduce((sum, sim) => sum + sim.npcs.size, 0), tickCostMs: Math.round(tickCostMs * 100) / 100, metrics: metrics.read() }));
     return;
   }
   if (!production) {
@@ -247,6 +247,8 @@ function sendSnapshot(session: Session): void {
   if (session.ws.readyState !== WebSocket.OPEN || session.ws.bufferedAmount > 0) { metrics.snapshotsSkipped++; return; }
   const started = performance.now();
   const state = rooms.stateFor(session.id!);
+  const warpTransition = rooms.takeWarpTransition(session.id!);
+  if (warpTransition) send(session, warpTransition);
   if (session.roomEpoch !== state.epoch) {
     if (!send(session, { type: 'room', room: state })) return;
     session.roomEpoch = state.epoch;

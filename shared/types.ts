@@ -11,7 +11,7 @@ export type Vec2 = { x: number; y: number };
 export type RoomMode = 'world' | 'arena' | 'battleground';
 export interface Actor { pvpUntil?: number; }
 export interface Actor { soulEscort?: boolean; soulFarewellAt?: number; soulFarewellX?: number; soulFarewellY?: number; }
-export interface RoomState { id: string; epoch: number; mode: RoomMode; seed: number; spectating?: boolean; }
+export interface RoomState { id: string; epoch: number; mode: RoomMode; seed: number; spectating?: boolean; mapId?: string; }
 export interface ArenaGateState { phase: 'waiting' | 'countdown' | 'combat' | 'reenter' | 'full'; players: number; startsAt?: number; }
 export type TileKind = 'grass' | 'path' | 'water' | 'rock' | 'bush' | 'mud' | 'snow' | 'ice';
 export type Biome = 'meadow' | 'forest' | 'marsh';
@@ -79,6 +79,7 @@ export interface MatchResult {
 }
 
 export type ServerMessage =
+  | { type: 'warp-transition'; phase: 'start' | 'cancel'; name?: string }
   | { type: 'bet-win'; win: import('./betting').BetWin }
   | { type: 'welcome'; token: string; account: PublicAccount; playerId: string; seed: number; tickRate: number; time: number; social: SocialState }
   | { type: 'room'; room: RoomState }

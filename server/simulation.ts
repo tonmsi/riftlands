@@ -15,7 +15,7 @@ import { FishingSystem } from './fishing/fishing-system';
 import { validInteractionCommand, type InteractionCommand } from '../shared/interactions';
 import { newInventory } from '../shared/items';
 import { newNarrativeProgress } from '../shared/narrative';
-import { syncSoulEscort, SOUL_FAREWELL_MS } from '../shared/soul-escort';
+import { syncSoulEscort, clearSoulFarewell, SOUL_FAREWELL_MS } from '../shared/soul-escort';
 import { BossEncounter } from './boss-encounter';
 import type { Account } from './store';
 import type { GameplayPersistence } from './gameplay-persistence';
@@ -139,6 +139,8 @@ export class WorldSimulation {
     const character = activateCharacter(account, classId);
     this.accounts.set(account.id, account);
     if (current) {
+      // Farewell is a live scene, never something to resume on login or class change.
+      clearSoulFarewell(current);
       current.name = account.name;
       if (current.classId !== classId) {
         const spec = CLASSES[classId];
@@ -197,6 +199,8 @@ export class WorldSimulation {
   disconnectPlayer(id: string): void {
     this.fishing.close(id);
     this.interactions.close(id);
+    const actor = this.players.get(id);
+    if (actor) { clearSoulFarewell(actor); this.snapshots.invalidate(); }
     const connection = this.connections.get(id);
     if (!connection) return;
     connection.connected = false;
@@ -260,7 +264,7 @@ export class WorldSimulation {
       }
       actor.effects = actor.effects.filter(effect => effect.until > this.now);
       if (actor.soulFarewellAt !== undefined && this.now >= actor.soulFarewellAt + SOUL_FAREWELL_MS) {
-        delete actor.soulFarewellAt; delete actor.soulFarewellX; delete actor.soulFarewellY;
+        clearSoulFarewell(actor);
       }
       const input = connection.inputs.shift();
       actor.spriteMoving = actor.hp > 0 && !!input && Math.hypot(input.dx, input.dy) > 0;
@@ -328,7 +332,8 @@ export class WorldSimulation {
     for (let i = 0; i < 1200; i++) {
       const r = 40 + (Math.floor(i / 12) % 9) * 18;
       const origin = this.world.authoring.document.spawn;
-      const point = { x: origin.x * TILE_SIZE + Math.cos(angle + i * 2.4) * r, y: origin.y * TILE_SIZE + Math.sin(angle + i * 2.4) * r };
+      const offset = this.world.authoring.document.interiorBounds ? .5 : 0;
+      const point = { x: (origin.x + offset) * TILE_SIZE + Math.cos(angle + i * 2.4) * r, y: (origin.y + offset) * TILE_SIZE + Math.sin(angle + i * 2.4) * r };
       if (!this.world.arenaAt(point.x, point.y) && !collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, this.world) && ![...this.players.values()].some(actor => actor.hp > 0 && distance(actor, point) < 40)) return point;
     }
     return { x: this.world.authoring.document.spawn.x * TILE_SIZE + TILE_SIZE / 2, y: this.world.authoring.document.spawn.y * TILE_SIZE + TILE_SIZE / 2 };

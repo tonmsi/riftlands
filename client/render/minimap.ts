@@ -46,7 +46,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
     for (let ty = startY; ty < startY + rows; ty++) {
       for (let tx = startX; tx < startX + cols; tx++) {
       const tile = world.getTile(tx, ty);
-      const dungeon = world.mode === 'world' ? dungeonAtTile(tx, ty) : undefined;
+      const dungeon = world.mode === 'world' ? world.dungeons.find(d => tx >= d.layout.bounds.minTx && tx <= d.layout.bounds.maxTx && ty >= d.layout.bounds.minTy && ty <= d.layout.bounds.maxTy) : undefined;
       paint.fillStyle = dungeon && tile === 'rock' ? dungeon.theme.wallTop
         : dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor
         : mapTerrainColor(tile, world.getMoisture((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE), noise(tx, ty));
@@ -70,7 +70,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   }
 
   if (world.mode === 'world') {
-    for (const dungeon of DUNGEON_DEFINITIONS) {
+    for (const dungeon of world.dungeons) {
       const dx = Math.max(10, Math.min(width - 10, (dungeon.area.x - left) * scale));
       const dy = Math.max(10, Math.min(height - 10, (dungeon.area.y - top) * scale));
       ctx.save();
