@@ -20,12 +20,13 @@ html.game-active, .game-active body { overflow:hidden; overscroll-behavior:none;
 .touch-layout.is-playing { --control-edge:20px; --stick-size:124px; --skill-size:58px; --attack-size:76px }
 .touch-layout .mobile-joystick {
   display:grid; place-items:center; position:absolute; pointer-events:auto;
-  left:calc(var(--safe-left) + var(--control-edge)); bottom:calc(var(--safe-bottom) + 24px);
+  left:clamp(calc(var(--safe-left) + var(--control-edge)), calc(var(--safe-left) + var(--control-edge) + var(--move-x, 0%)), calc(100% - var(--stick-size) - var(--safe-right) - 20px));
+  bottom:clamp(calc(var(--safe-bottom) + var(--stick-bottom, 24px)), calc(var(--safe-bottom) + var(--stick-bottom, 24px) + var(--move-y, 0%)), calc(100% - var(--stick-size) - var(--safe-top) - 20px));
   width:var(--stick-size); height:var(--stick-size); border-radius:50%; border:2px solid #c6e7ff40;
   background:radial-gradient(circle, #49739614 0 48%, #18374c30 49%); box-shadow:inset 0 0 20px #15344d22, 0 3px 20px #0004;
 }
 .joystick-knob { width:46%; height:46%; border-radius:50%; border:2px solid #b6dcf566; background:radial-gradient(circle at 35% 30%, #77aec160, #30567465); box-shadow:0 3px 12px #0005; pointer-events:none }
-.touch-layout .combat-hud { left:auto; right:calc(var(--safe-right) + var(--control-edge)); bottom:calc(var(--safe-bottom) + 22px); width:190px; height:174px; max-width:none; transform:none; display:block }
+.touch-layout .combat-hud { left:auto; right:clamp(calc(var(--safe-right) + var(--control-edge)), calc(var(--safe-right) + var(--control-edge) + var(--attack-x, 0%)), calc(100% - 190px - var(--safe-left) - 20px)); bottom:clamp(calc(var(--safe-bottom) + var(--attack-bottom, 22px)), calc(var(--safe-bottom) + var(--attack-bottom, 22px) + var(--attack-y, 0%)), calc(100% - 174px - var(--safe-top) - 20px)); width:190px; height:174px; max-width:none; transform:none; display:block }
 .touch-layout .combat-instruction, .touch-layout .combat-caption { display:none }
 .touch-layout .ability-bar { position:relative; width:100%; height:100%; display:block; padding:0; border:0; background:none; box-shadow:none; backdrop-filter:none; pointer-events:none }
 .touch-layout .ability-button { position:absolute; width:var(--skill-size); height:var(--skill-size); border-radius:50%; pointer-events:auto; border:2px solid color-mix(in srgb, var(--ability-color) 65%, transparent); background:radial-gradient(circle at 35% 25%, #415745e8, #142a28ed); box-shadow:0 3px 12px #0006; gap:0; overflow:hidden }
@@ -100,8 +101,8 @@ html.game-active, .game-active body { overflow:hidden; overscroll-behavior:none;
 }
 @media (orientation:landscape) and (max-height:370px) {
   .touch-layout.is-playing { --stick-size:106px; --skill-size:52px; --attack-size:66px }
-  .touch-layout .combat-hud { width:174px; height:156px; bottom:calc(var(--safe-bottom) + 14px) }
-  .touch-layout .mobile-joystick { bottom:calc(var(--safe-bottom) + 14px) }
+  .touch-layout .combat-hud { width:174px; height:156px; --attack-bottom:14px }
+  .touch-layout .mobile-joystick { --stick-bottom:14px }
   .touch-layout .target-panel { top:calc(var(--safe-top) + 120px); max-height:calc(var(--game-height) - 255px - var(--safe-top) - var(--safe-bottom)) }
   .touch-layout .effect-list { top:calc(var(--safe-top) + 90px) }
 }

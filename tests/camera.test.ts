@@ -6,7 +6,8 @@ import { defaultControls, GameControls } from '../client/controls/controls';
 test('camera preserves the game scale and bounds wide and tall displays', () => {
   const settings = parseCameraSettings(null);
   assert.equal(cameraZoom(1280, 900, false, settings), .95);
-  assert.equal(cameraZoom(1280, 900, true, settings), .76);
+  assert.ok(Math.abs(cameraZoom(1280, 900, true, settings) - .6175) < 1e-10);
+  assert.ok(cameraZoom(844, 390, true, settings) < .76);
   for (const [width, height] of [[5120, 1440], [1920, 3000]]) {
     const zoom = cameraZoom(width, height, false, settings);
     assert.ok(width / zoom <= 2200 / .95);

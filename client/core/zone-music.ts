@@ -11,7 +11,37 @@ interface Voice {
 export class ZoneMusicPlayer {
   private voices = new Map<string, Voice>();
   private desired?: ZoneMusic;
-  constructor(private context: AudioContext) {}
+  private muted = false;
+  private volume = 1;
+  private unmuteUntil = 0;
+  private output: GainNode;
+  constructor(private context: AudioContext) {
+    this.output = context.createGain(); this.output.connect(context.destination);
+  }
+
+  setMuted(muted: boolean): void {
+    if (muted === this.muted) return;
+    this.muted = muted;
+    const now = this.context.currentTime;
+    const current = this.output.gain.value;
+    this.output.gain.cancelScheduledValues(now); this.output.gain.setValueAtTime(current, now);
+    if (muted) { this.unmuteUntil = 0; this.output.gain.setValueAtTime(0, now); }
+    else {
+      this.unmuteUntil = now + MUSIC_FADE_SECONDS;
+      this.output.gain.linearRampToValueAtTime(this.volume, now + MUSIC_FADE_SECONDS);
+      const track = this.desired; this.desired = undefined; this.select(track);
+    }
+  }
+
+  setVolume(volume: number): void {
+    if (volume === this.volume) return;
+    this.volume = volume;
+    const now = this.context.currentTime;
+    const current = this.output.gain.value;
+    this.output.gain.cancelScheduledValues(now); this.output.gain.setValueAtTime(current, now);
+    if (!this.voices.size) this.output.gain.setValueAtTime(this.muted ? 0 : volume, now);
+    else this.output.gain.linearRampToValueAtTime(this.muted ? 0 : volume, Math.max(now + .1, this.unmuteUntil));
+  }
 
   select(track?: ZoneMusic): void {
     if (track?.src === this.desired?.src && track?.volume === this.desired?.volume) return;
@@ -26,6 +56,7 @@ export class ZoneMusicPlayer {
     if (!track) return;
     let voice = this.voices.get(track.src);
     if (voice) { this.fade(voice, track.volume); return; }
+    if (this.muted) return;
     // Bound playback/decoding even when rapidly crossing several music areas.
     if (this.voices.size >= 2) {
       const [src, old] = this.voices.entries().next().value!;
@@ -35,7 +66,7 @@ export class ZoneMusicPlayer {
     media.preload = 'none'; media.loop = true;
     const gain = this.context.createGain(); gain.gain.value = 0;
     const source = this.context.createMediaElementSource(media);
-    source.connect(gain).connect(this.context.destination);
+    source.connect(gain).connect(this.output);
     voice = { media, gain, source, started: false, from: 0, target: 0, at: this.context.currentTime };
     this.voices.set(track.src, voice);
     media.src = track.src;

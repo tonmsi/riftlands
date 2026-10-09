@@ -247,6 +247,12 @@
 .camera-options input,.camera-options select { width:100%; min-width:0; accent-color:#c7d59d; }
 .camera-options select { padding:7px; background:#1c2928; color:#e8eadc; border:1px solid #8da39855; border-radius:6px; }
 .camera-options small { font-size:11px; line-height:1.5; color:#b8c4b4; }
+.device-options { border-top:1px solid #8da39833; }
+.device-options summary { padding:12px; cursor:pointer; color:#e8eadc; font-size:13px; }
+.device-options button { padding:8px; border:1px solid #8da39855; border-radius:6px; background:#1c2928; color:#e8eadc; }
+.device-options input[type=range] { min-height:28px; }
+.mobile-layout-options { display:none; }
+.touch-layout .mobile-layout-options { display:block; }
 .match-result-status { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 
 /* XP lives with the vitals; the short level celebration never captures input. */

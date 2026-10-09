@@ -2,6 +2,7 @@ import type { Actor, GameEvent, Vec2 } from '../../shared/types';
 import type { BossWindup } from '../../shared/bosses';
 import type { ZoneMusic } from '../../shared/world-schema';
 import { ZoneMusicPlayer } from './zone-music';
+import { AUDIO_STORAGE_KEY, parseAudioSettings, type AudioSettings } from '../controls/audio-settings';
 
 export interface SoundCue extends Vec2 { kind: 'step' | 'swing' | 'magic' | 'hit'; heavy?: boolean; }
 
@@ -65,9 +66,11 @@ export class GameAudio {
   private music?: ZoneMusicPlayer;
   private readonly cues = new SoundCues();
   muted = false;
+  settings: AudioSettings = parseAudioSettings(null);
 
   constructor() {
     try { this.muted = localStorage.getItem('riftlands.audio.muted') === 'true'; } catch { /* Optional storage. */ }
+    try { this.settings = parseAudioSettings(localStorage.getItem(AUDIO_STORAGE_KEY)); } catch { /* Optional storage. */ }
   }
 
   unlock = (): void => {
@@ -77,8 +80,9 @@ export class GameAudio {
         const context = new AudioContext();
         this.context = context;
         this.music = new ZoneMusicPlayer(context);
+        this.music.setVolume(this.settings.music); this.music.setMuted(this.muted);
         this.master = context.createGain();
-        this.master.gain.value = this.active ? 0.45 : 0;
+        this.master.gain.value = this.active && !this.muted ? 0.45 * this.settings.effects : 0;
         this.master.connect(context.destination);
         this.noise = context.createBuffer(1, context.sampleRate, context.sampleRate);
         const data = this.noise.getChannelData(0);
@@ -90,27 +94,34 @@ export class GameAudio {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
-    if (muted) this.music?.stop();
-    if (this.master && this.context) this.master.gain.setTargetAtTime(muted || !this.active ? 0 : 0.45, this.context.currentTime, 0.015);
+    this.music?.setMuted(muted);
+    if (this.master && this.context) this.master.gain.setTargetAtTime(muted || !this.active ? 0 : 0.45 * this.settings.effects, this.context.currentTime, 0.015);
     try { localStorage.setItem('riftlands.audio.muted', String(muted)); } catch { /* Optional storage. */ }
     if (!muted) this.unlock();
   }
 
   reset(stopMusic = true): void { this.cues.reset(); if (stopMusic) this.music?.stop(); }
 
+  setVolumes(settings: AudioSettings): void {
+    this.settings = parseAudioSettings(JSON.stringify(settings));
+    this.music?.setVolume(this.settings.music);
+    if (this.master && this.context) this.master.gain.setTargetAtTime(this.active && !this.muted ? .45 * this.settings.effects : 0, this.context.currentTime, .015);
+    try { localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(this.settings)); } catch { /* Optional storage. */ }
+  }
+
   setMusic(track?: ZoneMusic): void {
-    if (this.active && !this.muted && this.context?.state === 'running') this.music?.select(track);
+    if (this.active && this.context?.state === 'running') this.music?.select(track);
   }
 
   setActive(active: boolean): void {
     if (active === this.active) return;
     this.active = active;
     if (!active) this.reset();
-    if (this.master && this.context) this.master.gain.setTargetAtTime(active && !this.muted ? 0.45 : 0, this.context.currentTime, 0.015);
+    if (this.master && this.context) this.master.gain.setTargetAtTime(active && !this.muted ? 0.45 * this.settings.effects : 0, this.context.currentTime, 0.015);
   }
 
   update(self: Actor, actors: Actor[], events: GameEvent[], windups: BossWindup[], time: number): void {
-    if (this.muted || this.context?.state !== 'running') { this.cues.reset(); return; }
+    if (this.muted || !this.settings.effects || this.context?.state !== 'running') { this.cues.reset(); return; }
     const nearby = actors.filter(actor => actor.id !== self.id && Math.hypot(actor.x - self.x, actor.y - self.y) < 700);
     nearby.push(self);
     const cues = this.cues.sample(nearby, events, windups, time);

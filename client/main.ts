@@ -26,6 +26,7 @@ import { FrameBudget } from './core/frame-budget';
 import { prepareLobbyArt } from './ui/lobby/lobby-assets';
 import { CAMERA_STORAGE_KEY, parseCameraSettings } from './controls/camera-settings';
 import { CameraOptions } from './controls/camera-options';
+import { DeviceOptions } from './controls/device-options';
 import { matchResultText } from './ui/transition-overlay';
 import { WarpUI } from './ui/warp-ui';
 import { WORLD_DOCUMENT } from '../shared/world-content';
@@ -125,7 +126,7 @@ const refreshAudioButton = (): void => {
   audioButton.setAttribute('aria-pressed', String(audio.muted));
 };
 refreshAudioButton();
-audioButton.addEventListener('click', () => { audio.setMuted(!audio.muted); refreshAudioButton(); });
+audioButton.addEventListener('click', () => { audio.setMuted(!audio.muted); refreshAudioButton(); deviceOptions.refresh(); });
 document.querySelector('.map-actions')!.append(audioButton);
 window.addEventListener('pointerdown', audio.unlock);
 window.addEventListener('keydown', audio.unlock);
@@ -137,6 +138,7 @@ let cameraSettings = parseCameraSettings(null);
 try { cameraSettings = parseCameraSettings(localStorage.getItem(CAMERA_STORAGE_KEY)); } catch { /* Storage may be unavailable. */ }
 renderer.setCameraSettings(cameraSettings);
 new CameraOptions(document.querySelector<HTMLElement>('#app')!, cameraSettings, settings => renderer.setCameraSettings(settings));
+const deviceOptions = new DeviceOptions(document.querySelector<HTMLElement>('#app')!, audio, refreshAudioButton, releaseControls);
 const menuAssetsReady = prepareLobbyArt(renderer.spritesReady, (done, total, failed) => ui.setAssetProgress(done, total, failed), Object.values(PROFILE_URLS)).then(art => ui.setLobbyArt(art));
 const connection = new GameConnection({
   reset: () => { fishingUI.reset(); renderer.clearMatchResult(); releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },

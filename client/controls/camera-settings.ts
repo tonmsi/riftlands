@@ -18,7 +18,7 @@ export function parseCameraSettings(raw: string | null): CameraSettings {
 }
 export function cameraZoom(width: number, height: number, touch: boolean, settings: CameraSettings): number {
   const limit = VIEW_LIMITS[settings.viewLimit];
-  const base = (width < 680 ? 0.8 : 0.95) * (touch ? 0.8 : 1);
+  const base = (width < 680 ? 0.8 : 0.95) * (touch ? 0.65 : 1);
   return base * Math.max(1, width / limit.width, height / limit.height) * settings.zoom;
 }
 /** Reflect about the horizontal axis only for the team spawning at the top. */
