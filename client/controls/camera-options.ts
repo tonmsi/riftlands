@@ -1,4 +1,5 @@
 import { CAMERA_STORAGE_KEY, parseCameraSettings, type CameraSettings } from './camera-settings';
+import { installScrollSafeRanges } from './scroll-safe-ranges';
 
 /** The same device preferences are editable from the lobby and during play. */
 export class CameraOptions {
@@ -10,6 +11,7 @@ export class CameraOptions {
       panel.className = 'camera-options';
       panel.innerHTML = `<strong>Visuale e zoom</strong><label>Zoom <output></output><input data-camera-zoom type="range" min="100" max="200" step="5" aria-label="Zoom di gioco"></label><label>Limite della visuale<select data-camera-limit aria-label="Limite della visuale"><option value="standard">2200 × 1400 (predefinito)</option><option value="compact">1920 × 1080</option><option value="close">1600 × 1000</option></select></label><small>Il limite riduce quanto mondo puoi vedere sui grandi schermi. Lo zoom è uguale nel mondo e in arena.</small>`;
       target.append(panel); panels.push(panel);
+      installScrollSafeRanges(panel);
     }
     const refresh = () => {
       for (const panel of panels) {

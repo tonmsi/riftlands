@@ -1,5 +1,6 @@
 import type { GameAudio } from '../core/audio';
 import { applyMobileLayout, MOBILE_LAYOUT_STORAGE_KEY, parseMobileLayout, type MobileLayoutSettings } from './mobile-settings';
+import { installScrollSafeRanges } from './scroll-safe-ranges';
 
 /** Mirrored settings in lobby and HUD, stored only on this device. */
 export class DeviceOptions {
@@ -14,6 +15,7 @@ export class DeviceOptions {
       const panel = document.createElement('div'); panel.className = 'device-options';
       panel.innerHTML = `<details open><summary>Audio</summary><div class="camera-options"><button type="button" data-device-mute></button>${range('effects', 'Volume effetti', 100)}${range('music', 'Volume musica', 100)}<small>Riattivando la musica il volume torna in 5 secondi, mantenendo il punto della traccia.</small></div></details><details class="mobile-layout-options"><summary>Controlli mobile</summary><div class="camera-options"><strong>Joystick movimento</strong>${range('moveX', 'Movimento verso il centro', 30)}${range('moveY', 'Movimento più in alto', 30)}<strong>Attacchi</strong>${range('attackX', 'Attacchi verso il centro', 30)}${range('attackY', 'Attacchi più in alto', 30)}<button type="button" data-device-reset>Ripristina posizioni</button><small>Posizioni proporzionali allo schermo, salvate su questo dispositivo.</small></div></details>`;
       target.append(panel); this.panels.push(panel);
+      installScrollSafeRanges(panel);
       panel.addEventListener('input', event => {
         const input = event.target as HTMLInputElement, key = input.dataset.device;
         if (!key) return;

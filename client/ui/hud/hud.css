@@ -316,6 +316,6 @@
 .rift-app:not(.touch-layout) .game-hud .player-panel { width:240px; padding:8px 8px 20px; column-gap:7px; row-gap:3px; grid-template-columns:42px minmax(0,1fr) }
 .rift-app:not(.touch-layout) .player-panel .player-profile,.rift-app:not(.touch-layout) .player-panel .player-portrait { width:42px; height:42px }
 .rift-app.touch-layout .game-hud .player-panel { width:164px; height:64px; grid-template-rows:14px 10px 10px 4px; padding:4px 4px 16px }
-@media (orientation:landscape) and (max-height:600px) {
-  .rift-app.touch-layout .quest-completion-feedback { top:calc(var(--safe-top) + 8px); left:50%; margin-left:-150px; width:300px; max-width:calc(100% - 32px); padding:8px 10px; font-size:11px }
+@media (orientation:landscape) {
+  .rift-app.touch-layout .quest-completion-feedback { top:calc(var(--safe-top) + 78px); left:calc(var(--safe-left) + 4px); margin-left:0; width:260px; max-width:calc(100% - 32px); padding:8px 10px; font-size:11px }
 }

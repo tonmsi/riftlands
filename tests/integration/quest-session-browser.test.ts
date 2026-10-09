@@ -68,7 +68,9 @@ test('quest celebrations end with the session and saved history never replays on
     await expect(page.locator('.quest-completion-feedback')).toContainText('20 gold');
     await expect(page.locator('.quest-completion-feedback')).toContainText('Canna da pesca');
     const completionBox = (await page.locator('.quest-completion-feedback').boundingBox())!;
-    assert.ok(completionBox.y < playerBox.y + playerBox.height && completionBox.x >= 0 && completionBox.x + completionBox.width <= 844);
+    assert.ok(completionBox.y >= playerBox.y + playerBox.height && completionBox.x + completionBox.width <= 844);
+    assert.equal(await page.locator('.quest-completion-feedback').evaluate(e => (e as HTMLElement).offsetLeft),
+      await page.locator('.player-panel').evaluate(e => (e as HTMLElement).offsetLeft));
     assert.equal(await page.locator('.quest-completion-feedback').evaluate(e => e.parentElement?.classList.contains('game-hud')), true);
     assert.equal(await page.locator('.quest-completion-feedback').evaluate(e => getComputedStyle(e).zIndex), '120');
     await page.clock.runFor(5000);
