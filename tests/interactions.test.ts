@@ -46,7 +46,8 @@ test('exploration explains the map before acceptance, closes immediately and gra
     if (owned) grantWorldMap(f.a.narrative!);
     const before = structuredClone(f.a.inventory!);
     const view = f.talk();
-    assert.match(view.text, owned ? /tua mappa/ : /regalerò una mappa/);
+    assert.match(view.text, /segnato sulla mappa/);
+    assert.doesNotMatch(view.text, /regal|ricompens/);
     const command = { kind: 'choose', sessionId: view.sessionId, choiceId: 'accept' } as const;
     f.sim.interact(f.a.id, command);
     assert.ok(hasWorldMap(f.a.narrative!));
@@ -93,8 +94,8 @@ test('authored neutral NPC wanders near home, remains invulnerable and has a per
 
 test('Nereo automatically gives the first rod after completing the quest, using the slot freed by delivery', () => {
   const f = fixture(); const intro = f.talk(); assert.equal(intro.choices.some(choice => choice.id === 'fishing'), false);
-  assert.deepEqual(intro.rewards?.map(item => item.itemId), ['backpack-2', 'fishing-rod']);
-  assert.equal(intro.rewardGold, 20); assert.equal(intro.rewardXp, 150);
+  assert.equal(intro.rewards, undefined);
+  assert.equal(intro.rewardGold, undefined); assert.equal(intro.rewardXp, undefined);
   assert.throws(() => f.sim.interact(f.a.id, { kind: 'choose', sessionId: intro.sessionId, choiceId: 'fishing' }));
   f.accept(); insertItem(f.a.inventory!, 'slime-innards', 3);
   assert.equal(f.sim.interactions.view(f.a.id, f.sim.now), null);
@@ -113,7 +114,7 @@ test('Nereo leaves the first rod privately on the ground when excess items keep 
   assert.equal(f.a.inventory!.slots[slot]!.quantity, 3);
   const rod = [...f.sim.interactions.drops.values()].find(drop => drop.stack.itemId === 'fishing-rod')!;
   assert.equal(rod.ownerId, f.a.id); assert.equal(f.sim.interactions.visibleDrops(f.b.id, f.sim.now, 500).some(drop => drop.id === rod.id), false);
-  assert.match(view.text, /a terra solo per te/);
+  assert.match(view.text, /prenderò solo quelle necessarie/);
   assert.equal(f.sim.interactions.view(f.a.id, f.sim.now), null);
 });
 
@@ -355,8 +356,8 @@ test('quest rewards are delivered together, close dialogue and cannot be duplica
   sim.now = a.narrative!.quests['stinking-bait'].completedAt! + 300_000;
   Object.assign(player, { x: 72, y: 24 }); accept(); insertItem(a.inventory!, 'slime-innards', 3);
   const next = talk(); const slot = a.inventory!.slots.findIndex(stack => stack?.itemId === 'slime-innards');
-  assert.equal(next.rewardGold, 0);
-  assert.deepEqual(next.rewards, []);
+  assert.equal(next.rewardGold, undefined);
+  assert.equal(next.rewards, undefined);
   sim.interact(a.id, { kind: 'use-item', sessionId: next.sessionId, slot, itemId: 'slime-innards' });
   assert.deepEqual([...sim.interactions.drops.values()].map(drop => drop.stack.itemId), []);
   assert.equal(a.gold, 20, 'gold stays first-completion only');

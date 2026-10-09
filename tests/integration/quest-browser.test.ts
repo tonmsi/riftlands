@@ -100,13 +100,13 @@ test('real multiplayer quest: accept, deliver via slot, touch hold to discard, a
     await expect(ready.page.locator('.drop-item-panel')).toBeHidden(); await expect(ready.page.locator('.inventory-slot b')).toHaveText('5');
     await ready.page.keyboard.press('KeyF'); await ready.page.locator('.backpack-toggle').tap();
     await expect(ready.page.locator('.dialogue-request')).toContainText('ancora 3');
-    await expect(ready.page.locator('.dialogue-rewards')).toContainText('Ricompense alla consegna');
-    await expect(ready.page.locator('[data-reward-gold]')).toContainText('20 gold');
-    await expect(ready.page.locator('.dialogue-rewards')).toContainText('Zaino da 2 slot');
-    await expect(ready.page.locator('.dialogue-rewards')).toContainText('Canna da pesca');
+    await expect(ready.page.locator('.dialogue-rewards')).toBeHidden();
     await ready.page.locator('.inventory-slot').tap();
     await expect(ready.page.locator('.npc-dialogue')).toBeHidden();
     await expect(ready.page.locator('.quest-completion-feedback')).toBeVisible();
+    await expect(ready.page.locator('.quest-completion-feedback')).toContainText('20 gold');
+    await expect(ready.page.locator('.quest-completion-feedback')).toContainText('Zaino da 2 slot');
+    await expect(ready.page.locator('.quest-completion-feedback')).toContainText('Canna da pesca');
     await expect(ready.page.locator('.inventory-slots')).toBeVisible();
     await expect(ready.page.locator('[data-choice=fishing]')).toHaveCount(0);
     await expect(ready.page.locator('.gold-gain')).toHaveText('+20 GOLD');

@@ -69,7 +69,9 @@ export class HudUI {
     this.canvas = root.querySelector<HTMLCanvasElement>('.world-canvas')!;
     this.popups = popups;
     this.interactions = new InteractionUI(root, command => this.actions.interact?.(command), message => this.toast(message), () => this.canvas.focus({ preventScroll: true }), this.popups);
-    this.journal = new QuestJournalUI(root.querySelector('.game-hud')!, root.querySelector('.player-panel')!, this.popups);
+    this.journal = new QuestJournalUI(root.querySelector('.game-hud')!, root.querySelector('.player-panel')!, this.popups, () => {
+      this.setSelected(null); this.actions.select(null);
+    });
     this.minimap = root.querySelector<HTMLCanvasElement>('.minimap')!;
     this.display = new GameDisplay(root, () => this.actions.releaseControls?.(), () => this.confirmLeave(), message => this.toast(message));
     this.exitDialog.className = 'control-options exit-confirmation';

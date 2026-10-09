@@ -3679,6 +3679,36 @@
       "assetId": "brazier",
       "x": 70,
       "y": 121
+    },
+    {
+      "id": "asset-46000fa1-352f-46e9-96df-049db3b5cf6d",
+      "assetId": "brazier",
+      "x": 7,
+      "y": 146
+    },
+    {
+      "id": "asset-81f8a662-c87e-4674-a98b-5097595e32e5",
+      "assetId": "brazier",
+      "x": 6,
+      "y": 146
+    },
+    {
+      "id": "asset-569c2ae4-4f57-4de1-aacc-122ee09a12ac",
+      "assetId": "brazier",
+      "x": 6,
+      "y": 147
+    },
+    {
+      "id": "asset-d74e771f-42a6-431e-a722-35ee666859cc",
+      "assetId": "brazier",
+      "x": 6,
+      "y": 148
+    },
+    {
+      "id": "asset-0398a39c-5614-4128-8e92-a0608ffc73d0",
+      "assetId": "brazier",
+      "x": 8,
+      "y": 148
     }
   ],
   "tiles": [],
@@ -4949,6 +4979,90 @@
             "assetId": "brazier",
             "x": 6,
             "y": 23
+          },
+          {
+            "id": "asset-37a2a3ed-dc69-4cb2-a606-6e2382e5e8da",
+            "assetId": "brazier",
+            "x": 31,
+            "y": 0
+          },
+          {
+            "id": "asset-757c8cf3-1589-47c9-8930-dd96e363abe9",
+            "assetId": "brazier",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "asset-74c74f0f-5cd9-4254-b627-b5fb1e7d3aa2",
+            "assetId": "brazier",
+            "x": 0,
+            "y": 23
+          },
+          {
+            "id": "asset-8ffa50ee-5247-4f13-a998-9afa27b404fc",
+            "assetId": "brazier",
+            "x": 31,
+            "y": 23
+          },
+          {
+            "id": "asset-45cab0ba-61ec-420b-95f2-e9eaf88162b6",
+            "assetId": "brazier",
+            "x": 0,
+            "y": 4
+          },
+          {
+            "id": "asset-8a5ad117-ee26-4ee3-9441-caea7a1f4e54",
+            "assetId": "brazier",
+            "x": 0,
+            "y": 8
+          },
+          {
+            "id": "asset-66eb066c-306f-408f-8ca9-833d400d02a7",
+            "assetId": "brazier",
+            "x": 0,
+            "y": 12
+          },
+          {
+            "id": "asset-33e6b75b-1696-4dde-b103-f32dede0e4eb",
+            "assetId": "brazier",
+            "x": 0,
+            "y": 16
+          },
+          {
+            "id": "asset-2949645b-6356-4d1d-8575-59a6909a5db6",
+            "assetId": "brazier",
+            "x": 0,
+            "y": 20
+          },
+          {
+            "id": "asset-5c4b3636-9f2b-491e-95fc-e5c24ae3fce6",
+            "assetId": "brazier",
+            "x": 31,
+            "y": 19
+          },
+          {
+            "id": "asset-9c15b961-24f2-4b8f-b411-b095001ea1c8",
+            "assetId": "brazier",
+            "x": 31,
+            "y": 15
+          },
+          {
+            "id": "asset-e8740aa4-b5aa-4f4b-8172-563b9950720c",
+            "assetId": "brazier",
+            "x": 31,
+            "y": 11
+          },
+          {
+            "id": "asset-f9729e24-3c8c-418e-b2fc-5171995a043f",
+            "assetId": "brazier",
+            "x": 31,
+            "y": 7
+          },
+          {
+            "id": "asset-a0adcb83-7647-4af4-87f0-791fa99151e0",
+            "assetId": "brazier",
+            "x": 31,
+            "y": 3
           }
         ],
         "tiles": [],
@@ -4967,7 +5081,37 @@
       }
     },
     {
-      "id": "interior-545596e6-1a38-4663-b5fc-f0c29c16cf41",
+      "id": "interior-ccfc2688-bbe0-485d-9987-d3f8ad11aff1",
+      "name": "Northpost Ruins",
+      "width": 28,
+      "height": 22,
+      "pvp": false,
+      "kind": "dungeon",
+      "document": {
+        "version": 2,
+        "generatorVersion": 1,
+        "seed": 734291,
+        "spawn": {
+          "x": 1,
+          "y": 1
+        },
+        "assets": [],
+        "placements": [],
+        "tiles": [],
+        "zones": [],
+        "npcs": [],
+        "dungeons": [
+          {
+            "dungeonId": "northpostruins",
+            "x": 2,
+            "y": 2
+          }
+        ],
+        "tileChunks": []
+      }
+    },
+    {
+      "id": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
       "name": "Cathedral Cave",
       "width": 100,
       "height": 82,
@@ -4993,30 +5137,6 @@
             "y": 2
           }
         ],
-        "tileChunks": []
-      }
-    },
-    {
-      "id": "interior-250171a0-2bb1-42fd-907c-c2dcb4f46762",
-      "name": "LocandaPVP",
-      "width": 32,
-      "height": 24,
-      "pvp": true,
-      "kind": "building",
-      "document": {
-        "version": 2,
-        "generatorVersion": 1,
-        "seed": 734291,
-        "spawn": {
-          "x": 16,
-          "y": 12
-        },
-        "assets": [],
-        "placements": [],
-        "tiles": [],
-        "zones": [],
-        "npcs": [],
-        "dungeons": [],
         "tileChunks": []
       }
     }
@@ -5055,68 +5175,66 @@
       "reverseId": "warp-dc2bdb20-e6b6-4f8e-a1d2-1c2f9bba0be2"
     },
     {
-      "id": "warp-f1f6873e-3fa1-4239-be18-133f647cc6c3",
-      "name": "Nuovo passaggio",
-      "from": "interior-545596e6-1a38-4663-b5fc-f0c29c16cf41",
+      "id": "warp-31e488cf-f172-4dee-add8-d409d1287dec",
+      "name": "uscita",
+      "from": "interior-ccfc2688-bbe0-485d-9987-d3f8ad11aff1",
       "to": "world",
       "entry": {
-        "x": 13,
-        "y": 71
+        "x": 0,
+        "y": 21
       },
       "arrival": {
-        "x": 15,
-        "y": 139
+        "x": 7,
+        "y": 147
       },
       "activation": "walk",
-      "reverseId": "warp-69b73e7c-7341-4daf-b0ee-14105ff5dba8"
+      "reverseId": "warp-bdfbd315-2f49-4a0a-8a41-a9871cc4d3de"
     },
     {
-      "id": "warp-69b73e7c-7341-4daf-b0ee-14105ff5dba8",
-      "name": "Ritorno · Nuovo passaggio",
+      "id": "warp-8f5e04b2-9c17-4272-9a44-33ee5793ccad",
+      "name": "uscita",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "world",
+      "entry": {
+        "x": 14,
+        "y": 3
+      },
+      "arrival": {
+        "x": 33,
+        "y": 98
+      },
+      "activation": "walk"
+    },
+    {
+      "id": "warp-bdfbd315-2f49-4a0a-8a41-a9871cc4d3de",
+      "name": "Entrata",
       "from": "world",
-      "to": "interior-545596e6-1a38-4663-b5fc-f0c29c16cf41",
+      "to": "interior-ccfc2688-bbe0-485d-9987-d3f8ad11aff1",
       "entry": {
-        "x": 15,
-        "y": 139
+        "x": 7,
+        "y": 147
       },
       "arrival": {
-        "x": 13,
+        "x": 0,
+        "y": 21
+      },
+      "activation": "walk",
+      "reverseId": "warp-31e488cf-f172-4dee-add8-d409d1287dec"
+    },
+    {
+      "id": "warp-09158c51-440c-4f1b-bc22-ac9816748550",
+      "name": "entratanoexit",
+      "from": "interior-ccfc2688-bbe0-485d-9987-d3f8ad11aff1",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 24,
+        "y": 1
+      },
+      "arrival": {
+        "x": 14,
         "y": 71
       },
-      "activation": "walk",
-      "reverseId": "warp-f1f6873e-3fa1-4239-be18-133f647cc6c3"
-    },
-    {
-      "id": "warp-72ac93c3-c380-40f9-be39-a50692e6211f",
-      "name": "Nuovo passaggio",
-      "from": "interior-250171a0-2bb1-42fd-907c-c2dcb4f46762",
-      "to": "interior-a8b3bf2d-5445-43a4-b26d-352054ebdd0a",
-      "entry": {
-        "x": 4,
-        "y": 23
-      },
-      "arrival": {
-        "x": 31,
-        "y": 23
-      },
-      "activation": "walk",
-      "reverseId": "warp-75bb6673-a908-4547-a213-bfbf07e0b3ed"
-    },
-    {
-      "id": "warp-75bb6673-a908-4547-a213-bfbf07e0b3ed",
-      "name": "Ritorno · Nuovo passaggio",
-      "from": "interior-a8b3bf2d-5445-43a4-b26d-352054ebdd0a",
-      "to": "interior-250171a0-2bb1-42fd-907c-c2dcb4f46762",
-      "entry": {
-        "x": 31,
-        "y": 23
-      },
-      "arrival": {
-        "x": 4,
-        "y": 23
-      },
-      "activation": "walk",
-      "reverseId": "warp-72ac93c3-c380-40f9-be39-a50692e6211f"
+      "activation": "walk"
     }
   ]
 }

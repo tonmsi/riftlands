@@ -1,4 +1,4 @@
-import { QUEST_DEFINITIONS, newNarrativeProgress, questCompletions, type NarrativeProgress } from '../../../shared/narrative';
+import { QUEST_DEFINITIONS, newNarrativeProgress, questCompletions, questReward, type NarrativeProgress } from '../../../shared/narrative';
 import { ITEM_DEFINITIONS, inventoryCount, newInventory, type Inventory } from '../../../shared/items';
 import type { PopupManager } from '../popups';
 import { drawTransitionOverlay } from '../transition-overlay';
@@ -33,7 +33,7 @@ export class QuestJournalUI {
   private acceptance = document.createElement('canvas');
   private acceptanceFrame = 0;
   private readonly soulFarewell: SoulFarewellUI;
-  constructor(hud: HTMLElement, private player: HTMLElement, popups: PopupManager) {
+  constructor(hud: HTMLElement, private player: HTMLElement, popups: PopupManager, private onAccepted: () => void = () => {}) {
     this.soulFarewell = new SoulFarewellUI(hud);
     this.panel.className = 'quest-journal glass'; this.panel.id = 'quest-journal'; this.panel.hidden = true;
     this.panel.setAttribute('role', 'region'); this.panel.setAttribute('aria-label', 'Diario delle missioni');
@@ -43,11 +43,10 @@ export class QuestJournalUI {
     this.acceptance.setAttribute('role', 'status'); this.acceptance.setAttribute('aria-live', 'polite'); hud.append(this.acceptance);
     this.toggle.type = 'button'; this.toggle.className = 'player-journal-toggle'; this.toggle.setAttribute('aria-label', 'Apri missioni e traguardi');
     this.toggle.setAttribute('aria-controls', this.panel.id); this.toggle.setAttribute('aria-expanded', 'false'); this.player.append(this.toggle);
-    this.toggle.innerHTML = '<span class="journal-box-hint" aria-hidden="true">▤ DIARIO</span>';
     this.toggle.title = 'Apri il diario delle missioni';
     this.completion.className = 'quest-completion-feedback'; this.completion.hidden = true;
     this.completion.setAttribute('role', 'status'); this.completion.setAttribute('aria-live', 'polite');
-    this.completion.setAttribute('aria-atomic', 'true'); this.player.append(this.completion);
+    this.completion.setAttribute('aria-atomic', 'true'); hud.append(this.completion);
     this.toggle.addEventListener('click', () => this.setOpen(this.panel.hidden));
     this.panel.querySelector('button')!.addEventListener('click', () => this.setOpen(false));
     popups.register(this.panel, () => !this.panel.hidden, () => this.setOpen(false), this.toggle);
@@ -66,6 +65,7 @@ export class QuestJournalUI {
     this.player.classList.remove('quest-completed', 'quest-accepted'); this.hasBaseline = false; this.completionCounts = {};
   }
   private announceAccepted(names: string[]): void {
+    this.onAccepted();
     cancelAnimationFrame(this.acceptanceFrame);
     this.acceptance.hidden = false; this.acceptance.textContent = `Missione accettata: ${names.join(', ')}`;
     const started = performance.now();
@@ -94,13 +94,21 @@ export class QuestJournalUI {
       if (accepted.length) this.announceAccepted(accepted.map(([id]) => QUEST_DEFINITIONS[id]?.name ?? id));
       const counts = Object.fromEntries(Object.entries(narrative.quests).map(([id, q]) => [id, questCompletions(q)]));
       const completed = Object.keys(counts).filter(id => this.hasBaseline && counts[id] > (this.completionCounts[id] ?? 0));
+      const rewards = completed.flatMap(id => {
+        const quest = QUEST_DEFINITIONS[id]; if (!quest) return [];
+        const previous = this.completionCounts[id] ?? 0, reward = questReward(quest, previous);
+        return [reward.xp ? `+${reward.xp} XP` : '', reward.gold ? `+${reward.gold} gold` : '',
+          ...(quest.reward?.items ?? []).filter(item => (!item.firstOnly || previous === 0) && (!item.giftId || !this.narrative.gifts?.includes(item.giftId)))
+            .map(item => `${ITEM_DEFINITIONS[item.itemId]?.name ?? item.itemId}${item.quantity > 1 ? ` ×${item.quantity}` : ''}`)].filter(Boolean);
+      });
       this.completionCounts = counts; this.hasBaseline = true;
       if (completed.length) {
         if (completed.includes(SOUL_QUEST_ID)) this.soulFarewell.start();
         const open = document.createElement('button'); open.type = 'button'; open.textContent = 'Apri il diario →';
         open.addEventListener('click', () => this.setOpen(true));
         this.completion.replaceChildren(text('strong', completed.length > 1 ? '✓ Missioni completate!' : '✓ Missione completata!'),
-          text('span', completed.map(id => QUEST_DEFINITIONS[id]?.name ?? id).join(', ')), open);
+          text('span', completed.map(id => QUEST_DEFINITIONS[id]?.name ?? id).join(', ')),
+          ...(rewards.length ? [text('small', `Hai ricevuto: ${rewards.join(' · ')}`)] : []), open);
         // Restart the short celebration when another completion arrives before the previous one expires.
         this.completion.hidden = true; this.player.classList.remove('quest-completed');
         void this.player.offsetWidth;

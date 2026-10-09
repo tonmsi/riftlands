@@ -164,12 +164,12 @@ export class InteractionSystem {
     const requested = node.itemRequest ? QUEST_DEFINITIONS[node.itemRequest.questId] : undefined;
     const quest = requested?.objective.kind !== 'reach-area' ? requested : undefined;
     const remaining = quest ? Math.max(0, quest.objective.quantity - (account.narrative!.quests[quest.id]?.objectives[quest.objective.id] ?? 0)) : 0;
-    const rewardQuest = node.rewardQuestId ? QUEST_DEFINITIONS[node.rewardQuestId] : undefined;
+    const rewardQuest = node.rewardQuestId && account.narrative!.quests[node.rewardQuestId]?.status === 'completed' ? QUEST_DEFINITIONS[node.rewardQuestId] : undefined;
     const rewardProgress = rewardQuest ? account.narrative!.quests[rewardQuest.id] : undefined;
     const completions = rewardProgress ? questCompletions(rewardProgress) : 0;
     const rewards = rewardQuest?.reward?.items?.filter(item => (!item.firstOnly || completions === 0) && (!item.giftId || !account.narrative!.gifts?.includes(item.giftId))).map(({ itemId, quantity }) => ({ itemId, quantity }));
-    const mapOffer = hasWorldMap(account.narrative!) ? 'Ti segnerò il posto sulla tua mappa.' : 'Ti regalerò una mappa e ti segnerò il posto. Potrai aprirla dal cerchio in alto a destra.';
-    const soulMapOffer = hasWorldMap(account.narrative!) ? 'Il nostro luogo di riposo sarà segnato sulla tua mappa.' : 'Prendi la mia mappa: ti segnerò il nostro luogo di riposo.';
+    const mapOffer = 'Il posto sarà segnato sulla mappa, che puoi aprire dal cerchio in alto a destra.';
+    const soulMapOffer = 'Il nostro luogo di riposo sarà segnato sulla mappa.';
     return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: node.text.replace('{remaining}', String(remaining)).replace('{mapOffer}', mapOffer).replace('{soulMapOffer}', soulMapOffer),
       choices: node.choices.filter(choice => !choice.condition || conditionMatches(account.narrative!, choice.condition, now)).map(({ id, label }) => ({ id, label })),
       ...(quest && quest.objective.kind !== 'reach-area' && remaining ? { request: { itemId: quest.objective.itemId, remaining } } : {}),

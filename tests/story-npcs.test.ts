@@ -30,7 +30,7 @@ function fixture() {
 
 test('wounded soldier offers Platos independently of previous quests, with provision advice and an arrival objective', () => {
   const f = fixture(); assert.match(f.talk('soldier').text, /non gli ho dato retta/);
-  const advice = f.choose('platos')!; assert.match(advice.text, /provviste/); assert.match(advice.text, /regalerò una mappa/);
+  const advice = f.choose('platos')!; assert.match(advice.text, /provviste/); assert.match(advice.text, /segnato sulla mappa/);
   assert.equal(f.choose('accept'), null);
   assert.equal(f.account.narrative!.quests['find-platos'].status, 'active');
   f.sim.interactions.close(f.player.id); Object.assign(f.player, { x: 9.5 * 48, y: 1.5 * 48 }); f.sim.step(.01);

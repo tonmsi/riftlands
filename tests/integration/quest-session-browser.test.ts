@@ -14,13 +14,14 @@ test('quest celebrations end with the session and saved history never replays on
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
     browser = await chromium.launch({ channel: 'chrome', headless: true });
-    const page = await browser.newPage(); const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+    const page = await browser.newPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true }); const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
     await page.addInitScript('window.__name = value => value'); await page.clock.install();
-    await page.route('**/quest-session-review', r => r.fulfill({ contentType: 'text/html', body: '<div id="app"></div>' }));
+    await page.route('**/quest-session-review', r => r.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div>' }));
     await page.route('**/api/lobby', r => r.fulfill({ json: { account: null, friends: [], leaderboard: [] } }));
     await page.route('**/api/actor-catalog', r => r.fulfill({ status: 404 }));
     await page.goto(new URL('/quest-session-review', studio.url).href);
     await page.evaluate(async () => {
+      for (const file of ['styles/style.css', 'styles/mobile.css', 'ui/hud/team.css', 'ui/lobby/lobby.css', 'ui/hud/hud.css', 'ui/interactions/interactions.css']) await import(`/client/${file}`);
       const { GameUI } = await import('/client/ui/ui.ts' as string);
       const noop = () => {};
       const ui = new GameUI(document.querySelector<HTMLElement>('#app')!, { joinCredentials: noop, joinSaved: noop, logout: noop, leave: noop, social: noop, select: noop, cast: noop });
@@ -39,7 +40,14 @@ test('quest celebrations end with the session and saved history never replays on
       await expect(page.locator('.quest-acceptance-feedback')).toBeHidden();
       await expect(page.locator('.player-panel')).not.toHaveClass(/quest-completed|quest-accepted/);
     };
-    await page.evaluate(() => { const f = (window as any).sessionReview; f.snapshot.narrative.quests['souls-home'] = { status: 'active', objectives: {} }; f.update(); f.snapshot.narrative = structuredClone(f.completed); f.update(); });
+    await expect(page.locator('.journal-box-hint')).toHaveCount(0);
+    const playerBox = (await page.locator('.player-panel').boundingBox())!; assert.ok(playerBox.width <= 166 && playerBox.height <= 66);
+    await page.evaluate(() => { const f = (window as any).sessionReview; f.ui.setSelected({ ...f.snapshot.self, id: 'nereo', kind: 'npc', npcKind: 'old-fisher' }); });
+    await expect(page.locator('.target-panel')).toBeVisible();
+    await page.evaluate(() => { const f = (window as any).sessionReview; f.snapshot.narrative.quests['souls-home'] = { status: 'active', objectives: {} }; f.update(); });
+    await expect(page.locator('.target-panel')).toBeHidden(); await expect(page.locator('.quest-acceptance-feedback')).toBeVisible();
+    assert.equal(await page.locator('.quest-acceptance-feedback').evaluate(e => getComputedStyle(e).zIndex), '120');
+    await page.evaluate(() => { const f = (window as any).sessionReview; f.snapshot.narrative = structuredClone(f.completed); f.update(); });
     await page.clock.runFor(1000);
     await expect(page.locator('.soul-farewell')).toBeVisible(); await expect(page.locator('.quest-completion-feedback')).toBeVisible();
     // Leave during the farewell, then preview another character and the original one in the menu.
@@ -56,6 +64,14 @@ test('quest celebrations end with the session and saved history never replays on
     // A new completion during gameplay still celebrates normally.
     await page.evaluate(() => { const f = (window as any).sessionReview; f.snapshot.narrative.quests['north-road'] = { status: 'active', objectives: {} }; f.update(); f.snapshot.narrative.quests['north-road'] = { status: 'completed', objectives: {}, completions: 1 }; f.update(); });
     await expect(page.locator('.quest-completion-feedback')).toContainText('Pietre che camminano'); await expect(page.locator('.soul-farewell')).toBeHidden();
+    await page.evaluate(() => { const f = (window as any).sessionReview; f.snapshot.narrative.quests['stinking-bait'] = { status: 'active', objectives: {} }; f.update(); f.snapshot.narrative.quests['stinking-bait'] = { status: 'completed', objectives: {}, completions: 1 }; f.update(); });
+    await expect(page.locator('.quest-completion-feedback')).toContainText('20 gold');
+    await expect(page.locator('.quest-completion-feedback')).toContainText('Canna da pesca');
+    const completionBox = (await page.locator('.quest-completion-feedback').boundingBox())!;
+    assert.ok(completionBox.y < playerBox.y + playerBox.height && completionBox.x >= 0 && completionBox.x + completionBox.width <= 844);
+    assert.equal(await page.locator('.quest-completion-feedback').evaluate(e => e.parentElement?.classList.contains('game-hud')), true);
+    assert.equal(await page.locator('.quest-completion-feedback').evaluate(e => getComputedStyle(e).zIndex), '120');
+    await page.clock.runFor(5000);
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); await studio.close(); await rm(dir, { recursive: true, force: true }); }
 });
