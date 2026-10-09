@@ -32,12 +32,14 @@ export interface TileOverride extends Vec2 { terrain?: TileKind; suppressAssets?
 export type ZoneShape = { kind: 'rect'; x: number; y: number; width: number; height: number }
   | { kind: 'circle'; x: number; y: number; radius: number };
 export interface NpcRule { density: number; maxPerChunk: number; weights: Record<NpcKind, number>; }
+export interface ZoneMusic { src: string; volume: number; }
 export interface WorldZone {
   id: string; name: string; priority: number; shape: ZoneShape;
   temperature?: number; moisture?: number; pvp?: boolean; generateAssets?: boolean;
   npcs?: NpcRule; arenaId?: string;
   /** Entering this area advances the matching reach-area quest, on the server. */
   questId?: string;
+  music?: ZoneMusic;
 }
 export interface WorldNpc extends Vec2 { id: string; npcKind: NpcTemplateId; level: number; }
 /** One placement per installed dungeon, preserving encounter/boss identity and persistence. */
@@ -156,6 +158,8 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     for (const k of ['pvp', 'generateAssets']) if (z[k] !== undefined && !boolean(z[k])) fail(`regole di ${z.id}`);
     if (z.arenaId !== undefined && !id(z.arenaId)) fail('arena');
     if (z.questId !== undefined && !id(z.questId)) fail('missione zona');
+    if (z.music !== undefined && (!object(z.music) || typeof z.music.src !== 'string'
+      || !/^\/music\/[a-zA-Z0-9_-]+\.(mp3|ogg|wav)$/.test(z.music.src) || !finite(z.music.volume, 0, 1))) fail('musica zona');
     if (z.npcs !== undefined) {
       const n = z.npcs;
       if (!object(n) || !finite(n.density, 0, 1) || !integer(n.maxPerChunk, 0, 24) || !object(n.weights)

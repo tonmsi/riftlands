@@ -6,6 +6,8 @@ import { readActorProject, saveActorProject, listActorAssets } from './actor-lib
 import { createServer as createViteServer } from 'vite';
 import { importWorldImage, readWorldProject, readWorldDungeonCatalog, saveWorldProject } from './world-library';
 import { dungeonStudioRoutes } from './dungeon-studio-routes';
+import { importWorldMusic, listWorldMusic } from './music-library';
+import { serveAudioFile } from '../server/audio-files';
 
 async function readBody(request: IncomingMessage): Promise<any> {
   const chunks: Buffer[] = []; let size = 0;
@@ -21,6 +23,10 @@ export async function startWorldStudio(options: { root: string; documentPath: st
     if (`http://${request.headers.host}` !== origin || (request.headers.origin && request.headers.origin !== origin)) { reply(403, { error: 'World Studio accessibile dalla propria pagina locale.' }); return; }
     const path = (request.url ?? '').split('?')[0];
     if (library(request, response, origin)) return;
+    const music = /^\/music\/([a-zA-Z0-9_-]+\.(mp3|ogg|wav))$/.exec(path);
+    if (music && ['GET', 'HEAD'].includes(request.method ?? '')) {
+      serveAudioFile(request, response, resolve(options.root, 'public/music', music[1])); return;
+    }
     const image = /^\/(world-assets|actor-assets)\/([a-zA-Z0-9_-]+\.(png|svg))$/.exec(path);
     if (image && request.method === 'GET') {
       // New immutable uploads are available immediately, independent of Vite's public-file watcher.
@@ -29,8 +35,9 @@ export async function startWorldStudio(options: { root: string; documentPath: st
           'Cache-Control': /^[a-f0-9]{64}\./.test(image[2]) ? 'public, max-age=31536000, immutable' : 'no-cache' }); response.end(bytes);
       }).catch(() => { response.writeHead(404); response.end(); }); return;
     }
-    if (!['/__world/project', '/__world/images', '/__world/actor-images', '/__world/actors', '/api/actor-catalog'].includes(path)) { vite.middlewares(request, response, () => { response.writeHead(404); response.end(); }); return; }
+    if (!['/__world/project', '/__world/music', '/__world/images', '/__world/actor-images', '/__world/actors', '/api/actor-catalog'].includes(path)) { vite.middlewares(request, response, () => { response.writeHead(404); response.end(); }); return; }
     void (async () => {
+      if (request.method === 'GET' && path === '/__world/music') { reply(200, { files: await listWorldMusic(options.root) }); return; }
       if (request.method === 'GET' && (path === '/__world/actors' || path === '/api/actor-catalog')) {
         const { catalog, revision } = await readActorProject(join(dirname(options.documentPath), 'actor-catalog.json'));
         reply(200, { token, catalog, revision, assets: await listActorAssets(options.root) }); return;
@@ -45,7 +52,8 @@ export async function startWorldStudio(options: { root: string; documentPath: st
       busy = true;
       try {
         const payload = await readBody(request);
-        if (path === '/__world/actors') { const result = await saveActorProject(options, payload.catalog, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
+        if (path === '/__world/music') reply(200, { src: await importWorldMusic(options.root, payload.filename, payload.base64) });
+        else if (path === '/__world/actors') { const result = await saveActorProject(options, payload.catalog, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
         else if (path === '/__world/images' || path === '/__world/actor-images') reply(200, { image: await importWorldImage(options.root, payload.mime, payload.base64, path === '/__world/actor-images' ? 'actor-assets' : 'world-assets', payload.filename) });
         else { const result = await saveWorldProject(options, payload.document, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
       } finally { busy = false; }

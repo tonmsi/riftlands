@@ -38,6 +38,8 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     const issues = validateWorld(next, catalog);
     if (issues.length) throw new Error(issues.slice(0, 12).join('\n'));
     for (const a of next.assets) await access(resolve(options.root, 'public', a.image.slice(1)));
+    for (const doc of [next, ...(next.interiors ?? []).map(m => m.document)])
+      for (const zone of doc.zones) if (zone.music) await access(resolve(options.root, 'public', zone.music.src.slice(1)));
     const tag = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`;
     const backup = `${options.documentPath}.${tag}.bak`, backups = [backup];
     await writeFile(backup, current, { flag: 'wx' });

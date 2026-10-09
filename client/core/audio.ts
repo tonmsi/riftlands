@@ -1,5 +1,7 @@
 import type { Actor, GameEvent, Vec2 } from '../../shared/types';
 import type { BossWindup } from '../../shared/bosses';
+import type { ZoneMusic } from '../../shared/world-schema';
+import { ZoneMusicPlayer } from './zone-music';
 
 export interface SoundCue extends Vec2 { kind: 'step' | 'swing' | 'magic' | 'hit'; heavy?: boolean; }
 
@@ -60,6 +62,7 @@ export class GameAudio {
   private noise?: AudioBuffer;
   private voices = 0;
   private active = false;
+  private music?: ZoneMusicPlayer;
   private readonly cues = new SoundCues();
   muted = false;
 
@@ -73,6 +76,7 @@ export class GameAudio {
       if (!this.context) {
         const context = new AudioContext();
         this.context = context;
+        this.music = new ZoneMusicPlayer(context);
         this.master = context.createGain();
         this.master.gain.value = this.active ? 0.45 : 0;
         this.master.connect(context.destination);
@@ -86,12 +90,17 @@ export class GameAudio {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
+    if (muted) this.music?.stop();
     if (this.master && this.context) this.master.gain.setTargetAtTime(muted || !this.active ? 0 : 0.45, this.context.currentTime, 0.015);
     try { localStorage.setItem('riftlands.audio.muted', String(muted)); } catch { /* Optional storage. */ }
     if (!muted) this.unlock();
   }
 
-  reset(): void { this.cues.reset(); }
+  reset(stopMusic = true): void { this.cues.reset(); if (stopMusic) this.music?.stop(); }
+
+  setMusic(track?: ZoneMusic): void {
+    if (this.active && !this.muted && this.context?.state === 'running') this.music?.select(track);
+  }
 
   setActive(active: boolean): void {
     if (active === this.active) return;

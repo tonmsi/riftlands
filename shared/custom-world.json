@@ -3755,7 +3755,11 @@
           "sentinel": 0
         }
       },
-      "temperature": 0.01
+      "temperature": 0.01,
+      "music": {
+        "src": "/music/Celestial-Snow-afa518e5438f79f1.mp3",
+        "volume": 0.5
+      }
     },
     {
       "id": "zone-d13cc017-3f38-4249-bc07-6d81707c2d2e",

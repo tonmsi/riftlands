@@ -238,7 +238,19 @@ function refreshAsset(a: WorldAsset): void {
     set('gen-spacing', a.generation.spacing);
     el('gen-terrains').replaceChildren(...WORLD_TERRAINS.map(t => { const l = document.createElement('label'); l.className = 'check'; const c = document.createElement('input'); c.type = 'checkbox'; c.value = t; c.checked = a.generation.terrains.includes(t); l.append(c, terrains[t].name); return l; }));
 }
+let musicSources: string[] = [];
+function refreshMusicOptions(src?: string): void {
+    const select = el('zone-music') as HTMLSelectElement;
+    select.replaceChildren(new Option('Eredita / nessuna', ''), ...[...new Set([...musicSources, ...(src ? [src] : [])])].sort().map(path => new Option(path.split('/').at(-1), path)));
+    select.value = src ?? '';
+}
+function fileData(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
+}
+function musicZones(project: WorldDocument): WorldZone[] { return [project, ...(project.interiors ?? []).map(m => m.document)].flatMap(doc => doc.zones).filter(z => !!z.music); }
 function refreshZone(z: WorldZone): void {
+    refreshMusicOptions(z.music?.src);
+    set('zone-music-volume', (z.music?.volume ?? .5) * 100);
     set('zone-name', z.name);
     set('zone-priority', z.priority);
     set('zone-shape', z.shape.kind);
@@ -594,11 +606,26 @@ on('zone-update', () => change(() => { const z = surface().zones.find(z => z.id 
 else
     delete z.arenaId;
 if (val('zone-quest')) z.questId = val('zone-quest'); else delete z.questId;
+if (val('zone-music')) z.music = { src: val('zone-music'), volume: num('zone-music-volume') / 100 }; else delete z.music;
 if (input('zone-npcs').checked)
     z.npcs = { density: num('zone-density') / 100, maxPerChunk: num('zone-limit'), weights: { slime: num('zone-slime'), wisp: num('zone-wisp'), sentinel: num('zone-sentinel') } };
 else
     delete z.npcs; }));
 on('zone-delete', () => change(() => { surface().zones = surface().zones.filter(z => z.id !== selected?.id); selected = null; }));
+on('zone-music-import', () => input('zone-music-file').click());
+input('zone-music-file').addEventListener('change', () => { void (async () => {
+    const file = input('zone-music-file').files?.[0]; if (!file) return;
+    if (!token) throw new Error('Apri World Studio per importare musica.');
+    if (file.size > 20_000_000) throw new Error('Traccia oltre 20 MB.');
+    const zone = selected?.kind === 'zone' ? surface().zones.find(z => z.id === selected?.id) : undefined;
+    if (!zone) throw new Error('Seleziona una zona.');
+    status('Importazione musica…');
+    const data = await fileData(file);
+    const { src } = await api('/__world/music', { filename: file.name, base64: data.slice(data.indexOf(',') + 1) });
+    musicSources.push(src);
+    if (selected?.id === zone.id) refreshMusicOptions(src);
+    status('Traccia importata. Premi Aggiorna zona per associarla.');
+})().catch(report).finally(() => { input('zone-music-file').value = ''; }); });
 on('selection-update', () => change(() => { materializeSelection(); const e = selectionEntity(); if (!e)
     return; if (selected?.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id))
     surface().dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'npc')
@@ -689,13 +716,18 @@ on('apply-world', async () => { if (gesture)
 finally {
     el<HTMLButtonElement>('apply-world').disabled = false;
 } });
-on('export-world', async () => { status('Preparazione esportazione con immagini…'); const images: Record<string, string> = {}; for (const src of new Set(draft.assets.map(a => a.image))) {
+on('export-world', async () => { status('Preparazione esportazione con immagini e musica…'); const music: Record<string, string> = {};
+for (const src of new Set(musicZones(draft).map(z => z.music!.src))) {
+    const response = await fetch(src); if (!response.ok) throw new Error(`Traccia mancante: ${src}`);
+    music[src] = await fileData(await response.blob());
+}
+const images: Record<string, string> = {}; for (const src of new Set(draft.assets.map(a => a.image))) {
     const response = await fetch(src);
     if (!response.ok)
         throw new Error(`Immagine mancante: ${src}`);
     const blob = await response.blob();
     images[src] = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
-} const blob = new Blob([JSON.stringify({ format: 'riftlands-world-project', version: 1, document: parseWorldDocument(draft), images })], { type: 'application/json' }); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'riftlands-world.project.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); status('Progetto esportato con tutte le immagini. I dungeon fanno riferimento al catalogo installato.'); });
+} const blob = new Blob([JSON.stringify({ format: 'riftlands-world-project', version: 1, document: parseWorldDocument(draft), images, music })], { type: 'application/json' }); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'riftlands-world.project.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); status('Progetto esportato con immagini e musica. I dungeon fanno riferimento al catalogo installato.'); });
 on('import-world', () => input('world-file').click());
 input('world-file').addEventListener('change', () => { void (async () => { const file = input('world-file').files?.[0]; if (!file)
     return; if (file.size > 50000000)
@@ -711,6 +743,19 @@ input('world-file').addEventListener('change', () => { void (async () => { const
             throw new Error('Immagine esportata non valida.');
         a.image = (await api('/__world/images', { mime: match[1], base64: match[2], filename: a.image.split('/').at(-1) ?? a.name })).image;
     }
+} if (payload.music) {
+    if (!token) throw new Error('Importa da World Studio per ripristinare la musica.');
+    const sources = new Map<string, string>();
+    for (const zone of musicZones(document)) {
+        const src = zone.music!.src;
+        if (!sources.has(src)) {
+            const data = payload.music[src];
+            if (typeof data !== 'string' || !/^data:[^,]*;base64,/.test(data)) throw new Error(`Traccia assente o non valida: ${src}`);
+            sources.set(src, (await api('/__world/music', { filename: src.split('/').at(-1), base64: data.slice(data.indexOf(',') + 1) })).src);
+        }
+        zone.music!.src = sources.get(src)!;
+    }
+    musicSources = [...new Set([...musicSources, ...sources.values()])];
 } change(() => { draft = document; selected = null; }); status('Progetto importato nella bozza locale.'); })().catch(report).finally(() => { input('world-file').value = ''; }); });
 async function load(reload = false): Promise<void> {
     ready = false;
@@ -721,6 +766,8 @@ async function load(reload = false): Promise<void> {
             draft = compactWorldTiles(parseWorldDocument(project.document));
             installedDocument = draft;
             token = project.token;
+            const musicResponse = await fetch('/__world/music');
+            if (musicResponse.ok) musicSources = (await musicResponse.json()).files;
             revision = project.revision;
             installedRevision = revision;
             compatibleRevisions = project.compatibleRevisions ?? [];

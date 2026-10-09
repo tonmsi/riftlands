@@ -15,6 +15,7 @@ import { SnapshotEncoder, type SnapshotPacket } from '../shared/snapshot-stream'
 import { newNarrativeProgress } from '../shared/narrative';
 import { OrderedSaveWriter } from './save-writer';
 import { ACTOR_CATALOG } from '../shared/actor-catalog';
+import { serveAudioFile } from './audio-files';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
@@ -155,8 +156,9 @@ const server = createServer((request, response) => {
   if (request.method !== 'GET' && request.method !== 'HEAD') { response.writeHead(405); response.end(); return; }
   let relative: string;
   try { relative = decodeURIComponent(path); } catch { response.writeHead(400); response.end(); return; }
-  if (/^\/(actor-assets|world-assets)\/[a-zA-Z0-9_-]+\.(png|svg)$/.test(relative)) {
+  if (/^\/(?:(actor-assets|world-assets)\/[a-zA-Z0-9_-]+\.(png|svg)|music\/[a-zA-Z0-9_-]+\.(mp3|ogg|wav))$/.test(relative)) {
     const asset = resolve(ROOT, 'public', relative.slice(1));
+    if (relative.startsWith('/music/')) { serveAudioFile(request, response, asset); return; }
     if (!existsSync(asset) || !statSync(asset).isFile()) { response.writeHead(404); response.end(); return; }
     response.writeHead(200, { 'Content-Type': mime[extname(asset)], 'Cache-Control': 'no-cache' });
     if (request.method === 'HEAD') response.end(); else createReadStream(asset).on('error', () => response.destroy()).pipe(response);

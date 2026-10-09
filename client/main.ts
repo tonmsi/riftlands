@@ -7,7 +7,7 @@ import './ui/interactions/interactions.css';
 import './fishing/fishing.css';
 import { FishingUI } from './fishing/fishing-ui';
 import { canTalkToNpc } from './core/npc-interaction';
-import { CLASSES, TICK_RATE } from '../shared/config';
+import { CLASSES, TICK_RATE, TILE_SIZE } from '../shared/config';
 import { equippedAbility } from '../shared/progression';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import type { NarrativeProgress } from '../shared/narrative';
@@ -40,6 +40,7 @@ let seq = 0;
 let selectedId: string | null = null;
 const controls = new GameControls(defaultControls());
 const audio = new GameAudio();
+let nextMusicCheck = 0;
 try { controls.settings = parseControls(localStorage.getItem(CONTROLS_STORAGE_KEY)); } catch { /* Storage may be unavailable. */ }
 const snapshotBuffer = new SnapshotBuffer();
 let renderedActors: Actor[] = [];
@@ -176,7 +177,7 @@ const connection = new GameConnection({
       selectedId = null;
       releaseControls();
       effects.clear();
-      audio.reset();
+      audio.reset(false);
       lastMinimap = 0;
       ui.setSelected(null);
       ui.interactions.reset();
@@ -367,7 +368,12 @@ function frame(now: number): void {
   const combat = localCombat.sample(self, remoteFrame?.projectiles ?? [], [...effects.values()], renderer.world, time);
   const projectiles = combat.projectiles;
   const audible = playing && connection.connected && !document.hidden && !!self;
-  audio.setActive(audible);
+  audio.setActive(playing && connection.connected && !document.hidden);
+  if (now >= nextMusicCheck) {
+    nextMusicCheck = now + 100;
+    audio.setMusic(audible && self && renderer.world.mode === 'world'
+      ? renderer.world.authoring.rule(self.x / TILE_SIZE, self.y / TILE_SIZE, 'music') : undefined);
+  }
   const frameEvents = combat.events;
   if (audible && self) audio.update(self, actors, frameEvents, latest?.bossWindups ?? [], time);
   renderer.render({
