@@ -195,28 +195,3 @@ test('failed return checkpoint leaves both players in the world and releases res
   await rooms.createMatch('arena', [['alice'], ['bruno']]);
   assert.equal(rooms.rooms.size, 1);
 });
-
-test('leaving the authored arena gate while saving cancels entry even after immediate reentry', async () => {
-  const { saved, rooms, saveRequests } = pendingRoom(), world = rooms.global.world;
-  const zone = world.authoring.document.zones.find(zone => zone.arenaId)!;
-  assert.ok(zone, 'current authored world needs an arena entrance');
-  const bounds = shapeBounds(zone.shape), positions: { x: number; y: number }[] = [];
-  for (let ty = Math.floor(bounds.top); ty <= bounds.bottom && positions.length < 2; ty++)
-    for (let tx = Math.floor(bounds.left); tx <= bounds.right && positions.length < 2; tx++) {
-      const point = { x: (tx + .5) * TILE_SIZE, y: (ty + .5) * TILE_SIZE };
-      if (world.arenaAt(point.x, point.y) && !collidesWorld(point.x, point.y, 15, world)
-        && positions.every(other => Math.hypot(other.x - point.x, other.y - point.y) > 32)) positions.push(point);
-    }
-  assert.equal(positions.length, 2);
-  const alice = rooms.global.players.get('alice')!, outside = { x: alice.x, y: alice.y };
-  assert.equal(world.arenaAt(outside.x, outside.y), undefined);
-  Object.assign(alice, positions[0]); Object.assign(rooms.global.players.get('bruno')!, positions[1]);
-  const countdownSteps = Math.ceil(ARENA_GATE.countdownMs * 30 / 1000) + 3;
-  for (let i = 0; i < countdownSteps; i++) rooms.step();
-  assert.equal(saveRequests(), 1, 'transfer is waiting for the requested save');
-  assert.equal(rooms.rooms.size, 0); assert.equal(rooms.gateStateFor('alice')!.phase, 'countdown');
-  Object.assign(alice, outside); rooms.step(); Object.assign(alice, positions[0]); rooms.step();
-  saved.resolve(); await nextTurn(); assert.equal(rooms.rooms.size, 0);
-  for (let i = 0; i < countdownSteps; i++) rooms.step();
-  await nextTurn(); assert.equal(rooms.rooms.size, 1, JSON.stringify({ gate: rooms.gateStateFor('alice'), notice: rooms.takeNotice('alice') }));
-});

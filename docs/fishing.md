@@ -2,7 +2,7 @@
 
 ## Come giocare
 
-Completa per la prima volta **Esche puzzolenti**, la missione delle interiora di Nereo: ricevi automaticamente una canna per personaggio. Se c’è spazio dopo la consegna, va subito nella sacca; se la sacca è piena, Nereo lo dice e la lascia a terra come bottino privato. Non c’è una scelta separata per imparare a pescare. Le ripetizioni non danno altre canne e Nereo non regala più pozioni. Se perdi la canna, Ada ne vende una di ricambio per 10 gold.
+Completa per la prima volta **Esche puzzolenti**, la missione delle interiora di Nereo: ricevi 20 gold, XP, uno zaino da due slot e una canna per personaggio. Nereo mostra le ricompense prima della consegna. Lo zaino si equipaggia e la canna va nella sacca; gli oggetti che non trovano spazio restano a terra come bottino privato. Accettare la missione o completare la consegna chiude il dialogo e lascia spazio al popup. Parlando di nuovo con Nereo restano disponibili “Buona pesca”, il saluto e “Come stai?”. Le ripetizioni danno XP, senza altri gold, zaini o canne. Se perdi la canna, Ada ne vende una di ricambio per 10 gold.
 
 Porta la canna nella sacca e usala vicino a una riva. Fuori dalle zone raggiungibili il suo simbolo è attenuato e l’uso spiega di avvicinarsi all’acqua. In questa versione tutti i bacini con terreno `water` nel mondo sono pescabili: mare, lago o fiume. Non si pesca in arena o battleground, né durante il combattimento.
 
@@ -46,7 +46,7 @@ Per aggiungere esche brillanti o organiche imposta `fishingBait: 'shiny' | 'orga
 
 Modifica **`biteChance` in `shared/fishing/config.ts`**: `.78` significa 78% di probabilità che un lancio abbia un’abboccata. In `shared/fishing/model.ts`, `spawnWeight` regola la rarità di ciascun pesce e `attraction` la preferenza per l’esca. Il peso effettivo è `spawnWeight × attraction[tipoEsca]`, normalizzato rispetto alla somma dei pesi delle specie: sono probabilità condizionate all’abboccata, non percentuali assolute per lancio.
 
-Puoi sostituire le grafiche procedurali con PNG trasparenti: **`assets/fish-pike.png`**, **`assets/fish-catfish.png`**, **`assets/fish-perch.png`**. Un’immagine singola, preferibilmente quadrata da 256×256 o 512×512, funziona in targa, sacca, selettore e bottino a terra. Manteniamo le proporzioni. Se il file manca resta la grafica procedurale. Dopo aver aggiunto i PNG riavvia il server di sviluppo o ricrea la build di produzione e ricarica la pagina.
+Puoi sostituire le grafiche procedurali con PNG trasparenti: **`public/actor-assets/fish-pike.png`**, **`public/actor-assets/fish-catfish.png`**, **`public/actor-assets/fish-perch.png`**. Un’immagine singola, preferibilmente quadrata da 256×256 o 512×512, funziona in targa, sacca, selettore e bottino a terra. Manteniamo le proporzioni. Se il file manca resta la grafica procedurale. Dopo aver aggiunto i PNG riavvia il server di sviluppo o ricrea la build di produzione e ricarica la pagina.
 
 Le future varianti albine possono avere un ID distinto, un proprio `spawnWeight` e PNG `fish-<variante>.png`; vanno registrate sia tra i pesci sia nel catalogo oggetti. Questo evita di mischiare la variante rara con lo stack della specie normale. Le varianti albine non sono ancora presenti.
 

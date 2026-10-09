@@ -1,9 +1,9 @@
 import type { ClassId } from '../../shared/types';
 /** Shared portraits and icons for lobby and HUD components. */
 export const PROFILE_URLS: Partial<Record<ClassId, string>> = {
-  paladin: new URL('../../assets/paladinoProfile.png', import.meta.url).href,
-  mage: new URL('../../assets/mageProfile.png', import.meta.url).href,
-  warrior: new URL('../../assets/warriorProfile.png', import.meta.url).href,
+  paladin: '/actor-assets/paladinoProfile.png',
+  mage: '/actor-assets/mageProfile.png',
+  warrior: '/actor-assets/warriorProfile.png',
 };
 
 export const CLASS_ICONS: Record<ClassId, string> = {

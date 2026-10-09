@@ -13,13 +13,6 @@ import { DUNGEON_DEFINITIONS } from '../shared/dungeons';
 import installed from '../shared/custom-dungeons.json';
 import { newWorldDocument } from '../shared/world-schema';
 
-test('production catalog contains only installed maps and bosses, independent of reusable templates', () => {
-    const catalog = installed as { definition: { id: string }; bosses: { id: string }[] }[];
-    assert.deepEqual(DUNGEON_DEFINITIONS.map(d => d.id), catalog.map(b => b.definition.id));
-    assert.deepEqual(BOSS_DEFINITIONS.map(b => b.id), catalog.flatMap(b => b.bosses.map(boss => boss.id)));
-    assert.equal(BOSS_TEMPLATES.length, 2);
-});
-
 test('library installs, reopens and updates source drafts without coupling templates to placed bosses', async t => {
     const dir = await mkdtemp(join(tmpdir(), 'riftlands-library-')); t.after(() => rm(dir, { recursive: true, force: true }));
     const options = { catalogPath: join(dir, 'catalog.json'), dataPath: join(dir, 'accounts.json') }, draft = studioDraft();

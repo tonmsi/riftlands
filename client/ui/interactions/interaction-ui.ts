@@ -188,12 +188,12 @@ export class InteractionUI {
     const rewards = this.panel.querySelector<HTMLElement>('.dialogue-rewards')!; rewards.hidden = !dialogue.rewards?.length && dialogue.rewardGold === undefined;
     rewards.replaceChildren();
     if (!rewards.hidden) {
-      const heading = document.createElement('strong'); heading.textContent = 'La tua ricompensa'; rewards.append(heading);
+      const heading = document.createElement('strong'); heading.textContent = 'Ricompense alla consegna'; rewards.append(heading);
       if (dialogue.rewardGold !== undefined) {
         const gold = document.createElement('span'), image = document.createElement('canvas'); image.width = image.height = 32;
-        drawItemArt(image.getContext('2d')!, 'gold', 32); gold.dataset.rewardGold = ''; gold.append(image, `${dialogue.rewardGold} gold ricevuti`); rewards.append(gold);
+        drawItemArt(image.getContext('2d')!, 'gold', 32); gold.dataset.rewardGold = ''; gold.append(image, `${dialogue.rewardGold} gold`); rewards.append(gold);
       }
-      if (dialogue.rewards?.length) { const itemLabel = document.createElement('small'); itemLabel.textContent = 'Oggetti della ricompensa · Solo tuoi'; rewards.append(itemLabel); }
+      if (dialogue.rewardXp !== undefined) { const xp = document.createElement('span'); xp.textContent = `${dialogue.rewardXp} XP`; rewards.append(xp); }
       for (const reward of dialogue.rewards ?? []) {
         const chip = document.createElement('span'), image = document.createElement('canvas'); image.width = image.height = 32;
         drawItemArt(image.getContext('2d')!, reward.itemId, 32); chip.append(image, `${ITEM_DEFINITIONS[reward.itemId].name} × ${reward.quantity}`); rewards.append(chip);

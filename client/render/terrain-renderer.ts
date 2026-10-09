@@ -5,9 +5,7 @@ import { dungeonAtTile, type DungeonDefinition } from '../../shared/dungeons';
 import { EnvironmentArt } from './environment-art';
 import { noise } from './render-primitives';
 import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor } from './terrain-style';
-import { loadImage } from './sprite-sheet';
 import type { RenderBounds, TerrainViewport } from './render-types';
-const BUSH_SPRITE_URL = new URL('../../assets/bush.svg', import.meta.url).href;
 function coverTileBleed(ctx: CanvasRenderingContext2D, vx: number, vy: number, corner: number, radius: number, color: string, scale: number): void {
   ctx.fillStyle = color;
   const e = Math.max(1, 1.5 / scale);
@@ -39,10 +37,7 @@ export class TerrainRenderer {
   private lockRevision = -1;
   readonly spritesReady: Promise<void>;
   constructor(private readonly ctx: CanvasRenderingContext2D, private readonly localDungeons?: readonly DungeonDefinition[]) {
-    this.spritesReady = loadImage(BUSH_SPRITE_URL).then(img => {
-      this.environmentArt.setBushSvg(img);
-      this.invalidate();
-    }).catch(error => { console.warn('SVG cespuglio non trovato (fallback procedurale):', error); });
+    this.spritesReady = Promise.resolve();
   }
   invalidate(): void { this.terrainCache = undefined; }
   private outsideLocalMap(tx: number, ty: number): boolean {

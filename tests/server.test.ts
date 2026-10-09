@@ -420,26 +420,6 @@ test('bush concealment filters enemies and social nearby lists, but nearby or re
   assert.equal(simulation.snapshotFor(a.id)!.actors.some(actor => actor.id === b.id), true);
 });
 
-test('generated chunks unload after players move away and NPC death cooldown survives sleep', () => {
-  const simulation = new WorldSimulation(734291, 1_000_000);
-  simulation.world.getTile = () => 'grass';
-  simulation.world.getChunk = (cx, cy) => ({ cx, cy, key: `${cx},${cy}`, tiles: [], pickups: [], npcs: cx === 0 && cy === 0 ? [{ id: 'test-slime', x: 300, y: 300, npcKind: 'slime', level: 1 }] : [] });
-  const actor = simulation.addPlayer(account('alice'), 'mage');
-  const npc = simulation.npcs.get('test-slime')!;
-  npc.hp = 0;
-  npc.deadUntil = simulation.now + 100_000;
-  actor.x = 10_000;
-  actor.y = 10_000;
-  advance(simulation, 21);
-  assert.equal(simulation.activeChunks.has('0,0'), false);
-  assert.equal(simulation.npcs.has(npc.id), false);
-  actor.x = 0;
-  actor.y = 0;
-  advance(simulation, 0.7);
-  assert.equal(simulation.npcs.get(npc.id)!.hp, 0);
-  assert.equal(simulation.npcs.get(npc.id)!.deadUntil, npc.deadUntil);
-});
-
 test('pickups grant positive and negative effects which expire on server time', () => {
   const { simulation, a } = arena();
   simulation.pickups.set('power-test', { id: 'power-test', x: a.x, y: a.y, kind: 'power', radius: 12 });

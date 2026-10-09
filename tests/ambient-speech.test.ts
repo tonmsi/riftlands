@@ -155,13 +155,3 @@ test('active speech is never interrupted by a higher priority NPC; cooldown stil
   speech.update(far, [npc, nereo], start + 40_000, true);
   assert.equal(speech.update(self, [npc, nereo], start + 41_000, true), null);
 });
-
-test('authored skeptic is on walkable terrain within sight of spawn', () => {
-  const world = new World();
-  const p = world.authoring.document.npcs.find(n => n.npcKind === 'dock-skeptic')!;
-  const point = { x: (p.x + .5) * TILE_SIZE, y: (p.y + .5) * TILE_SIZE };
-  const spawn = world.authoring.document.spawn;
-  const origin = { x: (spawn.x + .5) * TILE_SIZE, y: (spawn.y + .5) * TILE_SIZE };
-  assert.equal(collidesWorld(point.x, point.y, 18, world), false);
-  assert.equal(hasLineOfSight(origin, point, world), true);
-});

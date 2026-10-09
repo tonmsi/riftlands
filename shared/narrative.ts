@@ -12,7 +12,7 @@ export type QuestObjective = { kind?: 'deliver-item'; id: string; itemId: string
   | { kind: 'reach-area'; id: string; quantity: 1; description: string };
 export interface QuestDefinition { id: string; name: string; requiresQuest?: string; repeatable?: boolean; repeatAfterMs?: number; reward?: { xp: number; minXp: number; firstGold: number; items?: readonly { itemId: string; quantity: number; firstOnly?: boolean; toInventory?: boolean; giftId?: string }[] }; objective: QuestObjective; }
 export interface DialogueChoice { id: string; label: string; next?: string; action?: NarrativeAction; condition?: NarrativeCondition; }
-export interface DialogueNode { text: string; choices: readonly DialogueChoice[]; itemRequest?: { questId: string; completedNext: string; progressNext: string }; rewardQuestId?: string; }
+export interface DialogueNode { text: string; choices: readonly DialogueChoice[]; itemRequest?: { questId: string; progressNext: string }; rewardQuestId?: string; }
 export interface DialogueDefinition { id: string; questId: string; onTalkFlag?: string; showQuestMarker?: boolean; questMarkerCondition?: NarrativeCondition; entries: readonly { condition: NarrativeCondition; node: string }[]; nodes: Readonly<Record<string, DialogueNode>>; }
 export const QUEST_DEFINITIONS: Readonly<Record<string, QuestDefinition>> = {
   'find-platos': { id: 'find-platos', name: 'Ascolta il vecchio', reward: { xp: 150, minXp: 150, firstGold: 0 },
@@ -20,7 +20,7 @@ export const QUEST_DEFINITIONS: Readonly<Record<string, QuestDefinition>> = {
   'north-road': { id: 'north-road', name: 'Pietre che camminano',
     reward: { xp: 100, minXp: 100, firstGold: 0 },
     objective: { kind: 'reach-area', id: 'road-reached', quantity: 1, description: 'Raggiungi la strada a nord. Non occorre combattere i guardiani.' } },
-  'stinking-bait': { id: 'stinking-bait', name: 'Esche puzzolenti', repeatable: true, repeatAfterMs: 5 * 60 * 1000, reward: { xp: 150, minXp: 5, firstGold: 20, items: [{ itemId: 'backpack-2', quantity: 1, firstOnly: true }, { itemId: 'fishing-rod', quantity: 1, firstOnly: true, toInventory: true, giftId: 'nereo-first-rod' }] }, objective: { id: 'innards-delivered', itemId: 'slime-innards', quantity: 3 } },
+  'stinking-bait': { id: 'stinking-bait', name: 'Esche puzzolenti', repeatable: true, repeatAfterMs: 5 * 60 * 1000, reward: { xp: 150, minXp: 5, firstGold: 20, items: [{ itemId: 'backpack-2', quantity: 1, firstOnly: true, toInventory: true }, { itemId: 'fishing-rod', quantity: 1, firstOnly: true, toInventory: true, giftId: 'nereo-first-rod' }] }, objective: { id: 'innards-delivered', itemId: 'slime-innards', quantity: 3 } },
 };
 const questCondition = (status: 'available' | 'active' | 'completed'): NarrativeCondition => ({ kind: 'quest-status', questId: 'stinking-bait', status });
 export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> = {
@@ -36,12 +36,10 @@ export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> 
       intro: { text: 'Vengo da nord. Quelle cose mi hanno quasi spezzato una gamba. Il vecchio Platos ci aveva avvertiti di non passare… e io non gli ho dato retta.', choices: [
         { id: 'platos', label: 'Chi è Platos?', next: 'advice' }, { id: 'leave', label: 'Riposa. Devo andare.' },
       ] },
-      advice: { text: 'Un vecchio che ricorda cose che noi preferiamo dimenticare. Se vuoi capire cosa sta succedendo, raggiungilo. Ti segno il posto sulla mappa. La strada è tortuosa e il viaggio è lungo: portati delle provviste. Non fare il mio stesso errore.', choices: [
-        { id: 'accept', label: 'Andrò da Platos.', next: 'accepted', action: { kind: 'accept-quest', questId: 'find-platos' }, condition: { kind: 'flag', id: 'met-platos', value: false } },
+      advice: { text: 'Un vecchio che ricorda cose che noi preferiamo dimenticare. Se vuoi capire cosa sta succedendo, raggiungilo a nord. {mapOffer} Il viaggio è lungo: porta provviste e gira al largo dalle rocce che si muovono.', choices: [
+        { id: 'accept', label: 'Andrò da Platos.', action: { kind: 'accept-quest', questId: 'find-platos' }, condition: { kind: 'flag', id: 'met-platos', value: false } },
         { id: 'leave', label: 'Terrò a mente il consiglio.' },
       ] },
-      accepted: { text: '{mapGift}', choices: [{ id: 'directions', label: 'Mostrami dove andare.', next: 'directions' }] },
-      directions: { text: 'Ho segnato Platos sulla mappa. Aprila e cerca il segno della missione: è più a nord, lontano da questa strada. Prenditi il tempo di prepararti. Se una roccia si muove, girale al largo.', choices: [{ id: 'leave', label: 'Farò attenzione.' }] },
       active: { text: 'Hai già la strada per Platos segnata sulla mappa. Portati provviste… io ho pensato di potermela cavare senza ascoltare nessuno.', choices: [{ id: 'leave', label: 'Riposa.' }] },
       wounded: { text: 'Vengo da nord. Sono stato ferito sulla strada. Ora devo solo recuperare le forze.', choices: [{ id: 'leave', label: 'Ti lascio riposare.' }] },
     },
@@ -67,15 +65,13 @@ export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> 
       { condition: { kind: 'quest-status', questId: 'north-road', status: 'available' }, node: 'independent' },
     ],
     nodes: {
-      independent: { text: 'Un’altra Leggenda. Se vuoi renderti utile, guarda la strada a nord. Ci sono uomini che non sono tornati e rocce che si muovono. Vai a vedere, ma non ti ho chiesto di fare l’eroe.', choices: [
-        { id: 'accept', label: 'Andrò a vedere.', next: 'accepted', action: { kind: 'accept-quest', questId: 'north-road' } }, { id: 'leave', label: 'Non adesso.' },
+      independent: { text: 'Un’altra Leggenda. Sulla strada a nord ci sono uomini che non sono tornati e rocce che si muovono. Vuoi andare a vedere? {mapOffer} Basta arrivarci: non devi combattere.', choices: [
+        { id: 'accept', label: 'Andrò a vedere.', action: { kind: 'accept-quest', questId: 'north-road' } }, { id: 'leave', label: 'Non adesso.' },
       ] },
-      intro: { text: 'Nereo dice che sai renderti utile. Vediamo. Sulla strada a nord ci sono uomini che non sono tornati. E quelle che sembrano rocce… si muovono. Vai a vedere con i tuoi occhi. Non devi affrontarle: resta vivo, per una volta.', choices: [
-        { id: 'accept', label: 'Andrò a vedere.', next: 'accepted', action: { kind: 'accept-quest', questId: 'north-road' } },
+      intro: { text: 'Nereo dice che sai renderti utile. Sulla strada a nord ci sono uomini che non sono tornati e rocce che si muovono. Vuoi andare a vedere? {mapOffer} Basta arrivarci: non devi combattere.', choices: [
+        { id: 'accept', label: 'Andrò a vedere.', action: { kind: 'accept-quest', questId: 'north-road' } },
         { id: 'leave', label: 'Non adesso.' },
       ] },
-      accepted: { text: '{mapGift}', choices: [{ id: 'directions', label: 'Mostrami dove andare.', next: 'directions' }] },
-      directions: { text: 'Ho segnato la destinazione sulla mappa: aprila e cerca il segno della missione. Segui la strada verso nord. Basta arrivarci: non portarmi trofei e non farti ammazzare per impressionarmi.', choices: [{ id: 'leave', label: 'Ho capito.' }] },
       active: { text: 'La strada è a nord, dove ti ho indicato. Guarda quei corpi e quelle pietre. Non ti ho chiesto di combattere.', choices: [{ id: 'leave', label: 'Vado.' }] },
       after: { text: 'Adesso capisci perché sorvegliamo la strada. Non erano semplici rocce. Sei ancora vivo… bene. Forse sai anche ascoltare.', choices: [{ id: 'leave', label: 'Quelle cose da dove arrivano?' , next: 'mystery' }] },
       mystery: { text: 'Da più a nord. Oltre quel tratto non sappiamo più cosa succeda. Per ora tieni gli occhi aperti.', choices: [{ id: 'leave', label: 'Lo farò.' }] },
@@ -85,17 +81,15 @@ export const DIALOGUE_DEFINITIONS: Readonly<Record<string, DialogueDefinition>> 
     id: 'old-fisher', questId: 'stinking-bait',
     entries: [{ condition: questCondition('completed'), node: 'after' }, { condition: questCondition('active'), node: 'delivery' }, { condition: questCondition('available'), node: 'intro' }],
     nodes: {
-      intro: { text: 'Per le mie esche puzzolenti servono tre interiora di gelatina. Una volta me le procuravo da solo… adesso sono troppo vecchio. E dopo quello che è successo… Be’, lasciamo stare. Mi daresti una mano?', choices: [
-        { id: 'accept', label: 'Ti porterò le interiora.', next: 'accepted', action: { kind: 'accept-quest', questId: 'stinking-bait' }, condition: questCondition('available') },
+      intro: { text: 'Sono troppo vecchio per procurarmi le esche. Mi porteresti tre interiora di gelatina? Raccogli quello che lasciano le gelatine, poi torna qui, apri la borsa e premi sulle interiora. In cambio ti darò queste ricompense.', rewardQuestId: 'stinking-bait', choices: [
+        { id: 'accept', label: 'Ti porterò le interiora.', action: { kind: 'accept-quest', questId: 'stinking-bait' }, condition: questCondition('available') },
         { id: 'event', label: 'Che cosa è successo?', next: 'event' }, { id: 'leave', label: 'Forse un’altra volta.' },
       ] },
       event: { text: 'Certi rumori non te li togli più dalle orecchie. E certe persone non tornano. Non oggi, ragazzo… non chiedermi di parlarne oggi.', choices: [{ id: 'back', label: 'Capisco. Torniamo alle esche.', next: 'intro' }] },
-      accepted: { text: 'Grazie. Cerca le gelatine e raccogli quello che lasciano. Quando torni, mostrami le interiora dalla tua sacca. Me ne bastano tre.', choices: [{ id: 'leave', label: 'A presto, Nereo.' }] },
-      delivery: { text: 'Hai qualcosa per me? Premi sulle interiora nella tua sacca: ne prenderò soltanto quante me ne mancano. Me ne servono ancora {remaining}.', itemRequest: { questId: 'stinking-bait', completedNext: 'thanks', progressNext: 'delivery' }, choices: [{ id: 'event', label: 'Di quell’evento…', next: 'event-active' }, { id: 'leave', label: 'Torno presto.' }] },
+      delivery: { text: 'Mi servono ancora {remaining} interiora di gelatina. Se le hai, apri la borsa e premi su di loro: prenderò solo quelle necessarie e ti darò queste ricompense. Gli oggetti vanno nella borsa; se non c’è spazio, li lascio a terra solo per te.', rewardQuestId: 'stinking-bait', itemRequest: { questId: 'stinking-bait', progressNext: 'delivery' }, choices: [{ id: 'event', label: 'Di quell’evento…', next: 'event-active' }, { id: 'leave', label: 'Torno presto.' }] },
       'event-active': { text: 'Da quella notte il mondo ha un altro odore. Le mie esche almeno le so riconoscere… Il resto, meno. Perdona questo vecchio.', choices: [{ id: 'back', label: 'Hai bisogno delle interiora.', next: 'delivery' }] },
-      thanks: { text: 'Eccole! Questo sì che è un fetore come si deve. Con queste preparo le mie esche. Grazie, ragazzo. Le altre tienile tu. {rewardDelivery} Tra cinque minuti avrò bisogno di nuove esche.', rewardQuestId: 'stinking-bait', choices: [{ id: 'leave', label: 'Buona pesca.', next: 'bad-luck' }] },
       'bad-luck': { text: 'Buona pesca?! Ti maledico, ragazzo! Che tutte le gelatine del pantano ti si appiccichino agli stivali! Ai pescatori non si augura mai buona pesca… porta sfortuna!', choices: [{ id: 'leave', label: 'Mi rimangio l’augurio!' }] },
-      after: { text: 'Le tue esche funzionano. Sono contento di rivederti: siediti, se hai un momento. Per ora non ho bisogno di altre interiora. Ripassa cinque minuti dopo la tua ultima consegna.', choices: [{ id: 'event', label: 'Come stai?', next: 'after-chat' }, { id: 'leave', label: 'Passavo a salutarti.' }] },
+      after: { text: 'Con quelle interiora preparo le mie esche. Per ora non me ne servono altre: ripassa cinque minuti dopo la consegna. Siediti, se hai un momento.', choices: [{ id: 'good-luck', label: 'Buona pesca.', next: 'bad-luck' }, { id: 'leave', label: 'Passavo solo a salutarti.' }, { id: 'event', label: 'Come stai?', next: 'after-chat' }] },
       'after-chat': { text: 'Le ginocchia scricchiolano e i ricordi fanno peggio. Ma finché c’è qualcuno che passa a salutare, posso aspettare un’altra alba.', choices: [{ id: 'leave', label: 'Ci vediamo, Nereo.' }] },
     },
   },

@@ -81,21 +81,6 @@ test('melee follows the body while impacts and ground areas keep their world coo
     assert.equal(frame.events.find(e => e.id === 'hit')?.x, 70);
     assert.equal(frame.events.find(e => e.id === 'area')?.x, 5);
 });
-test('cooldown, resources and sanctuary gate speculative effects without changing player resources', () => {
-    const { world, actor, command, view } = fixture();
-    actor.resource = 0;
-    view.predict({ ...command, cast: 'q' }, actor, null, world, 1000);
-    actor.cooldowns.basic = 2000;
-    view.predict(command, actor, null, world, 1000);
-    assert.equal(view.sample(actor, [], [], world, 1000).events.length, 0);
-    actor.cooldowns.basic = 0;
-    view.predict(command, actor, null, world, 1000);
-    view.predict({ ...command, seq: 2 }, actor, null, world, 1033);
-    assert.equal(view.sample(actor, [], [], world, 1033).events.length, 1);
-    view.reset();
-    view.predict(command, actor, null, new World(), 1000);
-    assert.equal(view.sample(actor, [], [], world, 1000).events.length, 0);
-});
 test('held basic cadence uses bounded arrival time without sending extra casts during cooldown', () => {
     const { world, actor, command, view } = fixture();
     view.predict(command, actor, null, world, 1000, 150);

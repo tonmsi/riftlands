@@ -6,7 +6,7 @@ import { TILE_SIZE } from '../shared/config';
 import { insideShape } from '../shared/world-authoring';
 import { activeQuestAreas } from '../shared/quest-areas';
 import type { Account } from './store';
-import { canCollectItem, collectItem, insertItem, ITEM_DEFINITIONS, newInventory, type ItemStack } from '../shared/items';
+import { canCollectItem, collectItem, ITEM_DEFINITIONS, newInventory, type ItemStack } from '../shared/items';
 import { VENDOR_DEFINITIONS, type VendorOffer } from '../shared/vendors';
 import { acceptQuest, advanceQuest, conditionMatches, DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS, newNarrativeProgress, questStatus, questReward, questCompletions, hasWorldMap, grantWorldMap } from '../shared/narrative';
 import { NPC_LOOT_TABLES } from '../shared/loot';
@@ -19,7 +19,7 @@ interface Host {
   rewardXp: (id: string, amount: number) => void;
   heal: (player: Actor, amount: number) => void;
 }
-interface Session { id: string; targetId: string; dialogueId: string; node: string; startedAt: number; expiresAt: number; rewardNote?: string; rewards?: ItemStack[]; mapGift?: string; }
+interface Session { id: string; targetId: string; dialogueId: string; node: string; startedAt: number; expiresAt: number; }
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 /** Server-owned sessions and transactions; content contains conditions/actions, never executable script. */
 export class InteractionSystem {
@@ -99,10 +99,11 @@ export class InteractionSystem {
         if (!quest) throw new Error('Missione non disponibile.');
         acceptQuest(account.narrative!, quest, now);
         if (quest.objective.kind === 'reach-area') {
-          session.mapGift = hasWorldMap(account.narrative!) ? 'Hai già una mappa: usiamola per orientarci.' : 'Tieni, prendi questa mappa. È tua: puoi aprirla dal cerchio in alto a destra, anche dopo aver chiuso questo dialogo.';
           grantWorldMap(account.narrative!);
         }
         this.host.changed(id);
+        this.sessions.delete(id);
+        return;
       }
       if (choice.action?.kind === 'give-item') {
         if (account.narrative!.gifts?.includes(choice.action.giftId)) throw new Error('Regalo già ricevuto.');
@@ -127,7 +128,7 @@ export class InteractionSystem {
     const inventory = structuredClone(account.inventory!);
     inventory.slots[command.slot]!.quantity -= consumed;
     if (!inventory.slots[command.slot]!.quantity) inventory.slots[command.slot] = null;
-    const deliveries = rewardItems.map(item => ({ item, inBag: !!item.toInventory && insertItem(inventory, item.itemId, item.quantity) }));
+    const deliveries = rewardItems.map(item => ({ item, inBag: !!item.toInventory && collectItem(inventory, item.itemId, item.quantity) }));
     // Reserve space for every reward before consuming a delivery or completing its mission.
     if (this.drops.size + deliveries.filter(delivery => !delivery.inBag).length > 2048) throw new Error('Troppi oggetti a terra. Attendi qualche secondo prima di consegnare.');
     Object.assign(account.inventory!, inventory);
@@ -138,17 +139,15 @@ export class InteractionSystem {
       account.gold = (account.gold ?? 0) + reward.gold;
       this.host.rewardXp(id, reward.xp);
       const player = this.host.players.get(id)!;
-      session.rewards = rewardItems.map(({ itemId, quantity }) => ({ itemId, quantity }));
-      session.rewardNote = '';
       deliveries.forEach(({ item, inBag }, index) => {
         if (inBag) this.action(id, 'collect', item, now);
         else this.spawnLoot(player, { itemId: item.itemId, quantity: item.quantity }, id, now, index, 1000, 42);
         if (item.giftId) (account.narrative!.gifts ??= []).push(item.giftId);
-        if (item.itemId === 'fishing-rod') session.rewardNote += inBag ? 'Ti regalo la tua prima canna da pesca: è nella tua sacca. Usala vicino alla riva! ' : 'Ti regalo la tua prima canna da pesca. La sacca è piena: te la lascio a terra, soltanto per te. Raccoglila prima di andare! ';
       });
-      if (deliveries.some(delivery => !delivery.inBag && delivery.item.itemId !== 'fishing-rod')) session.rewardNote += 'Ho lasciato lo zaino qui a terra, soltanto per te: raccoglilo prima di andare. ';
     }
-    this.advance(session, progress.status === 'completed' ? node.itemRequest!.completedNext : node.itemRequest!.progressNext, now); this.host.changed(id);
+    if (progress.status === 'completed') this.sessions.delete(id);
+    else this.advance(session, node.itemRequest!.progressNext, now);
+    this.host.changed(id);
   }
   view(id: string, now: number): DialogueView | null {
     const session = this.sessions.get(id); if (!session) return null;
@@ -162,11 +161,13 @@ export class InteractionSystem {
     const remaining = quest ? Math.max(0, quest.objective.quantity - (account.narrative!.quests[quest.id]?.objectives[quest.objective.id] ?? 0)) : 0;
     const rewardQuest = node.rewardQuestId ? QUEST_DEFINITIONS[node.rewardQuestId] : undefined;
     const rewardProgress = rewardQuest ? account.narrative!.quests[rewardQuest.id] : undefined;
-    const rewards = rewardQuest && rewardProgress ? session.rewards ?? [] : undefined;
-    return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: node.text.replace('{remaining}', String(remaining)).replace('{rewardDelivery}', session.rewardNote ?? '').replace('{mapGift}', session.mapGift ?? 'Ti segno la destinazione sulla mappa.'),
+    const completions = rewardProgress ? questCompletions(rewardProgress) : 0;
+    const rewards = rewardQuest?.reward?.items?.filter(item => (!item.firstOnly || completions === 0) && (!item.giftId || !account.narrative!.gifts?.includes(item.giftId))).map(({ itemId, quantity }) => ({ itemId, quantity }));
+    const mapOffer = hasWorldMap(account.narrative!) ? 'Ti segnerò il posto sulla tua mappa.' : 'Ti regalerò una mappa e ti segnerò il posto. Potrai aprirla dal cerchio in alto a destra.';
+    return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: node.text.replace('{remaining}', String(remaining)).replace('{mapOffer}', mapOffer),
       choices: node.choices.filter(choice => !choice.condition || conditionMatches(account.narrative!, choice.condition, now)).map(({ id, label }) => ({ id, label })),
       ...(quest && quest.objective.kind !== 'reach-area' && remaining ? { request: { itemId: quest.objective.itemId, remaining } } : {}),
-      ...(rewards ? { rewards, rewardGold: questReward(rewardQuest!, Math.max(0, questCompletions(rewardProgress!) - 1)).gold } : {}) };
+      ...(rewardQuest ? { rewards, rewardGold: questReward(rewardQuest, completions).gold, rewardXp: questReward(rewardQuest, completions).xp } : {}) };
   }
   private purchaseBlocked(account: Account, offer: VendorOffer): string | undefined {
     if (offer.unlock === 'world-map') return hasWorldMap(account.narrative!) ? 'Possiedi già la mappa.' : (account.gold ?? 0) < offer.price ? 'Gold insufficienti.' : undefined;

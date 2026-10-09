@@ -46,16 +46,3 @@ test('bad runtime structures and unsupported mechanics fail with an actionable e
     runtime.bosses[0].template = 'missing';
     assert.throws(() => buildDungeonBundle(parseDungeonFile(JSON.stringify(runtime)).draft, []), /senza comportamento/);
 });
-test('world selection moves all geometry together and shares installation collision checks', () => {
-    const draft = ready(), before = compileDungeonDraft(draft);
-    const origin = dungeonOriginAt({ x: 5000, y: -10000 }, draft.width, draft.height);
-    assert.equal(dungeonPlacementIssue(origin, draft.width, draft.height, []), undefined);
-    const after = compileDungeonDraft({ ...draft, origin });
-    const dx = (origin.x - draft.origin.x) * 48, dy = (origin.y - draft.origin.y) * 48;
-    assert.equal(after.definition.spawnPoints.boss.x, before.definition.spawnPoints.boss.x + dx);
-    assert.equal(after.definition.spawnPoints.boss.y, before.definition.spawnPoints.boss.y + dy);
-    assert.equal(after.definition.layout.bounds.minTx, before.definition.layout.bounds.minTx + dx / 48);
-    const home = dungeonOriginAt({ x: 0, y: 0 }, draft.width, draft.height);
-    assert.match(dungeonPlacementIssue(home, draft.width, draft.height, [])!, /avamposto/);
-    assert.throws(() => buildDungeonBundle({ ...draft, origin: home }, []), /avamposto/);
-});

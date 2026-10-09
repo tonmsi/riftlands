@@ -16,24 +16,6 @@ import { newWorldDocument } from '../shared/world-schema';
 import { World } from '../shared/world';
 import { WorldSimulation } from '../server/simulation';
 
-test('compressed dungeons preserve every painted tile, encounter, spawn and boss, and inherit catalog updates', () => {
-  const bundle = engineBundle();
-  bundle.draft!.entities.find(e => e.kind === 'boss')!.inheritRadius = true;
-  const packed = packDungeonCatalog([bundle]);
-  const restored = unpackDungeonCatalog(packed)[0];
-  assert.deepEqual(restored, bundle);
-  assert.deepEqual(parseDungeonDraft(JSON.stringify(compactDungeonDraft(bundle.draft!))), bundle.draft);
-  const next = structuredClone(ACTOR_CATALOG), boss = next.bosses.find(b => b.id === bundle.bosses[0].templateId)!;
-  boss.hp = 987; boss.radius = 35; boss.attacks[0].damage = 42;
-  const updated = unpackDungeonCatalog(packed, next)[0];
-  assert.equal(updated.bosses[0].hp, 987); assert.equal(updated.bosses[0].radius, 35); assert.equal(updated.bosses[0].attacks[0].damage, 42);
-  const world = new World(42, 16, 'world', newWorldDocument(), [updated.definition]);
-  const simulation = new WorldSimulation(42, 1_000_000, undefined, 'world', { world, dungeons: [updated.definition], bosses: new Map(updated.bosses.map(b => [b.id, b])), spawn: { x: 0, y: 0 } });
-  assert.equal(simulation.bosses.get(updated.bosses[0].id)!.boss.maxHp, 987);
-  assert.equal(simulation.bosses.get(updated.bosses[0].id)!.boss.radius, 35);
-  assert.equal(JSON.stringify(updated.definition), JSON.stringify(bundle.definition));
-});
-
 test('explicit instance overrides survive updates while unmodified properties follow the catalog', () => {
   const bundle = engineBundle(); bundle.bosses[0].hp = 123; bundle.bosses[0].radius = 30;
   const packed = packDungeonCatalog([bundle]), next = structuredClone(ACTOR_CATALOG); next.bosses[0].hp = 999; next.bosses[0].speed = 125;

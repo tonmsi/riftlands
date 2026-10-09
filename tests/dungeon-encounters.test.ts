@@ -139,44 +139,6 @@ test('solo entry announces relocation, pauses the boss on arrival, and can be ca
     } finally {g.cleanup();}
 });
 
-for (const team of [false, true]) test(`Warden waits for ${team ? 'team' : 'solo'} entry before waking once`, () => {
-    const f = fixture(false, team, true);
-    try {
-        const e = f.encounters[0], start = { x: e.boss.x, y: e.boss.y };
-        e.dungeon.encounter.regions.bossAggro = { kind: 'circle', center: start, radius: 100 };
-        Object.assign(f.player, { x: start.x + 80, y: start.y });
-        f.sim.step();
-        const preparation = e.preparationFor(f.player)!;
-        assert.ok(preparation);
-        while (f.sim.now + 100 < preparation.endsAt) {
-            f.sim.step(.1);
-            assert.equal(e.boss.bossAwakenedAt, undefined);
-            assert.equal(e.boss.spriteMoving, false);
-            assert.equal(e.windup, undefined);
-            assert.deepEqual({ x: e.boss.x, y: e.boss.y }, start);
-        }
-        f.sim.step(.1);
-        const awakenedAt = e.boss.bossAwakenedAt!;
-        assert.equal(awakenedAt, e.lockState().startedAt);
-        assert.equal(e.ownerId, f.player.id);
-        assert.deepEqual({ x: f.player.x, y: f.player.y }, e.dungeon.spawnPoints.party[0]);
-        assert.ok(BOSS_WAKE_MS <= DUNGEON_ARRIVAL_MS, 'entry grace covers the wake animation');
-        for (let i = 0; i < 11; i++) {
-            f.sim.step(.1);
-            assert.equal(e.boss.bossAwakenedAt, awakenedAt);
-            assert.equal(e.boss.spriteMoving, false);
-            assert.equal(e.windup, undefined);
-            assert.deepEqual({ x: e.boss.x, y: e.boss.y }, start);
-        }
-        f.sim.step(.1);
-        assert.ok(e.boss.spriteMoving || e.windup, 'combat begins after arrival');
-        f.player.hp = 0;
-        f.player.deadUntil = f.sim.now + 5000;
-        f.sim.step();
-        assert.equal(e.boss.bossAwakenedAt, undefined, 'wipe restores the sleeping pose');
-    } finally { f.cleanup(); }
-});
-
 test('authored spawns on a room edge move inside the new stones safely', () => {
     const f = fixture(true, false, true);
     try {

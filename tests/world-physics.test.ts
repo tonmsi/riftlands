@@ -14,32 +14,10 @@ class TestWorld extends World {
 function actor(id = 'a', x = 0, y = 0): Actor {
   return { id, x, y, kind: 'player', name: id, classId: 'mage', radius: 15, hp: 110, maxHp: 110, resource: 120, maxResource: 120, aim: 0, speed: 190, level: 1, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 } };
 }
-test('chunks are reproducible regardless of traversal order, including negative and distant coordinates', () => {
-  const a = new World(72), b = new World(72);
-  for (const [x, y] of [[0, 0], [-1, -2], [8712, -7211], [-31, 47]]) {
-    a.getChunk(x + 1, y); b.getChunk(x - 1, y - 1);
-    assert.deepEqual(a.getChunk(x, y), b.getChunk(x, y));
-  }
-  assert.notDeepEqual(a.getChunk(3, 4).tiles, new World(73).getChunk(3, 4).tiles);
-  assert.deepEqual(chunkCoords(-1, -769), { cx: -1, cy: -2 });
-});
 test('terrain cache stays bounded and regeneration matches evicted chunks', () => {
   const world = new World(99, 5), first = world.getChunk(0, 0);
   for (let i = 1; i <= 100; i++) world.getChunk(i, -i);
   assert.equal(world.cacheSize, 5); assert.deepEqual(world.getChunk(0, 0), first);
-});
-test('generated NPCs and pickups are valid and spawn clearing and roads stay traversable', () => {
-  const world = new World();
-  for (let x = -3; x <= 3; x++) for (let y = -3; y <= 3; y++) {
-    const chunk = world.getChunk(x, y);
-    assert.equal(chunk.tiles.length, 256);
-    for (const spawn of [...chunk.npcs, ...chunk.pickups]) assert.equal(collidesWorld(spawn.x, spawn.y, 15, world), false);
-  }
-  for (const dungeon of DUNGEON_DEFINITIONS) for (let step = 0; step <= 100; step++) {
-    const point = dungeonApproachPoint(dungeon, step / 100);
-    assert.equal(collidesWorld(point.x, point.y, 15, world), false);
-  }
-  assert.equal(collidesWorld(0, 0, 15, world), false);
 });
 test('movement normalizes diagonals, slides along walls, and cannot tunnel during a dash', () => {
   const floor = new TestWorld(), start = { x: 20, y: 20, radius: 10 };

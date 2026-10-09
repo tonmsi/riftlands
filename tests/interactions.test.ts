@@ -40,21 +40,20 @@ function fixture(random = () => 0) {
   return { sim, world, a, b, player, other, npc, talk, accept, kill };
 }
 
-test('exploration grants a persistent map before departure, and acknowledges an owned map', () => {
+test('exploration explains the map before acceptance, closes immediately and grants a persistent map', () => {
   for (const owned of [false, true]) {
     const f = fixture(); f.npc.dialogueId = 'north-scout';
     if (owned) grantWorldMap(f.a.narrative!);
     const before = structuredClone(f.a.inventory!);
-    const view = f.talk(); f.sim.interact(f.a.id, { kind: 'choose', sessionId: view.sessionId, choiceId: 'accept' });
+    const view = f.talk();
+    assert.match(view.text, owned ? /tua mappa/ : /regalerò una mappa/);
+    const command = { kind: 'choose', sessionId: view.sessionId, choiceId: 'accept' } as const;
+    f.sim.interact(f.a.id, command);
     assert.ok(hasWorldMap(f.a.narrative!));
     assert.deepEqual(f.a.inventory, before);
     assert.equal(f.a.narrative!.quests['north-road'].status, 'active');
-    assert.match(f.sim.interactions.view(f.a.id, f.sim.now)!.text, owned ? /Hai già una mappa/ : /Tieni, prendi questa mappa/);
-    const gift = f.sim.interactions.view(f.a.id, f.sim.now)!;
-    assert.doesNotMatch(gift.text, /Segui la strada/);
-    assert.equal(gift.choices[0].id, 'directions');
-    f.sim.interact(f.a.id, { kind: 'choose', sessionId: gift.sessionId, choiceId: 'directions' });
-    assert.match(f.sim.interactions.view(f.a.id, f.sim.now)!.text, /Ho segnato la destinazione/);
+    assert.equal(f.sim.interactions.view(f.a.id, f.sim.now), null);
+    assert.throws(() => f.sim.interact(f.a.id, command), /terminata/);
     f.sim.checkpoint(); f.sim.addPlayer(f.a, 'mage'); assert.ok(hasWorldMap(f.a.narrative!));
   }
 });
@@ -94,30 +93,36 @@ test('authored neutral NPC wanders near home, remains invulnerable and has a per
 
 test('Nereo automatically gives the first rod after completing the quest, using the slot freed by delivery', () => {
   const f = fixture(); const intro = f.talk(); assert.equal(intro.choices.some(choice => choice.id === 'fishing'), false);
+  assert.deepEqual(intro.rewards?.map(item => item.itemId), ['backpack-2', 'fishing-rod']);
+  assert.equal(intro.rewardGold, 20); assert.equal(intro.rewardXp, 150);
   assert.throws(() => f.sim.interact(f.a.id, { kind: 'choose', sessionId: intro.sessionId, choiceId: 'fishing' }));
   f.accept(); insertItem(f.a.inventory!, 'slime-innards', 3);
+  assert.equal(f.sim.interactions.view(f.a.id, f.sim.now), null);
   const view = f.talk(); f.sim.interact(f.a.id, { kind: 'use-item', sessionId: view.sessionId, slot: 0, itemId: 'slime-innards' });
   assert.equal(f.a.inventory!.slots[0]!.itemId, 'fishing-rod');
   assert.ok(f.a.narrative!.gifts!.includes('nereo-first-rod'));
-  assert.match(f.sim.interactions.view(f.a.id, f.sim.now)!.text, /canna da pesca.*nella tua sacca/);
+  assert.equal(f.sim.interactions.view(f.a.id, f.sim.now), null);
   assert.equal([...f.sim.interactions.drops.values()].some(drop => drop.stack.itemId === 'fishing-rod' || drop.stack.itemId === 'healing-potion'), false);
   assert.throws(() => f.sim.interact(f.a.id, { kind: 'use-item', sessionId: view.sessionId, slot: 0, itemId: 'slime-innards' }));
 });
 
 test('Nereo leaves the first rod privately on the ground when excess items keep the bag full', () => {
-  const f = fixture(); f.accept(); insertItem(f.a.inventory!, 'slime-innards', 6);
-  const view = f.talk(); f.sim.interact(f.a.id, { kind: 'use-item', sessionId: view.sessionId, slot: 0, itemId: 'slime-innards' });
-  assert.equal(f.a.inventory!.slots[0]!.quantity, 3);
+  const f = fixture(); collectItem(f.a.inventory!, 'backpack-2', 1); insertItem(f.a.inventory!, 'healing-potion', 20); f.accept(); insertItem(f.a.inventory!, 'slime-innards', 6);
+  const slot = f.a.inventory!.slots.findIndex(stack => stack?.itemId === 'slime-innards');
+  const view = f.talk(); f.sim.interact(f.a.id, { kind: 'use-item', sessionId: view.sessionId, slot, itemId: 'slime-innards' });
+  assert.equal(f.a.inventory!.slots[slot]!.quantity, 3);
   const rod = [...f.sim.interactions.drops.values()].find(drop => drop.stack.itemId === 'fishing-rod')!;
   assert.equal(rod.ownerId, f.a.id); assert.equal(f.sim.interactions.visibleDrops(f.b.id, f.sim.now, 500).some(drop => drop.id === rod.id), false);
-  assert.match(f.sim.interactions.view(f.a.id, f.sim.now)!.text, /sacca è piena.*a terra/);
+  assert.match(view.text, /a terra solo per te/);
+  assert.equal(f.sim.interactions.view(f.a.id, f.sim.now), null);
 });
 
 test('previously claimed Nereo rods are never granted again by the new quest reward', () => {
   const f = fixture(); f.a.narrative!.gifts = ['nereo-first-rod']; f.accept(); insertItem(f.a.inventory!, 'slime-innards', 3);
   const view = f.talk(); f.sim.interact(f.a.id, { kind: 'use-item', sessionId: view.sessionId, slot: 0, itemId: 'slime-innards' });
   assert.equal(f.a.inventory!.slots[0], null);
-  assert.deepEqual([...f.sim.interactions.drops.values()].map(drop => drop.stack.itemId), ['backpack-2']);
+  assert.equal(f.a.inventory!.backpackId, 'backpack-2');
+  assert.equal(f.sim.interactions.drops.size, 0);
 });
 
 test('slime deaths unlock 50% loot only while the killer has the active quest', () => {
@@ -157,13 +162,15 @@ test('deliveries accept partial stacks, retain excess, reject replays, and block
 test('good fishing triggers a curse without changing the completed friendship on the next conversation', () => {
   const { sim, a, talk, accept } = fixture(); accept(); insertItem(a.inventory!, 'slime-innards', 3);
   const request = talk(); sim.interact(a.id, { kind: 'use-item', sessionId: request.sessionId, slot: 0, itemId: 'slime-innards' });
-  const thanks = sim.interactions.view(a.id, sim.now)!;
-  sim.interact(a.id, { kind: 'choose', sessionId: thanks.sessionId, choiceId: 'leave' });
+  assert.equal(sim.interactions.view(a.id, sim.now), null);
+  const thanks = talk();
+  assert.deepEqual(thanks.choices.map(choice => choice.id), ['good-luck', 'leave', 'event']);
+  sim.interact(a.id, { kind: 'choose', sessionId: thanks.sessionId, choiceId: 'good-luck' });
   const curse = sim.interactions.view(a.id, sim.now)!; assert.match(curse.text, /Ti maledico/);
   assert.equal(questStatus(a.narrative!, 'stinking-bait', sim.now), 'completed');
   sim.interact(a.id, { kind: 'choose', sessionId: curse.sessionId, choiceId: 'leave' });
   assert.equal(sim.interactions.view(a.id, sim.now), null);
-  assert.match(talk().text, /Sono contento di rivederti/);
+  assert.match(talk().text, /Siediti/);
 });
 
 test('moving away from a wandering character closes the conversation before a stale delivery can consume an item', () => {
@@ -333,26 +340,27 @@ test('consumables heal once, clamp to max HP and reject stale slots, dead player
   sim.disconnectPlayer(a.id); assert.throws(() => sim.interact(a.id, command)); assert.equal(a.inventory!.slots[0]!.quantity, 2);
 });
 
-test('quest rewards stay on the ground and private; completion replay cannot duplicate items', () => {
+test('quest rewards are delivered together, close dialogue and cannot be duplicated', () => {
   const { sim, a, b, player, other, talk, accept } = fixture(); accept(); insertItem(a.inventory!, 'slime-innards', 3);
   const request = talk(), command = { kind: 'use-item', sessionId: request.sessionId, slot: 0, itemId: 'slime-innards' } as const;
   sim.interact(a.id, command);
   const rewards = [...sim.interactions.drops.values()];
-  assert.deepEqual(rewards.map(drop => drop.stack.itemId), ['backpack-2']);
-  assert.equal(a.inventory!.capacity, 1); assert.equal(a.inventory!.slots[0]!.itemId, 'fishing-rod'); assert.equal(a.gold, 20);
+  assert.deepEqual(rewards, []);
+  assert.equal(a.inventory!.capacity, 2); assert.equal(a.inventory!.slots[0]!.itemId, 'fishing-rod'); assert.equal(a.gold, 20);
   assert.equal(sim.interactions.visibleDrops(b.id, sim.now, 900).length, 0);
-  assert.throws(() => sim.interact(a.id, command)); assert.equal(sim.interactions.drops.size, 1);
-  player.x = -200; Object.assign(other, { x: rewards[0].x, y: rewards[0].y }); sim.now += 1100; sim.step(.01);
-  assert.equal(b.inventory!.capacity, 1); assert.equal(sim.interactions.drops.size, 1);
-  Object.assign(player, { x: rewards[0].x, y: rewards[0].y }); sim.step(.01); assert.equal(a.inventory!.backpackId, 'backpack-2');
+  assert.equal(sim.interactions.view(a.id, sim.now), null);
+  assert.throws(() => sim.interact(a.id, command)); assert.equal(sim.interactions.drops.size, 0);
+  assert.equal(b.inventory!.capacity, 1); assert.equal(a.inventory!.backpackId, 'backpack-2');
   assert.ok(a.inventory!.slots.some(stack => stack?.itemId === 'fishing-rod'));
   sim.now = a.narrative!.quests['stinking-bait'].completedAt! + 300_000;
   Object.assign(player, { x: 72, y: 24 }); accept(); insertItem(a.inventory!, 'slime-innards', 3);
   const next = talk(); const slot = a.inventory!.slots.findIndex(stack => stack?.itemId === 'slime-innards');
+  assert.equal(next.rewardGold, 0);
+  assert.deepEqual(next.rewards, []);
   sim.interact(a.id, { kind: 'use-item', sessionId: next.sessionId, slot, itemId: 'slime-innards' });
   assert.deepEqual([...sim.interactions.drops.values()].map(drop => drop.stack.itemId), []);
   assert.equal(a.gold, 20, 'gold stays first-completion only');
-  assert.equal(sim.interactions.view(a.id, sim.now)!.rewardGold, 0, 'repeat rewards visibly show zero gold');
+  assert.equal(sim.interactions.view(a.id, sim.now), null);
 });
 
 test('melee loot appears outside the killer pickup radius and is not collected where the mob died', () => {
@@ -384,10 +392,11 @@ test('inventory feedback confirms only successful actions, is private and expire
 
 test('ground loot limit rejects the delivery before consuming objectives or awarding XP', () => {
   const { sim, a, player, talk, accept } = fixture(); accept(); insertItem(a.inventory!, 'slime-innards', 3);
+  collectItem(a.inventory!, 'backpack-2', 1); insertItem(a.inventory!, 'healing-potion', 20); a.inventory!.slots[0]!.quantity = 6;
   for (let i = 0; i < 2048; i++) sim.interactions.drops.set(String(i), { id: String(i), x: player.x, y: player.y, stack: { itemId: 'gold', quantity: 1 }, expiresAt: sim.now + LOOT_ITEM_TTL });
   const request = talk();
   assert.throws(() => sim.interact(a.id, { kind: 'use-item', sessionId: request.sessionId, slot: 0, itemId: 'slime-innards' }), /Troppi oggetti/);
-  assert.equal(a.inventory!.slots[0]!.quantity, 3); assert.equal(a.xp, 0); assert.equal(a.gold ?? 0, 0);
+  assert.equal(a.inventory!.slots[0]!.quantity, 6); assert.equal(a.xp, 0); assert.equal(a.gold ?? 0, 0);
   assert.equal(a.narrative!.quests['stinking-bait'].status, 'active');
 });
 
@@ -470,7 +479,7 @@ test('dialogue and loot content reference real nodes, quests and item definition
         if (choice.action?.kind === 'accept-quest') assert.ok(Object.hasOwn(QUEST_DEFINITIONS, choice.action.questId));
         if (choice.action?.kind === 'give-item') assert.ok(Object.hasOwn(ITEM_DEFINITIONS, choice.action.itemId));
       }
-      if (node.itemRequest) for (const next of [node.itemRequest.completedNext, node.itemRequest.progressNext]) assert.ok(Object.hasOwn(dialogue.nodes, next));
+      if (node.itemRequest) assert.ok(Object.hasOwn(dialogue.nodes, node.itemRequest.progressNext));
     }
   }
   for (const rules of Object.values(NPC_LOOT_TABLES)) for (const rule of rules) {

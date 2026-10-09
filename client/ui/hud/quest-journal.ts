@@ -31,13 +31,15 @@ export class QuestJournalUI {
   private acceptanceFrame = 0;
   constructor(hud: HTMLElement, private player: HTMLElement, popups: PopupManager) {
     this.panel.className = 'quest-journal glass'; this.panel.id = 'quest-journal'; this.panel.hidden = true;
-    this.panel.setAttribute('role', 'region'); this.panel.setAttribute('aria-label', 'Il tuo viaggio');
-    this.panel.innerHTML = '<header><strong>Il tuo viaggio</strong><button type="button" aria-label="Chiudi diario">×</button></header><div class="quest-journal-scroll"><h3>Missioni attive</h3><div data-active-quests></div><h3>Traguardi in corso</h3><p>Non ci sono traguardi in corso.</p></div>';
+    this.panel.setAttribute('role', 'region'); this.panel.setAttribute('aria-label', 'Diario delle missioni');
+    this.panel.innerHTML = '<header><div><small>IL TUO VIAGGIO</small><strong>Diario delle missioni</strong></div><button type="button" aria-label="Chiudi diario">×</button></header><div class="quest-journal-scroll"><h3>Missioni attive <span data-active-count>0</span></h3><div data-active-quests></div><h3>Missioni completate <span data-completed-count>0</span></h3><div data-completed-quests></div></div>';
     hud.append(this.panel);
     this.acceptance.className = 'quest-acceptance-feedback'; this.acceptance.hidden = true;
     this.acceptance.setAttribute('role', 'status'); this.acceptance.setAttribute('aria-live', 'polite'); hud.append(this.acceptance);
     this.toggle.type = 'button'; this.toggle.className = 'player-journal-toggle'; this.toggle.setAttribute('aria-label', 'Apri missioni e traguardi');
     this.toggle.setAttribute('aria-controls', this.panel.id); this.toggle.setAttribute('aria-expanded', 'false'); this.player.append(this.toggle);
+    this.toggle.innerHTML = '<span class="journal-box-hint" aria-hidden="true">▤ DIARIO</span>';
+    this.toggle.title = 'Apri il diario delle missioni';
     this.completion.className = 'quest-completion-feedback'; this.completion.hidden = true;
     this.completion.setAttribute('role', 'status'); this.completion.setAttribute('aria-live', 'polite');
     this.completion.setAttribute('aria-atomic', 'true'); this.player.append(this.completion);
@@ -84,19 +86,29 @@ export class QuestJournalUI {
       const completed = Object.keys(counts).filter(id => this.hasBaseline && counts[id] > (this.completionCounts[id] ?? 0));
       this.completionCounts = counts; this.hasBaseline = true;
       if (completed.length) {
-        this.completion.textContent = `Missione completata · ${completed.map(id => QUEST_DEFINITIONS[id]?.name ?? id).join(', ')}`;
+        const open = document.createElement('button'); open.type = 'button'; open.textContent = 'Apri il diario →';
+        open.addEventListener('click', () => this.setOpen(true));
+        this.completion.replaceChildren(text('strong', completed.length > 1 ? '✓ Missioni completate!' : '✓ Missione completata!'),
+          text('span', completed.map(id => QUEST_DEFINITIONS[id]?.name ?? id).join(', ')), open);
+        // Restart the short celebration when another completion arrives before the previous one expires.
+        this.completion.hidden = true; this.player.classList.remove('quest-completed');
+        void this.player.offsetWidth;
         this.completion.hidden = false; this.player.classList.add('quest-completed');
         clearTimeout(this.completionTimer);
         this.completionTimer = window.setTimeout(() => {
           this.completion.hidden = true; this.player.classList.remove('quest-completed'); this.completionTimer = 0;
-        }, 4500);
+        }, 6500);
       }
     }
     if (narrative) this.narrative = narrative; if (inventory) this.inventory = inventory;
     const active = Object.entries(this.narrative.quests).filter(([, quest]) => quest.status === 'active');
     this.player.classList.toggle('has-active-quests', active.length > 0);
-    this.toggle.setAttribute('aria-label', active.length ? `Missioni attive: ${active.length}. Apri il diario` : 'Apri missioni e traguardi');
-    const signature = JSON.stringify([active, this.inventory]); if (signature === this.signature) return; this.signature = signature;
+    const completedCount = Object.values(this.narrative.quests).filter(quest => questCompletions(quest) > 0).length;
+    this.toggle.setAttribute('aria-label', `Apri il diario. Missioni attive: ${active.length}. Completate: ${completedCount}`);
+    const signature = JSON.stringify([this.narrative.quests, this.inventory]); if (signature === this.signature) return; this.signature = signature;
+    this.panel.querySelector('[data-active-count]')!.textContent = String(active.length);
+    this.panel.querySelector('[data-completed-count]')!.textContent = String(completedCount);
+    renderCompletedQuests(this.panel.querySelector<HTMLElement>('[data-completed-quests]')!, this.narrative);
     const list = this.panel.querySelector<HTMLElement>('[data-active-quests]')!; list.replaceChildren();
     for (const [id, progress] of active) {
       const quest = QUEST_DEFINITIONS[id]; if (!quest) continue;

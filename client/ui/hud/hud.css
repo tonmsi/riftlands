@@ -36,15 +36,32 @@
 .rift-app.map-locked .minimap-panel { background:#111b25; }
 .rift-app.map-locked .minimap-panel .map-heading,.rift-app.map-locked .minimap-panel>div:not(.map-actions) { visibility:hidden; }
 .rift-app .arena-watch-launcher[hidden],.bet-watch[hidden] { display:none!important; }
-.rift-app .quest-completion-feedback { position:absolute; top:calc(100% + 8px); left:0; z-index:4; width:max-content; max-width:min(310px,calc(100vw - 28px)); padding:7px 10px; border:1px solid #edcf82; border-radius:7px; background:#182a3af2; color:#ffe5a0; font-size:11px; line-height:1.4; pointer-events:none; }
+.rift-app .quest-completion-feedback { position:absolute; top:calc(100% + 8px); left:0; z-index:4; width:240px; max-width:calc(100vw - 28px); box-sizing:border-box; padding:10px 12px; border:1px solid #ffe597; border-radius:10px; background:linear-gradient(130deg,#35462af5,#142c30fa); color:#ffe5a0; font-size:12px; line-height:1.4; box-shadow:0 0 20px #ffd77970,0 6px 18px #04101e80; animation:quest-completion-arrive .55s ease-out,quest-completion-pulse 1s .55s ease-in-out 5 alternate; pointer-events:auto; }
+.rift-app .quest-completion-feedback strong,.rift-app .quest-completion-feedback>span { display:block; }
+.rift-app .quest-completion-feedback strong { color:#fff3bd; font-size:13px; text-shadow:0 0 9px #ffc94d90; }
+.rift-app .quest-completion-feedback>span { margin:4px 0 7px; color:#f4f7df; }
+.rift-app .game-hud .quest-completion-feedback button { padding:0; border:0; background:none; color:#ffe597; font-size:11px; text-decoration:underline; text-underline-offset:3px; }
+@keyframes quest-completion-arrive { 0% { opacity:0; transform:translateY(-8px) scale(.9); } 55% { opacity:1; transform:translateY(2px) scale(1.04); } 100% { transform:translateY(0) scale(1); } }
+@keyframes quest-completion-pulse { from { filter:brightness(1); box-shadow:0 0 12px #ffd77940; } to { filter:brightness(1.15); box-shadow:0 0 24px #ffd77990; } }
+.rift-app .game-hud .player-panel.quest-completed { animation:quest-box-celebrate .65s ease-out,quest-completed-glow .7s .65s ease-in-out infinite alternate; }
+@keyframes quest-box-celebrate { 0% { transform:scale(1); } 30% { transform:scale(1.035); } 55% { transform:scale(.99); } 75% { transform:scale(1.015); } 100% { transform:scale(1); } }
 .rift-app .quest-completion-feedback[hidden] { display:none; }
 @keyframes quest-completed-glow { from { box-shadow:0 0 0 2px #efce7950,0 0 12px #ffd77950; } to { box-shadow:0 0 0 2px #efce79a0,0 0 28px #ffd779b0; } }
-@media (prefers-reduced-motion:reduce) { .rift-app .game-hud .player-panel.quest-completed,.rift-app .game-hud .player-panel.quest-accepted { animation:none; } }
+@media (prefers-reduced-motion:reduce) { .rift-app .game-hud .player-panel.quest-completed,.rift-app .game-hud .player-panel.quest-accepted,.rift-app .quest-completion-feedback { animation:none; } }
 .rift-app .game-hud .player-journal-toggle { position:absolute; inset:0; z-index:1; padding:0; border:0; border-radius:inherit; background:transparent; }
+.rift-app .journal-box-hint { position:absolute; right:8px; top:7px; padding:2px 4px; border-radius:4px; background:#10202fe8; color:#e5c98b; font-size:8px; letter-spacing:.6px; }
+.rift-app .player-panel .player-name-row { padding-right:54px; }
+.rift-app .game-hud .player-journal-toggle:hover,.rift-app .game-hud .player-journal-toggle[aria-expanded="true"] { box-shadow:inset 0 0 0 1px #ffe59790; }
 .rift-app .game-hud .player-panel>.character-effects { z-index:2; }
 .rift-app .game-hud .quest-journal { position:absolute; z-index:45; left:calc(var(--safe-left) + 18px); top:calc(var(--safe-top) + 114px); width:min(360px,calc(100% - 32px)); max-height:min(440px,calc(var(--game-height,100dvh) - 300px)); display:flex; flex-direction:column; padding:12px; pointer-events:auto; background:linear-gradient(145deg,#203447f5,#101e2cf5); }
 .rift-app .quest-journal[hidden] { display:none; }
 .rift-app .quest-journal header { display:flex; align-items:center; justify-content:space-between; gap:8px; flex:none; }
+.rift-app .quest-journal header strong,.rift-app .quest-journal header small { display:block; }
+.rift-app .quest-journal header small { margin-bottom:3px; color:#d5b779; font-size:9px; letter-spacing:1.3px; }
+.rift-app .quest-journal h3>span { padding:1px 6px; margin-left:4px; border-radius:8px; background:#accfff18; }
+.rift-app .quest-journal [data-completed-quests] .hub-row { display:flex; flex-direction:column; gap:4px; margin:6px 0; padding:9px 10px; border-left:2px solid #c6d988; border-radius:6px; background:#bdd78d0b; }
+.rift-app .quest-journal [data-completed-quests] .hub-row strong { font-size:12px; color:#e8edce; }
+.rift-app .quest-journal [data-completed-quests] .hub-row span { font-size:10px; color:#b8caa0; }
 .rift-app .quest-journal header>button { border:0; background:none; padding:0; width:32px; height:32px; font-size:22px; }
 .rift-app .quest-journal-scroll { min-height:0; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; scrollbar-width:thin; }
 .rift-app .quest-journal h3 { margin:12px 0 6px; font-size:11px; color:#aac9e6; }
@@ -53,9 +70,9 @@
 .rift-app .journal-quest strong { display:block; font-size:13px; color:#f1deb0; }
 .rift-app .journal-quest progress { display:block; width:100%; height:6px; accent-color:#73ace2; }
 .rift-app .journal-quest small { display:block; margin-top:6px; font-size:10px; color:#c7d7e5; }
-.rift-app.touch-layout .game-hud .quest-journal { left:calc(var(--safe-left) + 8px); top:calc(var(--safe-top) + 98px); width:min(360px,calc(100% - 16px)); max-height:calc(var(--game-height,100dvh) - 290px); padding:10px; }
+.rift-app.touch-layout .game-hud .quest-journal { left:calc(var(--safe-left) + 8px); top:calc(var(--safe-top) + 98px); width:min(360px,calc(100% - 16px)); max-height:min(440px,calc(var(--game-height,100dvh) - var(--safe-top) - var(--safe-bottom) - 130px)); padding:10px; }
 @media (orientation:landscape) and (max-height:600px) {
-  .rift-app.touch-layout .game-hud .quest-journal { top:calc(var(--safe-top) + 90px); width:min(360px,calc(100% - 32px)); max-height:min(180px,calc(var(--game-height,100dvh) - 250px)); }
+  .rift-app.touch-layout .game-hud .quest-journal { top:calc(var(--safe-top) + 90px); width:min(360px,calc(100% - 32px)); max-height:calc(var(--game-height,100dvh) - var(--safe-top) - var(--safe-bottom) - 120px); }
 }
 .rift-app .target-panel { left:calc(var(--safe-left) + 270px); max-height:240px; overflow:visible }
 .rift-app .player-portrait {

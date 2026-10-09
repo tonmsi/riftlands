@@ -7,9 +7,9 @@ import { type BossWindup } from '../../shared/bosses';
 import { playerSpriteDirectionRow } from './sprite-direction';
 import { DEFAULT_PLAYER_DRAW_SIZE } from '../../shared/actor-catalog';
 const CLASS_SPRITE_URLS: Partial<Record<ClassId, string>> = {
-  paladin: new URL('../../assets/paladino256.png', import.meta.url).href,
-  mage: new URL('../../assets/mage256.png', import.meta.url).href,
-  warrior: new URL('../../assets/warrior256.png', import.meta.url).href,
+  paladin: '/actor-assets/paladino256.png',
+  mage: '/actor-assets/mage256.png',
+  warrior: '/actor-assets/warrior256.png',
 };
 const FRAME_SIZE = 256;
 

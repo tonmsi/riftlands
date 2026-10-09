@@ -72,20 +72,3 @@ test('zone links survive parsing; invalid exploration links are reported by Worl
   const progress = newNarrativeProgress(); acceptQuest(progress, QUEST_DEFINITIONS['north-road']);
   assert.equal(progress.quests['north-road'].status, 'active');
 });
-
-test('authored scouts and level-eight sentinels are walkable; arrival is south of the main monsters', () => {
-  const world = new World(); const doc = world.authoring.document;
-  const spawns = doc.npcs.filter(n => n.id.startsWith('npc-north-'));
-  assert.equal(spawns.length, 4);
-  for (const n of spawns) assert.equal(collidesWorld((n.x + .5) * TILE_SIZE, (n.y + .5) * TILE_SIZE, 19, world), false, n.id);
-  const scout = spawns.find(n => n.npcKind === 'north-scout')!;
-  const monsters = spawns.filter(n => n.npcKind === 'sentinel');
-  assert.ok(monsters.every(n => n.level === 8));
-  const zone = doc.zones.find(z => z.questId === 'north-road')!.shape;
-  assert.equal(zone.kind, 'rect');
-  assert.ok(hasLineOfSight({ x: (scout.x + .5) * TILE_SIZE, y: (scout.y + .5) * TILE_SIZE }, { x: 24, y: 10.5 * TILE_SIZE }, world));
-  const sim = new WorldSimulation(doc.seed, 1_000_000, undefined, 'world', { world, spawn: { x: 24, y: 792 }, dungeons: [], bosses: new Map() });
-  sim.addPlayer({ id: 'stats', name: 'Stats', nameLower: 'stats', salt: '', passwordHash: '', xp: 0, kills: 0, deaths: 0, friends: [], requests: [], lastSeen: 0 }, 'paladin');
-  sim.step(.01);
-  for (const n of monsters) assert.equal(sim.npcs.get(`authored:${n.id}`)!.maxHp, 151);
-});

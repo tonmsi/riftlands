@@ -6,7 +6,7 @@ export const GROUND_ITEM_TTL = 10_000;
 export const LOOT_ITEM_TTL = 120_000;
 export interface InventoryAction { id: string; kind: 'purchase' | 'consume' | 'drop' | 'collect' | 'deliver'; itemId: string; quantity: number; at: number; slot?: number; }
 export interface GroundItem { id: string; x: number; y: number; stack: ItemStack; expiresAt: number; ownerId?: string; availableAt?: number; requireOwnerExit?: boolean; droppedBy?: string; ownerPickupAt?: number; }
-export interface DialogueView { sessionId: string; targetId: string; speaker: string; text: string; choices: { id: string; label: string }[]; request?: { itemId: string; remaining: number }; shop?: (VendorOffer & { disabledReason?: string })[]; rewards?: ItemStack[]; rewardGold?: number; }
+export interface DialogueView { sessionId: string; targetId: string; speaker: string; text: string; choices: { id: string; label: string }[]; request?: { itemId: string; remaining: number }; shop?: (VendorOffer & { disabledReason?: string })[]; rewards?: ItemStack[]; rewardGold?: number; rewardXp?: number; }
 export type InteractionCommand =
   | { kind: 'fishing'; command: FishingCommand }
   | { kind: 'talk'; targetId: string }

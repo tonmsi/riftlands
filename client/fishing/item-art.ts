@@ -1,7 +1,7 @@
-const pngUrls = import.meta.glob('../../assets/fish-*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const pngUrls = import.meta.glob('../../public/actor-assets/fish-*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const fishImages = new Map<string, HTMLImageElement>();
 export function drawFishingItem(ctx: CanvasRenderingContext2D, id: string): void {
-  const url = pngUrls[`../../assets/${id}.png`];
+  const url = pngUrls[`../../public/actor-assets/${id}.png`];
   if (url) {
     let img = fishImages.get(id);
     if (!img) { img = new Image(); img.onload = () => window.dispatchEvent(new Event('fishing-art-ready')); img.src = url; fishImages.set(id, img); }
