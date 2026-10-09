@@ -1,3 +1,5 @@
+import { dungeonRoomAt, dungeonRoomContains } from './dungeon-topology';
+import { parseDungeonTopology, type DungeonTopology } from './dungeon-topology';
 import { BOSS_BY_ID } from './bosses';
 import { packDraftTiles, unpackDraftTiles } from './dungeon-storage';
 import { TILE_SIZE } from './config';
@@ -28,6 +30,7 @@ export interface DraftEncounter { id: string; name: string; x: number; y: number
 export interface DungeonDraft {
   version: 1; id: string; name: string; width: number; height: number;
   encounters: DraftEncounter[]; origin: Vec2; tiles: TileKind[]; entities: DraftEntity[];
+  topology?: DungeonTopology;
   assetPlacements?: AssetPlacement[];
 }
 export function compactDungeonDraft(draft: DungeonDraft) { const { tiles, ...rest } = draft; return { ...rest, tileRuns: packDraftTiles(tiles) }; }
@@ -100,6 +103,7 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
     }
   }
   return { ...draft, id: value.id, name: value.name, origin: { x: value.origin.x, y: value.origin.y }, tiles: [...value.tiles], entities,
+    ...(value.topology !== undefined ? { topology: parseDungeonTopology(value.topology, value.width, value.height) } : {}),
     ...(placements !== undefined ? { assetPlacements: placements.map(p => ({ id: p.id, assetId: p.assetId, x: p.x, y: p.y })) } : {}) };
 }
 
@@ -110,7 +114,12 @@ export class DraftWorld extends World {
     document.placements = (draft.assetPlacements ?? []).filter(p => assets.some(a => a.id === p.assetId));
     super(document.seed, 16, 'world', document, []);
   }
+  override canTraverse(from: Vec2, to: Vec2): boolean {
+    const t = this.draft.topology; if (!t) return true;
+    const room = dungeonRoomAt(t,{x:0,y:0},from); return !!room && dungeonRoomAt(t,{x:0,y:0},to)?.id === room.id;
+  }
   override getTile(tx: number, ty: number): TileKind {
+    if (this.draft.topology && !this.draft.topology.rooms.some(r => dungeonRoomContains(r, tx, ty))) return 'rock';
     return tx < 0 || ty < 0 || tx >= this.draft.width || ty >= this.draft.height ? 'rock' : this.draft.tiles[ty * this.draft.width + tx];
   }
 }
@@ -130,7 +139,7 @@ export function reachableDraftTiles(draft: DungeonDraft, from: Vec2, assets: rea
     reached.add(key);
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const x = point.x + dx, y = point.y + dy;
-      if (x >= 0 && y >= 0 && x < draft.width && y < draft.height && !visited.has(`${x},${y}`)) queue.push({ x, y });
+      if (x >= 0 && y >= 0 && x < draft.width && y < draft.height && !visited.has(`${x},${y}`) && world.canTraverse(center,draftEntityPosition({x,y}))) queue.push({ x, y });
     }
   }
   return reached;
@@ -186,10 +195,28 @@ export function validateDungeonDraft(draft: DungeonDraft, assets: readonly World
     }
     if (Math.hypot(a.x - b.x, a.y - b.y) * TILE_SIZE < a.radius + b.radius) issues.push(`${a.label} e ${b.label}: posizioni sovrapposte.`);
   }
-  const start = party[0] ?? bosses[0];
+  if (draft.topology) {
+    for (const p of [draft.topology.entry, draft.topology.exit, ...draft.topology.warps.flatMap(w => [w.from, w.to])]) {
+      if (collidesWorld((p.x + .5) * TILE_SIZE, (p.y + .5) * TILE_SIZE, 15, world)) issues.push('Ingresso, uscita o warp su terreno solido.');
+    }
+  }
+  const start = draft.topology?.entry ?? party[0] ?? bosses[0];
   if (start) {
     // Reachability uses player-sized clearance, including narrow corridors and diagonals.
     const reached = reachableDraftTiles(draft, start, assets);
+    if (draft.topology) {
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const w of draft.topology.warps) if (reached.has(`${w.from.x},${w.from.y}`) && !reached.has(`${w.to.x},${w.to.y}`)) {
+          const before = reached.size;
+          for (const key of reachableDraftTiles(draft, w.to, assets)) reached.add(key);
+          changed ||= reached.size > before;
+        }
+      }
+      if (!reached.has(`${draft.topology.exit.x},${draft.topology.exit.y}`)) issues.push('Uscita non raggiungibile dai warp.');
+      for (const room of draft.topology.rooms) if (![...reached].some(key => { const [x,y] = key.split(',').map(Number); return dungeonRoomContains(room,x,y); })) issues.push(`${room.name}: stanza non raggiungibile dai warp.`);
+    }
     for (const entity of draft.entities) if (!reached.has(`${entity.x},${entity.y}`)) issues.push(`${entity.label}: non raggiungibile dal primo ingresso.`);
   }
   return [...new Set(issues)];
@@ -198,6 +225,7 @@ export function validateDungeonDraft(draft: DungeonDraft, assets: readonly World
 export function draftFromDungeon(definition: DungeonDefinition, bossRadius = 36): DungeonDraft {
   const b = definition.layout.bounds, width = b.maxTx - b.minTx + 1, height = b.maxTy - b.minTy + 1;
   const draft = newDungeonDraft(width, height);
+  draft.topology = definition.topology ? structuredClone(definition.topology) : undefined;
   draft.id = definition.id; draft.name = definition.name; draft.origin = { x: b.minTx, y: b.minTy };
   draft.tiles = Array.from({ length: width * height }, (_, index) => dungeonTile(definition, b.minTx + index % width, b.minTy + Math.floor(index / width))!);
   const position = (point: Vec2) => ({ x: Math.floor(point.x / TILE_SIZE) - b.minTx, y: Math.floor(point.y / TILE_SIZE) - b.minTy });
@@ -241,6 +269,7 @@ export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldA
   const left = bounds.minTx * TILE_SIZE, top = bounds.minTy * TILE_SIZE, right = (bounds.maxTx + 1) * TILE_SIZE, bottom = (bounds.maxTy + 1) * TILE_SIZE;
   const region: DungeonRegion = { kind: 'polygon', points: [{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }] };
   const definition: DungeonDefinition = {
+    ...(draft.topology ? { topology: structuredClone(draft.topology) } : {}),
     id: draft.id, name: draft.name, bossId: `boss:${draft.id}:main`,
     area: { x: (left + right) / 2, y: (top + bottom) / 2, radius: Math.hypot(right - left, bottom - top) / 2 },
     layout: { bounds, floor: 'path', obstacles: [], obstacleTiles: [], tiles: draft.tiles.map((kind, i) => ({ x: bounds.minTx + i % draft.width, y: bounds.minTy + Math.floor(i / draft.width), kind })) },

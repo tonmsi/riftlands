@@ -1,3 +1,5 @@
+import { DungeonInstanceWorld } from '../../shared/dungeon-instance';
+import { dungeonRoomAt, dungeonShadowVisible } from '../../shared/dungeon-topology';
 import { TILE_SIZE } from '../../shared/config';
 import type { Actor, Pickup } from '../../shared/types';
 import type { World } from '../../shared/world';
@@ -70,7 +72,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   }
 
   if (world.mode === 'world') {
-    for (const dungeon of DUNGEON_DEFINITIONS) {
+    for (const dungeon of world.dungeons) {
       const dx = Math.max(10, Math.min(width - 10, (dungeon.area.x - left) * scale));
       const dy = Math.max(10, Math.min(height - 10, (dungeon.area.y - top) * scale));
       ctx.save();
@@ -127,6 +129,14 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   circle(ctx, originX, originY, 4);
   ctx.stroke();
 
+  if (self && world instanceof DungeonInstanceWorld) {
+    const d = world.dungeon, t = d.topology!, origin = { x: d.layout.bounds.minTx, y: d.layout.bounds.minTy }, room = dungeonRoomAt(t, origin, self);
+    ctx.fillStyle = '#080711';
+    for (let ty = startY; ty < startY+rows; ty++) for (let tx = startX; tx < startX+cols; tx++) {
+      const point = { x: (tx+.5)*TILE_SIZE, y: (ty+.5)*TILE_SIZE };
+      if (dungeonRoomAt(t,origin,point)?.id !== room?.id || !dungeonShadowVisible(t,origin,self,point)) ctx.fillRect((tx*TILE_SIZE-left)*scale,(ty*TILE_SIZE-top)*scale,TILE_SIZE*scale+.5,TILE_SIZE*scale+.5);
+    }
+  }
   if (self) {
     ctx.save();
     ctx.translate(width / 2, height / 2);

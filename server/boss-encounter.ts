@@ -104,7 +104,9 @@ export class BossEncounter {
   isActiveParticipant(id: string): boolean { return this.participantIds.has(id) && !this.eliminatedIds.has(id); }
   isEliminated(id: string): boolean { return this.eliminatedIds.has(id); }
   eliminate(id: string): void { if (this.participantIds.has(id)) this.eliminatedIds.add(id); }
-  participantDied(id: string, world: World): void {
+  participantDied(id: string, world: World): void { this.participantLeft(id, world); }
+  /** A dungeon warp withdraws a participant without killing their character. */
+  participantLeft(id: string, world: World): void {
     if (!this.isActiveParticipant(id)) return;
     this.eliminate(id);
     if ([...this.participantIds].some(participant => this.isActiveParticipant(participant))) return;

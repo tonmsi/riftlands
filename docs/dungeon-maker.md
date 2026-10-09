@@ -42,6 +42,24 @@ Per ripristinare tutto: ferma gioco e Studio, copia i due file con lo stesso suf
 
 ## Authoring
 
+### Dungeon separati, stanze e piani
+
+Nel pannello **Stanze, piani e portali** attiva **Dungeon separato · ingresso immediato**. Il portale nel mondo usa la posizione scelta nel World Maker. Attraversarlo trasferisce il personaggio in un'istanza PvE, usando lo stesso routing delle stanze PvP ma senza conto alla rovescia, schermata di caricamento o regole del duello. Inventario e ricompense sono conservati; la posizione del mondo resta salvata per disconnessioni e riavvii.
+
+Il pulsante **Vista piani** apre la panoramica nell’area centrale; clicca una stanza per tornare alla sua modifica. Anche la **Panoramica di tutti i piani** nel pannello laterale affianca i livelli, mostra le stanze e traccia una linea per i warp. Clicca una stanza per centrarla nella mappa. Un collegamento di ritorno viene indicato con ↔.
+
+Gli strumenti sono nel pannello sinistro **Stanze e warp sulla mappa**; a destra restano proprietà, coordinate e panoramica. **Piano visualizzato** mostra un solo piano o tutti insieme. Scegli **Nuovo piano** e trascina **Disegna nuova stanza**: lo spazio interno viene assegnato automaticamente anche quando il rettangolo disegnato coincide visivamente con un piano esistente. Il limite complessivo rimane 96×96 tile; il maker espande automaticamente la superficie quando serve spazio.
+
+Per una forma a L, seleziona la stanza e trascina **Ritaglia forma** sull’angolo da togliere. **Aggiungi forma** estende la stanza; **Ridisegna rettangolo** sostituisce il suo contorno con un rettangolo disegnato con il mouse. Le caselle esterne sono vuoto nel gioco e non sono attraversabili. I piani e le stanze si attraversano soltanto usando i warp, anche quando toccano nella superficie interna. Il contorno e i ritagli sono conservati in bozze, esportazioni, catalogo e prova locale. Le coordinate di un contorno personalizzato sono informative: usa gli strumenti sulla mappa per cambiarlo. Le regioni degli incontri continuano a essere configurate separatamente.
+
+Con **Posiziona warp · 2 click**, clicca la partenza, cambia eventualmente il piano visualizzato e clicca la destinazione. **Crea anche il ritorno** aggiunge il collegamento inverso. Seleziona un warp nella lista a sinistra per spostarne partenza o destinazione con un click. Puoi posizionare allo stesso modo arrivo e uscita, oppure trascinare **Disegna zona d’ombra**. Premi Esc per annullare un collegamento in corso. L’arrivo non riattiva automaticamente il warp: occorre uscire dalla sua casella e rientrare. Durante uno scontro attivo i warp tra stanze sono disabilitati per mantenere i vincoli dell’incontro.
+
+**Arrivo** è la casella iniziale nel dungeon; **Uscita** è il warp finale. **Destinazione dell'uscita nel mondo** usa coordinate assolute in tile e può essere diversa dall'ingresso. Il World Maker mostra sia il portale sia il punto d'uscita. Una destinazione bloccata viene segnalata e il warp non teletrasporta dentro un ostacolo. Uscite e collegamenti devono essere raggiungibili e liberi.
+
+Le **Zone d'ombra** sono rettangoli con un raggio di visibilità in tile: terreno e contenuti restano oscurati oltre tale distanza, anche sulla minimappa, e tornano nascosti allontanandosi. La prova locale supporta ingresso diretto e warp tra stanze; il warp finale verso il mondo viene verificato nella partita online.
+
+Le vecchie mappe conservano il comportamento precedente finché non attivi questa modalità. Salva/aggiorna il dungeon nello Studio, applica il posizionamento nel World Maker, poi ricompila e riavvia il gioco.
+
 - Mappe 8×8–96×96; caselle da 48 unità. Terreno: erba, pavimento, muro, acqua, cespuglio, fango.
 - Tutti gli NPC attuali: gelatina, fuoco fatuo, guardiano; livello individuale. Tutti i boss del catalogo sono selezionabili, anche più copie dello stesso modello.
 - Boss futuri come segnaposto con nome, posizione e raggio; nessuna logica di combattimento richiesta per salvare la bozza.

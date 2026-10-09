@@ -1,3 +1,4 @@
+import { dungeonRoomContains, parseDungeonTopology, type DungeonTopology } from './dungeon-topology';
 import { TILE_SIZE } from './config';
 import type { Pickup, TileKind, Vec2 } from './types';
 import { NPC_DEFINITIONS, type NpcTemplateId } from './npcs';
@@ -71,6 +72,7 @@ export interface DungeonTheme {
   markerRune: string;
 }
 export interface DungeonDefinition {
+  topology?: DungeonTopology;
   id: string;
   name: string;
   bossId: string;
@@ -141,6 +143,7 @@ const paintedTileIndexes = new WeakMap<object, Map<string, TileKind>>();
 
 export function dungeonTile(definition: DungeonDefinition, tx: number, ty: number): TileKind | undefined {
   if (!insideRect(tx, ty, definition.layout.bounds)) return undefined;
+  if (definition.topology && !definition.topology.rooms.some(r=>dungeonRoomContains(r,tx-definition.layout.bounds.minTx,ty-definition.layout.bounds.minTy))) return 'rock';
   if (definition.layout.obstacles.some(rect => insideRect(tx, ty, rect))
     || definition.layout.obstacleTiles.some(tile => tile.x === tx && tile.y === ty)) return 'rock';
   if (definition.layout.tiles) {
@@ -359,6 +362,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   const walkable = (tile: TileKind | undefined) => tile !== undefined && tile !== 'water' && tile !== 'rock';
   if (![bounds.minTx, bounds.maxTx, bounds.minTy, bounds.maxTy].every(Number.isInteger)
     || bounds.minTx > bounds.maxTx || bounds.minTy > bounds.maxTy) fail('limiti della mappa non validi.');
+  if (definition.topology) parseDungeonTopology(definition.topology, bounds.maxTx-bounds.minTx+1, bounds.maxTy-bounds.minTy+1);
   if (!finitePoint(definition.area) || !Number.isFinite(definition.area.radius) || definition.area.radius <= 0) fail('area mondo non valida.');
   if (definition.assetPlacements !== undefined) {
     if (!Array.isArray(definition.assetPlacements) || definition.assetPlacements.length > 4096) fail('piazzamenti asset non validi.');

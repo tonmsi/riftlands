@@ -30,21 +30,22 @@ export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number,
   const dirX = dx / magnitude;
   const dirY = dy / magnitude;
   
+  const blocked = (x: number, y: number) => collidesWorld(x,y,actor.radius,world) || !world.canTraverse(actor,{x,y});
   let x = actor.x, y = actor.y;
   for (let i = 0; i < steps; i++) {
     const targetX = x + dirX * stepDist;
     const targetY = y + dirY * stepDist;
     
     // Prova il movimento diagonale diretto
-    if (!collidesWorld(targetX, targetY, actor.radius, world)) {
+    if (!blocked(targetX, targetY)) {
       x = targetX;
       y = targetY;
       continue;
     }
 
     // Se sbatte, prova a scivolare mantenendo l'intera velocità lungo l'asse libero
-    const canMoveX = !collidesWorld(x + Math.sign(dirX) * stepDist, y, actor.radius, world);
-    const canMoveY = !collidesWorld(x, y + Math.sign(dirY) * stepDist, actor.radius, world);
+    const canMoveX = !blocked(x + Math.sign(dirX) * stepDist, y);
+    const canMoveY = !blocked(x, y + Math.sign(dirY) * stepDist);
 
     if (canMoveX && !canMoveY) {
       // Parete orizzontale: scivola orizzontalmente a piena velocità
@@ -54,8 +55,8 @@ export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number,
       y += Math.sign(dirY) * stepDist;
     } else {
       // Tentativo standard a componenti ridotte se entrambi o nessuno sono completamente liberi
-      if (!collidesWorld(x + dirX * stepDist, y, actor.radius, world)) x += dirX * stepDist;
-      if (!collidesWorld(x, y + dirY * stepDist, actor.radius, world)) y += dirY * stepDist;
+      if (!blocked(x + dirX * stepDist, y)) x += dirX * stepDist;
+      if (!blocked(x, y + dirY * stepDist)) y += dirY * stepDist;
     }
   }
   return { x, y };
@@ -77,6 +78,7 @@ export function terrainSpeed(actor: Vec2, world: World): number {
 
 /** Grid traversal checks every crossed tile, including diagonal corner cracks. */
 export function hasLineOfSight(a: Vec2, b: Vec2, world: World): boolean {
+  if (!world.canTraverse(a,b)) return false;
   const dx = b.x - a.x, dy = b.y - a.y;
   // Grid DDA checks every crossed tile, including the two corner-adjacent cells.
   let tx = Math.floor(a.x / TILE_SIZE), ty = Math.floor(a.y / TILE_SIZE);

@@ -23,12 +23,13 @@ export function buildDungeonBundle(draft: DungeonDraft, existing: readonly Dunge
             throw new Error(`ID dungeon già installato: ${definition.id}. Usa un nuovo ID per non invalidare i salvataggi.`);
         const b = other.layout.bounds;
         // Include procedural exclusion/approach space around both maps.
-        if (options.checkPlacement !== false && (Math.hypot(other.area.x - definition.area.x, other.area.y - definition.area.y) < other.area.radius + definition.area.radius + 192
+        if (!definition.topology && !other.topology && options.checkPlacement !== false && (Math.hypot(other.area.x - definition.area.x, other.area.y - definition.area.y) < other.area.radius + definition.area.radius + 192
             || (bounds.minTx <= b.maxTx && bounds.maxTx >= b.minTx && bounds.minTy <= b.maxTy && bounds.maxTy >= b.minTy)))
             throw new Error(`Mappa troppo vicina o sovrapposta a ${other.name}: cambia Origine X/Y.`);
     }
     const placementIssue = dungeonPlacementIssue(draft.origin, draft.width, draft.height, existing);
-    if (options.checkPlacement !== false && placementIssue) throw new Error(placementIssue);
+    if (!definition.topology && options.checkPlacement !== false && placementIssue) throw new Error(placementIssue);
+    if (definition.topology) return { definition, bosses: resolveDungeonBosses(compiled, options.templates), draft: structuredClone(draft) };
     const entrance = definition.passages.find(p => p.tiles.some(t => t.x === bounds.minTx || t.x === bounds.maxTx || t.y === bounds.minTy || t.y === bounds.maxTy));
     if (!entrance)
         throw new Error('Apri almeno una casella sul bordo della mappa per accedere dal mondo.');

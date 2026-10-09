@@ -103,7 +103,7 @@ export class WorldSimulation {
     });
     if (store) for (const account of store.accounts.values()) this.accounts.set(account.id, account);
     if (mode === 'world') {
-      for (const dungeon of environment?.dungeons ?? DUNGEON_BY_BOSS_ID.values()) {
+      for (const dungeon of environment?.dungeons ?? [...DUNGEON_BY_BOSS_ID.values()].filter(d => !d.topology)) {
         const definition = (environment?.bosses ?? BOSS_BY_ID).get(dungeon.bossId);
         if (!definition || definition.dungeonId !== dungeon.id) throw new Error(`Configurazione dungeon non valida: ${dungeon.id}`);
         const encounter = new BossEncounter(definition, now, store?.bossStates[definition.id], store, dungeon);

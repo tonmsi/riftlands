@@ -1,3 +1,7 @@
+import { dungeonFloorGraph } from './dungeon-floor-graph';
+import { dungeonRoomAt, dungeonRoomContains, dungeonRoomTiles, type DungeonRoom } from '../../../shared/dungeon-topology';
+import { roomBrush, roomRectangle } from '../../../shared/dungeon-room-editing';
+import { topologyPanel } from './dungeon-topology-panel';
 import { setupDungeonLibrary } from './dungeon-library';
 import './dungeon-maker.css';
 import { WORLD_DOCUMENT } from '../../../shared/world-content';
@@ -122,10 +126,63 @@ catch (error) {
     refresh();
     status(error instanceof Error ? error.message : String(error));
 } }
-function setTool(next: string): void { stopPreview(); tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.tool === tool)); if (b.dataset.tool === tool)
+function setTool(next: string): void { stopPreview(); if (next !== tool) pendingWarp = undefined; roomDrag = undefined; tool = next; if (next === 'warp-place') status('Warp: clicca la partenza, poi la destinazione (anche su un altro piano).'); root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.tool === tool)); if (b.dataset.tool === tool)
     el('tool-name').textContent = b.textContent; }); if (tool.startsWith('asset:')) el('tool-name').textContent = `Asset · ${sharedAssets.find(a => a.id === tool.slice(6))?.name ?? tool.slice(6)}`; }
 root.addEventListener("click", event => { const b = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tool]"); if(b) setTool(b.dataset.tool!); });
+let editorFloor: number | 'all' = 'all', activeRoom = '', pendingWarp: Vec2 | undefined;
+let roomDrag: { from: Vec2; to: Vec2; roomId?: string } | undefined;
+const mapRoomTools = document.createElement('div'); mapRoomTools.id = 'room-map-tools'; mapRoomTools.className = 'tool-list';
+mapRoomTools.innerHTML = `<h3>Stanze e warp sulla mappa</h3><label>Piano visualizzato<select id="edit-floor"><option value="all">Tutti i piani</option></select></label><label>Stanza da rimodellare<select id="edit-room"></select></label>
+<button data-tool="room-select">Seleziona stanza sulla mappa</button><button data-tool="room-new">Disegna nuova stanza</button><button data-tool="room-rectangle">Ridisegna rettangolo</button><button data-tool="room-add">Aggiungi forma</button><button data-tool="room-cut">Ritaglia forma</button><button data-tool="warp-place">Posiziona warp · 2 click</button><label>Warp da modificare<select id="edit-warp"></select></label><button id="map-warp-from">Sposta partenza del warp</button><button id="map-warp-to">Sposta destinazione del warp</button><button id="map-warp-reverse">Crea ritorno del warp</button><button data-tool="shadow-new">Disegna zona d’ombra</button><label><input id="warp-return" type="checkbox" checked> Crea anche il ritorno</label><button id="new-edit-floor">Nuovo piano</button><p class="hint">Trascina per disegnare. Aggiungi o ritaglia caselle per ottenere una L. Per un warp: partenza, poi destinazione; puoi cambiare piano tra i click.</p>`;
+el('terrain').previousElementSibling!.before(mapRoomTools);
+function refreshMapRoomTools(): void {
+    mapRoomTools.hidden = !draft.topology;
+    if (!draft.topology) { editorFloor = 'all'; activeRoom = ''; pendingWarp = undefined; return; }
+    const t = draft.topology;
+    if (!t.rooms.some(r => r.id === activeRoom)) activeRoom = t.rooms[0]?.id ?? '';
+    const floors = [...new Set([...t.rooms.map(r => r.floor), ...(editorFloor === 'all' ? [] : [editorFloor])])].sort((a,b)=>b-a);
+    el<HTMLSelectElement>('edit-floor').replaceChildren(new Option('Tutti i piani','all'), ...floors.map(f => new Option(`Piano ${f}`,String(f))));
+    input('edit-floor').value = String(editorFloor);
+    const visible = t.rooms.filter(r => editorFloor === 'all' || r.floor === editorFloor);
+    if (!visible.some(r => r.id === activeRoom) && visible.length) activeRoom = visible[0].id;
+    el<HTMLSelectElement>('edit-room').replaceChildren(...visible.map(r => new Option(r.name,r.id))); input('edit-room').value = activeRoom;
+    const oldWarp=value('edit-warp'); el<HTMLSelectElement>('edit-warp').replaceChildren(...t.warps.map((w,i)=>new Option(`Warp ${i+1} · ${w.from.x},${w.from.y} → ${w.to.x},${w.to.y}`,w.id))); if (t.warps.some(w=>w.id===oldWarp)) input('edit-warp').value=oldWarp;
+    for (const id of ['map-warp-from','map-warp-to','map-warp-reverse']) el<HTMLButtonElement>(id).disabled=!t.warps.length;
+}
+input('edit-floor').addEventListener('change', () => { editorFloor = value('edit-floor') === 'all' ? 'all' : Number(value('edit-floor')); refreshMapRoomTools(); draw(); });
+input('edit-room').addEventListener('change', () => { activeRoom = value('edit-room'); const r = draft.topology?.rooms.find(r=>r.id===activeRoom); if (r) focusRoom(r); });
+button('map-warp-from',()=>{ if(value('edit-warp'))setTool(`warp-from:${value('edit-warp')}`); });
+button('map-warp-to',()=>{ if(value('edit-warp'))setTool(`warp-to:${value('edit-warp')}`); });
+button('map-warp-reverse',()=>change(()=>{ const w=draft.topology?.warps.find(w=>w.id===value('edit-warp')); if(w) draft.topology!.warps.push({id:`warp-${crypto.randomUUID()}`,from:{...w.to},to:{...w.from}}); }));
+button('new-edit-floor', () => { if (!draft.topology) return; editorFloor = Math.min(...draft.topology.rooms.map(r=>r.floor))-1; activeRoom = ''; setTool('room-new'); refreshMapRoomTools(); draw(); status('Nuovo piano: trascina una stanza in uno spazio libero.'); });
+const floorOverview = document.createElement('div');
+floorOverview.hidden = true;
+floorOverview.style.cssText = 'position:absolute;inset:0;padding:24px;background:#111b1e;overflow:auto;z-index:2';
+canvas.parentElement!.append(floorOverview);
+el('zoom-in').insertAdjacentHTML('beforebegin', '<button id="floor-overview" aria-pressed="false">Vista piani</button>');
+function focusRoom(room: DungeonRoom): void {
+    activeRoom = room.id; editorFloor = room.floor; refreshMapRoomTools();
+    floorOverview.hidden = true; el('floor-overview').setAttribute('aria-pressed', 'false');
+    const r = canvas.getBoundingClientRect(); view.x = r.width/2 - (room.x+room.width/2)*view.scale; view.y = r.height/2 - (room.y+room.height/2)*view.scale;
+    draw(); status(`${room.name} · piano ${room.floor}`);
+}
+function refreshFloorOverview(): void {
+    floorOverview.replaceChildren();
+    if (draft.topology) {
+        const graph = dungeonFloorGraph(draft.topology, focusRoom), svg = graph.querySelector('svg')!;
+        svg.style.width = '100%'; svg.style.height = 'auto'; svg.style.minWidth = '360px';
+        floorOverview.append(graph);
+    }
+    el<HTMLButtonElement>('floor-overview').disabled = !draft.topology;
+    if (!draft.topology) floorOverview.hidden = true;
+}
+button('floor-overview', () => { refreshFloorOverview(); floorOverview.hidden = !floorOverview.hidden; el('floor-overview').setAttribute('aria-pressed', String(!floorOverview.hidden)); });
+const portalTools = document.createElement('div'); portalTools.id = 'dungeon-portal-tools'; portalTools.className = 'tool-list'; mapRoomTools.after(portalTools);
+const refreshTopology = topologyPanel(el('entity-properties').parentElement!, () => draft, change, focusRoom, portalTools);
 function refresh(): void {
+    refreshMapRoomTools();
+    refreshTopology();
+    refreshFloorOverview();
     const animated = new Set(sharedAssets.filter(a => worldAssetVisual(a).kind === 'fire').map(a => a.id));
     animatedAssets = (draft.assetPlacements ?? []).some(p => animated.has(p.assetId));
     if (!draft.encounters.some(g => g.id === activeEncounter))
@@ -202,6 +259,17 @@ function draw(): void {
     ctx.fillStyle = '#111b1e';
     ctx.fillRect(0, 0, r.width, r.height);
     ctx.translate(view.x, view.y);
+    if (draft.topology && ['room-new','room-add','room-rectangle','room-cut','shadow-new'].includes(tool)) {
+        ctx.strokeStyle = '#43515a44'; ctx.lineWidth = 1;
+        for (let x=0; x<=draft.width; x++) { ctx.beginPath(); ctx.moveTo(x*s,0); ctx.lineTo(x*s,draft.height*s); ctx.stroke(); }
+        for (let y=0; y<=draft.height; y++) { ctx.beginPath(); ctx.moveTo(0,y*s); ctx.lineTo(draft.width*s,y*s); ctx.stroke(); }
+    }
+    ctx.save();
+    if (draft.topology) {
+        ctx.beginPath();
+        for (const room of draft.topology.rooms.filter(r=>editorFloor==='all'||r.floor===editorFloor)) { if (room.tiles) for (const p of room.tiles) ctx.rect(p.x*s,p.y*s,s,s); else ctx.rect(room.x*s,room.y*s,room.width*s,room.height*s); }
+        ctx.clip();
+    }
     for (let y = 0; y < draft.height; y++)
         for (let x = 0; x < draft.width; x++) {
             ctx.fillStyle = TERRAIN_CATALOG[draft.tiles[y * draft.width + x]].color;
@@ -212,6 +280,33 @@ function draw(): void {
                 ctx.strokeRect(x * s, y * s, s, s);
             }
         }
+    if (draft.topology) {
+      ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+      for (const room of draft.topology.rooms.filter(r=>editorFloor==='all'||r.floor===editorFloor)) {
+        ctx.strokeStyle = room.id === activeRoom ? '#f4dd97' : '#bb97ff'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (const p of dungeonRoomTiles(room)) {
+          if (!dungeonRoomContains(room,p.x-1,p.y)) { ctx.moveTo(p.x*s,p.y*s); ctx.lineTo(p.x*s,(p.y+1)*s); }
+          if (!dungeonRoomContains(room,p.x+1,p.y)) { ctx.moveTo((p.x+1)*s,p.y*s); ctx.lineTo((p.x+1)*s,(p.y+1)*s); }
+          if (!dungeonRoomContains(room,p.x,p.y-1)) { ctx.moveTo(p.x*s,p.y*s); ctx.lineTo((p.x+1)*s,p.y*s); }
+          if (!dungeonRoomContains(room,p.x,p.y+1)) { ctx.moveTo(p.x*s,(p.y+1)*s); ctx.lineTo((p.x+1)*s,(p.y+1)*s); }
+        }
+        ctx.stroke(); ctx.fillStyle = '#e5d8ff'; ctx.fillText(`${room.name} · piano ${room.floor}`,room.x*s+4,room.y*s+16);
+      }
+      for (const shadow of draft.topology.shadows) { ctx.fillStyle = '#160d3977'; ctx.fillRect(shadow.x*s, shadow.y*s, shadow.width*s, shadow.height*s); }
+      for (const p of draft.topology.warps.map(w => w.from)) { ctx.strokeStyle = '#d6b5ff'; ctx.lineWidth = 3; ctx.strokeRect(p.x*s+3, p.y*s+3, s-6, s-6); }
+      for (const w of draft.topology.warps) { ctx.strokeStyle = '#c59aff'; ctx.beginPath(); ctx.moveTo((w.from.x+.5)*s,(w.from.y+.5)*s); ctx.lineTo((w.to.x+.5)*s,(w.to.y+.5)*s); ctx.stroke(); }
+      for (const marker of [{ point: draft.topology.entry, color: '#c59aff', label: 'IN' }, { point: draft.topology.exit, color: '#76e4ff', label: 'OUT' }]) {
+        const p = marker.point;
+        if (!draft.topology.rooms.some(r => (editorFloor === 'all' || r.floor === editorFloor) && dungeonRoomContains(r, p.x, p.y))) continue;
+        ctx.save(); ctx.strokeStyle = marker.color; ctx.fillStyle = marker.color + '44'; ctx.lineWidth = 3;
+        ctx.fillRect(p.x*s+2, p.y*s+2, s-4, s-4); ctx.strokeRect(p.x*s+2, p.y*s+2, s-4, s-4);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3; ctx.strokeStyle = '#111b1e'; ctx.strokeText(marker.label, (p.x+.5)*s, (p.y+.5)*s);
+        ctx.fillStyle = marker.color; ctx.fillText(marker.label, (p.x+.5)*s, (p.y+.5)*s); ctx.restore();
+      }
+
+    }
     const placements = [...(draft.assetPlacements ?? [])].sort((p, q) => {
         const a = sharedAssets.find(a => a.id === p.assetId), b = sharedAssets.find(a => a.id === q.assetId);
         return (a?.layer === 'ground' ? -1 : 1) - (b?.layer === 'ground' ? -1 : 1) || p.y + (a?.height ?? 1) * (a?.pivot.y ?? 1) - q.y - (b?.height ?? 1) * (b?.pivot.y ?? 1);
@@ -272,11 +367,35 @@ function draw(): void {
     }
     ctx.strokeStyle = '#ffdf7e'; ctx.lineWidth = 3;
     for (const p of highlighted) ctx.strokeRect(p.x * s + 1, p.y * s + 1, s - 2, s - 2);
+    ctx.restore();
+    if (roomDrag) { const x=Math.min(roomDrag.from.x,roomDrag.to.x), y=Math.min(roomDrag.from.y,roomDrag.to.y), w=Math.abs(roomDrag.to.x-roomDrag.from.x)+1,h=Math.abs(roomDrag.to.y-roomDrag.from.y)+1; ctx.fillStyle='#c59aff33'; ctx.fillRect(x*s,y*s,w*s,h*s); ctx.strokeStyle='#f4dd97'; ctx.strokeRect(x*s,y*s,w*s,h*s); }
+    if (pendingWarp) { ctx.strokeStyle='#76e4ff'; ctx.lineWidth=3; ctx.strokeRect(pendingWarp.x*s+2,pendingWarp.y*s+2,s-4,s-4); }
 }
 function tileAt(event: PointerEvent): Vec2 { const r = canvas.getBoundingClientRect(); return { x: Math.floor((event.clientX - r.left - view.x) / view.scale), y: Math.floor((event.clientY - r.top - view.y) / view.scale) }; }
 function paint(p: Vec2): void {
     if (p.x < 0 || p.y < 0 || p.x >= draft.width || p.y >= draft.height)
         return;
+    if (draft.topology && tool==='shadow-new') { roomDrag??={from:p,to:p}; roomDrag.to=p; lastTile=p; draw(); return; }
+    if (draft.topology && tool.startsWith('room-')) {
+        const t=draft.topology;
+        if (tool==='room-select' && !lastTile) { const room=dungeonRoomAt(t,{x:0,y:0},{x:(p.x+.5)*48,y:(p.y+.5)*48}); if (room && (editorFloor==='all'||room.floor===editorFloor)) { activeRoom=room.id; refreshMapRoomTools(); } }
+        else if (tool==='room-add' || tool==='room-cut') { roomBrush(draft,activeRoom,lastTile??p,p,tool==='room-cut'); }
+        else if (tool==='room-new' || tool==='room-rectangle') { roomDrag ??= {from:p,to:p,roomId:tool==='room-rectangle'?activeRoom:undefined}; roomDrag.to=p; }
+        lastTile=p; draw(); return;
+    }
+    if (draft.topology && (tool==='warp-place' || tool.startsWith('warp-from:') || tool.startsWith('warp-to:') || tool==='entry-place' || tool==='exit-place')) {
+        if (lastTile) return;
+        const t=draft.topology, room=dungeonRoomAt(t,{x:0,y:0},{x:(p.x+.5)*48,y:(p.y+.5)*48});
+        if (!room || (editorFloor!=='all' && room.floor!==editorFloor) || ['rock','water'].includes(draft.tiles[p.y*draft.width+p.x])) { status('Scegli una casella libera all’interno di una stanza del piano visualizzato.'); return; }
+        if (tool==='entry-place') t.entry={...p};
+        else if (tool==='exit-place') t.exit={...p};
+        else if (tool.startsWith('warp-from:') || tool.startsWith('warp-to:')) { const w=t.warps.find(w=>w.id===tool.split(':')[1]); if (w) { if (tool.startsWith('warp-from:')) w.from={...p}; else w.to={...p}; } }
+        else if (!pendingWarp) { pendingWarp={...p}; status('Partenza scelta: clicca la destinazione. Puoi cambiare piano.'); }
+        else if (pendingWarp.x===p.x && pendingWarp.y===p.y) { status('La destinazione deve essere diversa dalla partenza.'); }
+        else { const id=`warp-${crypto.randomUUID()}`; t.warps.push({id,from:{...pendingWarp},to:{...p}}); if (input('warp-return').checked) t.warps.push({id:`${id}-back`,from:{...p},to:{...pendingWarp}}); pendingWarp=undefined; status('Warp creato.'); }
+        lastTile=p; draw(); return;
+    }
+    if (draft.topology && editorFloor!=='all' && !draft.topology.rooms.some(r=>r.floor===editorFloor&&dungeonRoomContains(r,p.x,p.y))) return;
     const existing = draft.entities.find(e => e.kind === 'flame' ? draftFlameTiles(e).some(t => t.x === p.x && t.y === p.y) : e.x === p.x && e.y === p.y);
     const existingAsset = [...(draft.assetPlacements ?? [])].reverse().find(item => {
         const a = sharedAssets.find(a => a.id === item.assetId);
@@ -369,11 +488,15 @@ canvas.addEventListener('pointermove', e => { if (e.pointerId !== pointer)
 else if (stroke)
     paint(tileAt(e)); });
 function finishStroke(cancelled = false): void { if (stroke) {
-    if (cancelled)
-        draft = stroke;
-    else
-        commit(stroke);
-} stroke = null; lastTile = null; pointer = null; pan = null; refresh(); }
+    if (cancelled) draft = stroke;
+    else {
+        try {
+            if (roomDrag && draft.topology && tool==='shadow-new') { const a=roomDrag.from,b=roomDrag.to; draft.topology.shadows.push({x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),width:Math.abs(a.x-b.x)+1,height:Math.abs(a.y-b.y)+1,revealRadius:4}); }
+            else if (roomDrag && draft.topology) { const room=roomRectangle(draft,roomDrag.from,roomDrag.to,editorFloor==='all'?0:editorFloor,roomDrag.roomId); activeRoom=room.id; editorFloor=room.floor; if (tool==='room-new') focusRoom(room); }
+            if (JSON.stringify(draft)!==JSON.stringify(stroke)) commit(stroke);
+        } catch(error) { draft=stroke; status(error instanceof Error?error.message:String(error)); }
+    }
+} stroke = null; lastTile = null; pointer = null; pan = null; roomDrag = undefined; refresh(); }
 canvas.addEventListener('pointerup', () => finishStroke());
 canvas.addEventListener('pointercancel', () => finishStroke(true));
 canvas.addEventListener('lostpointercapture', () => { if (pointer !== null)
@@ -481,8 +604,7 @@ button('random-flame', () => change(() => {
     const e = candidates[Math.floor(Math.random() * candidates.length)]; draft.entities.push(e); selected = e.id;
 }));
 window.addEventListener('keydown', e => { if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement)
-    return; if (e.key === 'Escape')
-    stopPreview(); if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
+    return; if (e.key === 'Escape') { stopPreview(); pendingWarp=undefined; floorOverview.hidden=true; if(stroke) finishStroke(true); draw(); } if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
     e.preventDefault();
     history(!e.shiftKey);
 } if (e.code === 'Delete' && selected && !preview)
@@ -520,7 +642,6 @@ fit();
 if (storageError)
     status(storageError);
 requestAnimationFrame(frame);
-
 async function refreshSharedAssets(): Promise<void> {
     try {
         const response = await fetch('/__world/project');
@@ -551,5 +672,4 @@ if (studioChannel) studioChannel.onmessage = event => {
 };
 window.addEventListener('focus', () => { void refreshSharedAssets(); });
 void refreshSharedAssets().then(() => setupDungeonLibrary(() => draft, incoming => { change(() => { draft = incoming; selected = null; }); fit(); status('Dungeon aperto dal catalogo. Modifica e premi Aggiorna bozza installata.'); }, status, refreshBossPalette));
-
 el("entity-inherit-radius").addEventListener("change", () => change(() => { const e=draft.entities.find(e=>e.id===selected); if(!e) return; e.inheritRadius=input("entity-inherit-radius").checked; if(e.inheritRadius) e.radius=BOSS_DEFINITIONS.find(b=>b.id===e.template)?.radius??e.radius; }));

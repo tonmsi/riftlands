@@ -41,7 +41,7 @@ export interface WorldZone {
 }
 export interface WorldNpc extends Vec2 { id: string; npcKind: NpcTemplateId; level: number; }
 /** One placement per installed dungeon, preserving encounter/boss identity and persistence. */
-export interface WorldDungeon extends Vec2 { dungeonId: string; enabled?: boolean; }
+export interface WorldDungeon extends Vec2 { dungeonId: string; enabled?: boolean; worldExit?: Vec2; }
 export interface WorldDocument {
   version: 1 | 2; generatorVersion: 1; seed: number; spawn: Vec2;
   assets: WorldAsset[]; placements: AssetPlacement[]; tiles: TileOverride[];
@@ -156,7 +156,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   unique(d.zones, z => z.id, 'zone');
   for (const n of d.npcs) if (!point(n) || !id(n.id) || !Object.hasOwn(NPC_DEFINITIONS, n.npcKind) || !integer(n.level, 1, 100)) fail('NPC manuale');
   unique(d.npcs, n => n.id, 'NPC manuali');
-  for (const p of d.dungeons) if (!point(p) || !id(p.dungeonId) || (p.enabled !== undefined && !boolean(p.enabled))) fail('piazzamento dungeon');
+  for (const p of d.dungeons) if (!point(p) || !id(p.dungeonId) || (p.enabled !== undefined && !boolean(p.enabled)) || (p.worldExit !== undefined && !point(p.worldExit))) fail('piazzamento dungeon');
   unique(d.dungeons, p => p.dungeonId, 'dungeon');
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
   const result: WorldDocument = structuredClone({ version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,

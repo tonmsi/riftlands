@@ -161,7 +161,7 @@ const connection = new GameConnection({
       audio.reset();
       latest = null;
     } else if (message.type === 'room') {
-      renderer.setSeed(message.room.seed, message.room.mode);
+      renderer.setSeed(message.room.seed, message.room.mode, message.room.dungeonId);
       latest = null;
       selectedId = null;
       releaseControls();

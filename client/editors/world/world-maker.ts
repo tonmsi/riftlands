@@ -80,7 +80,7 @@ function ensureWorld(): void {
   const updated = gesture?.brush?.flushTiles() ?? [];
   if (updated.length && world && !worldDirty) world.updateAuthoredTiles(draft, updated);
   if (worldDirty) {
-    world = new World(draft.seed, 96, 'world', draft, worldDungeons(draft, catalog));
+    world = new World(draft.seed, 96, 'world', draft, worldDungeons(draft, catalog).filter(d => !d.topology));
     worldDirty = false;
 } }
 function schedule(rebuild = false): void { worldDirty ||= rebuild; if (!framePending) {
@@ -237,7 +237,7 @@ function selectionEntity(): any {
     if (!selected)
         return;
     return selected.kind === 'placement' ? draft.placements.find(p => p.id === selected!.id) ?? (selectedGenerated?.id === selected.id ? selectedGenerated : undefined) : selected.kind === 'npc' ? draft.npcs.find(n => n.id === selected!.id)
-        : selected.kind === 'dungeon' ? draft.dungeons.find(d => d.dungeonId === selected!.id) ?? (() => { const d = worldDungeons(draft, catalog).find(d => d.id === selected!.id); return d ? { dungeonId: d.id, x: d.layout.bounds.minTx, y: d.layout.bounds.minTy } : undefined; })() : draft.zones.find(z => z.id === selected!.id);
+        : selected.kind === 'dungeon' ? draft.dungeons.find(d => d.dungeonId === selected!.id) ?? (() => { const d = worldDungeons(draft, catalog).find(d => d.id === selected!.id); return d ? { dungeonId: d.id, x: d.topology ? Math.floor(d.area.x / 48) : d.layout.bounds.minTx, y: d.topology ? Math.floor(d.area.y / 48) : d.layout.bounds.minTy } : undefined; })() : draft.zones.find(z => z.id === selected!.id);
 }
 function refreshSelection(): void {
     const e = selectionEntity();
@@ -246,7 +246,7 @@ function refreshSelection(): void {
         el('selection-inspector').hidden = true;
         return;
     }
-    el('selection-title').textContent = selected?.kind === 'dungeon' ? 'Posizione dungeon' : selected?.kind === 'npc' ? 'NPC manuale' : 'Istanza asset';
+    el('selection-title').textContent = selected?.kind === 'dungeon' ? 'Ingresso dungeon · viola' : selected?.kind === 'npc' ? 'NPC manuale' : 'Istanza asset';
     el('selection-fields').innerHTML = `<div class="pair">${field('entity-x', 'X · celle')}${field('entity-y', 'Y · celle')}</div>${selected?.kind === 'npc' ? field('entity-level', 'Livello') : ''}`;
     set('entity-x', e.x);
     set('entity-y', e.y);
@@ -262,7 +262,7 @@ function refreshSelection(): void {
 function draw(): void {
     ensureWorld();
     const animated = drawWorldEditorMap(canvas, world, draft, view, art, { grid: input('show-grid').checked, cells: input('show-cells').checked,
-        zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, gesture, pointerTile, tool, activeAsset: active() });
+        portals: worldDungeons(draft, catalog).filter(d => d.topology), zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, gesture, pointerTile, tool, activeAsset: active() });
     if ((animated || (!el('asset-inspector').hidden && active() && worldAssetVisual(active()!).kind === 'fire')) && animationTimer === undefined)
         animationTimer = setTimeout(() => { animationTimer = undefined; schedule(); }, 33);
     el('zoom-label').textContent = Math.round(view.scale / 24 * 100) + '%';
@@ -290,7 +290,7 @@ function selectAt(p: Vec2): void {
     ensureWorld();
     const n = draft.npcs.find(n => n.x === p.x && n.y === p.y);
     const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 });
-    const asset = placements.filter(p => draft.placements.some(a => a.id === p.id)).at(-1), dungeon = world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
+    const asset = placements.filter(p => draft.placements.some(a => a.id === p.id)).at(-1), dungeon = worldDungeons(draft, catalog).find(d => d.topology ? Math.hypot((p.x+.5)*48-d.area.x,(p.y+.5)*48-d.area.y) < 48 : p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
     const zone = world.authoring.zonesAt(p.x + .5, p.y + .5)[0];
     selectedGenerated = placements.filter(a => a.id.startsWith('generated:')).at(-1);
     selected = n ? { kind: 'npc', id: n.id } : asset ? { kind: 'placement', id: asset.id } : dungeon ? { kind: 'dungeon', id: dungeon.id }
@@ -311,7 +311,9 @@ function selectionContains(p: Vec2): boolean {
     if (selected.kind === 'npc') return entity.x === p.x && entity.y === p.y;
     if (selected.kind === 'placement') return overlaps(placementVisualBounds(entity, world.authoring.assets.get(entity.assetId)!),
         { left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 });
-    const b = world.dungeons.find(d => d.id === selected!.id)?.layout.bounds;
+    const selectedDungeon = worldDungeons(draft,catalog).find(d => d.id === selected!.id);
+    if (selectedDungeon?.topology) return Math.hypot((p.x+.5)*48-selectedDungeon.area.x,(p.y+.5)*48-selectedDungeon.area.y) < 48;
+    const b = selectedDungeon?.layout.bounds;
     return !!b && p.x >= b.minTx && p.x <= b.maxTx && p.y >= b.minTy && p.y <= b.maxTy;
 }
 function paint(p: Vec2): void {
@@ -387,11 +389,18 @@ canvas.addEventListener('pointerdown', event => {
     else if (tool === 'dungeon') {
         const dungeonId = val('dungeon');
         if (dungeonId) {
-            const existing = draft.dungeons.find(d => d.dungeonId === dungeonId);
-            if (existing)
-            Object.assign(existing, p, { enabled: true });
-            else
-                draft.dungeons.push({ ...p, dungeonId });
+            const source = worldDungeons(draft, catalog).find(d => d.id === dungeonId);
+            let existing = draft.dungeons.find(d => d.dungeonId === dungeonId);
+            if (val('dungeon-point') === 'exit') {
+                if (!source?.topology) { status('L’uscita separata è disponibile per i dungeon a stanze.'); return; }
+                if (!existing) { existing = { dungeonId, x: Math.floor(source.area.x / 48), y: Math.floor(source.area.y / 48) }; draft.dungeons.push(existing); }
+                existing.worldExit = { ...p }; existing.enabled = true;
+                status(`Uscita nel mondo: ${p.x}, ${p.y}. Azzurro sulla mappa.`);
+            } else {
+                if (existing) Object.assign(existing, p, { enabled: true });
+                else draft.dungeons.push({ ...p, dungeonId });
+                status(`Ingresso al dungeon: ${p.x}, ${p.y}. Viola sulla mappa.`);
+            }
             selected = { kind: 'dungeon', id: dungeonId };
         }
     }
@@ -767,3 +776,13 @@ new ResizeObserver(() => schedule()).observe(canvas);
 new ResizeObserver(() => schedule()).observe(assetCanvas);
 selectTool('select');
 void load();
+
+on('find-dungeon-point', () => {
+    const mode = val('dungeon-point');
+    const d = worldDungeons(draft, catalog).find(d => d.id === val('dungeon'));
+    if (!d?.topology) throw new Error('Seleziona un dungeon a stanze.');
+    const p = mode === 'entry' ? { x: d.area.x / 48 - .5, y: d.area.y / 48 - .5 } : d.topology.worldExit;
+    if (!p) throw new Error('OUT non configurato: scegli Uscita nel mondo e clicca sulla mappa.');
+    set('dungeon-point', mode); selectTool('dungeon'); centerAt(p.x + .5, p.y + .5);
+    status(`${mode === 'entry' ? 'IN · ingresso' : 'OUT · uscita nel mondo'}: X ${p.x}, Y ${p.y}. Per spostarlo clicca una casella libera.`);
+});

@@ -3994,6 +3994,16 @@
       "x": 40,
       "y": 107,
       "enabled": false
+    },
+    {
+      "dungeonId": "wrap",
+      "x": 62,
+      "y": 21,
+      "enabled": true,
+      "worldExit": {
+        "x": 63,
+        "y": 16
+      }
     }
   ],
   "tileChunks": [

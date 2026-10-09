@@ -1,3 +1,4 @@
+import { DungeonInstanceWorld } from './dungeon-instance';
 import { TILE_SIZE, PLAYER_RADIUS } from './config';
 import type { DungeonDefinition } from './dungeons';
 import { assertValidDungeonDefinition, configuredDungeonTile } from './dungeons';
@@ -9,7 +10,7 @@ import { QUEST_DEFINITIONS } from './narrative';
 
 export function worldDungeons(document: WorldDocument, catalog: readonly DungeonDefinition[]): DungeonDefinition[] {
   return catalog.filter(d => document.dungeons.find(p => p.dungeonId === d.id)?.enabled !== false)
-    .map(d => { const p = document.dungeons.find(p => p.dungeonId === d.id); return p ? relocateDungeon(d, p) : d; });
+    .map(d => { const p = document.dungeons.find(p => p.dungeonId === d.id); if (!p) return d; const placed = relocateDungeon(d, p); if (placed.topology && p.worldExit) placed.topology.worldExit = { ...p.worldExit }; return placed; });
 }
 /** Referential and spatial checks supplement format validation before installation. */
 export function validateWorld(document: WorldDocument, catalog: readonly DungeonDefinition[]): string[] {
@@ -26,26 +27,29 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
   }
   for (const d of dungeons) {
     try { assertValidDungeonDefinition(d); } catch (e) { issues.push((e as Error).message); }
-    for (const other of dungeons) if (d.id < other.id && Math.hypot(d.area.x - other.area.x, d.area.y - other.area.y) < d.area.radius + other.area.radius + 192)
+    for (const other of dungeons) if (!d.topology && !other.topology && d.id < other.id && Math.hypot(d.area.x - other.area.x, d.area.y - other.area.y) < d.area.radius + other.area.radius + 192)
       issues.push(`Dungeon sovrapposti o troppo vicini: ${d.name}, ${other.name}.`);
   }
-  const world = new World(document.seed, 16, 'world', document, dungeons);
+  const world = new World(document.seed, 16, 'world', document, dungeons.filter(d => !d.topology));
   for (const d of dungeons) {
+    if (d.topology && collidesWorld(d.area.x,d.area.y,PLAYER_RADIUS,world)) issues.push(`${d.name}: portale di ingresso bloccato nel mondo.`);
+    const terrain = d.topology ? new DungeonInstanceWorld(d, document.seed) : world;
+    if (d.topology?.worldExit) { const p = d.topology.worldExit; if (collidesWorld((p.x+.5)*TILE_SIZE,(p.y+.5)*TILE_SIZE,PLAYER_RADIUS,world)) issues.push(`${d.name}: uscita nel mondo bloccata alla casella ${p.x}, ${p.y}. Usa “Uscita nel mondo” e scegli una casella libera.`); }
     for (const e of [d, ...(d.additionalEncounters ?? [])]) for (const p of [e.spawnPoints.boss, ...e.spawnPoints.party]) {
-      if (collidesWorld(p.x, p.y, PLAYER_RADIUS, world)) issues.push(`${d.name}: spawn su un ostacolo del catalogo condiviso.`);
+      if (collidesWorld(p.x, p.y, PLAYER_RADIUS, terrain)) issues.push(`${d.name}: spawn su un ostacolo del catalogo condiviso.`);
     }
   }
   const spawn = { x: document.spawn.x * TILE_SIZE, y: document.spawn.y * TILE_SIZE };
   if (collidesWorld(spawn.x, spawn.y, PLAYER_RADIUS + 2, world)) issues.push('Spawn del giocatore bloccato: libera anche le celle vicine.');
-  if (configuredDungeonTile(Math.floor(spawn.x / TILE_SIZE), Math.floor(spawn.y / TILE_SIZE), dungeons) !== undefined) issues.push('Spawn globale dentro un dungeon: scegli una posizione nel mondo.');
+  if (configuredDungeonTile(Math.floor(spawn.x / TILE_SIZE), Math.floor(spawn.y / TILE_SIZE), dungeons.filter(d => !d.topology)) !== undefined) issues.push('Spawn globale dentro un dungeon: scegli una posizione nel mondo.');
   if (world.arenaAt(spawn.x, spawn.y)) issues.push('Lo spawn del giocatore si trova dentro un ingresso arena.');
   for (const n of document.npcs) {
     if (collidesWorld((n.x + .5) * TILE_SIZE, (n.y + .5) * TILE_SIZE, 19, world)) issues.push(`NPC ${n.id} su un ostacolo.`);
-    if (configuredDungeonTile(n.x, n.y, dungeons) !== undefined) issues.push(`NPC ${n.id} dentro un dungeon: usa il Dungeon Maker.`);
+    if (configuredDungeonTile(n.x, n.y, dungeons.filter(d => !d.topology)) !== undefined) issues.push(`NPC ${n.id} dentro un dungeon: usa il Dungeon Maker.`);
   }
   for (const p of document.placements) {
     const a = world.authoring.assets.get(p.assetId)!;
-    for (let y = 0; y < a.rows; y++) for (let x = 0; x < a.columns; x++) if (configuredDungeonTile(p.x + x, p.y + y, dungeons) !== undefined) {
+    for (let y = 0; y < a.rows; y++) for (let x = 0; x < a.columns; x++) if (configuredDungeonTile(p.x + x, p.y + y, dungeons.filter(d => !d.topology)) !== undefined) {
       issues.push(`Asset ${a.name} dentro un dungeon: modifica il dungeon nel Dungeon Maker.`); y = a.rows; break;
     }
   }

@@ -1,3 +1,5 @@
+import { DungeonInstanceWorld } from '../../shared/dungeon-instance';
+import { dungeonRoomAt, dungeonRoomTiles, topologyPosition } from '../../shared/dungeon-topology';
 import { PICKUP_COLORS, circle, noise, polygon } from './render-primitives';
 import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../../shared/config';
 import { equippedAbility } from '../../shared/progression';
@@ -80,8 +82,9 @@ export class Renderer {
     this.resize();
   }
 
-  setSeed(seed: number, mode: RoomMode = 'world'): void {
-    this.world = new World(seed, 160, mode);
+  setSeed(seed: number, mode: RoomMode = 'world', dungeonId?: string): void {
+    const dungeon = DUNGEON_DEFINITIONS.find(d => d.id === dungeonId && d.topology);
+    this.world = dungeon ? new DungeonInstanceWorld(dungeon, seed) : new World(seed, 160, mode);
     this.terrain.invalidate();
     this.hasCamera = false;
     this.viewSign = 1;
@@ -141,7 +144,7 @@ export class Renderer {
             y: this.world.authoring.document.spawn.y * TILE_SIZE + 12 + Math.cos(frame.time * 0.000019) * 12,
           };
 
-    if (!this.hasCamera || (frame.playing && !this.wasPlaying)) {
+    if (!this.hasCamera || (frame.playing && !this.wasPlaying) || Math.hypot(this.camera.x-target.x, this.camera.y-target.y) > TILE_SIZE * 4) {
       this.camera.x = target.x;
       this.camera.y = target.y;
       this.hasCamera = true;
@@ -172,6 +175,7 @@ export class Renderer {
 
     this.terrain.drawCachedTerrain(this.world, { camera: this.camera, width: this.width, height: this.height, dpr: this.dpr, zoom: this.zoom }, frame.time);
     this.drawDungeonEntry(frame, false);
+    this.drawDungeonPortals(frame);
 
     if (this.world.mode === 'world') {
       if (!this.localDungeons) {
@@ -377,6 +381,7 @@ export class Renderer {
 
     for (const event of events) this.drawFloatingEvent(event, frame.time);
     if (frame.self && frame.fishing) drawFishingWorld(ctx, frame.self, frame.fishing, frame.fishingTarget, frame.time, this.reducedMotion.matches);
+    this.drawDungeonShadows(frame);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     if (frame.time - this.lastWeatherCheck > 1000) {
@@ -502,6 +507,43 @@ export class Renderer {
     ctx.fill();
 
     ctx.restore();
+  }
+
+  private drawDungeonPortals(frame: RenderFrame): void {
+    const instance = this.world instanceof DungeonInstanceWorld ? this.world.dungeon : undefined;
+    const portals = instance ? [
+      ...instance.topology!.warps.map(w => ({ position: topologyPosition({ x: instance.layout.bounds.minTx, y: instance.layout.bounds.minTy }, w.from), label: 'Warp' })),
+      { position: topologyPosition({ x: instance.layout.bounds.minTx, y: instance.layout.bounds.minTy }, instance.topology!.exit), label: 'Torna nel mondo' },
+    ] : DUNGEON_DEFINITIONS.filter(d => d.topology).map(d => ({ position: d.area, label: d.name }));
+    for (const p of portals) {
+      if (!this.visible(p.position)) continue;
+      const ctx = this.ctx; ctx.save(); ctx.translate(p.position.x, p.position.y);
+      const pulse = 1 + Math.sin(frame.time * .004) * .08;
+      ctx.fillStyle = '#271545'; ctx.strokeStyle = '#c59aff'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(0, -10, 19 * pulse, 29 * pulse, 0, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = '#76e4ff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0, -10, 12, 21, Math.sin(frame.time * .002) * .2, 0, TAU); ctx.stroke();
+      ctx.scale(1, this.viewSign); ctx.font = '12px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#eee2ff'; ctx.fillText(p.label, 0, -48); ctx.restore();
+    }
+  }
+
+  private drawDungeonShadows(frame: RenderFrame): void {
+    const d = this.world instanceof DungeonInstanceWorld ? this.world.dungeon : this.localDungeons?.find(d => d.topology);
+    if (!d?.topology || !frame.self) return;
+    const origin = { x: d.layout.bounds.minTx, y: d.layout.bounds.minTy }, ctx = this.ctx;
+    const room = dungeonRoomAt(d.topology, origin, frame.self);
+    if (room) {
+      ctx.save(); ctx.beginPath(); ctx.rect(this.bounds.left-100, this.bounds.top-100, this.bounds.right-this.bounds.left+200, this.bounds.bottom-this.bounds.top+200);
+      if (!room.tiles) ctx.rect((origin.x+room.x)*TILE_SIZE,(origin.y+room.y)*TILE_SIZE,room.width*TILE_SIZE,room.height*TILE_SIZE);
+      else for (const tile of room.tiles) ctx.rect((origin.x+tile.x)*TILE_SIZE,(origin.y+tile.y)*TILE_SIZE,TILE_SIZE,TILE_SIZE);
+      ctx.clip('evenodd'); ctx.fillStyle = '#080711'; ctx.fillRect(this.bounds.left-100,this.bounds.top-100,this.bounds.right-this.bounds.left+200,this.bounds.bottom-this.bounds.top+200); ctx.restore();
+    }
+    for (const s of d.topology.shadows) {
+      ctx.save(); ctx.beginPath(); ctx.rect((origin.x + s.x)*TILE_SIZE, (origin.y + s.y)*TILE_SIZE, s.width*TILE_SIZE, s.height*TILE_SIZE); ctx.clip();
+      const radius = s.revealRadius*TILE_SIZE;
+      const gradient = ctx.createRadialGradient(frame.self.x, frame.self.y, radius*.7, frame.self.x, frame.self.y, radius);
+      gradient.addColorStop(0, '#08071100'); gradient.addColorStop(1, '#080711'); ctx.fillStyle = gradient;
+      ctx.fillRect((origin.x+s.x)*TILE_SIZE, (origin.y+s.y)*TILE_SIZE, s.width*TILE_SIZE, s.height*TILE_SIZE); ctx.restore();
+    }
   }
 
   private visible(point: Vec2): boolean {
@@ -739,7 +781,7 @@ export class Renderer {
   }
 
   private drawDungeons(): void {
-    for (const definition of this.localDungeons ?? DUNGEON_DEFINITIONS) this.drawDungeon(definition);
+    for (const definition of this.localDungeons ?? this.world.dungeons) this.drawDungeon(definition);
   }
 
   private drawDungeon(definition: DungeonDefinition): void {

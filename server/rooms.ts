@@ -1,3 +1,9 @@
+import { collidesWorld } from '../shared/physics';
+import { BOSS_BY_ID } from '../shared/bosses';
+import { DungeonInstanceWorld } from '../shared/dungeon-instance';
+import { DUNGEON_DEFINITIONS, dungeonEncounters } from '../shared/dungeons';
+import { dungeonRoomAt, dungeonShadowVisible, topologyPosition } from '../shared/dungeon-topology';
+import { TILE_SIZE } from '../shared/config';
 import { randomUUID } from 'node:crypto';
 import { DT, WORLD_SEED, levelFromXp } from '../shared/config';
 import { characterFor } from './character-progress';
@@ -17,7 +23,8 @@ export interface MatchRoom {
   startsAt?: number;
   market?: ArenaMarket;
   id: string;
-  mode: Exclude<RoomMode, 'world'>;
+  mode: RoomMode;
+  dungeonId?: string;
   simulation: WorldSimulation;
   members: Set<string>;
   endsAt: number;
@@ -28,6 +35,9 @@ export interface MatchRoom {
 export class RoomManager {
   readonly global: WorldSimulation;
   readonly rooms = new Map<string, MatchRoom>();
+  private readonly dungeonGateBlocked = new Set<string>();
+  private readonly warpArrival = new Map<string, { x: number; y: number }>();
+  private readonly warpReady = new Map<string, number>();
   private readonly memberships = new Map<string, Membership>();
   private readonly gateEntries = new Map<string, number>();
   private readonly mustExitGate = new Set<string>();
@@ -60,7 +70,7 @@ export class RoomManager {
     const member = this.membership(id), sim = this.simulationFor(id);
     const watched = this.spectators.get(id);
     if (watched) return { id: watched, epoch: member.epoch, mode: 'arena', seed: this.global.seed, spectating: true };
-    return { id: member.roomId, epoch: member.epoch, mode: sim.mode, seed: sim.seed };
+    return { id: member.roomId, epoch: member.epoch, mode: sim.mode, seed: sim.seed, dungeonId: this.rooms.get(member.roomId)?.dungeonId };
   }
 
   connect(account: Account, classId: ClassId) {
@@ -201,12 +211,27 @@ export class RoomManager {
     const member = this.membership(id);
     if (member.roomId === 'world') return;
     const room = this.rooms.get(member.roomId)!;
-    if (forfeit) this.matchResults.set(id, { roomId: room.id, mode: room.mode, outcome: 'loss', reason: 'forfeit' });
+    if (forfeit && room.mode !== 'world') this.matchResults.set(id, { roomId: room.id, mode: room.mode as Exclude<RoomMode, 'world'>, outcome: 'loss', reason: 'forfeit' });
     this.mustExitGate.add(id);
+    if (room.dungeonId) {
+      room.simulation.checkpoint();
+      const temporary = room.simulation.accounts.get(id)!;
+      const saved = member.account.body;
+      member.account.xp = temporary.xp;
+      member.account.kills = temporary.kills;
+      member.account.deaths = temporary.deaths;
+      member.account.gold = temporary.gold;
+      const body = room.simulation.players.get(id);
+      if (saved && body) { saved.hp = body.hp; saved.resource = body.resource; saved.cooldowns = { ...body.cooldowns }; saved.effects = body.effects.map(e => ({ ...e })); saved.deadUntil = body.deadUntil; }
+      member.account.body = saved;
+      this.store?.touch();
+      this.dungeonGateBlocked.add(id);
+    }
     // Reserve return capacity: create the global body before discarding the instance body.
     if (member.connected) this.global.addPlayer(member.account, member.classId);
     room.simulation.detachPlayer(id);
     room.members.delete(id);
+    this.warpArrival.delete(id); this.warpReady.delete(id);
     this.global.awayPlayers.delete(id);
     member.roomId = 'world';
     member.epoch++;
@@ -219,6 +244,11 @@ export class RoomManager {
     const room = this.rooms.get(id);
     if (!room || room.closing) return;
     room.closing = true;
+    if (room.dungeonId) {
+      for (const playerId of [...room.members]) this.returnToWorld(playerId);
+      this.rooms.delete(id);
+      return;
+    }
     const survivingTeams = new Set([...room.simulation.players.values()].filter(actor => actor.hp > 0).map(actor => actor.teamId));
     const remainingTeams = new Set([...room.simulation.players.values()].map(actor => actor.teamId));
     const resultReason = reason === 'elimination' && remainingTeams.size < 2 ? 'forfeit' : reason;
@@ -230,7 +260,7 @@ export class RoomManager {
     }
     for (const playerId of room.members) {
       const winner = survivingTeams.size === 1 && survivingTeams.has(room.roster.get(playerId)!);
-      this.matchResults.set(playerId, { roomId: room.id, mode: room.mode,
+      this.matchResults.set(playerId, { roomId: room.id, mode: room.mode as Exclude<RoomMode, 'world'>,
         outcome: reason === 'timeout' || (reason === 'elimination' && survivingTeams.size === 0) ? 'draw' : reason === 'closed' ? 'closed' : winner ? 'win' : 'loss',
         reason: resultReason });
       if (!this.memberships.get(playerId)?.connected) continue;
@@ -262,10 +292,98 @@ export class RoomManager {
       else { this.memberships.delete(id); this.mustExitGate.delete(id); }
     }
     for (const room of [...this.rooms.values()]) {
+      if (room.dungeonId) continue;
       const teams = new Set([...room.simulation.players.values()].filter(actor => room.mode !== 'arena' || actor.hp > 0).map(actor => actor.teamId));
       if (this.global.now >= room.endsAt || teams.size < 2) this.closeMatch(room.id, this.global.now >= room.endsAt ? 'timeout' : 'elimination');
     }
+    this.stepDungeonGates();
     this.stepArenaGate();
+  }
+
+  /** Uses the arena membership/epoch routing, with persistent PvE progress and a saved world body. */
+  async enterDungeon(id: string, dungeonId: string): Promise<void> {
+    const dungeon = DUNGEON_DEFINITIONS.find(d => d.id === dungeonId && d.topology);
+    const member = this.membership(id);
+    if (!dungeon || this.transfersStopped || this.pendingPlayers.has(id) || member.roomId !== 'world' || !member.connected || !this.global.canTransfer(id)) return;
+    const epoch = member.epoch;
+    this.pendingPlayers.add(id);
+    try {
+      this.global.checkpoint(); this.store?.flush(); if (this.store) await this.store.drain();
+      const actor = this.global.players.get(id);
+      if (this.transfersStopped || member.epoch !== epoch || !member.connected || !actor || member.roomId !== 'world' || !this.global.canTransfer(id) || Math.hypot(actor.x - dungeon.area.x, actor.y - dungeon.area.y) > TILE_SIZE) return;
+      const roomId = `dungeon:${dungeon.id}`;
+      let room = this.rooms.get(roomId);
+      if (!room) {
+        if (this.rooms.size >= 16) return;
+        const world = new DungeonInstanceWorld(dungeon);
+        let simulation: WorldSimulation;
+        const sync = () => {
+          for (const [playerId, temporary] of simulation?.accounts ?? []) {
+            const original = this.memberships.get(playerId)?.account;
+            if (original) { original.gold = temporary.gold; original.xp = temporary.xp; original.kills = temporary.kills; original.deaths = temporary.deaths; }
+          }
+          this.store?.touch();
+        };
+        const persistence: GameplayPersistence | undefined = this.store ? { accounts: new Map(), bossStates: this.store.bossStates,
+          touch: sync, flush: () => { sync(); this.store!.flush(); }, flushBosses: () => this.store!.flushBosses(), drain: () => this.store!.drain() } : undefined;
+        simulation = new WorldSimulation(this.global.seed, this.global.now, persistence, 'world', { world, dungeons: dungeonEncounters(dungeon), bosses: BOSS_BY_ID,
+          spawn: topologyPosition({ x: dungeon.layout.bounds.minTx, y: dungeon.layout.bounds.minTy }, dungeon.topology!.entry) });
+        room = { id: roomId, mode: 'world', dungeonId, simulation, members: new Set(), endsAt: Number.MAX_SAFE_INTEGER, roster: new Map() };
+        this.rooms.set(roomId, room);
+      }
+      // Share progression references, keep the transient body out of the world save.
+      const temporary: Account = { ...member.account, body: undefined };
+      const entrant = room.simulation.addPlayer(temporary, member.classId);
+      Object.assign(entrant, topologyPosition({ x: dungeon.layout.bounds.minTx, y: dungeon.layout.bounds.minTy }, dungeon.topology!.entry));
+      entrant.teamId = actor.teamId;
+      entrant.hp = actor.hp; entrant.resource = actor.resource; entrant.cooldowns = { ...actor.cooldowns }; entrant.effects = actor.effects.map(e => ({ ...e }));
+      this.global.detachPlayer(id); this.global.awayPlayers.add(id);
+      room.members.add(id); member.roomId = roomId; member.epoch++;
+      this.warpReady.set(id, this.global.now + 1200);
+      this.notices.set(id, `Ingresso in ${dungeon.name}.`);
+    } finally { this.pendingPlayers.delete(id); }
+  }
+
+  private stepDungeonGates(): void {
+    for (const [id, member] of this.memberships) {
+      if (!member.connected) continue;
+      if (member.roomId === 'world') {
+        const actor = this.global.players.get(id);
+        if (!actor || actor.hp <= 0) continue;
+        const dungeon = DUNGEON_DEFINITIONS.find(d => d.topology && Math.hypot(actor.x - d.area.x, actor.y - d.area.y) < TILE_SIZE * .65);
+        if (!dungeon) { this.dungeonGateBlocked.delete(id); continue; }
+        if (!this.dungeonGateBlocked.has(id)) void this.enterDungeon(id, dungeon.id).catch(error => this.notices.set(id, String(error)));
+        continue;
+      }
+      const room = this.rooms.get(member.roomId);
+      if (!room?.dungeonId) continue;
+      const dungeon = room.simulation.world.dungeons[0], t = dungeon.topology!;
+      const actor = room.simulation.players.get(id);
+      if (!actor) continue;
+      const temporary = room.simulation.accounts.get(id)!;
+      member.account.gold = temporary.gold; member.account.xp = temporary.xp;
+      member.account.kills = temporary.kills; member.account.deaths = temporary.deaths;
+      const origin = { x: dungeon.layout.bounds.minTx, y: dungeon.layout.bounds.minTy };
+      const near = (p: { x: number; y: number }) => { const v = topologyPosition(origin, p); return Math.hypot(actor.x - v.x, actor.y - v.y) < TILE_SIZE * .45; };
+      if (actor.hp <= 0) { this.returnToWorld(id); continue; }
+      const leaveEncounter = () => { for (const encounter of room.simulation.bosses.values()) encounter.participantLeft(id, room.simulation.world); };
+      if (near(t.exit)) {
+        const destination = t.worldExit && topologyPosition({ x: 0, y: 0 }, t.worldExit);
+        if (destination && collidesWorld(destination.x, destination.y, actor.radius, this.global.world)) {
+          if (!this.notices.has(id)) this.notices.set(id, 'Destinazione del warp di uscita bloccata: correggi il punto nel maker.');
+          continue;
+        }
+        leaveEncounter();
+        if (destination && member.account.body) Object.assign(member.account.body, destination);
+        this.returnToWorld(id); continue;
+      }
+      const arrival = this.warpArrival.get(id);
+      if (arrival && Math.hypot(actor.x-arrival.x,actor.y-arrival.y) < TILE_SIZE*.55) continue;
+      this.warpArrival.delete(id);
+      if ((this.warpReady.get(id) ?? 0) > this.global.now) continue;
+      const warp = t.warps.find(w => near(w.from));
+      if (warp) { leaveEncounter(); const destination = topologyPosition(origin, warp.to); Object.assign(actor, destination); this.warpArrival.set(id, destination); }
+    }
   }
 
   private stepArenaGate(): void {
@@ -331,11 +449,20 @@ export class RoomManager {
     }
     const snapshot = this.simulationFor(id).snapshotFor(id);
     if (snapshot) {
+      const room = this.rooms.get(this.membership(id).roomId);
+      if (room?.dungeonId) {
+        const d = room.simulation.world.dungeons[0], t = d.topology!, origin = { x: d.layout.bounds.minTx, y: d.layout.bounds.minTy };
+        const current = dungeonRoomAt(t, origin, snapshot.self);
+        const visible = (p: { x: number; y: number }) => dungeonRoomAt(t, origin, p)?.id === current?.id && dungeonShadowVisible(t, origin, snapshot.self, p);
+        snapshot.actors = snapshot.actors.filter(a => a.id === id || visible(a));
+        snapshot.pickups = snapshot.pickups.filter(visible); snapshot.projectiles = snapshot.projectiles.filter(visible); snapshot.traps = snapshot.traps?.filter(visible); snapshot.events = snapshot.events.filter(visible);
+        if (snapshot.groundItems) snapshot.groundItems = snapshot.groundItems.filter(visible);
+      }
       snapshot.betting = this.bettingView(id);
       snapshot.gold = this.membership(id).account.gold ?? 0;
       snapshot.arenaGate = this.gateStateFor(id);
       if (this.membership(id).roomId === 'world') snapshot.sanctuary = this.global.world.pvpAt(snapshot.self.x, snapshot.self.y) ? 'outside' : this.global.isSafeProtected(snapshot.self) ? 'safe' : 'combat';
-      snapshot.matchEndsAt = this.rooms.get(this.membership(id).roomId)?.endsAt;
+      snapshot.matchEndsAt = this.rooms.get(this.membership(id).roomId)?.dungeonId ? undefined : this.rooms.get(this.membership(id).roomId)?.endsAt;
     }
     return snapshot;
   }

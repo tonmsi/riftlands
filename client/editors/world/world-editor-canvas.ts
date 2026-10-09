@@ -1,3 +1,4 @@
+import type { DungeonDefinition } from '../../../shared/dungeons';
 import { TILE_SIZE, CHUNK_TILES } from '../../../shared/config';
 import type { Vec2 } from '../../../shared/types';
 import type { World } from '../../../shared/world';
@@ -21,6 +22,7 @@ export interface EditorSelection {
     id: string;
 }
 export interface MapOptions {
+    portals?: DungeonDefinition[];
     grid: boolean;
     cells: boolean;
     zones: boolean;
@@ -107,6 +109,13 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
             ctx.lineTo(b.right * s, y * s);
         }
         ctx.stroke();
+    }
+    for (const d of options.portals ?? []) {
+        const x = d.area.x/TILE_SIZE*s, y = d.area.y/TILE_SIZE*s;
+        ctx.strokeStyle = selected?.kind === 'dungeon' && selected.id === d.id ? '#fff0b0' : '#c59aff'; ctx.fillStyle = '#38224f'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(x,y,s*.45,s*.65,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#e7d9ff'; ctx.font = '11px system-ui'; ctx.fillText(`IN · ${d.name}`,x+s*.6,y);
+        if (d.topology?.worldExit) { const p=d.topology.worldExit; ctx.strokeStyle='#76e4ff'; ctx.strokeRect(p.x*s,p.y*s,s,s); ctx.fillStyle='#b9efff'; ctx.fillText(`OUT · ${d.name}`,p.x*s+s+3,p.y*s); }
     }
     for (const d of world.dungeons) {
         const t = d.layout.bounds;

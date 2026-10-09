@@ -3,8 +3,14 @@ import type { DungeonDefinition, DungeonEncounterDefinition, DungeonPassage, Dun
 import type { Vec2 } from './types';
 
 /** Translate every piece of geometry together. Identity, templates and encounter rules are preserved. */
-export function relocateDungeon(source: DungeonDefinition, origin: Vec2): DungeonDefinition {
-  const d = structuredClone(source), dx = origin.x - d.layout.bounds.minTx, dy = origin.y - d.layout.bounds.minTy;
+export function relocateDungeon(source: DungeonDefinition, origin: Vec2 & { worldExit?: Vec2 }): DungeonDefinition {
+  const d = structuredClone(source);
+  if (d.topology) {
+    d.area.x = (origin.x + .5) * TILE_SIZE; d.area.y = (origin.y + .5) * TILE_SIZE;
+    if (origin.worldExit) d.topology.worldExit = { ...origin.worldExit };
+    return d;
+  }
+  const dx = origin.x - d.layout.bounds.minTx, dy = origin.y - d.layout.bounds.minTy;
   const tile = <T extends Vec2>(p: T): T => ({ ...p, x: p.x + dx, y: p.y + dy });
   const position = <T extends Vec2>(p: T): T => ({ ...p, x: p.x + dx * TILE_SIZE, y: p.y + dy * TILE_SIZE });
   const rect = (b: DungeonTileRect): DungeonTileRect => ({ minTx: b.minTx + dx, maxTx: b.maxTx + dx, minTy: b.minTy + dy, maxTy: b.maxTy + dy });

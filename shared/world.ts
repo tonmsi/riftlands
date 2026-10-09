@@ -34,7 +34,7 @@ export class World {
   private readonly lockedTiles = new Map<string, ReadonlySet<string>>();
   private readonly generationEnvironment: GenerationEnvironment;
   constructor(public readonly seed = WORLD_DOCUMENT.seed, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world',
-    document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS) {
+    document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS.filter(d => !d.topology)) {
     this.authoring = new WorldAuthoring(document);
     for (const d of dungeons) for (const p of d.assetPlacements ?? []) {
       if (this.authoring.assets.has(p.assetId)) this.authoring.addPlacement({ ...p, id: `dungeon:${d.id}:${p.id}` });
@@ -50,6 +50,7 @@ export class World {
         || this.dungeons.some(d => onDungeonApproach(d, { x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE }))
         || this.arenaAt((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE) !== undefined };
   }
+  canTraverse(_from: { x: number; y: number }, _to: { x: number; y: number }): boolean { return true; }
   /** Rendering includes image overflow; movement and concealment query only the tile grid. */
   assetsIn(bounds: TileBounds, includeArtwork = true): AssetPlacement[] { return this.mode === 'world' ? this.authoring.assetsIn(bounds, this.generationEnvironment, this.seed, includeArtwork) : []; }
   updateAuthoredTiles(document: WorldDocument, chunks: readonly WorldTileChunk[]): void {

@@ -1,7 +1,7 @@
 import { CHUNK_SIZE, TILE_SIZE } from '../../shared/config';
 import type { TileKind } from '../../shared/types';
 import type { World } from '../../shared/world';
-import { dungeonAtTile, type DungeonDefinition } from '../../shared/dungeons';
+import { type DungeonDefinition } from '../../shared/dungeons';
 import { EnvironmentArt } from './environment-art';
 import { noise } from './render-primitives';
 import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor } from './terrain-style';
@@ -51,15 +51,17 @@ export class TerrainRenderer {
       return tx >= b.minTx - 2 && tx <= b.maxTx + 2 && ty >= b.minTy - 2 && ty <= b.maxTy + 2;
     });
   }
+  private activeDungeons: readonly DungeonDefinition[] = [];
   private dungeonAt(tx: number, ty: number): DungeonDefinition | undefined {
     return this.localDungeons
       ? this.localDungeons.find(d => {
           const b = d.layout.bounds;
           return tx >= b.minTx && tx <= b.maxTx && ty >= b.minTy && ty <= b.maxTy;
         })
-      : dungeonAtTile(tx, ty);
+      : this.activeDungeons.find(d => tx >= d.layout.bounds.minTx && tx <= d.layout.bounds.maxTx && ty >= d.layout.bounds.minTy && ty <= d.layout.bounds.maxTy);
   }
   drawCachedTerrain(world: World, view: TerrainViewport, time: number): void {
+    this.activeDungeons = world.dungeons;
     if (this.lockRevision !== world.lockRevision) {
       this.invalidate();
       this.lockRevision = world.lockRevision;
