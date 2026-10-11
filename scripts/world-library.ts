@@ -37,7 +37,10 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     const next = compactWorldTiles(parseWorldDocument(document)), catalog = await readWorldDungeonCatalog(options.dungeonPath);
     const issues = validateWorld(next, catalog);
     if (issues.length) throw new Error(issues.slice(0, 12).join('\n'));
-    for (const a of next.assets) await access(resolve(options.root, 'public', a.image.slice(1)));
+    for (const a of next.assets) {
+      try { await access(resolve(options.root, 'public', decodeURIComponent(a.image.slice(1)))); }
+      catch { throw new Error(`Immagine assente per ${a.name}: ${decodeURIComponent(a.image)}. Premi Sincronizza cartelle per riparare i file spostati, oppure ripristina l’immagine.`); }
+    }
     for (const doc of [next, ...(next.interiors ?? []).map(m => m.document)])
       for (const zone of doc.zones) if (zone.music) await access(resolve(options.root, 'public', zone.music.src.slice(1)));
     const tag = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`;

@@ -28,7 +28,7 @@ export function worldAssetImageBounds(asset: WorldAsset) {
   const { x = 0, y = 0, scale = 1 } = asset.imageTransform ?? {};
   return { x, y, width: asset.width * scale, height: asset.height * scale };
 }
-export interface AssetPlacement extends Vec2 { id: string; assetId: string; }
+export interface AssetPlacement extends Vec2 { id: string; assetId: string; pivotY?: number; }
 export interface TileOverride extends Vec2 { terrain?: TileKind; suppressAssets?: boolean; }
 export type ZoneShape = { kind: 'rect'; x: number; y: number; width: number; height: number }
   | { kind: 'circle'; x: number; y: number; radius: number };
@@ -79,6 +79,13 @@ export function worldAssetVisual(asset: WorldAsset): NonNullable<WorldAsset['vis
   if (style) return { kind: 'fire', style };
   return { kind: 'image' };
 }
+export function validWorldAssetImage(image: unknown): image is string {
+  if (typeof image !== 'string' || !image.startsWith('/world-assets/') || /[?#]/.test(image)) return false;
+  try {
+    const parts=decodeURIComponent(image.slice('/world-assets/'.length)).split('/');
+    return parts.every(p=>p.length>0 && p!=='.' && p!=='..' && !/[\\\x00-\x1f:*?"<>|]/.test(p)) && /\.(png|svg)$/i.test(parts.at(-1)!);
+  } catch { return false; }
+}
 export function newWorldDocument(seed = 734291): WorldDocument {
   return { version: 1, generatorVersion: 1, seed, spawn: { x: 0, y: 0 }, assets: [], placements: [], tiles: [], zones: [], npcs: [], dungeons: [] };
 }
@@ -114,7 +121,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   list(d.zones, 10_000, 'zone'); list(d.npcs, 100_000, 'NPC'); list(d.dungeons, 4096, 'dungeon');
   if (d.version === 2 && (!Array.isArray(d.tileChunks) || d.tiles.length)) fail('versione 2: terreno in chunk');
   for (const a of d.assets) {
-    if (!object(a) || !id(a.id) || !name(a.name) || typeof a.image !== 'string' || !/^\/world-assets\/[a-zA-Z0-9_-]+\.(png|svg)$/.test(a.image)
+    if (!object(a) || !id(a.id) || !name(a.name) || !validWorldAssetImage(a.image)
       || !finite(a.width, .25, 32) || !finite(a.height, .25, 32) || a.columns !== Math.ceil(a.width) || a.rows !== Math.ceil(a.height)
       || !['ground', 'object'].includes(a.layer) || !object(a.pivot) || !finite(a.pivot.x, 0, 1) || !finite(a.pivot.y, 0, 1)) fail('definizione asset');
     list(a.cells, 1024, 'celle asset');
@@ -130,7 +137,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       || g.terrains.length > WORLD_TERRAINS.length || !g.terrains.every((t: any) => WORLD_TERRAINS.includes(t))) fail(`regole di ${a.id}`);
   }
   unique(d.assets, a => a.id, 'asset'); const assets = new Set(d.assets.map((a: any) => a.id));
-  for (const p of d.placements) if (!point(p) || !id(p.id) || !assets.has(p.assetId)) fail('piazzamento asset o riferimento assente');
+  for (const p of d.placements) if (!point(p) || !id(p.id) || !assets.has(p.assetId) || (p.pivotY !== undefined && !finite(p.pivotY,0,1))) fail('piazzamento asset o riferimento assente');
   unique(d.placements, p => p.id, 'piazzamenti');
   for (const t of d.tiles) if (!point(t) || (t.terrain === undefined && t.suppressAssets !== true)
     || (t.terrain !== undefined && !WORLD_TERRAINS.includes(t.terrain)) || (t.suppressAssets !== undefined && !boolean(t.suppressAssets))) fail('tile');

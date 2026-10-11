@@ -16,6 +16,7 @@ import { newNarrativeProgress } from '../shared/narrative';
 import { OrderedSaveWriter } from './save-writer';
 import { ACTOR_CATALOG } from '../shared/actor-catalog';
 import { serveAudioFile } from './audio-files';
+import { validWorldAssetImage } from '../shared/world-schema';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
@@ -146,6 +147,15 @@ const server = createServer((request, response) => {
   if (path === '/health') {
     response.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     response.end(JSON.stringify({ ok: healthy, online: byAccount.size, worldOnline: simulation.online, matchRooms: rooms.rooms.size, interiorRooms: rooms.interiors.size, tick: simulation.tick, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE, activeChunks: simulation.activeChunks.size + [...rooms.rooms.values()].reduce((sum, room) => sum + room.simulation.activeChunks.size, 0) + [...rooms.interiors.values()].reduce((sum, sim) => sum + sim.activeChunks.size, 0), npcs: simulation.npcs.size + [...rooms.interiors.values()].reduce((sum, sim) => sum + sim.npcs.size, 0), tickCostMs: Math.round(tickCostMs * 100) / 100, metrics: metrics.read() }));
+    return;
+  }
+  // Serve authoring images directly, including files added after Vite started.
+  if (validWorldAssetImage(path)) {
+    if (request.method !== 'GET' && request.method !== 'HEAD') { response.writeHead(405); response.end(); return; }
+    const asset = resolve(ROOT, 'public', decodeURIComponent(path).slice(1));
+    if (!existsSync(asset) || !statSync(asset).isFile()) { response.writeHead(404); response.end(); return; }
+    response.writeHead(200, { 'Content-Type': mime[extname(asset).toLowerCase()], 'Cache-Control': 'no-cache' });
+    if (request.method === 'HEAD') response.end(); else createReadStream(asset).on('error', () => response.destroy()).pipe(response);
     return;
   }
   if (!production) {

@@ -497,6 +497,12 @@
       }
     }
   },
+  "playerDrawSizes": {
+    "warrior": 60,
+    "mage": 60,
+    "hunter": 60,
+    "paladin": 60
+  },
   "npcSkins": {
     "slime": "npc-slime",
     "wisp": "npc-wisp",

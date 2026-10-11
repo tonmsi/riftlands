@@ -1,3 +1,4 @@
+import { syncWorldAssetFiles } from './world-asset-sync';
 import { organizeWorldPanels } from './world-panels';
 import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../npc-properties';
 import { newDungeonInterior } from '../../../shared/warps';
@@ -20,7 +21,7 @@ import { brushTiles, strokeTiles, WorldBrush, forkWorldDocument } from '../../..
 import { compactWorldTiles, worldTileMetrics, worldDocumentsEqual } from '../../../shared/world-tiles';
 import { WorldAssetArt } from '../../render/world-asset-art';
 import { WorldEditorHistory } from './world-editor-history';
-import { WorldAssetCatalog } from './world-asset-catalog';
+import { WorldAssetCatalog, assetGroup } from './world-asset-catalog';
 import { AssetGridCamera } from '../../render/world-asset-view';
 import { loadWorldCheckpoint, saveWorldCheckpoint } from './world-editor-storage';
 import { mapDocument } from '../../../shared/warps';
@@ -239,7 +240,9 @@ function refreshAsset(a: WorldAsset): void {
     const fade = a.fade ?? DEFAULT_ASSET_FADE;
     set('fade-opacity', Math.round(fade.opacity * 100_000) / 1000); set('fade-feather', fade.feather); set('fade-duration', fade.durationMs);
     set('asset-name', a.name);
-    set('asset-group', a.group);
+    set('asset-group', assetGroup(a));
+    input('asset-group').readOnly = true;
+    input('asset-group').title = 'Derivata dalla cartella immagine in public/world-assets.';
     el('asset-groups').replaceChildren(...[...new Set(draft.assets.flatMap(a => a.group ? [a.group] : []))].sort().map(group => new Option(group)));
     el('asset-preview-title').textContent = `Celle · ${a.name}`;
     set('asset-width', a.width);
@@ -316,6 +319,8 @@ function refreshSelection(): void {
     if (selected?.kind === 'npc')
         set('entity-level', e.level);
     if (selected?.kind === 'placement') {
+        el('selection-fields').insertAdjacentHTML('beforeend', '<label>Base per ordine disegno · 0–1<input id="entity-pivot" type="number" min="0" max="1" step="0.05" placeholder="Eredita dal catalogo"></label><p class="hint">Vale solo per questa copia. Vuoto: usa il valore del catalogo. A parità di posizione, una base più bassa viene disegnata sopra.</p>');
+        set('entity-pivot', e.pivotY);
         const b = document.createElement('button');
         b.textContent = 'Modifica asset nel catalogo';
         b.onclick = () => { activeAsset = e.assetId; selected = null; refresh(); schedule(); };
@@ -636,7 +641,7 @@ on('asset-expand', () => {
 on('asset-preview-close', () => previewDialog.close());
 previewDialog.addEventListener('cancel', () => finishGesture(undefined, true));
 previewDialog.addEventListener('close', () => { finishGesture(undefined, true); el('asset-preview-home').append(el('asset-preview')); el('asset-expand').textContent = 'Ingrandisci'; schedule(); });
-on('asset-update', () => change(() => { const a = active()!; resizeWorldAsset(a, num('asset-width'), num('asset-height')); a.name = val('asset-name').trim(); const group = val('asset-group').trim(); if (group) a.group = group; else delete a.group; assetCatalog.reveal(a); a.layer = val('asset-layer') as 'ground' | 'object'; a.pivot.y = num('asset-pivot'); a.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') }; a.visual = val('asset-visual') === 'image' ? { kind: 'image' } : { kind: 'fire', style: val('asset-visual') as 'brazier' | 'campfire' }; }));
+on('asset-update', () => change(() => { const a = active()!; resizeWorldAsset(a, num('asset-width'), num('asset-height')); a.name = val('asset-name').trim();  assetCatalog.reveal(a); a.layer = val('asset-layer') as 'ground' | 'object'; a.pivot.y = num('asset-pivot'); a.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') }; a.visual = val('asset-visual') === 'image' ? { kind: 'image' } : { kind: 'fire', style: val('asset-visual') as 'brazier' | 'campfire' }; }));
 input('asset-width').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
     set('asset-height', Math.round(num('asset-width') * a.height / a.width * 1000) / 1000); });
 input('asset-height').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
@@ -686,7 +691,7 @@ input('zone-music-file').addEventListener('change', () => { void (async () => {
 })().catch(report).finally(() => { input('zone-music-file').value = ''; }); });
 on('selection-update', () => change(() => { materializeSelection(); const e = selectionEntity(); if (!e)
     return; if (selected?.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id))
-    surface().dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'npc')
+    surface().dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'placement') { if (val('entity-pivot').trim()==='') delete e.pivotY; else {const pivot=num('entity-pivot');if(!Number.isFinite(pivot)||pivot<0||pivot>1)throw new Error('La base deve essere fra 0 e 1.');e.pivotY=pivot;} } if (selected?.kind === 'npc')
     { e.level = num('entity-level'); const properties = readNpcProperties(root, 'selected-npc'); e.npcKind = properties.kind; e.settings = properties.settings; } if (selected?.kind === 'dungeon') { if (val('entity-pvp') === '') delete e.pvp; else e.pvp = val('entity-pvp') === 'true'; } }));
 on('selection-delete', () => change(() => { materializeSelection(); if (selected?.kind === 'placement')
     surface().placements = surface().placements.filter(p => p.id !== selected!.id); if (selected?.kind === 'npc')
@@ -737,6 +742,18 @@ async function imageSize(src: string): Promise<{
     width: number;
     height: number;
 }> { return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight }); image.onerror = () => reject(new Error('Immagine non leggibile.')); image.src = src; }); }
+on('sync-asset-folders', () => { void (async () => {
+    if (!token) throw new Error('Sincronizzazione disponibile con npm run world:studio.');
+    const button=el<HTMLButtonElement>('sync-asset-folders'); button.disabled=true;
+    try {
+        status('Ricerca immagini in public/world-assets…');
+        const result=await api('/__world/asset-files', {});
+        await settleGesture();
+        let count={added:0,repaired:0};
+        change(() => {count=syncWorldAssetFiles(draft,result.files);});
+        status(count.added || count.repaired ? `Aggiunti ${count.added} asset dalle cartelle. Riparati ${count.repaired} percorsi di immagini spostate. Dimensione iniziale 1 × 1, calpestabile. Premi Applica al gioco per salvare il catalogo nel progetto.` : 'Nessuna nuova immagine: il catalogo è già aggiornato.');
+    } finally {button.disabled=false;}
+})().catch(report); });
 on('import-assets', () => input('asset-files').click());
 input('asset-files').addEventListener('change', () => { void (async () => { const files = [...input('asset-files').files ?? []]; const imported: { name: string; image: string; width: number; height: number }[] = []; for (const file of files) {
     status(`Importazione ${file.name}…`);

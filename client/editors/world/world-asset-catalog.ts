@@ -1,6 +1,17 @@
 import type { WorldAsset } from '../../../shared/world-schema';
 
-export const assetGroup = (asset: WorldAsset): string => asset.group?.trim() || 'Senza gruppo';
+/** Catalog groups follow the image's public folder instead of manual tags. */
+export const assetGroup = (asset: WorldAsset): string => {
+  let path = asset.image.split(/[?#]/)[0].replaceAll('\\', '/');
+  try { path = decodeURIComponent(path); } catch { /* Preserve malformed legacy URLs. */ }
+  const match = /(?:^|\/)world-assets\/(.*)/.exec(path);
+  if (match) {
+    const folders = match[1].split('/').slice(0, -1).filter(Boolean);
+    return folders.length ? folders.join(' / ') : 'world-assets';
+  }
+  const folders = path.split('/').filter(Boolean).slice(0, -1);
+  return folders.length ? folders.join(' / ') : 'Altri asset';
+};
 const PAGE_SIZE = 40;
 /** Collapsed groups create no thumbnails; open groups grow in bounded pages. */
 export class WorldAssetCatalog {
@@ -31,7 +42,7 @@ export class WorldAssetCatalog {
     const search = this.search.trim().toLocaleLowerCase();
     const expansion = search ? this.searchOpen : this.open;
     const groups = new Map<string, WorldAsset[]>();
-    for (const asset of this.assets) {
+    for (const asset of [...this.assets].sort((a,b) => assetGroup(a).localeCompare(assetGroup(b), 'it') || a.name.localeCompare(b.name, 'it'))) {
       const group = assetGroup(asset);
       if (search && !`${asset.name} ${group} ${asset.generation.category}`.toLocaleLowerCase().includes(search)) continue;
       if (!groups.has(group)) groups.set(group, []);

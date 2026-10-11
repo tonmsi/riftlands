@@ -185,10 +185,11 @@ export class Renderer {
     }
     const worldAssets = this.world.assetsIn({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
       right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE });
-    const groundAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'ground');
+    const assetOrder = (p: typeof worldAssets[number], q: typeof worldAssets[number]) => { const a=this.world.authoring.assets.get(p.assetId)!,b=this.world.authoring.assets.get(q.assetId)!;return p.y+a.height*(p.pivotY??a.pivot.y)-q.y-b.height*(q.pivotY??b.pivot.y)||p.id.localeCompare(q.id); };
+    const groundAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'ground').sort(assetOrder);
     const objectAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'object')
-      .sort((a, b) => (a.y + this.world.authoring.assets.get(a.assetId)!.height * this.world.authoring.assets.get(a.assetId)!.pivot.y)
-        - (b.y + this.world.authoring.assets.get(b.assetId)!.height * this.world.authoring.assets.get(b.assetId)!.pivot.y) || a.id.localeCompare(b.id));
+      .sort((a, b) => (a.y + this.world.authoring.assets.get(a.assetId)!.height * (a.pivotY ?? this.world.authoring.assets.get(a.assetId)!.pivot.y))
+        - (b.y + this.world.authoring.assets.get(b.assetId)!.height * (b.pivotY ?? this.world.authoring.assets.get(b.assetId)!.pivot.y)) || a.id.localeCompare(b.id));
     const publicPlayers = [...frame.actors.filter(actor => actor.id !== frame.self?.id), ...(frame.self ? [frame.self] : [])]
       .filter(actor => actor.kind === 'player' && actor.hp > 0 && this.world.pvpAt(actor.x, actor.y));
     const assetFades = new Map(worldAssets.map(p => {
@@ -353,7 +354,7 @@ export class Renderer {
       if (!this.visible(actor)) continue;
       while (objectIndex < objectAssets.length) {
         const p = objectAssets[objectIndex], a = this.world.authoring.assets.get(p.assetId)!;
-        if ((p.y + a.height * a.pivot.y) * TILE_SIZE > actor.y) break;
+        if ((p.y + a.height * (p.pivotY ?? a.pivot.y)) * TILE_SIZE > actor.y) break;
         paintObject(p); objectIndex++;
       }
       const self = !frame.spectating && (actor.id === frame.self?.id || (!frame.playing && actor.id === 'preview'));
@@ -379,7 +380,7 @@ export class Renderer {
     }
     while (objectIndex < objectAssets.length) paintObject(objectAssets[objectIndex++]);
     // Explicitly annotated cells cover actors on both layers; unannotated cells keep their original depth.
-    for (const p of worldAssets) if (assetFades.get(p.id)!.annotated) paintObject(p, true);
+    for (const p of [...groundAssets,...objectAssets]) if (assetFades.get(p.id)!.annotated) paintObject(p, true);
 
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);

@@ -72,7 +72,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
                 paint.fillRect(x * s, y * s, step * s + .5, step * s + .5);
             }
         const placements = step === 1 ? world.assetsIn(b) : world.authoring.visibleAssetsIn(b);
-        placements.sort((p, q) => { const a = world.authoring.assets.get(p.assetId)!, c = world.authoring.assets.get(q.assetId)!; return (a.layer === 'ground' ? -1 : 1) - (c.layer === 'ground' ? -1 : 1) || p.y + a.height * a.pivot.y - q.y - c.height * c.pivot.y; });
+        placements.sort((p, q) => { const a = world.authoring.assets.get(p.assetId)!, c = world.authoring.assets.get(q.assetId)!; return (a.layer === 'ground' ? -1 : 1) - (c.layer === 'ground' ? -1 : 1) || p.y + a.height * (p.pivotY ?? a.pivot.y) - q.y - c.height * (q.pivotY ?? c.pivot.y) || p.id.localeCompare(q.id); });
         cached = { key, world, canvas: bitmap, placements }; terrainViews.set(canvas, cached);
     }
     ctx.drawImage(cached.canvas, -view.x, -view.y, width, height);

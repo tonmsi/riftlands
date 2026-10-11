@@ -145,7 +145,7 @@
     {
       "id": "asset-db8c6bf2-9a6b-4711-9610-d7dc26ec41d9",
       "name": "Immagine ChatGPT 2 ott 2026, 19_32_20-1",
-      "image": "/world-assets/4049586a6848a67f1240a22a640e933cc07ad45b202f07550c6cb33f37f217f1.png",
+      "image": "/world-assets/porto/4049586a6848a67f1240a22a640e933cc07ad45b202f07550c6cb33f37f217f1.png",
       "width": 7,
       "height": 7,
       "columns": 7,
@@ -384,7 +384,7 @@
     {
       "id": "asset-877018b1-20a8-4150-95ea-5ee1fccfcecc",
       "name": "Immagine ChatGPT 2 ott 2026, 19_32_20-2",
-      "image": "/world-assets/ed01c4551f0b8deca0ca4fcf097b8d502e2534a1e12b92038373923ce756ff3c.png",
+      "image": "/world-assets/porto/ed01c4551f0b8deca0ca4fcf097b8d502e2534a1e12b92038373923ce756ff3c.png",
       "width": 8,
       "height": 8,
       "columns": 8,
@@ -1303,7 +1303,7 @@
     {
       "id": "asset-f7871465-ce50-4d4e-9629-bd2bb9107b2a",
       "name": "Relitto magico viola e oro",
-      "image": "/world-assets/98cc767cb20742fe69bd29b9fa8a74d6df93883b6667a5bad9e0621243b1ce29.png",
+      "image": "/world-assets/porto/98cc767cb20742fe69bd29b9fa8a74d6df93883b6667a5bad9e0621243b1ce29.png",
       "width": 7,
       "height": 7,
       "columns": 7,
@@ -1555,6 +1555,94 @@
         },
         {
           "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
           "visibility": "normal"
         },
         {
@@ -1566,7 +1654,7 @@
           "visibility": "normal"
         },
         {
-          "blocked": false,
+          "blocked": true,
           "visibility": "normal"
         },
         {
@@ -1574,99 +1662,11 @@
           "visibility": "normal"
         },
         {
-          "blocked": false,
+          "blocked": true,
           "visibility": "normal"
         },
         {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
-          "visibility": "normal"
-        },
-        {
-          "blocked": false,
+          "blocked": true,
           "visibility": "normal"
         },
         {
@@ -1726,12 +1726,17 @@
         "opacity": 0.28,
         "feather": 0.35,
         "durationMs": 180
+      },
+      "imageTransform": {
+        "x": 0.028,
+        "y": -0.5791,
+        "scale": 1.1
       }
     },
     {
       "id": "asset-6876aaf2-5c5b-4b3b-9485-b9158d94ff9b",
       "name": "Pontile di legno stilizzato con corda",
-      "image": "/world-assets/e6cc57e1003e6cf8dc17a23b372ba3b56d29d8e72b0585ac98ae99f0de6a39f7.png",
+      "image": "/world-assets/porto/e6cc57e1003e6cf8dc17a23b372ba3b56d29d8e72b0585ac98ae99f0de6a39f7.png",
       "width": 5,
       "height": 6,
       "columns": 5,
@@ -1916,15 +1921,15 @@
         },
         {
           "blocked": false,
-          "visibility": "normal"
+          "visibility": "fade"
         },
         {
           "blocked": false,
-          "visibility": "normal"
+          "visibility": "fade"
         },
         {
           "blocked": false,
-          "visibility": "normal"
+          "visibility": "fade"
         },
         {
           "blocked": false,
@@ -2047,7 +2052,7 @@
           "visibility": "normal"
         },
         {
-          "blocked": true,
+          "blocked": false,
           "visibility": "normal"
         },
         {
@@ -2103,23 +2108,23 @@
           "visibility": "normal"
         },
         {
-          "blocked": true,
+          "blocked": false,
           "visibility": "normal"
         },
         {
-          "blocked": true,
+          "blocked": false,
           "visibility": "normal"
         },
         {
-          "blocked": true,
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
           "visibility": "normal"
         },
         {
-          "blocked": true,
-          "visibility": "normal"
-        },
-        {
-          "blocked": true,
+          "blocked": false,
           "visibility": "normal"
         },
         {
@@ -2197,9 +2202,9 @@
         "durationMs": 180
       },
       "imageTransform": {
-        "x": -0.5,
-        "y": 0.25,
-        "scale": 1.02
+        "x": -0.5647,
+        "y": -0.5546,
+        "scale": 1.05
       }
     },
     {
@@ -3165,7 +3170,7 @@
     {
       "id": "tile-muro-pietra",
       "name": "tile muro pietra",
-      "image": "/world-assets/tile-muro-pietra.png",
+      "image": "/world-assets/locanda/tile-muro-pietra.png",
       "width": 1,
       "height": 1,
       "columns": 1,
@@ -6867,7 +6872,7 @@
     {
       "id": "tile-muro-sx",
       "name": "tile muro sx",
-      "image": "/world-assets/tile-muro-sx.png",
+      "image": "/world-assets/locanda/tile-muro-sx.png",
       "width": 1,
       "height": 1,
       "columns": 1,
@@ -6903,6 +6908,2346 @@
         ]
       },
       "group": "Importati",
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "tile-_muro1-5_bst",
+      "name": "tile._muro1,5_bst",
+      "image": "/world-assets/locanda/tile-muro-pietra1-5x1.png",
+      "width": 2,
+      "height": 3,
+      "columns": 2,
+      "rows": 3,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "wall",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "rock"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "tile-_muro1-5x2_bst",
+      "name": "tile._muro1,5x2_bst",
+      "image": "/world-assets/locanda/tile-_muro1-5x2_bst.png",
+      "width": 3,
+      "height": 3,
+      "columns": 3,
+      "rows": 3,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          0
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "rock"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "asset-c14acd38-d30a-456a-b273-9ed66244d1ab",
+      "name": "brazier",
+      "image": "/world-assets/brazier.svg",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "visual": {
+        "kind": "fire",
+        "style": "brazier"
+      }
+    },
+    {
+      "id": "asset-f76162e8-958c-403a-b9bc-efe7e9f3ff98",
+      "name": "campfire",
+      "image": "/world-assets/campfire.svg",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "visual": {
+        "kind": "fire",
+        "style": "campfire"
+      }
+    },
+    {
+      "id": "asset-b0d75482-2b3a-4409-9e24-9de189e16c92",
+      "name": "Immagine ChatGPT 11 ott 2026, 19_53_45-1",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2019_53_45-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-5ab15ce7-3b4e-4ed0-8858-5f01788ad5d7",
+      "name": "Immagine ChatGPT 11 ott 2026, 19_53_46-2",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2019_53_46-2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-67ae3da5-661e-417b-9b7f-21bfd25389d7",
+      "name": "Immagine ChatGPT 11 ott 2026, 19_53_46-3",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2019_53_46-3.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-af27dfb0-6f5c-4a04-a5ef-4cd49acbc9f7",
+      "name": "Immagine ChatGPT 11 ott 2026, 19_53_47-4",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2019_53_47-4.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-a7161633-8889-4925-8099-c03ea3ec0d98",
+      "name": "Immagine ChatGPT 11 ott 2026, 19_53_49-5",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2019_53_49-5.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-d0eaf839-2ede-4681-9cb7-f6c9f8e769b3",
+      "name": "Immagine ChatGPT 11 ott 2026, 19_53_50-6",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2019_53_50-6.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-45212819-66cf-4855-8260-d38e6ee072dd",
+      "name": "Immagine ChatGPT 11 ott 2026, 19_53_51-7",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2019_53_51-7.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-244b021b-81a1-4c3a-a62f-d2048bc5eefd",
+      "name": "Immagine ChatGPT 11 ott 2026, 19_53_52-8",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2019_53_52-8.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-9fc07a3b-bccd-4e52-bbd6-8886a7ad3749",
+      "name": "Immagine ChatGPT 11 ott 2026, 19_53_53-9",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2019_53_53-9.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-eb0acb84-e247-43e0-800a-758aaa359dd6",
+      "name": "Immagine ChatGPT 11 ott 2026, 20_51_30-1",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2020_51_30-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-038939c6-a1e9-4639-9d68-10fa8ee7a3e5",
+      "name": "Piastrella di Scale in Pietra con Muschio",
+      "image": "/world-assets/dungeon/Piastrella%20di%20Scale%20in%20Pietra%20con%20Muschio.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-15c5ae3b-dd12-4fe3-8fcc-a6e910ae5bd9",
+      "name": "Tessera di Scala in Pietra Fantasia",
+      "image": "/world-assets/dungeon/Tessera%20di%20Scala%20in%20Pietra%20Fantasia.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-ffc44043-f5c4-41b2-8bfa-aa9ab42c29fd",
+      "name": "Banco-medievale-in-legno-e-pietra",
+      "image": "/world-assets/locanda/Banco-medievale-in-legno-e-pietra.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-b5a5a70a-2f0e-4768-9f90-2cd9425218e4",
+      "name": "Banco2",
+      "image": "/world-assets/locanda/Banco2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-a9109add-b099-42c3-b7e5-8f2472d0a97e",
+      "name": "Cassa-di-legno-1",
+      "image": "/world-assets/locanda/Cassa-di-legno-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-e560a70d-2b16-4375-b81b-3998cbfa5d78",
+      "name": "Cassa-di-legno-rinforzata",
+      "image": "/world-assets/locanda/Cassa-di-legno-rinforzata.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-ef4c8a8d-f78f-488c-afc9-aa03e2caed53",
+      "name": "Cassa di legno rinforzata",
+      "image": "/world-assets/locanda/Cassa%20di%20legno%20rinforzata.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-3a5412f0-fae3-4e40-88aa-d1ee3af9af8e",
+      "name": "sgabello",
+      "image": "/world-assets/locanda/sgabello.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-d9cc2701-efdd-4ce3-8c31-0bb6878159e3",
+      "name": "tile-_muro1-5x2_bst",
+      "image": "/world-assets/locanda/tile-_muro1-5x2_bst.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-fe889122-08c5-4a8c-aa56-ffdf2688682b",
+      "name": "tile-muro-pietra",
+      "image": "/world-assets/locanda/tile-muro-pietra.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-16a51d28-0c4c-463d-b0e8-052f3f67a247",
+      "name": "tile-muro-pietra1-5x1",
+      "image": "/world-assets/locanda/tile-muro-pietra1-5x1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-4ba6ada9-32dd-48d1-97ec-1b41068c9b67",
+      "name": "tile-muro-sx",
+      "image": "/world-assets/locanda/tile-muro-sx.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-27e95777-a68d-4f6a-b658-041b6f98b6db",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_01_59-1",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_01_59-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-cdb3c9dd-48a5-4102-8e3e-09351b8606bb",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_01_59-2",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_01_59-2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "imageTransform": {
+        "x": -1.906,
+        "y": -2.9233,
+        "scale": 5
+      }
+    },
+    {
+      "id": "asset-f282446c-5ad0-42e2-96fa-ad719ca4e151",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_02_28-1",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_02_28-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.4
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "imageTransform": {
+        "x": -0.4978,
+        "y": -1.7,
+        "scale": 5
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "asset-5a1a69eb-0876-41dd-b869-1c4187286881",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_02_30-2",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_02_30-2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": -0.8094,
+        "y": -3.2974,
+        "scale": 5
+      }
+    },
+    {
+      "id": "asset-9e21fd46-aab5-4711-acf7-e0f9c3717f48",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_02_33-3",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_02_33-3.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "imageTransform": {
+        "x": -0.4326,
+        "y": -1.0758,
+        "scale": 5
+      }
+    },
+    {
+      "id": "asset-c1a963f9-7173-4c2f-8d4c-93fc8d0341d6",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_02_34-4",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_02_34-4.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": -2.5883,
+        "y": -4.0556,
+        "scale": 6
+      }
+    },
+    {
+      "id": "asset-dc5f6f76-63aa-482d-962b-b8cbb6a15fdc",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_02_36-5",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_02_36-5.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "imageTransform": {
+        "x": -1.6838,
+        "y": -2.7713,
+        "scale": 5
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "asset-b05c8284-ac58-4253-bc3b-025b4f4c67fb",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_02_38-6",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_02_38-6.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": -1.4091,
+        "y": -2.3736,
+        "scale": 6
+      }
+    },
+    {
+      "id": "asset-34ce6922-becc-4918-985e-a9d6427efa6c",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_06_38-1",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_06_38-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": -1.6219,
+        "y": -3.2962,
+        "scale": 5
+      }
+    },
+    {
+      "id": "asset-93654bba-d517-436b-bd1b-7276576e5162",
+      "name": "Immagine ChatGPT 11 ott 2026, 21_06_38-2",
+      "image": "/world-assets/montagna/Immagine%20ChatGPT%2011%20ott%202026%2C%2021_06_38-2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "imageTransform": {
+        "x": -3.1104,
+        "y": -1.4032,
+        "scale": 5
+      }
+    },
+    {
+      "id": "asset-04333e76-c221-4d8f-b5bd-aa5813a891a9",
+      "name": "Ingresso della Grotta sulla Scogliera",
+      "image": "/world-assets/montagna/Ingresso%20della%20Grotta%20sulla%20Scogliera.png",
+      "width": 2.25,
+      "height": 2.25,
+      "columns": 3,
+      "rows": 3,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": -3.7259,
+        "y": -4.1667,
+        "scale": 4.75
+      }
+    },
+    {
+      "id": "asset-038f11bd-dde6-4aef-8563-85e6247daeee",
+      "name": "Scogliera erbosa modulare sfaccettata",
+      "image": "/world-assets/montagna/Scogliera%20erbosa%20modulare%20sfaccettata.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.4
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": -3.6391,
+        "y": -3.3174,
+        "scale": 7
+      }
+    },
+    {
+      "id": "asset-89226487-3118-4779-8839-793a7981740d",
+      "name": "4049586a6848a67f1240a22a640e933cc07ad45b202f07550c6cb33f37f217f1",
+      "image": "/world-assets/porto/4049586a6848a67f1240a22a640e933cc07ad45b202f07550c6cb33f37f217f1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-da4936e3-0366-446b-875b-9d072725441e",
+      "name": "98cc767cb20742fe69bd29b9fa8a74d6df93883b6667a5bad9e0621243b1ce29",
+      "image": "/world-assets/porto/98cc767cb20742fe69bd29b9fa8a74d6df93883b6667a5bad9e0621243b1ce29.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-ac6b93ee-e318-4852-98a3-78be26c5edd9",
+      "name": "e6cc57e1003e6cf8dc17a23b372ba3b56d29d8e72b0585ac98ae99f0de6a39f7",
+      "image": "/world-assets/porto/e6cc57e1003e6cf8dc17a23b372ba3b56d29d8e72b0585ac98ae99f0de6a39f7.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-4791656d-4ac1-441d-9988-5174f8f135df",
+      "name": "ed01c4551f0b8deca0ca4fcf097b8d502e2534a1e12b92038373923ce756ff3c",
+      "image": "/world-assets/porto/ed01c4551f0b8deca0ca4fcf097b8d502e2534a1e12b92038373923ce756ff3c.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-f2ba9afd-42a0-44bd-8989-18534b2efeba",
+      "name": "waystone",
+      "image": "/world-assets/waystone.svg",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-d494d11c-8fcd-4055-91c4-77ec8ec0b06b",
+      "name": "Isola montuosa terrazzata cel-shading",
+      "image": "/world-assets/montagna/Isola%20montuosa%20terrazzata%20cel-shading.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "imageTransform": {
+        "x": -3.2273,
+        "y": -4.993,
+        "scale": 7
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "asset-4cb9b499-2db0-4270-9238-d4faf659c314",
+      "name": "roccia-tile",
+      "image": "/world-assets/Piattaforma-rocciosa-in-pietra-sfaccettata.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.2
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": -0.9961,
+        "y": -0.8789,
+        "scale": 2
+      }
+    },
+    {
+      "id": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "name": "Piattaforma rocciosa in pietra sfaccettata",
+      "image": "/world-assets/montagna/Piattaforma%20rocciosa%20in%20pietra%20sfaccettata.png",
+      "width": 1,
+      "height": 1.2,
+      "columns": 1,
+      "rows": 2,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "imageTransform": {
+        "x": -0.975,
+        "y": 0.0021,
+        "scale": 2
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "name": "roccia-tile",
+      "image": "/world-assets/montagna/roccia-tile.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "asset-a32bcf23-cc44-422e-b6bd-2b740a26374b",
+      "name": "dcae4a06a6a76b58c18baf55787586ece43db675aa235bd602e2f1c9689b245f",
+      "image": "/world-assets/dungeon/dcae4a06a6a76b58c18baf55787586ece43db675aa235bd602e2f1c9689b245f.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-f484fba6-0b9c-456e-9730-acb5f0419f50",
+      "name": "Immagine ChatGPT 11 ott 2026, 23_12_44-2",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2023_12_44-2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-7d00ac84-42cf-4abd-bf7b-ceeedc8c8319",
+      "name": "Immagine ChatGPT 11 ott 2026, 23_12_49-4",
+      "image": "/world-assets/dungeon/Immagine%20ChatGPT%2011%20ott%202026%2C%2023_12_49-4.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      }
+    },
+    {
+      "id": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "name": "Plateau Roccioso Isometrico con Erba",
+      "image": "/world-assets/montagna/Plateau%20Roccioso%20Isometrico%20con%20Erba.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": -3.5665,
+        "y": -3.7419,
+        "scale": 8
+      }
+    },
+    {
+      "id": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "name": "tile-frastagliatA",
+      "image": "/world-assets/montagna/tile-frastagliatA.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.2
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "imageTransform": {
+        "x": -0.2673,
+        "y": -0.4177,
+        "scale": 2.5000000000000004
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
       "visual": {
         "kind": "image"
       }
@@ -7454,6 +9799,774 @@
       "assetId": "brazier",
       "x": 8,
       "y": 148
+    },
+    {
+      "id": "asset-1b1f38a5-c195-4189-9e9f-75cd450419b5",
+      "assetId": "asset-038f11bd-dde6-4aef-8563-85e6247daeee",
+      "x": -12,
+      "y": 1
+    },
+    {
+      "id": "asset-f327052a-4d09-4639-8bf3-a776202b14ed",
+      "assetId": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "x": -16,
+      "y": 0
+    },
+    {
+      "id": "asset-edb3d1c3-7967-4170-bcd2-46978609017e",
+      "assetId": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "x": -16,
+      "y": 1
+    },
+    {
+      "id": "asset-576130ec-7870-4d14-9915-1c691ab6b0ad",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -14,
+      "y": 0
+    },
+    {
+      "id": "asset-0f79233e-1000-411b-8cad-50249685edb2",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -12,
+      "y": 0
+    },
+    {
+      "id": "asset-ce89461e-8e70-4804-a577-7fea9f207c74",
+      "assetId": "asset-c1a963f9-7173-4c2f-8d4c-93fc8d0341d6",
+      "x": -33,
+      "y": 5
+    },
+    {
+      "id": "asset-8991a902-99b3-48b0-80dd-ab8b9d747305",
+      "assetId": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "x": -17,
+      "y": 1
+    },
+    {
+      "id": "asset-523b4292-08d9-4433-af1b-1ffa504dbbaa",
+      "assetId": "asset-038f11bd-dde6-4aef-8563-85e6247daeee",
+      "x": -14,
+      "y": 2
+    },
+    {
+      "id": "asset-cfb5ac64-50c6-423b-8c7c-957e96215bb4",
+      "assetId": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "x": -18,
+      "y": 1
+    },
+    {
+      "id": "asset-4568ef8f-0592-4034-b9cd-fba7060348cb",
+      "assetId": "asset-04333e76-c221-4d8f-b5bd-aa5813a891a9",
+      "x": -28,
+      "y": 2
+    },
+    {
+      "id": "asset-b95b56a5-94ef-4cb1-822b-482d0c591fa5",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -9,
+      "y": -2
+    },
+    {
+      "id": "asset-f0023a25-6df7-4305-a2d0-173a89a664c0",
+      "assetId": "asset-dc5f6f76-63aa-482d-962b-b8cbb6a15fdc",
+      "x": -8,
+      "y": -1
+    },
+    {
+      "id": "asset-80522129-a636-4867-85c1-b203c84e8194",
+      "assetId": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "x": -19,
+      "y": 1
+    },
+    {
+      "id": "asset-8e362a0e-485d-46d9-b04c-0e07e33a5c5a",
+      "assetId": "asset-038f11bd-dde6-4aef-8563-85e6247daeee",
+      "x": -11,
+      "y": 0
+    },
+    {
+      "id": "asset-54093b5c-0b16-4b54-a833-caa2aee848c6",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -31,
+      "y": 2
+    },
+    {
+      "id": "asset-a277a1a4-4cd4-4e15-9247-b58ed5e1ec51",
+      "assetId": "asset-038f11bd-dde6-4aef-8563-85e6247daeee",
+      "x": -18,
+      "y": 2
+    },
+    {
+      "id": "asset-e286c800-3e50-4de2-8726-e4a796aeeb41",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -10,
+      "y": -1
+    },
+    {
+      "id": "asset-99e65482-bad6-4078-8c26-7fea188a8f31",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -11,
+      "y": -2
+    },
+    {
+      "id": "asset-a527ef83-1344-4aa4-9fe3-b09ddb6d2e00",
+      "assetId": "asset-b05c8284-ac58-4253-bc3b-025b4f4c67fb",
+      "x": -36,
+      "y": 2
+    },
+    {
+      "id": "asset-33a4e25d-a689-4ec7-bc6a-96d6836fbfd9",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -32,
+      "y": 0
+    },
+    {
+      "id": "asset-ab67dc18-3c65-424b-a6a9-e28d4c62d28f",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -30,
+      "y": 0
+    },
+    {
+      "id": "asset-044ea428-5038-4a03-ac2f-d884177ccd19",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -25,
+      "y": -12
+    },
+    {
+      "id": "asset-40f8e236-343a-407a-bf25-c904f0a5c7d5",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -32,
+      "y": -2
+    },
+    {
+      "id": "asset-c36215b1-67a7-48c8-9e4c-f4a3ba1630a6",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -30,
+      "y": -4
+    },
+    {
+      "id": "asset-91af0250-1702-4fd7-9e5a-a4dec9a0b788",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -33,
+      "y": 0
+    },
+    {
+      "id": "asset-0898d8b1-f64e-4db2-94fd-ec44bb516fa2",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -33,
+      "y": -1
+    },
+    {
+      "id": "asset-ebb03c19-01d2-489a-a8d1-61fed51aa733",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -18,
+      "y": -4
+    },
+    {
+      "id": "asset-dc222bda-004c-41ed-93d9-324a0a5f2ff7",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -27,
+      "y": -2
+    },
+    {
+      "id": "asset-f6da1811-bc37-4b06-b2c3-213da2b1d33b",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -27,
+      "y": -4
+    },
+    {
+      "id": "asset-8b324468-1191-4ebb-af05-144604422333",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -25,
+      "y": -4
+    },
+    {
+      "id": "asset-b4028423-70ca-44c9-9002-04817b8f758d",
+      "assetId": "asset-62b9abbd-5790-4107-a14b-ec897cb11fd4",
+      "x": -25,
+      "y": -2
+    },
+    {
+      "id": "asset-8c4dcf96-b2e8-4781-877a-f36a8d6b3474",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -30,
+      "y": -1
+    },
+    {
+      "id": "asset-f9b13fe0-9bdd-42cd-94f3-945d48eb892a",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -30,
+      "y": -8
+    },
+    {
+      "id": "asset-5f793820-f84d-40df-82af-7afd666a085f",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -28,
+      "y": -2
+    },
+    {
+      "id": "asset-e0d30f41-10a1-457c-a98d-66fdac83ba52",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -21,
+      "y": -5
+    },
+    {
+      "id": "asset-3517977c-5aed-467b-9999-b64cb5bc71fc",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -29,
+      "y": -1
+    },
+    {
+      "id": "asset-f2a0ca9f-82c8-4f97-a0c5-ca56cf95173d",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -25,
+      "y": -1
+    },
+    {
+      "id": "asset-fb85d455-bd3a-44d8-b1dc-1c375cff143f",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -24,
+      "y": -2
+    },
+    {
+      "id": "asset-5107dc00-88da-48bf-a7de-b2fd85eb3db9",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -22,
+      "y": -2
+    },
+    {
+      "id": "asset-d3b0fe0e-1ec0-4439-b06e-d0dc1773e7d4",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -29,
+      "y": 0
+    },
+    {
+      "id": "asset-38dbada5-bbf3-430f-9ea0-981cb68d0b3a",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -28,
+      "y": -1
+    },
+    {
+      "id": "asset-1bab43d0-67d9-4519-9189-611be300567c",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -20,
+      "y": -2
+    },
+    {
+      "id": "asset-185de480-a96a-452a-86d2-aef0c8aa165b",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -20,
+      "y": -3
+    },
+    {
+      "id": "asset-d771cc4a-aabe-4cd5-9626-8547b6aafda2",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -20,
+      "y": 0
+    },
+    {
+      "id": "asset-17b23ddd-6cae-408d-8b44-f03961d25d55",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -18,
+      "y": 0
+    },
+    {
+      "id": "asset-ca3f2245-fed5-42da-adf6-a8c0049e2e6b",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -16,
+      "y": -1
+    },
+    {
+      "id": "asset-bce077f9-ed58-42c8-817b-fddf465d6c0d",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -18,
+      "y": -2
+    },
+    {
+      "id": "asset-e58a1bdd-8836-4925-bd98-5d7df029f7cd",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -16,
+      "y": -3
+    },
+    {
+      "id": "asset-545e002c-1f81-45bb-a25b-13d76873788e",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -14,
+      "y": -2
+    },
+    {
+      "id": "asset-6142c5c9-bbc3-40db-9b08-8eb6fd05dcee",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -22,
+      "y": -6
+    },
+    {
+      "id": "asset-a0a9a511-5e5c-40e1-a67a-b0edc30a3572",
+      "assetId": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "x": -33,
+      "y": 3
+    },
+    {
+      "id": "asset-094f6bc7-401a-4dde-a562-fb548de06def",
+      "assetId": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "x": -33,
+      "y": 2
+    },
+    {
+      "id": "asset-d098f625-4f62-4199-afc4-2124a843a139",
+      "assetId": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "x": -34,
+      "y": 2
+    },
+    {
+      "id": "asset-52c08a2c-5577-4e68-8402-659fb75258e3",
+      "assetId": "asset-e2171391-7898-4f73-80dd-90ffdba48fee",
+      "x": -35,
+      "y": 1
+    },
+    {
+      "id": "asset-bf330fd1-7069-4a3a-9902-07440b44baef",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -32,
+      "y": -1
+    },
+    {
+      "id": "asset-30c7e5a4-4f2d-41d5-92a5-5d8ea86cf15a",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -7,
+      "y": -6
+    },
+    {
+      "id": "asset-2d6ec416-4e8b-4d86-a480-544d722ebc24",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -9,
+      "y": -3
+    },
+    {
+      "id": "asset-33e62909-6ef2-414a-978c-1c99d301b030",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -13,
+      "y": -3
+    },
+    {
+      "id": "asset-236411bb-fe34-4854-8da3-7e5da36e974a",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -18,
+      "y": -3
+    },
+    {
+      "id": "asset-ecd7cc4e-0993-48ea-8535-d033d7ef81f1",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -35,
+      "y": 0
+    },
+    {
+      "id": "asset-37701543-1bbe-43ca-ae46-c254f897ccbe",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -27,
+      "y": -12
+    },
+    {
+      "id": "asset-4263f833-ed15-4e4d-9b0a-29a60a5dc264",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -32,
+      "y": -11
+    },
+    {
+      "id": "asset-be47c35b-2da2-41a8-a3af-2c92684480db",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -22,
+      "y": -11
+    },
+    {
+      "id": "asset-a1ffe8e7-7527-4a12-8958-d744fbc9cc2c",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -27,
+      "y": -9
+    },
+    {
+      "id": "asset-4a97dd6f-213e-4a3e-bf15-42f373574506",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -32,
+      "y": -10
+    },
+    {
+      "id": "asset-e2e4cc04-70e3-4bfc-93d4-6d8602ef18dd",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -24,
+      "y": 0
+    },
+    {
+      "id": "asset-e3967caa-3e3b-4521-b6be-cf59e3d156b0",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -32,
+      "y": -8
+    },
+    {
+      "id": "asset-aea1cf06-363c-448e-a8b2-c0639e9957f0",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -26,
+      "y": -1
+    },
+    {
+      "id": "asset-a182e086-9545-4db3-87b3-123baee3a28d",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -32,
+      "y": -7
+    },
+    {
+      "id": "asset-0b9bdb6b-3d02-4a65-a76d-64acf704f6bc",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -25,
+      "y": -4
+    },
+    {
+      "id": "asset-afa3a502-6d08-43a2-ba65-d6fdb54480c0",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -32,
+      "y": -3
+    },
+    {
+      "id": "asset-058ba1f2-8db2-4e52-9de3-719995bbcc41",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -32,
+      "y": -5
+    },
+    {
+      "id": "asset-4fb0e386-09b3-4442-871a-105c86e30685",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -27,
+      "y": -11
+    },
+    {
+      "id": "asset-18963059-278b-44d9-af56-895e06a9c776",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -27,
+      "y": -10
+    },
+    {
+      "id": "asset-a68f816f-5d38-4951-88d8-658f53e71b9a",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -19,
+      "y": -1
+    },
+    {
+      "id": "asset-ea021423-20c1-4588-9377-b5429435c55f",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -27,
+      "y": -7
+    },
+    {
+      "id": "asset-ab0483da-48fd-47d1-b46f-6b4896ef320a",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -27,
+      "y": -6
+    },
+    {
+      "id": "asset-8cc321dd-af3b-4f2c-b6dc-00af1415e1bf",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -22,
+      "y": -1
+    },
+    {
+      "id": "asset-7b7c93e4-72a8-4e0e-958a-640c51fb6d23",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -27,
+      "y": -4
+    },
+    {
+      "id": "asset-ab4c399f-12a7-4e93-9632-cd50f0c13f34",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -27,
+      "y": -3
+    },
+    {
+      "id": "asset-18d988d3-fdf9-4bfd-8f16-909e7f56fca1",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -29,
+      "y": -6
+    },
+    {
+      "id": "asset-c7e16223-f9eb-4d10-b8b3-6e65e0c05e6e",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -29,
+      "y": -8
+    },
+    {
+      "id": "asset-7f2c233b-a84f-4216-982c-209fb818df5c",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -23,
+      "y": 0
+    },
+    {
+      "id": "asset-a47a3c04-6465-46d1-bf1f-74335bcc7e7b",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -29,
+      "y": -11
+    },
+    {
+      "id": "asset-9555aae9-0766-4132-84e3-8f844407e1e2",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -29,
+      "y": -12
+    },
+    {
+      "id": "asset-33647984-d003-4115-9f76-470fb16b9cbe",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -29,
+      "y": -7
+    },
+    {
+      "id": "asset-0109d4f7-c826-40f1-92a3-7e330ceb09ba",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -24,
+      "y": -10
+    },
+    {
+      "id": "asset-faf99f08-14dc-4681-96a2-2db0128b6fa1",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -29,
+      "y": -10
+    },
+    {
+      "id": "asset-ff01fd7e-ef16-4e20-a1c1-56a108685489",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -24,
+      "y": -1
+    },
+    {
+      "id": "asset-3baf06c6-6e03-4d3d-bb0c-24be7946705c",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -29,
+      "y": -4
+    },
+    {
+      "id": "asset-68a39a9d-05b7-4be5-9a8f-323d69e9e49a",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -24,
+      "y": -1
+    },
+    {
+      "id": "asset-7c611ef5-6f43-4281-9461-b6b4f67cc85e",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -22,
+      "y": -7
+    },
+    {
+      "id": "asset-57ad11d8-2668-4432-b6c2-607280eaba6f",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -31,
+      "y": -1
+    },
+    {
+      "id": "asset-1ef294b3-48da-4a81-b275-df5a7f7ab0d8",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -23,
+      "y": -9
+    },
+    {
+      "id": "asset-c8418e5b-ebd0-4724-83e1-4a448b16d15f",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -19,
+      "y": -8
+    },
+    {
+      "id": "asset-e741ce59-c5b7-42d0-97c9-f4983f9b4b8e",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -15,
+      "y": -5
+    },
+    {
+      "id": "asset-fb77746d-17fc-43f5-b377-f093a109b4a8",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -20,
+      "y": -6
+    },
+    {
+      "id": "asset-41a82547-4a91-4175-a226-4fda4b9bccda",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -21,
+      "y": -1
+    },
+    {
+      "id": "asset-13172992-2ac6-4ee1-ae42-151fbfb4799a",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -20,
+      "y": -11
+    },
+    {
+      "id": "asset-a49d343a-8d00-4388-b9ff-5b4e5afd3548",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -25,
+      "y": -9
+    },
+    {
+      "id": "asset-51136174-6f42-46ca-97d3-d907d28cba6a",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -15,
+      "y": -6
+    },
+    {
+      "id": "asset-ce28b840-cf93-4456-83ff-e6b497567a87",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -21,
+      "y": 0
+    },
+    {
+      "id": "asset-3c3fc895-f51d-4d53-ad45-9b173854aaf5",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -25,
+      "y": -10
+    },
+    {
+      "id": "asset-b3dbc9c5-930e-4635-9b44-1f4fbf78e633",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -24,
+      "y": -11
+    },
+    {
+      "id": "asset-6b413684-33c1-4cce-a329-66891034763e",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -23,
+      "y": -11
+    },
+    {
+      "id": "asset-d4ee22d4-119d-4ba8-9a3a-e689885cfd67",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -20,
+      "y": -7
+    },
+    {
+      "id": "asset-33c90ef1-97e9-48b8-b487-7d25a52e6479",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -17,
+      "y": -7
+    },
+    {
+      "id": "asset-e933e8d5-95c5-4afb-bddd-95fc98104454",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -17,
+      "y": -8
+    },
+    {
+      "id": "asset-3e44c446-e0e0-4088-85e0-8117c54f6c2b",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -16,
+      "y": -9
+    },
+    {
+      "id": "asset-dd0dd273-bbbc-4629-afbe-ca0a7705cb8b",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -18,
+      "y": -9
+    },
+    {
+      "id": "asset-614884fb-a489-4550-b22f-993c42269c4f",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -13,
+      "y": -6
+    },
+    {
+      "id": "asset-0ec9b87a-62c4-4ff4-85fa-de89d44cd6a8",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -11,
+      "y": -7
+    },
+    {
+      "id": "asset-c81fa43f-d50a-4c73-bff8-3103947f118d",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -10,
+      "y": -7
+    },
+    {
+      "id": "asset-b3a52152-c0a0-4a6e-8bfb-db045437468e",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -9,
+      "y": -7
+    },
+    {
+      "id": "asset-436163b7-0471-4e3b-ba9e-e7cd57b4b4ce",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -9,
+      "y": -8
+    },
+    {
+      "id": "asset-24b62cbd-feb4-4ba2-8980-5891b0d3eb62",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -13,
+      "y": -8
+    },
+    {
+      "id": "asset-6c516843-cd0e-4ace-907c-95227cb04353",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -14,
+      "y": -8
+    },
+    {
+      "id": "asset-6a5e75c2-9f46-47a1-924d-c53c7738b709",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -21,
+      "y": -10
+    },
+    {
+      "id": "asset-859325ff-8f90-4b9a-85c9-ae3c69854ae9",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -20,
+      "y": -1
+    },
+    {
+      "id": "asset-07749d6f-bf87-41cc-8bed-9cfd8e92ac5e",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -31,
+      "y": -3
+    },
+    {
+      "id": "asset-f915b44a-f4f3-4916-9067-1c76208b33b8",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -33,
+      "y": -5
+    },
+    {
+      "id": "asset-f1f36d05-b26c-4bbe-89a1-4613c798563e",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -34,
+      "y": -6
+    },
+    {
+      "id": "asset-70369e70-d4ee-4aed-b9c0-35eefb4d3879",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -28,
+      "y": 0
+    },
+    {
+      "id": "asset-8a16cdba-2697-4a3e-aa27-fae1ae89922d",
+      "assetId": "asset-650c3b7e-b323-4069-8e5b-14d0901bc5e5",
+      "x": -26,
+      "y": 0
+    },
+    {
+      "id": "asset-0b2aea7f-d312-49ff-95cf-1c3fff287703",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -34,
+      "y": -12
+    },
+    {
+      "id": "asset-8258199d-1d6f-43ec-a16b-c3ff0b66db93",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -33,
+      "y": -12
+    },
+    {
+      "id": "asset-3b896a45-933d-4308-93dc-04a84fca2592",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -31,
+      "y": -12
+    },
+    {
+      "id": "asset-b8bc1fae-eabb-4b74-8b48-170edf71d141",
+      "assetId": "asset-ae3af84e-abfb-4f4a-8951-cbc3a059383f",
+      "x": -30,
+      "y": -12
     }
   ],
   "tiles": [],
@@ -7512,8 +10625,8 @@
       "priority": 20,
       "shape": {
         "kind": "circle",
-        "x": -22,
-        "y": -6,
+        "x": -23,
+        "y": -7,
         "radius": 24.99
       },
       "npcs": {
@@ -7795,7 +10908,7 @@
     }
   ],
   "tileChunks": [
-    [-1,-1,0,160,3,160,3,5,163,29,3,192,6,5,198,26,3,224,7,5,231,25,3,256,2,7,258,5,5,263,25,3,288,3,7,291,1,3,292,3,5,295,25,3,320,3,7,323,1,3,324,3,5,327,26,3,353,3,7,356,3,5,359,2,7,361,24,3,385,3,7,388,3,5,391,2,7,393,24,3,417,3,7,420,3,5,423,2,7,425,24,3,449,3,7,452,3,5,455,2,7,457,23,3,480,4,7,484,3,5,487,2,7,489,23,3,512,4,7,516,3,5,519,2,7,521,23,3,544,3,7,547,5,9,552,1,7,553,23,3,576,9,9,585,23,3,608,12,9,620,20,3,640,14,9,654,18,3,672,19,9,691,13,3,704,26,9,730,6,3,736,27,9,763,5,3,768,28,9,796,4,3,800,29,9,829,3,3,832,29,9,861,3,3,864,29,9,893,3,3,896,28,9,924,4,3,928,26,9,954,6,7,960,25,9,985,7,7,992,24,9,1016,8,7],
+    [-1,-1,0,160,3,160,3,5,163,29,3,192,6,5,198,26,3,224,7,5,231,25,3,256,2,7,258,5,5,263,25,3,288,3,7,291,1,3,292,3,5,295,25,3,320,3,7,323,1,3,324,3,5,327,26,3,353,3,7,356,3,5,359,2,7,361,24,3,385,3,7,388,3,5,391,2,7,393,24,3,417,3,7,420,3,5,423,2,7,425,24,3,449,3,7,452,3,5,455,2,7,457,23,3,480,4,7,484,3,5,487,2,7,489,23,3,512,4,7,516,3,5,519,2,7,521,23,3,544,3,7,547,1,9,548,3,5,551,1,9,552,1,7,553,23,3,576,9,9,585,23,3,608,12,9,620,20,3,640,14,9,654,18,3,672,19,9,691,13,3,704,26,9,730,6,3,736,27,9,763,5,3,768,28,9,796,4,3,800,29,9,829,3,3,832,29,9,861,3,3,864,29,9,893,3,3,896,28,9,924,4,3,928,26,9,954,6,7,960,25,9,985,7,7,992,24,9,1016,8,7],
     [-1,-10,0,251,3,254,24,3,288,20,3,320,18,3,352,17,3,384,16,3,416,15,3,448,14,3,480,14,3,512,13,3,544,13,3,576,12,3,608,12,3,640,11,3,672,11,3,704,10,3,736,9,3,768,9,3,800,8,3,832,7,3,864,7,3,896,6,3,928,6,3,960,5,3,992,4,3],
     [-1,-11,701,3,3,729,7,3,758,10,3,787,13,3,816,16,3,845,19,3,874,22,3,903,25,3,932,28,3,961,63,3],
     [-1,-2,0,2,7,2,30,3,32,1,7,33,991,3],
@@ -8708,16 +11821,16 @@
             "y": 23
           },
           {
-            "id": "asset-37a2a3ed-dc69-4cb2-a606-6e2382e5e8da",
-            "assetId": "brazier",
-            "x": 31,
-            "y": 0
+            "id": "asset-37f32de9-b0e1-4ed7-8ead-b223faec5304",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 11
           },
           {
-            "id": "asset-757c8cf3-1589-47c9-8930-dd96e363abe9",
-            "assetId": "brazier",
+            "id": "asset-0e227376-fc37-4d9e-be47-cea9af9d7779",
+            "assetId": "tile-muro-sx",
             "x": 0,
-            "y": 0
+            "y": 14
           },
           {
             "id": "asset-74c74f0f-5cd9-4254-b627-b5fb1e7d3aa2",
@@ -8738,10 +11851,10 @@
             "y": 4
           },
           {
-            "id": "asset-8a5ad117-ee26-4ee3-9441-caea7a1f4e54",
-            "assetId": "brazier",
-            "x": 0,
-            "y": 8
+            "id": "asset-8754ca29-fffc-4368-a745-8fc1973dd032",
+            "assetId": "tile-_muro1-5_bst",
+            "x": 9,
+            "y": 0
           },
           {
             "id": "asset-66eb066c-306f-408f-8ca9-833d400d02a7",
@@ -8792,448 +11905,10 @@
             "y": 3
           },
           {
-            "id": "asset-d6bd88d9-a980-4363-9760-17f27729a612",
-            "assetId": "tile-muro-pietra",
-            "x": 0,
-            "y": 0
-          },
-          {
-            "id": "asset-21caea01-aee1-49c7-8529-b7474cb30f2e",
-            "assetId": "tile-muro-pietra",
-            "x": 1,
-            "y": 0
-          },
-          {
-            "id": "asset-6ce70da8-a6f6-4369-bbed-3f1926f2f12c",
-            "assetId": "tile-muro-pietra",
-            "x": 2,
-            "y": 0
-          },
-          {
-            "id": "asset-d68d9847-5e01-4cd7-bccf-797920a43cfa",
-            "assetId": "tile-muro-pietra",
-            "x": 3,
-            "y": 0
-          },
-          {
-            "id": "asset-4f043d25-a9d5-47d9-9198-1dbfab4a579c",
-            "assetId": "tile-muro-pietra",
-            "x": 4,
-            "y": 0
-          },
-          {
-            "id": "asset-4e401a85-58c7-467c-908b-a69fd43508cc",
-            "assetId": "tile-muro-pietra",
-            "x": 5,
-            "y": 0
-          },
-          {
-            "id": "asset-f149fbaf-4f8f-428b-9098-df320c88f4d4",
-            "assetId": "tile-muro-pietra",
-            "x": 6,
-            "y": 0
-          },
-          {
-            "id": "asset-b1506e1f-447f-4a27-a302-a5cfcd819227",
-            "assetId": "tile-muro-pietra",
-            "x": 7,
-            "y": 0
-          },
-          {
-            "id": "asset-b5eb332f-912a-46df-b3ce-762206d0927c",
-            "assetId": "tile-muro-pietra",
-            "x": 8,
-            "y": 0
-          },
-          {
-            "id": "asset-15fe252d-a06e-40c6-82b2-945593c1fd65",
-            "assetId": "tile-muro-pietra",
-            "x": 9,
-            "y": 0
-          },
-          {
-            "id": "asset-61768424-d48f-47f8-be18-2847a929904b",
-            "assetId": "tile-muro-pietra",
-            "x": 10,
-            "y": 0
-          },
-          {
-            "id": "asset-41255efd-e8d5-491e-9e13-7c153a0d9338",
-            "assetId": "tile-muro-pietra",
-            "x": 11,
-            "y": 0
-          },
-          {
-            "id": "asset-dd0e25d6-63f9-4775-8c83-12c0ab2e9e92",
-            "assetId": "tile-muro-pietra",
-            "x": 12,
-            "y": 0
-          },
-          {
-            "id": "asset-243868bd-ceb4-4ef8-abfb-eec33eb923e5",
-            "assetId": "tile-muro-pietra",
-            "x": 13,
-            "y": 0
-          },
-          {
-            "id": "asset-17ed8f01-ed20-46ab-9786-5ddd9e9a20a9",
-            "assetId": "tile-muro-pietra",
-            "x": 14,
-            "y": 0
-          },
-          {
-            "id": "asset-5947ad2c-efa7-4092-a4b0-9064d6353dd7",
-            "assetId": "tile-muro-pietra",
-            "x": 15,
-            "y": 0
-          },
-          {
-            "id": "asset-a631b1eb-842f-4248-a90f-782c5d03986e",
-            "assetId": "tile-muro-pietra",
-            "x": 16,
-            "y": 0
-          },
-          {
-            "id": "asset-5a4e51f1-1a43-4381-a120-0885ca2e85bb",
-            "assetId": "tile-muro-pietra",
-            "x": 17,
-            "y": 0
-          },
-          {
-            "id": "asset-4de7c7ff-e451-45ab-a871-2b1665f4256e",
-            "assetId": "tile-muro-pietra",
-            "x": 18,
-            "y": 0
-          },
-          {
-            "id": "asset-cbe81300-e2e8-48b5-80d4-a1ece0a9caad",
-            "assetId": "tile-muro-pietra",
-            "x": 19,
-            "y": 0
-          },
-          {
-            "id": "asset-19cf2a17-b224-48f7-bc1f-0c41c3cd3861",
-            "assetId": "tile-muro-pietra",
-            "x": 20,
-            "y": 0
-          },
-          {
-            "id": "asset-1fda54b2-a2d0-415a-a6c1-52ace921801d",
-            "assetId": "tile-muro-pietra",
-            "x": 21,
-            "y": 0
-          },
-          {
-            "id": "asset-06f693b8-301c-4631-956e-7ed1c75f1c0e",
-            "assetId": "tile-muro-pietra",
-            "x": 22,
-            "y": 0
-          },
-          {
-            "id": "asset-110d3f41-026f-4f89-b113-c77c2b68d8e3",
-            "assetId": "tile-muro-pietra",
-            "x": 23,
-            "y": 0
-          },
-          {
-            "id": "asset-bcfbf817-94ae-47b0-818d-5b191318728c",
-            "assetId": "tile-muro-pietra",
-            "x": 24,
-            "y": 0
-          },
-          {
-            "id": "asset-2c7040cd-4608-428b-a26e-e8d591eda401",
-            "assetId": "tile-muro-pietra",
-            "x": 25,
-            "y": 0
-          },
-          {
-            "id": "asset-eb19527f-ecf1-4ef7-87ad-884011944ed4",
-            "assetId": "tile-muro-pietra",
-            "x": 26,
-            "y": 0
-          },
-          {
-            "id": "asset-25ddf674-dc22-4f12-93b4-da6ce7bf1095",
-            "assetId": "tile-muro-pietra",
-            "x": 27,
-            "y": 0
-          },
-          {
-            "id": "asset-8a7fcda9-c294-4a37-8054-19211121ee44",
-            "assetId": "tile-muro-pietra",
-            "x": 28,
-            "y": 0
-          },
-          {
-            "id": "asset-daca8bca-9e9c-41d4-aa77-28e205341c7f",
-            "assetId": "tile-muro-pietra",
-            "x": 29,
-            "y": 0
-          },
-          {
-            "id": "asset-fb0abb80-56d8-49ea-9246-dd4cb75f438d",
-            "assetId": "tile-muro-pietra",
-            "x": 30,
-            "y": 0
-          },
-          {
-            "id": "asset-1e631c87-17b4-4302-b328-3851320451c7",
-            "assetId": "tile-muro-pietra",
-            "x": 31,
-            "y": 0
-          },
-          {
-            "id": "asset-584973be-5463-4d18-9ab1-0d7332be657a",
-            "assetId": "tile-muro-pietra",
-            "x": 24,
-            "y": 4
-          },
-          {
-            "id": "asset-e20b6045-e43f-458a-a745-d115f89617c6",
-            "assetId": "tile-muro-pietra",
-            "x": 2,
-            "y": 4
-          },
-          {
-            "id": "asset-78e0e505-df3e-4059-9647-a33b71b2fb96",
-            "assetId": "tile-muro-pietra",
-            "x": 3,
-            "y": 4
-          },
-          {
-            "id": "asset-44271613-f674-41a3-ba07-f20bc1d0f957",
-            "assetId": "tile-muro-pietra",
-            "x": 4,
-            "y": 4
-          },
-          {
-            "id": "asset-f8fc284b-891e-40f8-8d14-f741806b4cf3",
-            "assetId": "tile-muro-pietra",
-            "x": 5,
-            "y": 4
-          },
-          {
-            "id": "asset-51770663-70c3-4bdb-be4f-23b530d9eae5",
-            "assetId": "tile-muro-pietra",
-            "x": 6,
-            "y": 4
-          },
-          {
-            "id": "asset-facf48f8-2acd-472d-9fd0-06f1c812d6e7",
-            "assetId": "tile-muro-pietra",
-            "x": 7,
-            "y": 4
-          },
-          {
-            "id": "asset-66ad6473-0524-4bc6-8ddf-573af91420ef",
-            "assetId": "tile-muro-pietra",
-            "x": 8,
-            "y": 4
-          },
-          {
-            "id": "asset-852b42cc-703b-4d5e-b3da-9590f0179500",
-            "assetId": "tile-muro-pietra",
-            "x": 9,
-            "y": 4
-          },
-          {
-            "id": "asset-44258f1e-37d3-4678-b30e-afd8dd3b7e3c",
-            "assetId": "tile-muro-pietra",
-            "x": 10,
-            "y": 4
-          },
-          {
-            "id": "asset-ff0c1095-2693-4a72-9cb3-b8d35d66517d",
-            "assetId": "tile-muro-pietra",
-            "x": 11,
-            "y": 4
-          },
-          {
-            "id": "asset-e686c89c-7055-4a39-b83d-3d6826947437",
-            "assetId": "tile-muro-pietra",
-            "x": 12,
-            "y": 4
-          },
-          {
-            "id": "asset-d486784a-dd35-49bd-97eb-fbf307969471",
-            "assetId": "tile-muro-pietra",
-            "x": 13,
-            "y": 4
-          },
-          {
-            "id": "asset-9a16e6c5-3924-4b62-aed3-4ccce42e84a2",
-            "assetId": "tile-muro-pietra",
-            "x": 14,
-            "y": 4
-          },
-          {
-            "id": "asset-f94c0242-4203-492a-a80e-df8989d19254",
-            "assetId": "tile-muro-pietra",
-            "x": 16,
-            "y": 4
-          },
-          {
-            "id": "asset-630ef09f-c1ad-4c68-bb9b-7339eea9249f",
-            "assetId": "tile-muro-pietra",
-            "x": 15,
-            "y": 4
-          },
-          {
-            "id": "asset-69130c20-a7f3-4e05-ad17-c0521fdafcd7",
-            "assetId": "tile-muro-pietra",
-            "x": 17,
-            "y": 4
-          },
-          {
-            "id": "asset-00068aba-7b3a-4643-82fb-bb8209285992",
-            "assetId": "tile-muro-pietra",
-            "x": 18,
-            "y": 4
-          },
-          {
-            "id": "asset-21592447-c768-48d0-b73b-aa1414bf7516",
-            "assetId": "tile-muro-pietra",
-            "x": 19,
-            "y": 4
-          },
-          {
-            "id": "asset-2bfe5160-a190-480d-b2f9-9c0a3371611b",
-            "assetId": "tile-muro-pietra",
-            "x": 20,
-            "y": 4
-          },
-          {
-            "id": "asset-db0157d9-cc3f-4a63-a6b5-6af97a85bdea",
-            "assetId": "tile-muro-pietra",
-            "x": 21,
-            "y": 4
-          },
-          {
-            "id": "asset-c10315b0-8ca9-49b4-94ef-1c9b590a827b",
-            "assetId": "tile-muro-pietra",
-            "x": 22,
-            "y": 4
-          },
-          {
-            "id": "asset-a1adaf55-0009-434b-9f6e-01344304b5fb",
-            "assetId": "tile-muro-pietra",
-            "x": 23,
-            "y": 4
-          },
-          {
-            "id": "asset-37f32de9-b0e1-4ed7-8ead-b223faec5304",
+            "id": "asset-e95d0a7a-47ce-4f92-bf4f-1211e7079296",
             "assetId": "tile-muro-sx",
             "x": 0,
-            "y": 11
-          },
-          {
-            "id": "asset-084b31ff-76ae-4463-bc54-31663963e4dc",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 7
-          },
-          {
-            "id": "asset-4cda3057-e3e0-43de-b5ea-009a35517f4c",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 1
-          },
-          {
-            "id": "asset-113c7a4d-4413-400f-92c1-fa77712cd66d",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 2
-          },
-          {
-            "id": "asset-13651862-bb66-4ed0-a319-cec5e8fe1ead",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 3
-          },
-          {
-            "id": "asset-bc5d44b2-1524-4d8f-b6df-c8c1e146c3d0",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 4
-          },
-          {
-            "id": "asset-226ab50d-367b-4a82-9d05-a0766848832b",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 5
-          },
-          {
-            "id": "asset-50b54704-09c4-4ef0-91c0-655230b42196",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 6
-          },
-          {
-            "id": "asset-5874e141-c6e4-485b-816b-d6ba8798a4d2",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 9
-          },
-          {
-            "id": "asset-a61386e0-8d51-47d6-a05f-4c43d33ec6dc",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 10
-          },
-          {
-            "id": "asset-cb53567f-5c63-407d-8e0d-3d67fd9e8d40",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 8
-          },
-          {
-            "id": "asset-8f692f9d-7032-4db4-bb59-8558cee22347",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 12
-          },
-          {
-            "id": "asset-64b9153e-fdca-4e24-b1c5-e2135b7dda73",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 13
-          },
-          {
-            "id": "asset-17a651c9-9e37-4fde-a855-5ac07ad7e2d0",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 23
-          },
-          {
-            "id": "asset-27187487-b354-4e79-b61d-157f11da524d",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 22
-          },
-          {
-            "id": "asset-8a720d6f-3016-4c3e-94ca-caa3796c501a",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 21
-          },
-          {
-            "id": "asset-b1248d26-8fd1-4412-bd17-336ed6e4fa29",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 20
-          },
-          {
-            "id": "asset-474c4951-5803-449f-8272-44d7964c8a41",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 19
-          },
-          {
-            "id": "asset-9c638c20-37ac-468d-95de-1e48d8565a53",
-            "assetId": "tile-muro-sx",
-            "x": 0,
-            "y": 18
+            "y": 16
           },
           {
             "id": "asset-d5e1fda0-1ca5-40f1-a9d2-5d26371553d4",
@@ -9242,16 +11917,166 @@
             "y": 17
           },
           {
-            "id": "asset-e95d0a7a-47ce-4f92-bf4f-1211e7079296",
+            "id": "asset-474c4951-5803-449f-8272-44d7964c8a41",
             "assetId": "tile-muro-sx",
             "x": 0,
-            "y": 16
+            "y": 19
           },
           {
-            "id": "asset-0e227376-fc37-4d9e-be47-cea9af9d7779",
+            "id": "asset-b1248d26-8fd1-4412-bd17-336ed6e4fa29",
             "assetId": "tile-muro-sx",
             "x": 0,
-            "y": 14
+            "y": 20
+          },
+          {
+            "id": "asset-8a720d6f-3016-4c3e-94ca-caa3796c501a",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 21
+          },
+          {
+            "id": "asset-27187487-b354-4e79-b61d-157f11da524d",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 22
+          },
+          {
+            "id": "asset-17a651c9-9e37-4fde-a855-5ac07ad7e2d0",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 23
+          },
+          {
+            "id": "asset-64b9153e-fdca-4e24-b1c5-e2135b7dda73",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 13
+          },
+          {
+            "id": "asset-8f692f9d-7032-4db4-bb59-8558cee22347",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 12
+          },
+          {
+            "id": "asset-96bf4179-00c1-4392-9b7d-d7b956aa06b5",
+            "assetId": "tile-_muro1-5_bst",
+            "x": 7,
+            "y": 0
+          },
+          {
+            "id": "asset-a61386e0-8d51-47d6-a05f-4c43d33ec6dc",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 10
+          },
+          {
+            "id": "asset-5874e141-c6e4-485b-816b-d6ba8798a4d2",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 9
+          },
+          {
+            "id": "asset-50b54704-09c4-4ef0-91c0-655230b42196",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 6
+          },
+          {
+            "id": "asset-226ab50d-367b-4a82-9d05-a0766848832b",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 5
+          },
+          {
+            "id": "asset-bc5d44b2-1524-4d8f-b6df-c8c1e146c3d0",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 4
+          },
+          {
+            "id": "asset-13651862-bb66-4ed0-a319-cec5e8fe1ead",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 3
+          },
+          {
+            "id": "asset-113c7a4d-4413-400f-92c1-fa77712cd66d",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 2
+          },
+          {
+            "id": "asset-9c638c20-37ac-468d-95de-1e48d8565a53",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 18
+          },
+          {
+            "id": "asset-084b31ff-76ae-4463-bc54-31663963e4dc",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 7
+          },
+          {
+            "id": "asset-ff9d62e3-9eb8-4d16-9f27-320ac397f7d0",
+            "assetId": "tile-_muro1-5_bst",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "asset-ba46c433-876d-44f7-a7c8-5e370ef62464",
+            "assetId": "tile-_muro1-5_bst",
+            "x": 2,
+            "y": 0
+          },
+          {
+            "id": "asset-b9146b18-20e8-4105-9565-35796b2b310b",
+            "assetId": "tile-_muro1-5x2_bst",
+            "x": 4,
+            "y": 0
+          },
+          {
+            "id": "asset-37550ab4-61f0-480e-92d5-ce2ee3dcdb8c",
+            "assetId": "tile-_muro1-5x2_bst",
+            "x": 14,
+            "y": 0
+          },
+          {
+            "id": "asset-9909e694-04f6-48d6-a770-1b1badd71f08",
+            "assetId": "tile-_muro1-5x2_bst",
+            "x": 11,
+            "y": 0
+          },
+          {
+            "id": "asset-96473537-ce14-4ee1-acbb-3bca00d61c7f",
+            "assetId": "tile-_muro1-5x2_bst",
+            "x": 26,
+            "y": 0
+          },
+          {
+            "id": "asset-5d9dc782-127c-48c8-a738-3cbba5bcc320",
+            "assetId": "tile-_muro1-5x2_bst",
+            "x": 23,
+            "y": 0
+          },
+          {
+            "id": "asset-106fc0ce-ba85-4b95-bdd8-f2ea1a1844a6",
+            "assetId": "tile-_muro1-5x2_bst",
+            "x": 29,
+            "y": 0
+          },
+          {
+            "id": "asset-0b4fcecd-cda3-4950-b2a3-0cd78d1d917d",
+            "assetId": "tile-_muro1-5x2_bst",
+            "x": 20,
+            "y": 0
+          },
+          {
+            "id": "asset-690480ea-e556-4456-9f33-b652670a1a54",
+            "assetId": "tile-_muro1-5x2_bst",
+            "x": 17,
+            "y": 0
           }
         ],
         "tiles": [],
@@ -11024,7 +13849,7 @@
       "to": "interior-a8b3bf2d-5445-43a4-b26d-352054ebdd0a",
       "entry": {
         "x": 38,
-        "y": 91
+        "y": 90
       },
       "arrival": {
         "x": 5,
@@ -11052,7 +13877,7 @@
       },
       "arrival": {
         "x": 38,
-        "y": 91
+        "y": 90
       },
       "activation": "walk",
       "entrySize": {
@@ -11092,7 +13917,7 @@
       },
       "arrival": {
         "x": -28,
-        "y": -16
+        "y": -15
       },
       "activation": "walk",
       "entrySize": {
@@ -11237,7 +14062,7 @@
       "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
       "entry": {
         "x": -28,
-        "y": -16
+        "y": -15
       },
       "arrival": {
         "x": 13,
@@ -11253,29 +14078,6 @@
         "y": 1
       },
       "reverseId": "warp-8f5e04b2-9c17-4272-9a44-33ee5793ccad"
-    },
-    {
-      "id": "warp-41296f9b-8ebe-4023-874a-16987fd840b5",
-      "name": "Cathedral Cave · Passaggio 2",
-      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
-      "to": "world",
-      "entry": {
-        "x": 3,
-        "y": 79
-      },
-      "arrival": {
-        "x": -28,
-        "y": 4
-      },
-      "activation": "walk",
-      "keyGate": {
-        "id": "key-68d5e411-fefc-4cd9-a7d1-f7af969ea58d",
-        "mapId": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
-        "position": {
-          "x": 33,
-          "y": 5
-        }
-      }
     },
     {
       "id": "warp-971b4160-2e2e-48b1-9baa-e9b390a17c99",
