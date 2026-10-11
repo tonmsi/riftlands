@@ -11,6 +11,7 @@ import { SnapshotPrivateState } from './snapshot-private-state';
 import { SOUL_QUEST_ID } from '../shared/soul-escort';
 
 interface SnapshotSource {
+  world?: import('../shared/world').World;
   players: ReadonlyMap<string, Actor>; npcs: ReadonlyMap<string, Actor>;
   connections: ReadonlyMap<string, { ack: number; connected: boolean }>;
   accounts: ReadonlyMap<string, Account>; bosses: ReadonlyMap<string, BossEncounter>;
@@ -64,7 +65,7 @@ export class SnapshotBuilder {
     found.set(observer.id, observer);
     // Preserve off-screen teammates using the same rules for all actor kinds.
     if (observer.teamId) for (const actor of this.teams.get(observer.teamId) ?? []) found.set(actor.id, actor);
-    return [...found.values()].filter(actor => actorVisibleTo(observer, actor, source.now));
+    return [...found.values()].filter(actor => actorVisibleTo(observer, actor, source.now, source.world));
   }
   build(id: string): Snapshot | undefined {
     const s = this.source, self = s.players.get(id), connection = s.connections.get(id);
@@ -79,6 +80,7 @@ export class SnapshotBuilder {
     });
     const visibleIds = new Set(actors.map(actor => actor.id));
     const account = s.accounts.get(id);
+    const visible = (point: Vec2) => !s.world || s.world.sameRoom(self, point);
     return {
       type: 'snapshot', tick: s.tick, time: s.now, ack: connection.ack, self: this.actor(self), actors,
       gold: account?.gold ?? 0,
@@ -86,15 +88,15 @@ export class SnapshotBuilder {
       inventoryActions: s.interactions.feedback(id, s.now),
       fishing: s.fishing?.view(id) ?? null,
       fishingAvailable: s.mode === 'world' && s.fishing?.available(id),
-      ...(s.mode === 'world' ? { groundItems: s.interactions.visibleDrops(id, s.now, INTEREST_RADIUS), dialogue: s.interactions.view(id, s.now) } : { groundItems: [], dialogue: null }),
-      goldDrops: [...s.bosses.values()].flatMap(encounter => encounter.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > s.now && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop }))),
-      bossWindups: [...s.bosses.values()].flatMap(encounter => encounter.windup && distance(self, encounter.windup) < INTEREST_RADIUS ? [{ ...encounter.windup }] : []),
-      bossLocks: [...s.bosses.values()].map(encounter => encounter.lockState(self)),
-      bossPreparations: [...s.bosses.values()].flatMap(encounter => encounter.preparationFor(self) ?? []),
-      projectiles: [...s.projectiles.values()].filter(p => distance(self, p) < INTEREST_RADIUS).map(p => ({ ...p })),
-      pickups: [...s.pickups.values()].filter(p => distance(self, p) < INTEREST_RADIUS).map(p => ({ ...p })),
-      traps: [...s.traps.values()].filter(p => distance(self, p) < INTEREST_RADIUS).map(p => ({ ...p })),
-      events: s.events.filter(event => distance(self, event) < INTEREST_RADIUS && (!event.actorId || visibleIds.has(event.actorId)) && (!event.targetId || visibleIds.has(event.targetId))).map(event => ({ ...event })),
+      ...(s.mode === 'world' ? { groundItems: s.interactions.visibleDrops(id, s.now, INTEREST_RADIUS).filter(visible), dialogue: s.interactions.view(id, s.now) } : { groundItems: [], dialogue: null }),
+      goldDrops: [...s.bosses.values()].flatMap(encounter => encounter.state.drops.filter(drop => drop.ownerId === id && drop.expiresAt > s.now && visible(drop) && distance(self, drop) < INTEREST_RADIUS).map(drop => ({ ...drop }))),
+      bossWindups: [...s.bosses.values()].flatMap(encounter => encounter.windup && visible(encounter.windup) && distance(self, encounter.windup) < INTEREST_RADIUS ? [{ ...encounter.windup }] : []),
+      bossLocks: [...s.bosses.values()].filter(encounter => visible(encounter.boss)).map(encounter => encounter.lockState(self)),
+      bossPreparations: [...s.bosses.values()].filter(encounter => visible(encounter.boss)).flatMap(encounter => encounter.preparationFor(self) ?? []),
+      projectiles: [...s.projectiles.values()].filter(p => visible(p) && distance(self, p) < INTEREST_RADIUS).map(p => ({ ...p })),
+      pickups: [...s.pickups.values()].filter(p => visible(p) && distance(self, p) < INTEREST_RADIUS).map(p => ({ ...p })),
+      traps: [...s.traps.values()].filter(p => visible(p) && distance(self, p) < INTEREST_RADIUS).map(p => ({ ...p })),
+      events: s.events.filter(event => visible(event) && distance(self, event) < INTEREST_RADIUS && (!event.actorId || visibleIds.has(event.actorId)) && (!event.targetId || visibleIds.has(event.targetId))).map(event => ({ ...event })),
       online: [...s.connections.values()].filter(c => c.connected).length, activeChunks: s.activeChunks.size,
     };
   }

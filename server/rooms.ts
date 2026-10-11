@@ -1,3 +1,4 @@
+import { WarpKeys } from './warp-keys';
 import { randomUUID } from 'node:crypto';
 import { DT, WORLD_SEED, levelFromXp } from '../shared/config';
 import { characterFor } from './character-progress';
@@ -37,6 +38,7 @@ export interface MatchRoom {
 /** One owner for routing and persistent characters. Match accounts are disposable copies. */
 export class RoomManager {
   readonly global: WorldSimulation;
+  private readonly warpKeys: WarpKeys;
   readonly rooms = new Map<string, MatchRoom>();
   private readonly memberships = new Map<string, Membership>();
   private readonly gateEntries = new Map<string, number>();
@@ -56,6 +58,7 @@ export class RoomManager {
   private readonly warpMessages = new Map<string, Extract<import('../shared/types').ServerMessage, { type: 'warp-transition' }>>();
   private readonly warpRearm = new Set<string>();
   constructor(private readonly store?: GameplayPersistence, seed = WORLD_SEED, now = Date.now(), readonly project: WorldDocument = WORLD_DOCUMENT) {
+    this.warpKeys = new WarpKeys(project, store);
     const world = new World(seed, 160, 'world', project, worldDungeons(project, DUNGEON_DEFINITIONS));
     this.global = new WorldSimulation(seed, now, store, 'world', { world, dungeons: world.dungeons.flatMap(dungeonEncounters), bosses: BOSS_BY_ID,
       spawn: { x: project.spawn.x * TILE_SIZE, y: project.spawn.y * TILE_SIZE } });
@@ -177,8 +180,15 @@ export class RoomManager {
     if (!member.connected || roomId !== member.roomId || epoch !== member.epoch) return false;
     if (!validInteractionCommand(command)) return false;
     if (this.warpRequests.has(id)) return false;
+    if (command.kind === 'collect-warp-key') {
+      const actor = this.simulationFor(id).players.get(id);
+      const pickup = this.warpKeys.pickups(this.mapId(id), this.global.now).find(key => key.id === command.keyId);
+      if (actor && pickup && !this.simulationFor(id).world.sameRoom(actor, pickup)) throw new Error('La chiave si trova in un’altra stanza.');
+      if (!actor || actor.hp <= 0 || this.simulationFor(id).mode !== 'world' || !member.account.inventory || !this.warpKeys.collect(command.keyId, member.account.inventory, this.mapId(id), actor, INTERACTION_RANGE, this.global.now)) throw new Error('Chiave non disponibile: avvicinati per raccoglierla.');
+      this.notices.set(id, 'Chiave raccolta.'); return true;
+    }
     if (command.kind === 'warp') {
-      const warp = this.project.warps?.find(w => w.id === command.warpId && w.from === this.mapId(id) && w.activation === 'interact');
+      const warp = this.project.warps?.find(w => w.id === command.warpId && w.from === this.mapId(id) && (w.activation === 'interact' || !!w.keyGate));
       if (!warp) throw new Error('Passaggio non disponibile.');
       this.requestWarp(id, warp); return true;
     }
@@ -334,6 +344,12 @@ export class RoomManager {
       if (this.global.now >= room.endsAt || teams.size < 2) this.closeMatch(room.id, this.global.now >= room.endsAt ? 'timeout' : 'elimination');
     }
     this.stepArenaGate();
+    this.warpKeys.expire(this.global.now);
+    for (const [id, member] of this.memberships) {
+      if (!member.connected || this.spectators.has(id) || this.warpRequests.has(id) || this.simulationFor(id).mode !== 'world') continue;
+      const actor = this.simulationFor(id).players.get(id); if (!actor || actor.hp <= 0 || !member.account.inventory) continue;
+      for (const key of this.warpKeys.pickups(this.mapId(id), this.global.now)) if (this.simulationFor(id).world.sameRoom(actor, key) && this.warpKeys.collect(key.id, member.account.inventory, this.mapId(id), actor, TILE_SIZE * .65, this.global.now)) this.notices.set(id, 'Chiave raccolta.');
+    }
     this.stepWarps();
   }
 
@@ -400,6 +416,8 @@ export class RoomManager {
     }
     const snapshot = this.simulationFor(id).snapshotFor(id);
     if (snapshot) {
+      snapshot.warpKeys = this.simulationFor(id).mode === 'world' ? this.warpKeys.pickups(this.mapId(id), this.global.now).filter(key => this.simulationFor(id).world.sameRoom(snapshot.self, key)) : [];
+      snapshot.warpGates = this.warpKeys.views(this.global.now);
       snapshot.betting = this.bettingView(id);
       snapshot.gold = this.membership(id).account.gold ?? 0;
       snapshot.arenaGate = this.gateStateFor(id);
@@ -449,7 +467,7 @@ export class RoomManager {
   private requestWarp(id: string, warp: WorldWarp): void {
     const member = this.membership(id), sim = this.simulationFor(id), actor = sim.players.get(id);
     if (this.transfersStopped || this.pendingPlayers.has(id) || this.warpRequests.has(id) || this.spectators.has(id)
-      || !member.connected || sim.mode !== 'world' || !actor || actor.hp <= 0 || !atWarp(actor, warp) || this.mapId(id) !== warp.from)
+      || !member.connected || sim.mode !== 'world' || !actor || actor.hp <= 0 || !atWarp(actor, warp) || !sim.world.sameRoom(actor, warpPosition(warp.entry)) || this.mapId(id) !== warp.from)
       throw new Error('Avvicinati al passaggio per attraversarlo.');
     if (this.warpRearm.has(id)) throw new Error('Allontanati dalla porta e rientra per attraversarla di nuovo.');
     if (sim.fishing.busy(id)) throw new Error('Ritira la lenza prima di attraversare.');
@@ -457,6 +475,7 @@ export class RoomManager {
       || [...sim.bosses.values()].some(b => b.participantIds.has(id) && b.ownerId)) throw new Error('Non puoi attraversare durante un combattimento.');
     const target = warp.to === 'world' ? this.global : this.interior(warp.to), arrival = warpPosition(warp.arrival);
     if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world)) throw new Error('Arrivo del passaggio bloccato.');
+    if (!member.account.inventory || !this.warpKeys.canPass(warp, member.account.inventory, this.global.now)) throw new Error('Serve la chiave di questo passaggio.');
     sim.checkpoint(); this.store?.flush();
     sim.interactions.close(id); sim.fishing.close(id); sim.connections.get(id)!.inputs.length = 0;
     const request = { warp, readyAt: this.global.now + WARP_FADE_MS + 80, epoch: member.epoch, saved: !this.store };
@@ -474,7 +493,7 @@ export class RoomManager {
     for (const [id, member] of this.memberships) {
       if (!member.connected || this.spectators.has(id) || this.simulationFor(id).mode !== 'world') continue;
       const actor = this.simulationFor(id).players.get(id); if (!actor) continue;
-      const nearby = (this.project.warps ?? []).filter(w => w.from === this.mapId(id) && atWarp(actor, w));
+      const nearby = (this.project.warps ?? []).filter(w => w.from === this.mapId(id) && this.simulationFor(id).world.sameRoom(actor, warpPosition(w.entry)) && atWarp(actor, w));
       if (this.warpRearm.has(id)) { if (!nearby.length) this.warpRearm.delete(id); continue; }
       if (!this.warpRequests.has(id)) {
         const warp = nearby.find(w => w.activation === 'walk');
@@ -496,11 +515,13 @@ export class RoomManager {
       const oldBody = structuredClone(actor), oldLocation = member.account.location;
       try {
         if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world)) throw new Error('Arrivo bloccato.');
+        if (!member.account.inventory || !this.warpKeys.canPass(warp, member.account.inventory, this.global.now)) throw new Error('Serve la chiave di questo passaggio.');
         source.detachPlayer(id);
         Object.assign(member.account.body!, arrival);
         if (warp.to === 'world') delete member.account.location;
         else member.account.location = { mapId: warp.to, returnTo: oldLocation?.returnTo ?? { x: oldBody.x, y: oldBody.y } };
         target.addPlayer(member.account, member.classId);
+        this.warpKeys.open(warp, member.account.inventory!, this.global.now);
         member.roomId = warp.to === 'world' ? 'world' : `interior:${warp.to}`; member.epoch++;
         if (warp.to === 'world') this.global.awayPlayers.delete(id); else this.global.awayPlayers.add(id);
         target.checkpoint(); this.store?.touch(); this.store?.flush(); this.warpRearm.add(id);

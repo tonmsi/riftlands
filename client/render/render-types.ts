@@ -9,6 +9,7 @@ export interface RenderFrame {
   fishingTarget?: Vec2;
   goldDrops?: BossDrop[];
   groundItems?: GroundItem[];
+  warpKeys?: import('../../shared/warp-keys').WarpKeyPickup[];
   inventory?: Inventory;
   bossWindups?: BossWindup[];
   bossLocks?: BossLockState[];

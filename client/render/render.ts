@@ -327,6 +327,11 @@ export class Renderer {
       ctx.restore();
     }
 
+    for (const key of frame.warpKeys ?? []) if (this.visible(key)) {
+      ctx.save(); ctx.translate(key.x, key.y + Math.sin(frame.time * .003) * 2);
+      ctx.strokeStyle = '#ffe18a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(-5, 0, 5, 0, Math.PI * 2); ctx.moveTo(0, 0); ctx.lineTo(13, 0); ctx.lineTo(13, 5); ctx.moveTo(8, 0); ctx.lineTo(8, 4); ctx.stroke(); ctx.restore();
+    }
+
     if (frame.traps) {
       for (const trap of frame.traps) if (this.visible(trap)) this.drawTrap(trap, frame.time);
     }
@@ -414,6 +419,16 @@ export class Renderer {
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawDungeonEntry(frame, true);
+    if (frame.self && !frame.spectating && this.world.roomTiles.size) {
+      const room = this.world.roomAt(frame.self.x, frame.self.y);
+      ctx.fillStyle = '#0b1115';
+      for (let ty = Math.floor(this.bounds.top / TILE_SIZE); ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty++) for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
+        if ((this.world.roomTiles.get(`${tx},${ty}`) ?? '') === room) continue;
+        const x = this.width / 2 + (tx * TILE_SIZE - this.camera.x) * this.zoom;
+        const y = this.height / 2 + (ty * TILE_SIZE - this.camera.y) * this.zoom * this.viewSign;
+        ctx.fillRect(x, this.viewSign === 1 ? y : y - TILE_SIZE * this.zoom, TILE_SIZE * this.zoom + 1, TILE_SIZE * this.zoom + 1);
+      }
+    }
     if (this.matchResult) {
       const elapsed = this.matchResult.elapsed += delta;
       if (elapsed >= MATCH_RESULT_DURATION_MS) this.matchResult = null;

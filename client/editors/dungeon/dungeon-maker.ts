@@ -1,3 +1,6 @@
+import { installDungeonPanels } from './dungeon-panels';
+import { installDungeonRooms } from './dungeon-rooms-editor';
+import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../npc-properties';
 import { setupDungeonLibrary } from './dungeon-library';
 import './dungeon-maker.css';
 import { WORLD_DOCUMENT } from '../../../shared/world-content';
@@ -13,7 +16,7 @@ import { NPC_DEFINITIONS, type NpcTemplateId } from '../../../shared/npcs';
 import { CLASSES } from '../../../shared/config';
 import { createDungeonPlaytest, type DungeonPlaytest } from './dungeon-playtest';
 import { Renderer } from '../../render/render';
-import { serializeDungeonDraft, compactDungeonDraft, DEFAULT_BOSS_AGGRO_RADIUS, PICKUP_CATALOG, compileDungeonDraft, draftFlameTiles, draftFromDungeon, newDungeonDraft, parseDungeonDraft, TERRAIN_CATALOG, validateDungeonDraft, type DraftEntity, type DungeonDraft } from '../../../shared/dungeon-draft';
+import { serializeDungeonDraft, compactDungeonDraft, DEFAULT_BOSS_AGGRO_RADIUS, PICKUP_CATALOG, compileDungeonDraft, draftFlameTiles, draftFromDungeon, newDungeonDraft, parseDungeonDraft, TERRAIN_CATALOG, encounterTiles, encounterContains, isDungeonWarning, validateDungeonDraft, type DraftEntity, type DungeonDraft } from '../../../shared/dungeon-draft';
 import type { AbilitySlot, ClassId, PickupKind, TileKind, Vec2 } from '../../../shared/types';
 const root = document.querySelector<HTMLDivElement>('#maker')!;
 const field = (id: string, label: string, type = 'text') => `<label>${label}<input id="${id}" type="${type}"></label>`;
@@ -32,7 +35,8 @@ const button = (id: string, action: () => void) => el(id).addEventListener('clic
 const status = (message: string) => { el('status').textContent = message; };
 el('npcs').previousElementSibling!.insertAdjacentHTML('beforebegin', '<section class="shared-assets"><h3>Asset condivisi</h3><input id="dungeon-asset-search" placeholder="Cerca un asset…" aria-label="Cerca asset condivisi"><div class="catalog-actions"><button id="dungeon-assets-expand">Espandi tutti</button><button id="dungeon-assets-collapse">Comprimi tutti</button></div><div id="dungeon-assets" class="asset-list"></div><p class="hint">Importa e modifica gli asset nel World Maker. Applica il catalogo prima di installare dungeon che usano nuovi asset.</p></section>');
 el('entity-properties').insertAdjacentHTML('afterend', `<section id="asset-placement-properties" hidden><h3>Asset selezionato</h3><p id="asset-placement-name"></p><div class="two-fields">${field('asset-placement-x', 'Colonna', 'number')}${field('asset-placement-y', 'Riga', 'number')}</div><button id="delete-asset-placement">Rimuovi asset</button></section>`);
-el('npcs').insertAdjacentHTML('afterend', '<h3>Powerup e powerdown</h3><div id="pickups" class="tool-list"></div>');
+el('npcs').previousElementSibling!.textContent = 'NPC';
+el('npcs').insertAdjacentHTML('afterend', '<h3>Mob</h3><div id="mobs" class="tool-list"></div><h3>Powerup e powerdown</h3><div id="pickups" class="tool-list"></div>');
 el('issues').insertAdjacentHTML('afterend', '<p id="issue-detail" class="hint" role="status" hidden></p>');
 el('preview').textContent = 'Prova gioco locale';
 el('preview').insertAdjacentHTML('beforebegin', `<label class="preview-class">Classe<select id="preview-class">${Object.values(CLASSES).map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></label>`);
@@ -43,11 +47,50 @@ const playtestCanvas = el<HTMLCanvasElement>('playtest-canvas');
 root.querySelector('[data-tool="flame"]')!.insertAdjacentHTML('afterend', '<button id="random-flame">Fiamma in un punto casuale</button>');
 const rules = el('issues').parentElement!.querySelector<HTMLParagraphElement>(':scope > p.hint:last-child')!;
 rules.textContent = 'Gli ingressi, anche in erba, si chiudono automaticamente con massi durante lo scontro. Il terreno originale ritorna alla vittoria o alla morte di un partecipante. In solo e in gruppo restano i tempi di ingresso del gioco. Gli spawn sono opzionali: senza punti configurati ogni partecipante conserva la posizione raggiunta entrando; se presenti valgono anche per il singolo. I boss lontani attendono il proprio aggro. Le fiamme sono letali e compaiono solo durante lo scontro. Clicca un errore per vedere i punti coinvolti e come correggerlo. La prova locale usa il combattimento del gioco e non salva progressi.';
+installDungeonPanels(root);
+el('entity-properties').insertAdjacentHTML('beforeend', `<div id="dungeon-npc-properties" hidden>${npcPropertiesMarkup('selected-npc')}<button id="update-npc-properties">Aggiorna NPC / Mob</button></div>`);
+const advancedEntity = document.createElement('details'); advancedEntity.className = 'selection-advanced';
+advancedEntity.innerHTML = '<summary>Avanzate · posizione e incontro</summary>';
+for (const id of ['entity-x', 'radius-label', 'inherit-radius-label', 'aggro-label', 'entity-encounter-label', 'flame-properties']) {
+    const node = id === 'entity-x' ? el(id).closest('.two-fields')! : el(id); advancedEntity.append(node);
+}
+el('entity-properties').insertBefore(advancedEntity, el('delete'));
+el('asset-placement-properties').insertAdjacentHTML('beforeend', '<p id="asset-selection-description" class="hint"></p><a id="asset-selection-edit" target="riftlands-world-maker">Dimensioni, collisioni e visibilità nel World Maker ↗</a>');
+button('update-npc-properties', () => change(() => {
+    const entity = draft.entities.find(e => e.id === selected); if (!entity || entity.kind !== 'npc') return;
+    const properties = readNpcProperties(root, 'selected-npc'); entity.template = properties.kind; entity.settings = properties.settings; entity.label = properties.settings.name || NPC_DEFINITIONS[properties.kind].name;
+}));
+const encounterNumbers = el('encounter-x').closest('.two-fields')!;
+const encounterAdvanced = document.createElement('details'); encounterAdvanced.innerHTML='<summary>Avanzate � regione rettangolare originale</summary>'; encounterNumbers.before(encounterAdvanced); encounterAdvanced.append(encounterNumbers);
+el('encounter').closest('label')!.insertAdjacentHTML('afterend', '<div class="tool-grid"><button data-tool="encounter-add">Pennello</button><button data-tool="encounter-rectangle">Rettangolo</button><button data-tool="encounter-cut">Ritaglia</button></div><label>Dimensione pennello<select id="encounter-brush"><option value="0">1 casella</option><option value="1">3 � 3</option><option value="2">5 � 5</option></select></label><p class="hint">Disegna la zona dello scontro. Rettangolo aggiunge un�area piena; Ritaglia elimina caselle. Mantieni una forma continua e includi i boss e gli spawn assegnati.</p>');
+el('dungeon-section-passaggi').insertAdjacentHTML('beforeend', '<p class="hint">Collega questo dungeon al mondo o ad altre stanze. Usa A ↔ B oppure A → B, trascina gli ingressi e attiva Richiede chiave sul passaggio selezionato.</p><button id="open-passages">Modifica passaggi sulla mappa</button>');
+root.querySelector('.canvas-toolbar')!.insertAdjacentHTML('afterend', '<details id="dungeon-validation-alert" class="dungeon-validation-alert" hidden><summary id="dungeon-validation-summary" role="status" aria-live="polite"></summary><ul id="dungeon-validation-details"></ul></details>');
+root.insertAdjacentHTML('beforeend', '<dialog id="dungeon-passages-dialog" class="dungeon-passages-dialog"><div class="playtest-toolbar"><strong>Passaggi del dungeon</strong><button id="close-passages">Torna a terreno e boss</button></div><p class="hint">Questa vista condivide la bozza del World Maker. I passaggi si salvano nel progetto mondo; per renderli attivi premi Applica al gioco. Il dungeon deve essere installato nel catalogo per creare la sua mappa.</p><iframe id="dungeon-passages-frame" title="Mappa e passaggi del dungeon"></iframe></dialog>');
+el('open-passages').insertAdjacentHTML('afterend', '<div id="passages-install-notice" class="hint" role="status" hidden><p>Le forme delle stanze non sono ancora salvate nel dungeon installato. Prima aggiorna la bozza installata (oppure installala se è nuova), poi riapri i passaggi.</p><button id="passages-show-install">Vai ai comandi di installazione</button></div>');
+button('passages-show-install', () => {
+    const panel = el('dungeon-library');
+    for (let parent: HTMLElement | null = panel; parent; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
+    panel.scrollIntoView({ block: 'center' });
+    panel.querySelector<HTMLButtonElement>('[data-action="update"]')?.focus({ preventScroll: true });
+});
+button('open-passages', () => {
+    stopPreview();
+    if (draft.rooms?.length && roomSignature(draft.rooms) !== installedRoomSignature) {
+        el('passages-install-notice').hidden = false;
+        el('passages-install-notice').scrollIntoView({ block: 'nearest' });
+        status('Installa la bozza o premi Aggiorna bozza installata per salvare le forme delle stanze nel dungeon, poi collega i passaggi.'); return;
+    }
+    el('passages-install-notice').hidden = true;
+    el<HTMLIFrameElement>('dungeon-passages-frame').src = `/world-maker.html?dungeon=${encodeURIComponent(draft.id)}&passages=1&room=${encodeURIComponent(roomEditor.selectedId())}`;
+    el<HTMLDialogElement>('dungeon-passages-dialog').showModal();
+});
+button('close-passages', () => { el<HTMLDialogElement>('dungeon-passages-dialog').close(); });
 // The retired drafts referenced removed map instances rather than reusable boss models.
 localStorage.removeItem('riftlands.dungeon-draft.v1');
 const KEY = 'riftlands.dungeon-draft.v2';
 let draft = newDungeonDraft(), selected: string | null = null, activeEncounter = 'main', tool = 'tile:path';
 let past: DungeonDraft[] = [], future: DungeonDraft[] = [];
+let encounterStart: Vec2 | null = null;
 let stroke: DungeonDraft | null = null, lastTile: Vec2 | null = null, pointer: number | null = null, pan: Vec2 | null = null;
 let preview: DungeonPlaytest | null = null, previewRenderer: Renderer | null = null;
 let aim = 0, attacking = false, highlighted: Vec2[] = [], queuedCast: AbilitySlot | undefined;
@@ -55,6 +98,11 @@ const keys = new Set<string>();
 let view = { x: 0, y: 0, scale: 26 };
 const canvas = el<HTMLCanvasElement>('map'), ctx = canvas.getContext('2d')!;
 let sharedAssets: readonly WorldAsset[] = WORLD_DOCUMENT.assets;
+let roomPassages: { id: string; entry: Vec2; entrySize?: Vec2; arrivalSize?: Vec2; arrival?: Vec2; bidirectional: boolean; name: string; arrivalOnly?: boolean }[] = [];
+let installedRoomSignature = '';
+function roomSignature(rooms: readonly import('../../../shared/dungeon-rooms').DungeonRoom[]): string {
+    return JSON.stringify(rooms.map(room => ({ id: room.id, name: room.name, tiles: room.tiles.map(p => `${p.x},${p.y}`).sort() })).sort((a,b) => a.id.localeCompare(b.id)));
+}
 let animatedAssets = false;
 let assetDragOffset: Vec2 | null = null;
 const assetArt = new WorldAssetArt(() => draw());
@@ -86,10 +134,11 @@ function palette(container: string, label: string, tool: string, color: string):
     b.prepend(swatch);
     el(container).append(b);
 }
+const roomEditor = installDungeonRooms(root, { draft: () => draft, change, tool: () => tool, setTool, refresh, status, connect: () => el('open-passages').click() });
 for (const [id, item] of Object.entries(TERRAIN_CATALOG))
     palette('terrain', item.name, `tile:${id}`, item.color);
 for (const [id, item] of Object.entries(NPC_DEFINITIONS))
-    palette('npcs', item.name, `npc:${id}`, item.color);
+    palette(item.disposition === 'hostile' ? 'mobs' : 'npcs', item.name, `npc:${id}`, item.color);
 for (const [id, item] of Object.entries(PICKUP_CATALOG))
     palette('pickups', item.name, `pickup:${id}`, item.color);
 function refreshBossPalette() { el("bosses").replaceChildren(); el("entity-template").replaceChildren(new Option("Segnaposto · da creare",""));
@@ -126,16 +175,20 @@ function setTool(next: string): void { stopPreview(); tool = next; root.querySel
     el('tool-name').textContent = b.textContent; }); if (tool.startsWith('asset:')) el('tool-name').textContent = `Asset · ${sharedAssets.find(a => a.id === tool.slice(6))?.name ?? tool.slice(6)}`; }
 root.addEventListener("click", event => { const b = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tool]"); if(b) setTool(b.dataset.tool!); });
 function refresh(): void {
+    roomEditor.refresh();
     const animated = new Set(sharedAssets.filter(a => worldAssetVisual(a).kind === 'fire').map(a => a.id));
     animatedAssets = (draft.assetPlacements ?? []).some(p => animated.has(p.assetId));
     if (!draft.encounters.some(g => g.id === activeEncounter))
-        activeEncounter = draft.encounters[0].id;
+        activeEncounter = draft.encounters[0]?.id ?? '';
     for (const id of ['encounter', 'entity-encounter'])
         el<HTMLSelectElement>(id).replaceChildren(...draft.encounters.map(g => new Option(g.name, g.id)));
     input('encounter').value = activeEncounter;
-    const group = draft.encounters.find(g => g.id === activeEncounter)!;
+    const group = draft.encounters.find(g => g.id === activeEncounter);
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-tool]')) if (['party','activation','flame','visitors','visitors-erase','boss'].includes(b.dataset.tool!) || b.dataset.tool!.startsWith('boss:') || b.dataset.tool!.startsWith('encounter-')) b.disabled=!group;
+    input('encounter-name').disabled=!group; el<HTMLButtonElement>('remove-encounter').disabled=!group;
+    for(const f of ['x','y','width','height']) input(`encounter-${f}`).disabled=!group || group.tiles!==undefined;
     for (const f of ['name', 'x', 'y', 'width', 'height'] as const)
-        input(`encounter-${f}`).value = String(group[f]);
+        input(`encounter-${f}`).value = String(group?.[f] ?? '');
     input('name').value = draft.name;
     input('map-id').value = draft.id;
     el<HTMLButtonElement>('undo').disabled = !past.length;
@@ -145,15 +198,22 @@ function refresh(): void {
     const placement = draft.assetPlacements?.find(p => p.id === selected);
     el('asset-placement-properties').hidden = !placement;
     if (placement) {
-        el('asset-placement-name').textContent = sharedAssets.find(a => a.id === placement.assetId)?.name ?? placement.assetId;
+        const asset = sharedAssets.find(a => a.id === placement.assetId);
+        el('asset-placement-name').textContent = asset?.name ?? placement.assetId;
+        el('asset-selection-description').textContent = asset ? `${asset.columns} × ${asset.rows} caselle · ${asset.layer === 'ground' ? 'Sfondo' : 'Oggetto'} · ${asset.cells.filter(cell => cell.blocked).length} celle bloccanti. Le proprietà del catalogo valgono per tutte le istanze.` : '';
+        el<HTMLAnchorElement>('asset-selection-edit').href = `/world-maker.html?asset=${encodeURIComponent(placement.assetId)}`;
         input('asset-placement-x').value = String(placement.x); input('asset-placement-y').value = String(placement.y);
     }
     assetCatalog.update(sharedAssets, tool.startsWith('asset:') ? tool.slice(6) : '', value('dungeon-asset-search'));
     el('entity-properties').hidden = !e;
+    el('dungeon-npc-properties').hidden = e?.kind !== 'npc';
+    if (e?.kind === 'npc') fillNpcProperties(root, 'selected-npc', e.template as NpcTemplateId, { ...e.settings, name: e.label });
     if (e) {
+        el('entity-label').closest('label')!.hidden = e.kind === 'npc';
+        el('entity-properties').querySelector('summary')!.textContent = e.kind === 'npc' ? (NPC_DEFINITIONS[e.template as NpcTemplateId].disposition === 'neutral' ? 'NPC selezionato' : 'Mob selezionato') : e.kind === 'boss' ? 'Boss selezionato' : e.kind === 'party' ? 'Spawn selezionato' : 'Entità selezionata';
         for (const f of ['label', 'x', 'y', 'level', 'radius', 'template'] as const)
             input(`entity-${f}`).value = String(e[f]);
-        input('entity-encounter').value = e.encounterId ?? draft.encounters[0].id;
+        input('entity-encounter').value = e.encounterId ?? draft.encounters[0]?.id ?? '';
         input('entity-span').value = String(e.span ?? 1);
         input('entity-aggroRadius').value = String(e.aggroRadius ?? DEFAULT_BOSS_AGGRO_RADIUS);
         el('aggro-label').hidden = e.kind !== 'boss';
@@ -166,6 +226,14 @@ function refresh(): void {
         el('flame-properties').hidden = e.kind !== 'flame';
     }
     const issues = validateDungeonDraft(draft, sharedAssets);
+    const errors = issues.filter(issue => !isDungeonWarning(issue)), warnings = issues.filter(isDungeonWarning);
+    el('dungeon-validation-alert').hidden = !issues.length;
+    el('dungeon-validation-alert').classList.toggle('warnings-only', !errors.length);
+    el('dungeon-validation-summary').textContent = issues.length ? `⚠ ${[errors.length ? `${errors.length} problemi da correggere` : '', warnings.length ? `${warnings.length} avvisi non bloccanti` : ''].filter(Boolean).join(' · ')} · Mostra dettagli` : '';
+    el('dungeon-validation-details').replaceChildren(...issues.map(message => {
+        const li = document.createElement('li'), action = document.createElement('button'); action.textContent = `${isDungeonWarning(message) ? 'Avviso: ' : ''}${message}`;
+        action.onclick = () => explainIssue(message); li.append(action); return li;
+    }));
     el('issues').replaceChildren(...(issues.length ? issues : ['Terreno e posizioni validi.']).map(message => {
         const li = document.createElement('li');
         if (!issues.length) li.textContent = message;
@@ -173,7 +241,7 @@ function refresh(): void {
         return li;
     }));
     el('issues').classList.toggle('valid', !issues.length);
-    el<HTMLButtonElement>('compile').disabled = issues.length > 0;
+    el<HTMLButtonElement>('compile').disabled = errors.length > 0;
     draw();
 }
 function explainIssue(message: string): void {
@@ -229,12 +297,32 @@ function draw(): void {
         for (const tile of g.visitorTiles ?? []) ctx.fillRect(tile.x*s,tile.y*s,s,s);
         ctx.strokeStyle = g.id === activeEncounter ? '#ffffffbb' : '#7fe0d377';
         ctx.lineWidth = 2;
-        ctx.strokeRect(g.x * s, g.y * s, g.width * s, g.height * s);
+        if (!g.tiles) ctx.strokeRect(g.x * s, g.y * s, g.width * s, g.height * s);
+        else {
+            const cells=new Set(g.tiles.map(p=>`${p.x},${p.y}`));
+            for(const tile of g.tiles){ ctx.fillStyle=g.id===activeEncounter?'#7fe0d322':'#7fe0d30c';ctx.fillRect(tile.x*s,tile.y*s,s,s);
+                for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])if(!cells.has(`${tile.x+dx},${tile.y+dy}`)){const x=(tile.x+(dx===1?1:0))*s,y=(tile.y+(dy===1?1:0))*s;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+(dx===0?s:0),y+(dy===0?s:0));ctx.stroke();}
+            }
+        }
         ctx.fillStyle = '#fff';
         ctx.font = '11px system-ui';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillText(g.name, g.x * s + 4, g.y * s + 4);
+    }
+    roomEditor.draw(ctx, s);
+    for (const passage of roomPassages) {
+        ctx.strokeStyle = '#bfe7f5'; ctx.lineWidth = 1.5; ctx.setLineDash([4,4]);
+        const x = (passage.entry.x + .5) * s, y = (passage.entry.y + .5) * s;
+        if (passage.arrival) {
+            const bx = (passage.arrival.x + .5) * s, by = (passage.arrival.y + .5) * s;
+            ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(bx,by); ctx.stroke();
+            const angle = Math.atan2(by-y,bx-x); ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx - 9*Math.cos(angle-.45),by - 9*Math.sin(angle-.45)); ctx.moveTo(bx,by); ctx.lineTo(bx - 9*Math.cos(angle+.45),by - 9*Math.sin(angle+.45)); ctx.stroke();
+            if (passage.bidirectional) { ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x + 9*Math.cos(angle-.45),y + 9*Math.sin(angle-.45)); ctx.moveTo(x,y); ctx.lineTo(x + 9*Math.cos(angle+.45),y + 9*Math.sin(angle+.45)); ctx.stroke(); }
+            ctx.fillStyle = '#76deff'; ctx.fillRect(bx-4,by-4,8,8);
+        }
+        ctx.setLineDash([]); ctx.strokeStyle=passage.arrivalOnly?'#76deff':'#c1a0ff'; ctx.strokeRect(passage.entry.x*s,passage.entry.y*s,(passage.entrySize?.x??1)*s,(passage.entrySize?.y??1)*s); if(passage.arrival){ctx.strokeStyle='#76deff';ctx.strokeRect(passage.arrival.x*s,passage.arrival.y*s,(passage.arrivalSize?.x??1)*s,(passage.arrivalSize?.y??1)*s);}
+        ctx.fillStyle = passage.arrivalOnly ? '#76deff' : '#c1a0ff'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
     }
     for (const e of draft.entities) {
         ctx.strokeStyle = e.id === selected ? '#fff' : '#111b1e';
@@ -254,7 +342,7 @@ function draw(): void {
         }
         const x = (e.x + .5) * s, y = (e.y + .5) * s;
         if (e.kind === 'boss' && e.id === selected) {
-            const g = draft.encounters.find(g => g.id === (e.encounterId ?? draft.encounters[0].id))!;
+            const g = draft.encounters.find(g => g.id === (e.encounterId ?? draft.encounters[0]?.id ?? ''))!;
             ctx.save(); ctx.beginPath(); ctx.rect(g.x*s,g.y*s,g.width*s,g.height*s); ctx.clip();
             ctx.beginPath(); ctx.arc(x,y,(e.aggroRadius ?? DEFAULT_BOSS_AGGRO_RADIUS)/48*s,0,Math.PI*2);
             ctx.fillStyle = '#df946f22'; ctx.fill(); ctx.strokeStyle = '#df946f'; ctx.setLineDash([5,4]); ctx.stroke(); ctx.restore();
@@ -275,8 +363,31 @@ function draw(): void {
 }
 function tileAt(event: PointerEvent): Vec2 { const r = canvas.getBoundingClientRect(); return { x: Math.floor((event.clientX - r.left - view.x) / view.scale), y: Math.floor((event.clientY - r.top - view.y) / view.scale) }; }
 function paint(p: Vec2): void {
+    if ((!draft.encounters.length) && (tool.startsWith('encounter-') || tool.startsWith('boss') || ['party','activation','flame','visitors','visitors-erase'].includes(tool))) { status('Crea prima un incontro.'); return; }
+    if (tool.startsWith('encounter-')) {
+        if (!stroke) return;
+        if (!encounterStart && (p.x<0 || p.y<0 || p.x>=draft.width || p.y>=draft.height)) return;
+        encounterStart ??= {...p};
+        const group=draft.encounters.find(g=>g.id===activeEncounter)!;
+        const base=tool==='encounter-rectangle' ? stroke.encounters.find(g=>g.id===activeEncounter)! : group;
+        const cells=new Map(encounterTiles(base).map(t=>[`${t.x},${t.y}`,t]));
+        const radius=Number(el<HTMLSelectElement>('encounter-brush').value);
+        const from=lastTile ?? p, n=Math.max(Math.abs(p.x-from.x),Math.abs(p.y-from.y));
+        const apply=(x:number,y:number)=>{if(x<0 || y<0 || x>=draft.width || y>=draft.height)return;const key=`${x},${y}`;if(tool==='encounter-cut')cells.delete(key);else cells.set(key,{x,y});};
+        if(tool==='encounter-rectangle') {
+            for(let y=Math.max(0,Math.min(encounterStart.y,p.y));y<=Math.min(draft.height-1,Math.max(encounterStart.y,p.y));y++)
+                for(let x=Math.max(0,Math.min(encounterStart.x,p.x));x<=Math.min(draft.width-1,Math.max(encounterStart.x,p.x));x++)apply(x,y);
+        } else for(let i=0;i<=n;i++){const t=n?i/n:1,cx=Math.round(from.x+(p.x-from.x)*t),cy=Math.round(from.y+(p.y-from.y)*t);for(let y=cy-radius;y<=cy+radius;y++)for(let x=cx-radius;x<=cx+radius;x++)apply(x,y);}
+        group.tiles=[...cells.values()];
+        group.visitorTiles=group.visitorTiles?.filter(t=>cells.has(`${t.x},${t.y}`));
+        lastTile=p; draw(); return;
+    }
+    if (tool === 'room-rectangle' && lastTile) {
+        roomEditor.paint(p, lastTile); draw(); return;
+    }
     if (p.x < 0 || p.y < 0 || p.x >= draft.width || p.y >= draft.height)
         return;
+    if (roomEditor.paint(p, lastTile)) { lastTile = p; draw(); return; }
     const existing = draft.entities.find(e => e.kind === 'flame' ? draftFlameTiles(e).some(t => t.x === p.x && t.y === p.y) : e.x === p.x && e.y === p.y);
     const existingAsset = [...(draft.assetPlacements ?? [])].reverse().find(item => {
         const a = sharedAssets.find(a => a.id === item.assetId);
@@ -289,7 +400,7 @@ function paint(p: Vec2): void {
         for(let i=0;i<=n;i++) {
             const t=n ? i/n : 1, x=Math.round(from.x+(p.x-from.x)*t), y=Math.round(from.y+(p.y-from.y)*t);
             if (tool==='visitors-erase') tiles.delete(`${x},${y}`);
-            else if (x>=group.x && y>=group.y && x<group.x+group.width && y<group.y+group.height) tiles.set(`${x},${y}`,{x,y});
+            else if (encounterContains(group,x,y)) tiles.set(`${x},${y}`,{x,y});
         }
         group.visitorTiles=[...tiles.values()];
     }
@@ -368,7 +479,7 @@ canvas.addEventListener('pointermove', e => { if (e.pointerId !== pointer)
 }
 else if (stroke)
     paint(tileAt(e)); });
-function finishStroke(cancelled = false): void { if (stroke) {
+function finishStroke(cancelled = false): void { encounterStart=null; roomEditor.finish(); if (stroke) {
     if (cancelled)
         draft = stroke;
     else
@@ -396,8 +507,8 @@ for (const f of ['name', 'x', 'y', 'width', 'height'] as const)
         g.name = value('encounter-name');
     else
         g[f] = Number(value(`encounter-${f}`)); }));
-button('add-encounter', () => change(() => { activeEncounter = crypto.randomUUID(); draft.encounters.push({ id: activeEncounter, name: `Incontro ${draft.encounters.length + 1}`, x: 0, y: 0, width: draft.width, height: draft.height }); }));
-button('remove-encounter', () => change(() => { if (draft.encounters.length === 1 || draft.entities.some(e => e.kind !== 'npc' && (e.encounterId ?? draft.encounters[0].id) === activeEncounter))
+button('add-encounter', () => change(() => { activeEncounter = crypto.randomUUID(); draft.encounters.push({ id: activeEncounter, name: `Incontro ${draft.encounters.length + 1}`, x: 0, y: 0, width: draft.width, height: draft.height, tiles: [] }); }));
+button('remove-encounter', () => change(() => { if (draft.entities.some(e => !['npc','pickup'].includes(e.kind) && (e.encounterId ?? draft.encounters[0]?.id ?? '') === activeEncounter))
     throw new Error('Riassegna prima le entità. Deve restare almeno un incontro.'); draft.encounters = draft.encounters.filter(g => g.id !== activeEncounter); }));
 for (const f of ['label', 'x', 'y', 'level', 'radius', 'template', 'encounter', 'span', 'vertical', 'aggroRadius'] as const)
     el(`entity-${f}`).addEventListener('change', () => change(() => { const e = draft.entities.find(e => e.id === selected); if (!e)
@@ -470,10 +581,11 @@ playtestCanvas.addEventListener('pointerdown', e => { if (e.button !== 0 || !pre
 playtestCanvas.addEventListener('pointerup', () => { attacking = false; });
 playtestCanvas.addEventListener('pointercancel', () => { attacking = false; });
 button('random-flame', () => change(() => {
-    const group = draft.encounters.find(g => g.id === activeEncounter)!;
+    const group = draft.encounters.find(g => g.id === activeEncounter); if (!group) { status('Crea prima un incontro.'); return; }
     const candidates: DraftEntity[] = [];
     for (let y = Math.max(1, group.y); y < Math.min(draft.height - 1, group.y + group.height); y++)
         for (let x = Math.max(1, group.x); x < Math.min(draft.width - 1, group.x + group.width); x++) {
+            if (!encounterContains(group,x,y)) continue;
             if (['rock', 'water'].includes(draft.tiles[y * draft.width + x]) || draft.entities.some(e => (e.kind === 'flame' ? draftFlameTiles(e) : [e]).some(p => p.x === x && p.y === y))) continue;
             candidates.push({ id: crypto.randomUUID(), kind: 'flame', template: '', label: 'Fiamma casuale', x, y, radius: 15, level: 1, span: 1, vertical: false, encounterId: activeEncounter });
         }
@@ -526,7 +638,20 @@ async function refreshSharedAssets(): Promise<void> {
         const response = await fetch('/__world/project');
         if (response.ok) {
             const project = await response.json(), local = await loadWorldCheckpoint();
-            sharedAssets = local && local.revision === project.revision ? local.document.assets : parseWorldDocument(project.document).assets;
+            const definition = (project.dungeons as import('../../../shared/dungeons').DungeonDefinition[]).find(d => d.id === draft.id);
+            installedRoomSignature = definition ? roomSignature((definition.rooms ?? []).map(room => ({ ...room, tiles: room.tiles.map(p => ({ x: p.x-definition.layout.bounds.minTx, y: p.y-definition.layout.bounds.minTy })) }))) : '';
+            const document = local && local.revision === project.revision ? local.document : parseWorldDocument(project.document);
+            sharedAssets = document.assets; roomPassages = [];
+            const interior = document.interiors?.find(m => m.document.dungeons.some(d => d.dungeonId === draft.id && d.enabled !== false));
+            const placement = interior?.document.dungeons.find(d => d.dungeonId === draft.id);
+            if (interior && placement) {
+                const seen = new Set<string>();
+                for (const warp of document.warps ?? []) if (warp.from === interior.id && !seen.has(warp.id)) {
+                    seen.add(warp.id); if (warp.reverseId) seen.add(warp.reverseId);
+                    roomPassages.push({ id: warp.id, name: warp.name, entrySize:warp.entrySize, arrivalSize:warp.arrivalSize, entry: { x: warp.entry.x-placement.x, y: warp.entry.y-placement.y }, ...(warp.to === interior.id ? { arrival: { x: warp.arrival.x-placement.x, y: warp.arrival.y-placement.y } } : {}), bidirectional: !!warp.reverseId });
+                }
+                for (const warp of document.warps ?? []) if (warp.to === interior.id && warp.from !== interior.id && !seen.has(warp.id)) roomPassages.push({ id: warp.id, name: warp.name, entrySize:warp.arrivalSize, entry: { x: warp.arrival.x-placement.x, y: warp.arrival.y-placement.y }, bidirectional: false, arrivalOnly: true });
+            }
         }
         const library = await fetch('/__studio/library', { cache: 'no-store' });
         if (library.ok) {
@@ -544,12 +669,13 @@ async function refreshSharedAssets(): Promise<void> {
     } catch { /* The published client uses the bundled shared catalog. */ }
 }
 if (studioChannel) studioChannel.onmessage = event => {
+    if (event.data?.type === 'world-draft') { void refreshSharedAssets(); }
     if (event.data?.type === 'actors') { stopPreview(); void refreshSharedAssets(); }
     if (event.data?.type === 'assets') {
         try { const document = newWorldDocument(); document.assets = event.data.assets; sharedAssets = parseWorldDocument(document).assets; stopPreview(); refresh(); } catch { /* Ignore invalid catalog updates. */ }
     }
 };
 window.addEventListener('focus', () => { void refreshSharedAssets(); });
-void refreshSharedAssets().then(() => setupDungeonLibrary(() => draft, incoming => { change(() => { draft = incoming; selected = null; }); fit(); status('Dungeon aperto dal catalogo. Modifica e premi Aggiorna bozza installata.'); }, status, refreshBossPalette));
+void refreshSharedAssets().then(() => setupDungeonLibrary(() => draft, incoming => { change(() => { draft = incoming; selected = null; }); fit(); void refreshSharedAssets(); status('Dungeon aperto dal catalogo. Modifica e premi Aggiorna bozza installata.'); }, status, refreshBossPalette));
 
 el("entity-inherit-radius").addEventListener("change", () => change(() => { const e=draft.entities.find(e=>e.id===selected); if(!e) return; e.inheritRadius=input("entity-inherit-radius").checked; if(e.inheritRadius) e.radius=BOSS_DEFINITIONS.find(b=>b.id===e.template)?.radius??e.radius; }));

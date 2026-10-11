@@ -9,7 +9,7 @@ import { coordinateHash } from './coordinate-random';
 import { EDIT_CHUNK_SIZE, type WorldTileChunk } from './world-tiles';
 export { coordinateHash } from './coordinate-random';
 
-export interface NpcSpawn { id: string; x: number; y: number; npcKind: import('./npcs').NpcTemplateId; level: number; }
+export interface NpcSpawn { id: string; x: number; y: number; npcKind: import('./npcs').NpcTemplateId; level: number; settings?: import('./npc-settings').NpcSettings; }
 export interface Chunk { key: string; cx: number; cy: number; tiles: TileKind[]; npcs: NpcSpawn[]; pickups: Pickup[]; }
 export const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 export const chunkCoords = (x: number, y: number): { cx: number; cy: number } => ({ cx: Math.floor(x / CHUNK_SIZE), cy: Math.floor(y / CHUNK_SIZE) });
@@ -25,6 +25,10 @@ function noise(x: number, y: number, seed: number): number {
 
 /** Pure terrain plus a bounded LRU cache; neither client nor server retains infinity. */
 export class World {
+  readonly roomTiles = new Map<string, string>();
+  readonly rooms: { id: string; name: string; tiles: { x: number; y: number }[] }[] = [];
+  roomAt(x: number, y: number): string { return this.roomTiles.size ? this.roomTiles.get(`${Math.floor(x / TILE_SIZE)},${Math.floor(y / TILE_SIZE)}`) ?? '' : ''; }
+  sameRoom(a: { x: number; y: number }, b: { x: number; y: number }): boolean { return this.roomAt(a.x, a.y) === this.roomAt(b.x, b.y); }
   private cache = new Map<string, Chunk>();
   private readonly lockedBosses = new Set<string>();
   lockRevision = 0;
@@ -36,6 +40,10 @@ export class World {
   constructor(public readonly seed = WORLD_DOCUMENT.seed, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world',
     document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS) {
     this.authoring = new WorldAuthoring(document);
+    for (const dungeon of dungeons) for (const room of dungeon.rooms ?? []) {
+      const id = `${dungeon.id}:${room.id}`; this.rooms.push({ ...room, id });
+      for (const tile of room.tiles) this.roomTiles.set(`${tile.x},${tile.y}`, id);
+    }
     for (const d of dungeons) for (const p of d.assetPlacements ?? []) {
       if (this.authoring.assets.has(p.assetId)) this.authoring.addPlacement({ ...p, id: `dungeon:${d.id}:${p.id}` });
     }

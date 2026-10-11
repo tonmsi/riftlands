@@ -43,7 +43,7 @@ export function createDungeonPlaytest(draft: DungeonDraft, classId: ClassId = 'w
   const compiled = compileDungeonDraft(isolated, assets), definition = compiled.definition;
   const bosses = resolveDungeonBosses(compiled);
   const b = definition.layout.bounds;
-  const anchor = isolated.entities.find(e => e.kind === 'party') ?? isolated.entities.find(e => e.kind === 'boss')!;
+  const anchor = isolated.entities.find(e => e.kind === 'party') ?? isolated.entities.find(e => e.kind === 'boss') ?? {x:1,y:1};
   const start = definition.spawnPoints.party[0] ?? definition.spawnPoints.boss;
   const reachable = reachableDraftTiles(isolated, anchor, assets);
   const entrance = definition.passages.filter(p => p.tiles.some(t => (t.x === b.minTx || t.x === b.maxTx || t.y === b.minTy || t.y === b.maxTy) && reachable.has(`${t.x - b.minTx},${t.y - b.minTy}`)))

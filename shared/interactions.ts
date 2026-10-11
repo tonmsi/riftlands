@@ -9,6 +9,7 @@ export interface GroundItem { id: string; x: number; y: number; stack: ItemStack
 export interface DialogueView { sessionId: string; targetId: string; speaker: string; text: string; choices: { id: string; label: string }[]; request?: { itemId: string; remaining: number }; shop?: (VendorOffer & { disabledReason?: string })[]; rewards?: ItemStack[]; rewardGold?: number; rewardXp?: number; }
 export type InteractionCommand =
   | { kind: 'warp'; warpId: string }
+  | { kind: 'collect-warp-key'; keyId: string }
   | { kind: 'fishing'; command: FishingCommand }
   | { kind: 'talk'; targetId: string }
   | { kind: 'choose'; sessionId: string; choiceId: string }
@@ -24,6 +25,7 @@ export function validInteractionCommand(value: unknown): value is InteractionCom
   const slot = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) < 64;
   switch (command.kind) {
     case 'warp': return text(command.warpId);
+    case 'collect-warp-key': return text(command.keyId);
     case 'fishing': return validFishingCommand(command.command);
     case 'talk': return text(command.targetId);
     case 'choose': return text(command.sessionId) && text(command.choiceId);

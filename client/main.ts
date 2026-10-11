@@ -55,7 +55,7 @@ let lobbyToken: string | undefined;
 let mobileControls: MobileControls | undefined;
 const releaseControls = (): void => { controls.clear(); mobileControls?.reset(); };
 let activeMapId = 'world', warpRoomReceived = false;
-const warpUI = new WarpUI(warpId => { connection.send({ type: 'interaction', command: { kind: 'warp', warpId } }); });
+const warpUI = new WarpUI(warpId => { connection.send({ type: 'interaction', command: { kind: 'warp', warpId } }); }, keyId => { connection.send({ type: 'interaction', command: { kind: 'collect-warp-key', keyId } }); });
 
 const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   releaseControls,
@@ -365,7 +365,7 @@ function frame(now: number): void {
   // Never switch the owner's body onto the delayed remote timeline near enemies.
   const self = latest?.betting?.spectating ? actors.find(a => a.id === latest!.self.id) ?? latest.self : immediateSelf;
   warpUI.update(renderer.world, self, WORLD_DOCUMENT.warps ?? [], activeMapId,
-    playing && connection.connected && renderer.world.mode === 'world' && !ui.inputBlocked && !latest?.dialogue && !latest?.fishing && !bettingUI.visible);
+    playing && connection.connected && renderer.world.mode === 'world' && !ui.inputBlocked && !latest?.dialogue && !latest?.fishing && !bettingUI.visible, latest?.warpKeys, latest?.warpGates, latest?.inventory?.warpKeys, time);
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const combat = localCombat.sample(self, remoteFrame?.projectiles ?? [], [...effects.values()], renderer.world, time);
   const projectiles = combat.projectiles;
@@ -386,6 +386,7 @@ function frame(now: number): void {
     arenaGate: latest?.arenaGate,
     goldDrops: latest?.goldDrops,
     groundItems: latest?.groundItems,
+    warpKeys: latest?.warpKeys,
     inventory: latest?.inventory,
     bossWindups: latest?.bossWindups,
     bossLocks: latest?.bossLocks,

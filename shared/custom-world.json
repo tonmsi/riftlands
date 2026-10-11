@@ -3161,6 +3161,3751 @@
         "feather": 0.35,
         "durationMs": 180
       }
+    },
+    {
+      "id": "tile-muro-pietra",
+      "name": "tile muro pietra",
+      "image": "/world-assets/tile-muro-pietra.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "wall",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "Scene-Overview",
+      "name": "Scene Overview",
+      "image": "/world-assets/Scene-Overview.png",
+      "width": 29.25,
+      "height": 29.25,
+      "columns": 30,
+      "rows": 30,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "imageTransform": {
+        "x": 1.9895,
+        "y": 0.8509,
+        "scale": 1
+      }
+    },
+    {
+      "id": "tile-muro-sx",
+      "name": "tile muro sx",
+      "image": "/world-assets/tile-muro-sx.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      }
     }
   ],
   "placements": [
@@ -3767,9 +7512,9 @@
       "priority": 20,
       "shape": {
         "kind": "circle",
-        "x": -32,
-        "y": -12,
-        "radius": 41
+        "x": -22,
+        "y": -6,
+        "radius": 24.99
       },
       "npcs": {
         "density": 0.25,
@@ -3805,28 +7550,6 @@
       "pvp": false,
       "generateAssets": false,
       "questId": "find-platos"
-    },
-    {
-      "id": "zone-bf4515a8-a4a3-4619-b6b6-90988cd23b16",
-      "name": "Nuova zona",
-      "priority": 18,
-      "shape": {
-        "kind": "rect",
-        "x": -121,
-        "y": -56,
-        "width": 365,
-        "height": 294
-      },
-      "generateAssets": false,
-      "npcs": {
-        "density": 0,
-        "maxPerChunk": 3,
-        "weights": {
-          "slime": 0,
-          "wisp": 0,
-          "sentinel": 0
-        }
-      }
     },
     {
       "id": "zone-8dc61550-2433-42b5-a334-5a0b1d525a0e",
@@ -4072,7 +7795,7 @@
     }
   ],
   "tileChunks": [
-    [-1,-1,0,953,3,953,7,7,960,24,3,984,8,7,992,24,3,1016,8,7],
+    [-1,-1,0,160,3,160,3,5,163,29,3,192,6,5,198,26,3,224,7,5,231,25,3,256,2,7,258,5,5,263,25,3,288,3,7,291,1,3,292,3,5,295,25,3,320,3,7,323,1,3,324,3,5,327,26,3,353,3,7,356,3,5,359,2,7,361,24,3,385,3,7,388,3,5,391,2,7,393,24,3,417,3,7,420,3,5,423,2,7,425,24,3,449,3,7,452,3,5,455,2,7,457,23,3,480,4,7,484,3,5,487,2,7,489,23,3,512,4,7,516,3,5,519,2,7,521,23,3,544,3,7,547,5,9,552,1,7,553,23,3,576,9,9,585,23,3,608,12,9,620,20,3,640,14,9,654,18,3,672,19,9,691,13,3,704,26,9,730,6,3,736,27,9,763,5,3,768,28,9,796,4,3,800,29,9,829,3,3,832,29,9,861,3,3,864,29,9,893,3,3,896,28,9,924,4,3,928,26,9,954,6,7,960,25,9,985,7,7,992,24,9,1016,8,7],
     [-1,-10,0,251,3,254,24,3,288,20,3,320,18,3,352,17,3,384,16,3,416,15,3,448,14,3,480,14,3,512,13,3,544,13,3,576,12,3,608,12,3,640,11,3,672,11,3,704,10,3,736,9,3,768,9,3,800,8,3,832,7,3,864,7,3,896,6,3,928,6,3,960,5,3,992,4,3],
     [-1,-11,701,3,3,729,7,3,758,10,3,787,13,3,816,16,3,845,19,3,874,22,3,903,25,3,932,28,3,961,63,3],
     [-1,-2,0,2,7,2,30,3,32,1,7,33,991,3],
@@ -4083,7 +7806,7 @@
     [-1,-7,0,1024,7],
     [-1,-8,0,726,3,726,10,7,736,11,3,747,21,7,768,1,3,769,255,7],
     [-1,-9,0,4,3,32,3,3,64,2,3,96,2,3,128,1,3,160,1,3,694,10,3,715,21,3,737,287,3],
-    [-1,0,0,23,3,23,4,7,27,27,3,54,4,7,58,28,3,86,3,7,89,28,3,117,3,7,120,29,3,149,3,7,152,16,3,168,2,5,170,11,3,181,3,7,184,17,3,201,1,5,202,10,3,212,3,7,215,10,3,225,2,5,227,8,3,235,1,5,236,8,3,244,3,7,247,9,3,256,2,5,258,9,3,267,2,5,269,7,3,276,3,7,279,9,3,288,1,5,289,2,7,291,17,3,308,3,7,311,9,3,320,5,7,325,15,3,340,3,7,343,10,3,353,5,7,358,13,3,371,3,7,374,13,3,387,5,7,392,7,3,399,2,5,401,2,3,403,3,7,406,14,3,420,5,7,425,7,3,432,4,5,436,2,7,438,15,3,453,5,7,458,8,3,466,1,7,467,2,5,469,11,3,480,3,13,483,4,3,487,3,7,490,7,3,497,3,7,500,3,5,503,9,3,512,4,13,516,3,3,519,4,7,523,5,3,528,4,7,532,1,3,533,3,5,536,8,3,544,5,13,549,3,3,552,11,7,563,4,3,567,1,5,568,8,3,576,5,13,581,4,3,585,9,7,594,14,3,608,1,9,609,5,13,614,3,3,617,6,7,623,4,13,627,13,3,640,2,9,642,4,13,646,3,3,649,3,7,652,2,3,654,6,13,660,12,3,672,2,9,674,4,13,678,2,3,680,3,7,683,2,3,685,8,13,693,11,3,704,1,9,705,4,13,709,2,3,711,4,7,715,1,3,716,8,13,724,4,3,728,1,9,729,7,3,736,4,13,740,2,3,742,4,7,746,1,3,747,8,13,755,4,3,759,3,9,762,6,3,768,3,13,771,2,3,773,4,7,777,1,3,778,8,13,786,6,3,792,1,9,793,7,3,800,2,13,802,3,3,805,3,7,808,1,3,809,8,13,817,9,3,826,2,5,828,4,3,832,2,13,834,3,3,837,3,7,840,1,3,841,9,13,850,7,3,857,2,5,859,5,3,864,2,13,866,3,3,869,3,7,872,2,3,874,8,13,882,6,3,888,2,5,890,3,3,893,2,9,895,1,3,896,1,13,897,4,3,901,3,7,904,1,3,905,10,13,915,4,3,919,2,5,921,3,3,924,4,9,928,5,3,933,3,7,936,11,13,947,4,3,951,1,5,952,5,3,957,3,9,960,5,3,965,4,7,969,9,13,978,2,3,980,4,5,984,6,3,990,2,9,992,6,3,998,3,7,1001,8,13,1009,2,3,1011,4,5,1015,9,3],
+    [-1,0,0,24,9,24,3,7,27,5,3,32,23,9,55,3,7,58,6,3,64,18,9,82,4,3,86,3,7,89,7,3,96,10,9,106,11,3,117,3,7,120,8,3,128,4,9,132,2,5,134,3,9,137,12,3,149,3,7,152,8,3,160,2,9,162,8,5,170,11,3,181,3,7,184,8,3,192,1,9,193,9,5,202,10,3,212,3,7,215,9,3,224,8,5,232,3,3,235,1,5,236,8,3,244,3,7,247,9,3,256,3,5,259,3,3,262,1,5,263,4,3,267,2,5,269,7,3,276,3,7,279,9,3,288,1,5,289,2,7,291,17,3,308,3,7,311,9,3,320,5,7,325,15,3,340,3,7,343,10,3,353,5,7,358,13,3,371,3,7,374,13,3,387,5,7,392,7,3,399,2,5,401,2,3,403,3,7,406,14,3,420,5,7,425,7,3,432,4,5,436,2,7,438,15,3,453,5,7,458,8,3,466,1,7,467,2,5,469,11,3,480,3,13,483,4,3,487,3,7,490,7,3,497,3,7,500,3,5,503,9,3,512,4,13,516,3,3,519,4,7,523,5,3,528,4,7,532,1,3,533,3,5,536,8,3,544,5,13,549,3,3,552,11,7,563,4,3,567,1,5,568,8,3,576,5,13,581,4,3,585,9,7,594,14,3,608,1,9,609,5,13,614,3,3,617,6,7,623,4,13,627,13,3,640,2,9,642,4,13,646,3,3,649,3,7,652,2,3,654,6,13,660,12,3,672,2,9,674,4,13,678,2,3,680,3,7,683,2,3,685,8,13,693,11,3,704,1,9,705,4,13,709,2,3,711,4,7,715,1,3,716,8,13,724,4,3,728,1,9,729,7,3,736,4,13,740,2,3,742,4,7,746,1,3,747,8,13,755,4,3,759,3,9,762,6,3,768,3,13,771,2,3,773,4,7,777,1,3,778,8,13,786,6,3,792,1,9,793,7,3,800,2,13,802,3,3,805,3,7,808,1,3,809,8,13,817,9,3,826,2,5,828,4,3,832,2,13,834,3,3,837,3,7,840,1,3,841,9,13,850,7,3,857,2,5,859,5,3,864,2,13,866,3,3,869,3,7,872,2,3,874,8,13,882,6,3,888,2,5,890,3,3,893,2,9,895,1,3,896,1,13,897,4,3,901,3,7,904,1,3,905,10,13,915,4,3,919,2,5,921,3,3,924,4,9,928,5,3,933,3,7,936,11,13,947,4,3,951,1,5,952,5,3,957,3,9,960,5,3,965,4,7,969,9,13,978,2,3,980,4,5,984,6,3,990,2,9,992,6,3,998,3,7,1001,8,13,1009,2,3,1011,4,5,1015,9,3],
     [-1,1,0,6,3,6,3,7,9,1,3,10,6,13,16,4,3,20,2,5,22,16,3,38,3,7,41,7,13,48,20,3,68,4,7,72,7,13,79,13,3,92,1,5,93,3,3,96,8,7,104,1,3,105,5,13,110,13,3,123,3,5,126,2,3,128,7,7,135,3,3,138,1,13,139,16,3,155,3,5,158,2,3,160,5,7,165,4,3,169,1,13,170,17,3,187,3,5,190,10,3,200,3,13,203,17,3,220,1,5,221,1,13,222,2,3,224,1,13,225,6,3,231,5,13,236,17,3,253,2,13,255,1,5,256,2,13,258,4,3,262,6,13,268,18,3,286,1,13,287,1,5,288,3,13,291,4,3,295,4,13,299,19,3,318,4,13,322,6,3,328,2,13,330,20,3,350,3,13,353,49,3,402,3,9,405,28,3,433,5,9,438,10,3,448,2,13,450,14,3,464,8,9,472,8,3,480,3,13,483,13,3,496,9,9,505,7,3,512,3,13,515,13,3,528,8,9,536,8,3,544,3,13,547,14,3,561,1,9,562,2,3,564,3,9,567,9,3,576,4,13,580,28,3,608,3,13,611,3,3,614,1,13,615,10,3,625,1,13,626,14,3,640,10,13,650,6,3,656,3,13,659,13,3,672,11,13,683,4,3,687,5,13,692,12,3,704,11,13,715,3,3,718,6,13,724,14,3,738,9,13,747,4,3,751,6,13,757,12,3,769,11,13,780,4,3,784,6,13,790,12,3,802,9,13,811,5,3,816,7,13,823,11,3,834,9,13,843,6,3,849,7,13,856,10,3,866,9,13,875,7,3,882,5,13,887,9,3,896,10,13,906,5,3,911,1,13,912,1,3,913,5,13,918,10,3,928,8,13,936,6,3,942,9,13,951,9,3,960,8,13,968,5,3,973,11,13,984,7,3,991,1,7,992,8,13,1000,5,3,1005,5,13,1010,1,3,1011,4,13,1015,8,3,1023,1,7],
     [-1,10,0,1024,7],
     [-1,11,0,160,7],
@@ -4204,10 +7927,10 @@
     [-19,2,0,3,7,32,3,7],
     [-19,4,774,1,7,805,2,7,836,3,7,867,4,7,898,5,7,929,6,7,960,7,7,992,7,7],
     [-19,5,0,7,7,32,7,7,64,7,7,96,6,7,128,6,7,160,6,7,192,6,7],
-    [-2,-1,0,689,3,689,4,9,693,331,3],
+    [-2,-1,0,26,3,26,4,7,30,5,3,35,11,5,46,13,3,59,4,7,63,3,3,66,14,5,80,12,3,92,3,7,95,2,3,97,16,5,113,11,3,124,3,7,127,2,3,129,3,5,132,10,3,142,4,5,146,10,3,156,3,7,159,2,3,161,3,5,164,11,3,175,21,5,196,12,3,208,19,5,227,13,3,240,19,5,259,13,3,272,3,5,275,11,3,286,2,7,288,2,5,290,14,3,304,3,5,307,12,3,319,1,7,320,2,5,322,14,3,336,3,5,339,13,3,352,2,5,354,14,3,368,3,5,371,13,3,384,19,5,403,13,3,416,19,5,435,13,3,448,19,5,467,13,3,480,2,5,482,14,3,496,3,5,499,11,3,510,2,7,512,2,5,514,14,3,528,3,5,531,8,3,539,5,7,544,2,5,546,14,3,560,3,5,563,7,3,570,6,7,576,1,5,577,15,3,592,3,5,595,6,3,601,5,7,606,2,9,608,4,5,612,11,3,623,4,5,627,6,3,633,3,7,636,4,9,640,5,5,645,9,3,654,6,5,660,4,3,664,3,7,667,5,9,672,21,5,693,3,3,696,3,7,699,5,9,704,16,5,720,1,3,721,3,5,724,5,3,729,3,7,732,4,9,736,14,5,750,11,3,761,3,7,764,1,3,765,3,9,768,5,5,773,20,3,793,3,7,796,4,9,800,5,5,805,20,3,825,3,7,828,4,9,832,4,5,836,21,3,857,3,7,860,4,9,864,3,5,867,22,3,889,3,7,892,4,9,896,24,3,920,4,7,924,4,9,928,24,3,952,3,7,955,5,9,960,23,3,983,4,7,987,5,9,992,23,3,1015,3,7,1018,6,9],
     [-2,-10,27,5,3,56,8,3,86,10,3,116,12,3,146,14,3,176,16,3,206,18,3,237,19,3,269,19,3,301,19,3,333,19,3,365,19,3,396,20,3,428,20,3,460,20,3,492,20,3,524,20,3,556,20,3,588,20,3,620,20,3,652,20,3,684,20,3,715,21,3,747,21,3,779,21,3,811,21,3,843,21,3,875,21,3,907,21,3,939,21,3,971,21,3,1006,18,3],
     [-2,-11,1022,2,3],
-    [-2,-2,0,127,7,127,1,3,128,30,7,158,2,3,160,29,7,189,3,3,192,28,7,220,4,3,224,27,7,251,5,3,256,26,7,282,6,3,288,25,7,313,7,3,320,23,7,343,9,3,352,21,7,373,11,3,384,19,7,403,13,3,416,18,7,434,14,3,448,16,7,464,16,3,480,15,7,495,17,3,512,14,7,526,18,3,544,13,7,557,19,3,576,12,7,588,20,3,608,10,7,618,22,3,640,8,7,648,24,3,672,5,7,677,27,3,704,4,7,708,28,3,736,4,7,740,28,3,768,4,7,772,28,3,800,3,7,803,29,3,832,3,7,835,29,3,864,3,7,867,29,3,896,2,7,898,30,3,928,2,7,930,30,3,960,1,7,961,31,3,992,1,7,993,31,3],
+    [-2,-2,0,127,7,127,1,3,128,30,7,158,2,3,160,29,7,189,3,3,192,28,7,220,4,3,224,27,7,251,5,3,256,26,7,282,6,3,288,25,7,313,7,3,320,24,7,344,8,3,352,21,7,373,1,3,374,3,7,377,7,3,384,19,7,403,3,3,406,3,7,409,7,3,416,18,7,434,4,3,438,3,7,441,7,3,448,16,7,464,6,3,470,3,7,473,7,3,480,15,7,495,7,3,502,3,7,505,7,3,512,15,7,527,7,3,534,4,7,538,6,3,544,16,7,560,7,3,567,3,7,570,6,3,576,12,7,588,1,3,589,4,7,593,6,3,599,3,7,602,6,3,608,10,7,618,4,3,622,4,7,626,5,3,631,3,7,634,6,3,640,8,7,648,7,3,655,4,7,659,2,3,661,1,7,662,1,3,663,3,7,666,6,3,672,5,7,677,11,3,688,10,7,698,6,3,704,4,7,708,13,3,721,9,7,730,6,3,736,4,7,740,15,3,755,6,7,761,7,3,768,4,7,772,17,3,789,3,7,792,8,3,800,3,7,803,19,3,822,3,7,825,7,3,832,3,7,835,19,3,854,3,7,857,7,3,864,3,7,867,19,3,886,4,7,890,6,3,896,2,7,898,21,3,919,3,7,922,6,3,928,2,7,930,21,3,951,4,7,955,5,3,960,1,7,961,23,3,984,4,7,988,4,3,992,1,7,993,24,3,1017,4,7,1021,3,3],
     [-2,-3,0,1024,7],
     [-2,-4,0,1024,7],
     [-2,-5,0,1024,7],
@@ -4215,7 +7938,7 @@
     [-2,-7,0,1024,7],
     [-2,-8,0,827,3,827,197,7],
     [-2,-9,19,13,3,53,11,3,87,9,3,120,8,3,153,7,3,186,6,3,219,5,3,251,4,3,284,3,3,316,2,3,795,229,3],
-    [-2,0,0,2,7,2,30,3,32,3,7,35,15,3,50,3,7,53,11,3,64,4,7,68,13,3,81,5,7,86,10,3,96,6,7,102,1,3,103,7,7,110,1,3,111,6,7,117,11,3,128,25,7,153,7,3,160,29,7,189,3,3,192,17,7,209,4,3,213,9,7,222,2,3,224,14,7,238,10,3,248,20,7,268,16,3,284,9,7,293,1,3,294,3,7,297,20,3,317,2,7,319,1,5,320,6,7,326,24,3,350,2,5,352,6,7,358,23,3,381,2,5,383,1,3,384,5,7,389,8,3,397,6,13,403,13,3,416,4,7,420,8,3,428,8,13,436,12,3,448,3,7,451,8,3,459,10,13,469,11,3,480,2,7,482,8,3,490,22,13,512,3,7,515,7,3,522,22,13,544,5,7,549,6,3,555,21,13,576,6,7,582,5,3,587,21,13,608,4,7,612,1,13,613,1,7,614,5,3,619,16,13,635,5,9,640,3,7,643,8,13,651,1,3,652,14,13,666,6,9,672,2,7,674,24,13,698,6,9,704,2,7,706,25,13,731,5,9,736,3,7,739,25,13,764,1,9,765,3,13,768,4,7,772,28,13,800,6,7,806,26,13,832,5,7,837,27,13,864,5,7,869,27,13,896,6,7,902,26,13,928,7,7,935,25,13,960,7,7,967,21,13,988,4,3,992,7,7,999,20,13,1019,5,3],
+    [-2,0,0,2,7,2,21,3,23,3,7,26,6,9,32,3,7,35,15,3,50,3,7,53,2,3,55,3,7,58,6,9,64,4,7,68,13,3,81,5,7,86,1,3,87,4,7,91,5,9,96,6,7,102,1,3,103,7,7,110,1,3,111,6,7,117,3,3,120,4,7,124,4,9,128,29,7,157,3,9,160,29,7,189,3,9,192,17,7,209,4,3,213,9,7,222,2,9,224,14,7,238,10,3,248,20,7,268,16,3,284,9,7,293,1,3,294,3,7,297,20,3,317,2,7,319,1,5,320,6,7,326,24,3,350,2,5,352,6,7,358,23,3,381,2,5,383,1,3,384,5,7,389,8,3,397,6,13,403,13,3,416,4,7,420,8,3,428,8,13,436,12,3,448,3,7,451,8,3,459,10,13,469,11,3,480,2,7,482,8,3,490,22,13,512,3,7,515,7,3,522,22,13,544,5,7,549,6,3,555,21,13,576,6,7,582,5,3,587,21,13,608,4,7,612,1,13,613,1,7,614,5,3,619,16,13,635,5,9,640,3,7,643,8,13,651,1,3,652,14,13,666,6,9,672,2,7,674,24,13,698,6,9,704,2,7,706,25,13,731,5,9,736,3,7,739,25,13,764,1,9,765,3,13,768,4,7,772,28,13,800,6,7,806,26,13,832,5,7,837,27,13,864,5,7,869,27,13,896,6,7,902,26,13,928,7,7,935,25,13,960,7,7,967,21,13,988,4,3,992,7,7,999,20,13,1019,5,3],
     [-2,1,0,7,7,7,19,13,26,6,3,32,7,7,39,18,13,57,2,7,59,5,3,64,8,7,72,15,13,87,8,7,95,1,3,96,8,7,104,14,13,118,18,7,136,13,13,149,4,7,153,1,3,154,14,7,168,12,13,180,4,7,184,6,3,190,11,7,201,10,13,211,1,3,212,3,7,215,9,3,224,10,7,234,10,13,244,3,7,247,8,3,255,1,13,256,12,7,268,9,13,277,2,7,279,1,13,280,6,3,286,2,13,288,13,7,301,7,13,308,2,7,310,3,13,313,4,3,317,3,13,320,14,7,334,5,13,339,2,7,341,5,13,346,4,3,350,2,13,352,15,7,367,1,3,368,4,13,372,2,7,374,3,13,377,6,3,383,1,13,384,15,7,399,6,13,405,1,7,406,3,13,409,7,3,416,14,7,430,12,13,442,1,3,443,2,13,445,1,3,446,1,13,447,1,3,448,15,7,463,17,13,480,15,7,495,17,13,512,16,7,528,16,13,544,16,7,560,16,13,576,16,7,592,16,13,608,16,7,624,16,13,640,15,7,655,17,13,672,16,7,688,16,13,704,16,7,720,16,13,736,16,7,752,15,13,767,1,3,768,17,7,785,13,13,798,2,3,800,16,7,816,15,13,831,1,3,832,17,7,849,14,13,863,1,3,864,17,7,881,15,13,896,17,7,913,15,13,928,18,7,946,14,13,960,19,7,979,13,13,992,19,7,1011,13,13],
     [-2,10,0,1024,7],
     [-2,11,0,160,7],
@@ -4261,7 +7984,7 @@
     [-27,-1,793,7,7,812,178,7,992,15,7,1008,13,7],
     [-27,0,0,10,7,21,6,7,32,8,7,55,2,7,64,6,7,96,5,7,129,3,7,161,2,7,193,1,7,225,1,7],
     [-28,-1,895,1,7,927,1,7,959,1,7,991,1,7],
-    [-3,-1,0,63,7,63,1,3,64,31,7,95,1,3,96,31,7,127,1,3,128,30,7,158,2,3,160,30,7,190,2,3,192,29,7,221,3,3,224,29,7,253,3,3,256,28,7,284,4,3,288,28,7,316,4,3,320,27,7,347,5,3,352,27,7,379,5,3,384,27,7,411,5,3,416,26,7,442,6,3,448,26,7,474,6,3,480,26,7,506,6,3,512,25,7,537,7,3,544,25,7,569,7,3,576,24,7,600,8,3,608,24,7,632,8,3,640,24,7,664,8,3,672,24,7,696,8,3,704,24,7,728,8,3,736,24,7,760,8,3,768,24,7,792,8,3,800,24,7,824,8,3,832,25,7,857,7,3,864,25,7,889,7,3,896,26,7,922,6,3,928,26,7,954,6,3,960,28,7,988,4,3,992,29,7,1021,1,3,1022,1,7,1023,1,3],
+    [-3,-1,0,63,7,63,1,3,64,31,7,95,1,3,96,31,7,127,1,3,128,30,7,158,2,3,160,30,7,190,2,3,192,29,7,221,3,3,224,29,7,253,3,3,256,28,7,284,3,3,287,1,5,288,28,7,316,3,3,319,1,5,320,27,7,347,4,3,351,1,5,352,27,7,379,4,3,383,1,5,384,27,7,411,4,3,415,1,5,416,26,7,442,5,3,447,1,5,448,26,7,474,5,3,479,1,5,480,26,7,506,5,3,511,1,5,512,25,7,537,6,3,543,1,5,544,25,7,569,6,3,575,1,5,576,24,7,600,6,3,606,2,5,608,24,7,632,5,3,637,3,5,640,24,7,664,4,3,668,4,5,672,24,7,696,4,3,700,4,5,704,24,7,728,4,3,732,4,5,736,24,7,760,4,3,764,4,5,768,24,7,792,4,3,796,4,5,800,24,7,824,5,3,829,3,5,832,25,7,857,5,3,862,2,5,864,25,7,889,6,3,895,1,5,896,26,7,922,6,3,928,26,7,954,6,3,960,28,7,988,4,3,992,29,7,1021,1,3,1022,1,7,1023,1,3],
     [-3,-2,0,1024,7],
     [-3,-3,0,1024,7],
     [-3,-4,0,1024,7],
@@ -5067,6 +8790,468 @@
             "assetId": "brazier",
             "x": 31,
             "y": 3
+          },
+          {
+            "id": "asset-d6bd88d9-a980-4363-9760-17f27729a612",
+            "assetId": "tile-muro-pietra",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "asset-21caea01-aee1-49c7-8529-b7474cb30f2e",
+            "assetId": "tile-muro-pietra",
+            "x": 1,
+            "y": 0
+          },
+          {
+            "id": "asset-6ce70da8-a6f6-4369-bbed-3f1926f2f12c",
+            "assetId": "tile-muro-pietra",
+            "x": 2,
+            "y": 0
+          },
+          {
+            "id": "asset-d68d9847-5e01-4cd7-bccf-797920a43cfa",
+            "assetId": "tile-muro-pietra",
+            "x": 3,
+            "y": 0
+          },
+          {
+            "id": "asset-4f043d25-a9d5-47d9-9198-1dbfab4a579c",
+            "assetId": "tile-muro-pietra",
+            "x": 4,
+            "y": 0
+          },
+          {
+            "id": "asset-4e401a85-58c7-467c-908b-a69fd43508cc",
+            "assetId": "tile-muro-pietra",
+            "x": 5,
+            "y": 0
+          },
+          {
+            "id": "asset-f149fbaf-4f8f-428b-9098-df320c88f4d4",
+            "assetId": "tile-muro-pietra",
+            "x": 6,
+            "y": 0
+          },
+          {
+            "id": "asset-b1506e1f-447f-4a27-a302-a5cfcd819227",
+            "assetId": "tile-muro-pietra",
+            "x": 7,
+            "y": 0
+          },
+          {
+            "id": "asset-b5eb332f-912a-46df-b3ce-762206d0927c",
+            "assetId": "tile-muro-pietra",
+            "x": 8,
+            "y": 0
+          },
+          {
+            "id": "asset-15fe252d-a06e-40c6-82b2-945593c1fd65",
+            "assetId": "tile-muro-pietra",
+            "x": 9,
+            "y": 0
+          },
+          {
+            "id": "asset-61768424-d48f-47f8-be18-2847a929904b",
+            "assetId": "tile-muro-pietra",
+            "x": 10,
+            "y": 0
+          },
+          {
+            "id": "asset-41255efd-e8d5-491e-9e13-7c153a0d9338",
+            "assetId": "tile-muro-pietra",
+            "x": 11,
+            "y": 0
+          },
+          {
+            "id": "asset-dd0e25d6-63f9-4775-8c83-12c0ab2e9e92",
+            "assetId": "tile-muro-pietra",
+            "x": 12,
+            "y": 0
+          },
+          {
+            "id": "asset-243868bd-ceb4-4ef8-abfb-eec33eb923e5",
+            "assetId": "tile-muro-pietra",
+            "x": 13,
+            "y": 0
+          },
+          {
+            "id": "asset-17ed8f01-ed20-46ab-9786-5ddd9e9a20a9",
+            "assetId": "tile-muro-pietra",
+            "x": 14,
+            "y": 0
+          },
+          {
+            "id": "asset-5947ad2c-efa7-4092-a4b0-9064d6353dd7",
+            "assetId": "tile-muro-pietra",
+            "x": 15,
+            "y": 0
+          },
+          {
+            "id": "asset-a631b1eb-842f-4248-a90f-782c5d03986e",
+            "assetId": "tile-muro-pietra",
+            "x": 16,
+            "y": 0
+          },
+          {
+            "id": "asset-5a4e51f1-1a43-4381-a120-0885ca2e85bb",
+            "assetId": "tile-muro-pietra",
+            "x": 17,
+            "y": 0
+          },
+          {
+            "id": "asset-4de7c7ff-e451-45ab-a871-2b1665f4256e",
+            "assetId": "tile-muro-pietra",
+            "x": 18,
+            "y": 0
+          },
+          {
+            "id": "asset-cbe81300-e2e8-48b5-80d4-a1ece0a9caad",
+            "assetId": "tile-muro-pietra",
+            "x": 19,
+            "y": 0
+          },
+          {
+            "id": "asset-19cf2a17-b224-48f7-bc1f-0c41c3cd3861",
+            "assetId": "tile-muro-pietra",
+            "x": 20,
+            "y": 0
+          },
+          {
+            "id": "asset-1fda54b2-a2d0-415a-a6c1-52ace921801d",
+            "assetId": "tile-muro-pietra",
+            "x": 21,
+            "y": 0
+          },
+          {
+            "id": "asset-06f693b8-301c-4631-956e-7ed1c75f1c0e",
+            "assetId": "tile-muro-pietra",
+            "x": 22,
+            "y": 0
+          },
+          {
+            "id": "asset-110d3f41-026f-4f89-b113-c77c2b68d8e3",
+            "assetId": "tile-muro-pietra",
+            "x": 23,
+            "y": 0
+          },
+          {
+            "id": "asset-bcfbf817-94ae-47b0-818d-5b191318728c",
+            "assetId": "tile-muro-pietra",
+            "x": 24,
+            "y": 0
+          },
+          {
+            "id": "asset-2c7040cd-4608-428b-a26e-e8d591eda401",
+            "assetId": "tile-muro-pietra",
+            "x": 25,
+            "y": 0
+          },
+          {
+            "id": "asset-eb19527f-ecf1-4ef7-87ad-884011944ed4",
+            "assetId": "tile-muro-pietra",
+            "x": 26,
+            "y": 0
+          },
+          {
+            "id": "asset-25ddf674-dc22-4f12-93b4-da6ce7bf1095",
+            "assetId": "tile-muro-pietra",
+            "x": 27,
+            "y": 0
+          },
+          {
+            "id": "asset-8a7fcda9-c294-4a37-8054-19211121ee44",
+            "assetId": "tile-muro-pietra",
+            "x": 28,
+            "y": 0
+          },
+          {
+            "id": "asset-daca8bca-9e9c-41d4-aa77-28e205341c7f",
+            "assetId": "tile-muro-pietra",
+            "x": 29,
+            "y": 0
+          },
+          {
+            "id": "asset-fb0abb80-56d8-49ea-9246-dd4cb75f438d",
+            "assetId": "tile-muro-pietra",
+            "x": 30,
+            "y": 0
+          },
+          {
+            "id": "asset-1e631c87-17b4-4302-b328-3851320451c7",
+            "assetId": "tile-muro-pietra",
+            "x": 31,
+            "y": 0
+          },
+          {
+            "id": "asset-584973be-5463-4d18-9ab1-0d7332be657a",
+            "assetId": "tile-muro-pietra",
+            "x": 24,
+            "y": 4
+          },
+          {
+            "id": "asset-e20b6045-e43f-458a-a745-d115f89617c6",
+            "assetId": "tile-muro-pietra",
+            "x": 2,
+            "y": 4
+          },
+          {
+            "id": "asset-78e0e505-df3e-4059-9647-a33b71b2fb96",
+            "assetId": "tile-muro-pietra",
+            "x": 3,
+            "y": 4
+          },
+          {
+            "id": "asset-44271613-f674-41a3-ba07-f20bc1d0f957",
+            "assetId": "tile-muro-pietra",
+            "x": 4,
+            "y": 4
+          },
+          {
+            "id": "asset-f8fc284b-891e-40f8-8d14-f741806b4cf3",
+            "assetId": "tile-muro-pietra",
+            "x": 5,
+            "y": 4
+          },
+          {
+            "id": "asset-51770663-70c3-4bdb-be4f-23b530d9eae5",
+            "assetId": "tile-muro-pietra",
+            "x": 6,
+            "y": 4
+          },
+          {
+            "id": "asset-facf48f8-2acd-472d-9fd0-06f1c812d6e7",
+            "assetId": "tile-muro-pietra",
+            "x": 7,
+            "y": 4
+          },
+          {
+            "id": "asset-66ad6473-0524-4bc6-8ddf-573af91420ef",
+            "assetId": "tile-muro-pietra",
+            "x": 8,
+            "y": 4
+          },
+          {
+            "id": "asset-852b42cc-703b-4d5e-b3da-9590f0179500",
+            "assetId": "tile-muro-pietra",
+            "x": 9,
+            "y": 4
+          },
+          {
+            "id": "asset-44258f1e-37d3-4678-b30e-afd8dd3b7e3c",
+            "assetId": "tile-muro-pietra",
+            "x": 10,
+            "y": 4
+          },
+          {
+            "id": "asset-ff0c1095-2693-4a72-9cb3-b8d35d66517d",
+            "assetId": "tile-muro-pietra",
+            "x": 11,
+            "y": 4
+          },
+          {
+            "id": "asset-e686c89c-7055-4a39-b83d-3d6826947437",
+            "assetId": "tile-muro-pietra",
+            "x": 12,
+            "y": 4
+          },
+          {
+            "id": "asset-d486784a-dd35-49bd-97eb-fbf307969471",
+            "assetId": "tile-muro-pietra",
+            "x": 13,
+            "y": 4
+          },
+          {
+            "id": "asset-9a16e6c5-3924-4b62-aed3-4ccce42e84a2",
+            "assetId": "tile-muro-pietra",
+            "x": 14,
+            "y": 4
+          },
+          {
+            "id": "asset-f94c0242-4203-492a-a80e-df8989d19254",
+            "assetId": "tile-muro-pietra",
+            "x": 16,
+            "y": 4
+          },
+          {
+            "id": "asset-630ef09f-c1ad-4c68-bb9b-7339eea9249f",
+            "assetId": "tile-muro-pietra",
+            "x": 15,
+            "y": 4
+          },
+          {
+            "id": "asset-69130c20-a7f3-4e05-ad17-c0521fdafcd7",
+            "assetId": "tile-muro-pietra",
+            "x": 17,
+            "y": 4
+          },
+          {
+            "id": "asset-00068aba-7b3a-4643-82fb-bb8209285992",
+            "assetId": "tile-muro-pietra",
+            "x": 18,
+            "y": 4
+          },
+          {
+            "id": "asset-21592447-c768-48d0-b73b-aa1414bf7516",
+            "assetId": "tile-muro-pietra",
+            "x": 19,
+            "y": 4
+          },
+          {
+            "id": "asset-2bfe5160-a190-480d-b2f9-9c0a3371611b",
+            "assetId": "tile-muro-pietra",
+            "x": 20,
+            "y": 4
+          },
+          {
+            "id": "asset-db0157d9-cc3f-4a63-a6b5-6af97a85bdea",
+            "assetId": "tile-muro-pietra",
+            "x": 21,
+            "y": 4
+          },
+          {
+            "id": "asset-c10315b0-8ca9-49b4-94ef-1c9b590a827b",
+            "assetId": "tile-muro-pietra",
+            "x": 22,
+            "y": 4
+          },
+          {
+            "id": "asset-a1adaf55-0009-434b-9f6e-01344304b5fb",
+            "assetId": "tile-muro-pietra",
+            "x": 23,
+            "y": 4
+          },
+          {
+            "id": "asset-37f32de9-b0e1-4ed7-8ead-b223faec5304",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 11
+          },
+          {
+            "id": "asset-084b31ff-76ae-4463-bc54-31663963e4dc",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 7
+          },
+          {
+            "id": "asset-4cda3057-e3e0-43de-b5ea-009a35517f4c",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 1
+          },
+          {
+            "id": "asset-113c7a4d-4413-400f-92c1-fa77712cd66d",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 2
+          },
+          {
+            "id": "asset-13651862-bb66-4ed0-a319-cec5e8fe1ead",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 3
+          },
+          {
+            "id": "asset-bc5d44b2-1524-4d8f-b6df-c8c1e146c3d0",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 4
+          },
+          {
+            "id": "asset-226ab50d-367b-4a82-9d05-a0766848832b",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 5
+          },
+          {
+            "id": "asset-50b54704-09c4-4ef0-91c0-655230b42196",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 6
+          },
+          {
+            "id": "asset-5874e141-c6e4-485b-816b-d6ba8798a4d2",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 9
+          },
+          {
+            "id": "asset-a61386e0-8d51-47d6-a05f-4c43d33ec6dc",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 10
+          },
+          {
+            "id": "asset-cb53567f-5c63-407d-8e0d-3d67fd9e8d40",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 8
+          },
+          {
+            "id": "asset-8f692f9d-7032-4db4-bb59-8558cee22347",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 12
+          },
+          {
+            "id": "asset-64b9153e-fdca-4e24-b1c5-e2135b7dda73",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 13
+          },
+          {
+            "id": "asset-17a651c9-9e37-4fde-a855-5ac07ad7e2d0",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 23
+          },
+          {
+            "id": "asset-27187487-b354-4e79-b61d-157f11da524d",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 22
+          },
+          {
+            "id": "asset-8a720d6f-3016-4c3e-94ca-caa3796c501a",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 21
+          },
+          {
+            "id": "asset-b1248d26-8fd1-4412-bd17-336ed6e4fa29",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 20
+          },
+          {
+            "id": "asset-474c4951-5803-449f-8272-44d7964c8a41",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 19
+          },
+          {
+            "id": "asset-9c638c20-37ac-468d-95de-1e48d8565a53",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 18
+          },
+          {
+            "id": "asset-d5e1fda0-1ca5-40f1-a9d2-5d26371553d4",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 17
+          },
+          {
+            "id": "asset-e95d0a7a-47ce-4f92-bf4f-1211e7079296",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 16
+          },
+          {
+            "id": "asset-0e227376-fc37-4d9e-be47-cea9af9d7779",
+            "assetId": "tile-muro-sx",
+            "x": 0,
+            "y": 14
           }
         ],
         "tiles": [],
@@ -5078,7 +9263,43 @@
             0,
             0,
             0,
-            768,
+            191,
+            5,
+            191,
+            1,
+            9,
+            192,
+            63,
+            5,
+            255,
+            1,
+            9,
+            256,
+            452,
+            5,
+            708,
+            1,
+            9,
+            709,
+            1,
+            5,
+            710,
+            1,
+            9,
+            711,
+            29,
+            5,
+            740,
+            1,
+            9,
+            741,
+            1,
+            5,
+            742,
+            1,
+            9,
+            743,
+            25,
             5
           ]
         ]
@@ -5096,8 +9317,8 @@
         "generatorVersion": 1,
         "seed": 734291,
         "spawn": {
-          "x": 1,
-          "y": 1
+          "x": 12,
+          "y": 20
         },
         "assets": [],
         "placements": [],
@@ -5111,7 +9332,132 @@
             "y": 2
           }
         ],
-        "tileChunks": []
+        "tileChunks": [
+          [
+            0,
+            0,
+            0,
+            27,
+            5,
+            32,
+            28,
+            5,
+            64,
+            2,
+            5,
+            90,
+            2,
+            5,
+            96,
+            2,
+            5,
+            122,
+            2,
+            5,
+            128,
+            2,
+            5,
+            154,
+            2,
+            5,
+            160,
+            2,
+            5,
+            186,
+            2,
+            5,
+            192,
+            2,
+            5,
+            218,
+            2,
+            5,
+            224,
+            2,
+            5,
+            250,
+            2,
+            5,
+            256,
+            2,
+            5,
+            282,
+            2,
+            5,
+            288,
+            2,
+            5,
+            314,
+            2,
+            5,
+            320,
+            2,
+            5,
+            346,
+            2,
+            5,
+            352,
+            2,
+            5,
+            378,
+            2,
+            5,
+            384,
+            2,
+            5,
+            410,
+            2,
+            5,
+            416,
+            2,
+            5,
+            442,
+            2,
+            5,
+            448,
+            2,
+            5,
+            474,
+            2,
+            5,
+            480,
+            2,
+            5,
+            506,
+            2,
+            5,
+            512,
+            2,
+            5,
+            538,
+            2,
+            5,
+            544,
+            2,
+            5,
+            570,
+            2,
+            5,
+            576,
+            2,
+            5,
+            602,
+            2,
+            5,
+            608,
+            2,
+            5,
+            634,
+            2,
+            5,
+            640,
+            28,
+            5,
+            672,
+            28,
+            5
+          ]
+        ]
       }
     },
     {
@@ -5119,15 +9465,15 @@
       "name": "Cathedral Cave",
       "width": 100,
       "height": 82,
-      "pvp": false,
+      "pvp": true,
       "kind": "dungeon",
       "document": {
         "version": 2,
         "generatorVersion": 1,
         "seed": 734291,
         "spawn": {
-          "x": 1,
-          "y": 1
+          "x": 2,
+          "y": 79
         },
         "assets": [],
         "placements": [],
@@ -5141,14 +9487,1539 @@
             "y": 2
           }
         ],
-        "tileChunks": []
+        "tileChunks": [
+          [
+            0,
+            2,
+            0,
+            2,
+            9,
+            32,
+            2,
+            9,
+            64,
+            2,
+            9,
+            96,
+            2,
+            9,
+            128,
+            2,
+            9,
+            160,
+            2,
+            9,
+            192,
+            2,
+            9,
+            224,
+            2,
+            9,
+            256,
+            2,
+            9,
+            288,
+            2,
+            9,
+            320,
+            2,
+            9,
+            352,
+            2,
+            9,
+            384,
+            2,
+            9,
+            416,
+            2,
+            9,
+            448,
+            2,
+            9,
+            480,
+            2,
+            9,
+            512,
+            22,
+            9,
+            534,
+            10,
+            7,
+            544,
+            23,
+            9,
+            567,
+            4,
+            7
+          ],
+          [
+            0,
+            1,
+            0,
+            2,
+            7,
+            32,
+            2,
+            7,
+            64,
+            2,
+            7,
+            96,
+            2,
+            7,
+            128,
+            2,
+            7,
+            160,
+            2,
+            7,
+            192,
+            2,
+            7,
+            224,
+            1,
+            9,
+            225,
+            1,
+            7,
+            256,
+            1,
+            9,
+            257,
+            1,
+            7,
+            288,
+            1,
+            9,
+            289,
+            1,
+            7,
+            320,
+            1,
+            9,
+            321,
+            1,
+            7,
+            352,
+            1,
+            9,
+            353,
+            1,
+            7,
+            384,
+            1,
+            9,
+            385,
+            1,
+            7,
+            416,
+            1,
+            9,
+            417,
+            1,
+            7,
+            448,
+            1,
+            9,
+            449,
+            1,
+            7,
+            480,
+            2,
+            9,
+            512,
+            2,
+            9,
+            544,
+            2,
+            9,
+            576,
+            2,
+            9,
+            608,
+            2,
+            9,
+            640,
+            2,
+            9,
+            672,
+            2,
+            9,
+            704,
+            2,
+            9,
+            736,
+            2,
+            9,
+            768,
+            2,
+            9,
+            800,
+            2,
+            9,
+            832,
+            2,
+            9,
+            864,
+            2,
+            9,
+            896,
+            2,
+            9,
+            928,
+            2,
+            9,
+            960,
+            2,
+            9,
+            992,
+            2,
+            9
+          ],
+          [
+            0,
+            0,
+            3,
+            10,
+            7,
+            16,
+            11,
+            7,
+            34,
+            11,
+            7,
+            48,
+            10,
+            7,
+            65,
+            1,
+            7,
+            96,
+            2,
+            7,
+            128,
+            2,
+            7,
+            160,
+            2,
+            7,
+            192,
+            2,
+            7,
+            224,
+            2,
+            7,
+            257,
+            1,
+            7,
+            289,
+            1,
+            7,
+            385,
+            1,
+            7,
+            417,
+            1,
+            7,
+            449,
+            1,
+            7,
+            481,
+            1,
+            7,
+            513,
+            1,
+            7,
+            545,
+            1,
+            7,
+            577,
+            1,
+            7,
+            609,
+            1,
+            7,
+            641,
+            1,
+            7,
+            673,
+            1,
+            7,
+            705,
+            1,
+            7,
+            737,
+            1,
+            7,
+            769,
+            1,
+            7,
+            801,
+            1,
+            7,
+            833,
+            1,
+            7,
+            865,
+            1,
+            7,
+            896,
+            2,
+            7,
+            928,
+            2,
+            7,
+            960,
+            2,
+            7,
+            992,
+            2,
+            7
+          ],
+          [
+            1,
+            2,
+            512,
+            2,
+            7,
+            525,
+            13,
+            7,
+            541,
+            3,
+            7,
+            561,
+            7,
+            7
+          ],
+          [
+            2,
+            2,
+            512,
+            32,
+            7,
+            546,
+            16,
+            7,
+            564,
+            9,
+            7
+          ],
+          [
+            3,
+            2,
+            98,
+            1,
+            7,
+            130,
+            1,
+            7,
+            162,
+            1,
+            7,
+            194,
+            1,
+            7,
+            226,
+            1,
+            7,
+            258,
+            1,
+            7,
+            290,
+            1,
+            7,
+            322,
+            1,
+            7,
+            354,
+            1,
+            7,
+            386,
+            1,
+            7,
+            418,
+            1,
+            7
+          ],
+          [
+            3,
+            1,
+            2,
+            2,
+            7,
+            34,
+            2,
+            7,
+            66,
+            2,
+            7,
+            98,
+            2,
+            7,
+            130,
+            2,
+            7,
+            162,
+            2,
+            7,
+            194,
+            2,
+            7,
+            226,
+            1,
+            7,
+            258,
+            1,
+            7,
+            578,
+            1,
+            7,
+            610,
+            1,
+            7,
+            642,
+            1,
+            7,
+            674,
+            1,
+            7,
+            706,
+            1,
+            7,
+            738,
+            1,
+            7
+          ],
+          [
+            3,
+            0,
+            258,
+            1,
+            7,
+            290,
+            1,
+            7,
+            322,
+            2,
+            7,
+            354,
+            2,
+            7,
+            386,
+            2,
+            7,
+            418,
+            1,
+            7,
+            450,
+            1,
+            7,
+            482,
+            1,
+            7,
+            802,
+            1,
+            7,
+            834,
+            1,
+            7,
+            866,
+            2,
+            7,
+            898,
+            2,
+            7,
+            930,
+            2,
+            7,
+            962,
+            2,
+            7,
+            994,
+            2,
+            7
+          ],
+          [
+            2,
+            0,
+            55,
+            5,
+            7
+          ]
+        ]
+      }
+    },
+    {
+      "id": "interior-72f0f11c-ae53-4195-9ffb-6cd2d22c7282",
+      "name": "Locanda2",
+      "width": 32,
+      "height": 24,
+      "pvp": true,
+      "kind": "dungeon",
+      "document": {
+        "version": 2,
+        "generatorVersion": 1,
+        "seed": 734291,
+        "spawn": {
+          "x": 16,
+          "y": 12
+        },
+        "assets": [],
+        "placements": [
+          {
+            "id": "asset-023ad1ef-4c53-4760-a15a-375902061b90",
+            "assetId": "tile-muro-pietra",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "asset-7417d49f-344b-41cd-9851-319161cb846c",
+            "assetId": "tile-muro-pietra",
+            "x": 1,
+            "y": 0
+          },
+          {
+            "id": "asset-5f4e1441-5256-485e-84ae-2a4f62964233",
+            "assetId": "tile-muro-pietra",
+            "x": 2,
+            "y": 0
+          },
+          {
+            "id": "asset-46bb1962-0651-43ad-a6e8-ee813a7001c8",
+            "assetId": "tile-muro-pietra",
+            "x": 3,
+            "y": 0
+          },
+          {
+            "id": "asset-64b2d37b-0cfc-4231-b20b-aa904ff713ef",
+            "assetId": "tile-muro-pietra",
+            "x": 6,
+            "y": 0
+          },
+          {
+            "id": "asset-e69bd8ee-847e-482e-9b59-0d8b22e7b63b",
+            "assetId": "tile-muro-pietra",
+            "x": 8,
+            "y": 0
+          },
+          {
+            "id": "asset-21a3f2db-1fa4-4fa5-947d-01af21758ae6",
+            "assetId": "tile-muro-pietra",
+            "x": 10,
+            "y": 0
+          },
+          {
+            "id": "asset-7046f8b1-f013-4bd3-b72a-5d29901a2002",
+            "assetId": "tile-muro-pietra",
+            "x": 14,
+            "y": 0
+          },
+          {
+            "id": "asset-6269d2d2-fb39-4e27-8ecb-337d44454017",
+            "assetId": "tile-muro-pietra",
+            "x": 19,
+            "y": 0
+          },
+          {
+            "id": "asset-7224074c-4f55-4d7f-ac04-26b1f0dfacb7",
+            "assetId": "tile-muro-pietra",
+            "x": 30,
+            "y": 0
+          },
+          {
+            "id": "asset-40d72f10-0d7a-42df-834e-296c25e51224",
+            "assetId": "tile-muro-pietra",
+            "x": 29,
+            "y": 0
+          },
+          {
+            "id": "asset-41286070-2089-4935-ae80-10cb36170a1a",
+            "assetId": "tile-muro-pietra",
+            "x": 31,
+            "y": 0
+          },
+          {
+            "id": "asset-5ee6a7e9-91b6-4b60-8a81-009afa288284",
+            "assetId": "tile-muro-pietra",
+            "x": 4,
+            "y": 0
+          },
+          {
+            "id": "asset-8a29f48e-c994-4b02-b51d-5f2575762584",
+            "assetId": "tile-muro-pietra",
+            "x": 5,
+            "y": 0
+          },
+          {
+            "id": "asset-e24150a5-0862-4fbb-a836-2ecea9165913",
+            "assetId": "tile-muro-pietra",
+            "x": 7,
+            "y": 0
+          },
+          {
+            "id": "asset-2abc4d5f-81a5-4c31-88e2-6a86a24e244b",
+            "assetId": "tile-muro-pietra",
+            "x": 9,
+            "y": 0
+          },
+          {
+            "id": "asset-dbfa771f-f6b1-46b4-8130-ccf1a0940b95",
+            "assetId": "tile-muro-pietra",
+            "x": 16,
+            "y": 0
+          },
+          {
+            "id": "asset-5a26af8e-98b9-48b7-b739-d2f380d9ec9f",
+            "assetId": "tile-muro-pietra",
+            "x": 27,
+            "y": 0
+          },
+          {
+            "id": "asset-3338a145-5ee3-466f-a8e3-ad3474bdb84c",
+            "assetId": "tile-muro-pietra",
+            "x": 26,
+            "y": 0
+          },
+          {
+            "id": "asset-371e20c4-3fd5-4a9e-81f5-e74e3d222f81",
+            "assetId": "tile-muro-pietra",
+            "x": 28,
+            "y": 0
+          },
+          {
+            "id": "asset-01a8cb10-861a-467f-944a-4ace557c3961",
+            "assetId": "tile-muro-pietra",
+            "x": 25,
+            "y": 0
+          },
+          {
+            "id": "asset-77ec83c6-c680-497c-b321-0f597963261b",
+            "assetId": "tile-muro-pietra",
+            "x": 15,
+            "y": 0
+          },
+          {
+            "id": "asset-670ad874-55fd-430e-95be-d0459f455330",
+            "assetId": "tile-muro-pietra",
+            "x": 11,
+            "y": 0
+          },
+          {
+            "id": "asset-aecb8841-e661-407e-a9e8-01efc7b87297",
+            "assetId": "tile-muro-pietra",
+            "x": 18,
+            "y": 0
+          },
+          {
+            "id": "asset-4d347d07-8a8a-4d3a-97c6-9d972fcea218",
+            "assetId": "tile-muro-pietra",
+            "x": 20,
+            "y": 0
+          },
+          {
+            "id": "asset-1af0d699-013d-42e6-9ffd-957c7805d044",
+            "assetId": "tile-muro-pietra",
+            "x": 12,
+            "y": 0
+          },
+          {
+            "id": "asset-6f80f921-250d-497a-bc0b-69c2ebd2afc4",
+            "assetId": "tile-muro-pietra",
+            "x": 17,
+            "y": 0
+          },
+          {
+            "id": "asset-8b586e7d-e2f1-4a9b-a1d1-3bbe2a9c2f32",
+            "assetId": "tile-muro-pietra",
+            "x": 21,
+            "y": 0
+          },
+          {
+            "id": "asset-2bda7975-3d22-40f3-91bb-ab10635d93b8",
+            "assetId": "tile-muro-pietra",
+            "x": 13,
+            "y": 0
+          },
+          {
+            "id": "asset-d799a0bd-efaf-4b96-8e9a-5730eb9680b1",
+            "assetId": "tile-muro-pietra",
+            "x": 23,
+            "y": 0
+          },
+          {
+            "id": "asset-b105205b-867d-47ac-815c-ae9ac313af69",
+            "assetId": "tile-muro-pietra",
+            "x": 24,
+            "y": 0
+          },
+          {
+            "id": "asset-e3708899-6642-4240-8168-ab1dee81ce0c",
+            "assetId": "tile-muro-pietra",
+            "x": 22,
+            "y": 0
+          }
+        ],
+        "tiles": [],
+        "zones": [],
+        "npcs": [],
+        "dungeons": [],
+        "tileChunks": [
+          [
+            0,
+            0,
+            38,
+            23,
+            1,
+            69,
+            25,
+            1,
+            100,
+            27,
+            1,
+            132,
+            26,
+            1,
+            165,
+            24,
+            1,
+            198,
+            3,
+            1,
+            230,
+            8,
+            1,
+            261,
+            1,
+            1,
+            262,
+            1,
+            3,
+            263,
+            8,
+            1,
+            292,
+            1,
+            1,
+            293,
+            6,
+            3,
+            299,
+            5,
+            1,
+            324,
+            8,
+            3,
+            332,
+            4,
+            1,
+            356,
+            9,
+            3,
+            365,
+            3,
+            1,
+            389,
+            8,
+            3,
+            397,
+            2,
+            1,
+            421,
+            7,
+            3,
+            428,
+            2,
+            1,
+            452,
+            7,
+            3,
+            459,
+            1,
+            1,
+            481,
+            9,
+            3,
+            490,
+            1,
+            1,
+            512,
+            11,
+            3,
+            523,
+            1,
+            1,
+            544,
+            12,
+            3,
+            576,
+            12,
+            3,
+            608,
+            13,
+            3,
+            641,
+            13,
+            3,
+            674,
+            2,
+            3,
+            679,
+            1,
+            1,
+            680,
+            5,
+            3,
+            715,
+            1,
+            3
+          ]
+        ]
+      }
+    },
+    {
+      "id": "interior-652aa269-1605-4122-b8c9-3f395469258f",
+      "name": "Loconda",
+      "width": 32,
+      "height": 24,
+      "pvp": true,
+      "kind": "dungeon",
+      "document": {
+        "version": 2,
+        "generatorVersion": 1,
+        "seed": 734291,
+        "spawn": {
+          "x": 0,
+          "y": 18
+        },
+        "assets": [],
+        "placements": [
+          {
+            "id": "asset-2672e34a-8aa9-46cb-8ff8-5a72a98940db",
+            "assetId": "deadwarriors-10",
+            "x": 20,
+            "y": 4
+          },
+          {
+            "id": "asset-e18106a8-0c8c-4280-a657-b978b1e1b7ae",
+            "assetId": "asset-6876aaf2-5c5b-4b3b-9485-b9158d94ff9b",
+            "x": 27,
+            "y": 0
+          }
+        ],
+        "tiles": [],
+        "zones": [],
+        "npcs": [
+          {
+            "x": 22,
+            "y": 11,
+            "id": "npc-9b494a31-60e8-46a0-8f68-db0372d290dc",
+            "npcKind": "arena-bookmaker",
+            "level": 1
+          },
+          {
+            "x": 7,
+            "y": 3,
+            "id": "npc-5d5fe786-6281-4e0b-9d2b-ecba7aa21be9",
+            "npcKind": "fallen-soldier",
+            "level": 1
+          },
+          {
+            "x": 14,
+            "y": 3,
+            "id": "npc-f19fa922-e415-4101-a9dc-2f226aad2462",
+            "npcKind": "fallen-soldier",
+            "level": 1
+          },
+          {
+            "x": 22,
+            "y": 12,
+            "id": "npc-72e73140-472c-4825-9a1c-d747a9b8119d",
+            "npcKind": "north-scout",
+            "level": 1,
+            "settings": {
+              "name": "Rovan, esploratore",
+              "dialogueId": "fallen-soldier",
+              "speed": 5,
+              "wanderRadius": 3
+            }
+          },
+          {
+            "x": 7,
+            "y": 3,
+            "id": "npc-547f6a17-88a2-46c5-9f6e-34118e7a8a78",
+            "npcKind": "slime",
+            "level": 1
+          },
+          {
+            "x": 14,
+            "y": 3,
+            "id": "npc-8eade688-eb21-4a10-8730-a372e3e7d61b",
+            "npcKind": "slime",
+            "level": 1
+          }
+        ],
+        "dungeons": [],
+        "tileChunks": [
+          [
+            0,
+            0,
+            0,
+            5,
+            5,
+            5,
+            1,
+            9,
+            6,
+            5,
+            3,
+            11,
+            1,
+            9,
+            12,
+            5,
+            3,
+            17,
+            1,
+            9,
+            18,
+            5,
+            3,
+            23,
+            1,
+            9,
+            24,
+            13,
+            5,
+            37,
+            1,
+            9,
+            38,
+            5,
+            3,
+            43,
+            1,
+            9,
+            44,
+            5,
+            3,
+            49,
+            1,
+            9,
+            50,
+            5,
+            3,
+            55,
+            1,
+            9,
+            56,
+            13,
+            5,
+            69,
+            1,
+            9,
+            70,
+            5,
+            3,
+            75,
+            1,
+            9,
+            76,
+            4,
+            3,
+            80,
+            1,
+            13,
+            81,
+            1,
+            9,
+            82,
+            5,
+            3,
+            87,
+            1,
+            9,
+            88,
+            13,
+            5,
+            101,
+            1,
+            9,
+            102,
+            3,
+            3,
+            105,
+            2,
+            13,
+            107,
+            1,
+            9,
+            108,
+            1,
+            13,
+            109,
+            2,
+            3,
+            111,
+            2,
+            13,
+            113,
+            1,
+            9,
+            114,
+            2,
+            13,
+            116,
+            2,
+            3,
+            118,
+            1,
+            13,
+            119,
+            1,
+            9,
+            120,
+            13,
+            5,
+            133,
+            1,
+            9,
+            134,
+            2,
+            3,
+            136,
+            2,
+            13,
+            138,
+            1,
+            7,
+            139,
+            1,
+            9,
+            140,
+            4,
+            13,
+            144,
+            1,
+            7,
+            145,
+            1,
+            9,
+            146,
+            4,
+            13,
+            150,
+            1,
+            7,
+            151,
+            1,
+            9,
+            152,
+            13,
+            5,
+            165,
+            1,
+            9,
+            166,
+            5,
+            13,
+            171,
+            1,
+            9,
+            172,
+            5,
+            13,
+            177,
+            1,
+            9,
+            178,
+            5,
+            13,
+            183,
+            1,
+            9,
+            184,
+            13,
+            5,
+            197,
+            1,
+            9,
+            198,
+            5,
+            13,
+            203,
+            1,
+            9,
+            204,
+            5,
+            13,
+            209,
+            1,
+            9,
+            210,
+            5,
+            13,
+            215,
+            1,
+            9,
+            216,
+            13,
+            5,
+            229,
+            13,
+            9,
+            242,
+            5,
+            5,
+            247,
+            1,
+            9,
+            248,
+            26,
+            5,
+            274,
+            1,
+            9,
+            275,
+            32,
+            5,
+            307,
+            1,
+            9,
+            308,
+            32,
+            5,
+            340,
+            1,
+            9,
+            341,
+            171,
+            5,
+            512,
+            1,
+            9,
+            513,
+            95,
+            5,
+            608,
+            1,
+            9,
+            609,
+            142,
+            5,
+            751,
+            1,
+            9,
+            752,
+            1,
+            5,
+            753,
+            1,
+            9,
+            754,
+            14,
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "id": "interior-b84880cc-d5df-444f-9048-abe0889a852c",
+      "name": "cazzo",
+      "width": 32,
+      "height": 24,
+      "pvp": false,
+      "kind": "dungeon",
+      "document": {
+        "version": 2,
+        "generatorVersion": 1,
+        "seed": 734291,
+        "spawn": {
+          "x": 16,
+          "y": 12
+        },
+        "assets": [],
+        "placements": [],
+        "tiles": [],
+        "zones": [],
+        "npcs": [],
+        "dungeons": [],
+        "tileChunks": [
+          [
+            0,
+            0,
+            40,
+            7,
+            7,
+            48,
+            2,
+            7,
+            51,
+            2,
+            7,
+            71,
+            2,
+            7,
+            78,
+            3,
+            7,
+            84,
+            3,
+            7,
+            102,
+            2,
+            7,
+            108,
+            1,
+            7,
+            111,
+            1,
+            7,
+            113,
+            3,
+            7,
+            119,
+            1,
+            7,
+            134,
+            1,
+            7,
+            137,
+            2,
+            7,
+            143,
+            1,
+            7,
+            147,
+            1,
+            7,
+            151,
+            2,
+            7,
+            169,
+            1,
+            7,
+            173,
+            4,
+            5,
+            180,
+            1,
+            7,
+            184,
+            1,
+            7,
+            196,
+            1,
+            7,
+            199,
+            1,
+            7,
+            204,
+            6,
+            5,
+            212,
+            1,
+            7,
+            228,
+            1,
+            7,
+            231,
+            1,
+            7,
+            236,
+            6,
+            5,
+            249,
+            2,
+            7,
+            259,
+            1,
+            7,
+            263,
+            1,
+            7,
+            268,
+            7,
+            5,
+            277,
+            1,
+            7,
+            282,
+            1,
+            7,
+            291,
+            1,
+            7,
+            294,
+            1,
+            7,
+            300,
+            7,
+            5,
+            309,
+            2,
+            7,
+            314,
+            1,
+            7,
+            326,
+            1,
+            7,
+            331,
+            1,
+            3,
+            332,
+            7,
+            5,
+            342,
+            1,
+            7,
+            346,
+            1,
+            7,
+            355,
+            1,
+            7,
+            362,
+            2,
+            3,
+            364,
+            6,
+            5,
+            374,
+            1,
+            7,
+            387,
+            1,
+            7,
+            390,
+            1,
+            7,
+            394,
+            2,
+            3,
+            396,
+            6,
+            5,
+            410,
+            1,
+            7,
+            419,
+            1,
+            7,
+            422,
+            1,
+            7,
+            426,
+            1,
+            3,
+            427,
+            7,
+            5,
+            442,
+            1,
+            7,
+            458,
+            1,
+            3,
+            459,
+            7,
+            5,
+            482,
+            1,
+            7,
+            489,
+            12,
+            5,
+            514,
+            1,
+            7,
+            520,
+            14,
+            5,
+            551,
+            16,
+            5,
+            583,
+            17,
+            5,
+            615,
+            17,
+            5,
+            648,
+            16,
+            5,
+            681,
+            7,
+            5,
+            689,
+            6,
+            5,
+            714,
+            5,
+            5,
+            722,
+            4,
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "id": "interior-39c09fe5-301d-4d55-b6fa-0ad162b35ce2",
+      "name": "passaggio sospetto",
+      "width": 13,
+      "height": 4,
+      "pvp": false,
+      "kind": "building",
+      "document": {
+        "version": 2,
+        "generatorVersion": 1,
+        "seed": 734291,
+        "spawn": {
+          "x": 6,
+          "y": 2
+        },
+        "assets": [],
+        "placements": [
+          {
+            "id": "asset-40c36a55-1c43-40fa-abe6-1668f20461d1",
+            "assetId": "brazier",
+            "x": 0,
+            "y": 3
+          },
+          {
+            "id": "asset-bd1ddab7-8f19-460a-81c2-e987d059ab1a",
+            "assetId": "brazier",
+            "x": 3,
+            "y": 3
+          },
+          {
+            "id": "asset-0963d72e-97fc-4eec-93cb-09971e2cba2d",
+            "assetId": "brazier",
+            "x": 6,
+            "y": 3
+          },
+          {
+            "id": "asset-42342f7c-786c-4ec5-a912-7e8475ee4a69",
+            "assetId": "brazier",
+            "x": 12,
+            "y": 3
+          },
+          {
+            "id": "asset-e5c2ef6d-e325-4f3f-9f42-fda46925a181",
+            "assetId": "tile-muro-pietra",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "asset-1e02d25b-b6f5-4642-b371-29b864703ac0",
+            "assetId": "tile-muro-pietra",
+            "x": 1,
+            "y": 0
+          },
+          {
+            "id": "asset-a3842824-c241-4813-9626-d9f6c8f26699",
+            "assetId": "tile-muro-pietra",
+            "x": 2,
+            "y": 0
+          },
+          {
+            "id": "asset-3a324ba8-f140-4802-a6d5-38c3c597f596",
+            "assetId": "tile-muro-pietra",
+            "x": 3,
+            "y": 0
+          },
+          {
+            "id": "asset-70e9f742-00d6-42a9-98ef-19ce65a9d49f",
+            "assetId": "tile-muro-pietra",
+            "x": 4,
+            "y": 0
+          },
+          {
+            "id": "asset-1cbab11b-cd5d-4e79-9283-64ed0ff776a9",
+            "assetId": "tile-muro-pietra",
+            "x": 5,
+            "y": 0
+          },
+          {
+            "id": "asset-bb637ab7-7623-43ab-848f-dd17a190e9d3",
+            "assetId": "tile-muro-pietra",
+            "x": 6,
+            "y": 0
+          },
+          {
+            "id": "asset-41a44e88-42db-46ca-a911-4527e6fb75de",
+            "assetId": "tile-muro-pietra",
+            "x": 7,
+            "y": 0
+          },
+          {
+            "id": "asset-cffe3f61-ffc6-48c1-8e16-0dc6c9fd425f",
+            "assetId": "tile-muro-pietra",
+            "x": 8,
+            "y": 0
+          },
+          {
+            "id": "asset-de1a861c-7f3a-4806-8e05-f91ffbe332f6",
+            "assetId": "tile-muro-pietra",
+            "x": 9,
+            "y": 0
+          },
+          {
+            "id": "asset-f17b24a9-e204-4eda-a4f9-66aeeccab2be",
+            "assetId": "tile-muro-pietra",
+            "x": 10,
+            "y": 0
+          },
+          {
+            "id": "asset-529250de-a5ad-4d24-bb10-b86c2e91a2d8",
+            "assetId": "tile-muro-pietra",
+            "x": 11,
+            "y": 0
+          },
+          {
+            "id": "asset-21a39bd2-24cb-4d75-bdb3-5905a5743ccd",
+            "assetId": "tile-muro-pietra",
+            "x": 12,
+            "y": 0
+          }
+        ],
+        "tiles": [],
+        "zones": [],
+        "npcs": [],
+        "dungeons": [],
+        "tileChunks": [
+          [
+            0,
+            0,
+            0,
+            13,
+            1,
+            32,
+            13,
+            1,
+            65,
+            1,
+            1,
+            67,
+            4,
+            1,
+            72,
+            3,
+            1,
+            105,
+            1,
+            1
+          ]
+        ]
       }
     }
   ],
   "warps": [
     {
       "id": "warp-dc2bdb20-e6b6-4f8e-a1d2-1c2f9bba0be2",
-      "name": "Nuovo passaggio",
+      "name": "Locanda · Nuovo passaggio",
       "from": "world",
       "to": "interior-a8b3bf2d-5445-43a4-b26d-352054ebdd0a",
       "entry": {
@@ -5160,11 +11031,19 @@
         "y": 23
       },
       "activation": "walk",
+      "entrySize": {
+        "x": 1,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 1
+      },
       "reverseId": "warp-5971ca40-3d92-495f-837c-f54deffb752a"
     },
     {
       "id": "warp-5971ca40-3d92-495f-837c-f54deffb752a",
-      "name": "Ritorno · Nuovo passaggio",
+      "name": "Locanda · uscita pulita",
       "from": "interior-a8b3bf2d-5445-43a4-b26d-352054ebdd0a",
       "to": "world",
       "entry": {
@@ -5176,6 +11055,14 @@
         "y": 91
       },
       "activation": "walk",
+      "entrySize": {
+        "x": 1,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 1
+      },
       "reverseId": "warp-dc2bdb20-e6b6-4f8e-a1d2-1c2f9bba0be2"
     },
     {
@@ -5188,35 +11075,44 @@
         "y": 21
       },
       "arrival": {
-        "x": 7,
-        "y": 147
+        "x": 27,
+        "y": 179
       },
       "activation": "walk",
       "reverseId": "warp-bdfbd315-2f49-4a0a-8a41-a9871cc4d3de"
     },
     {
       "id": "warp-8f5e04b2-9c17-4272-9a44-33ee5793ccad",
-      "name": "uscita",
+      "name": "Cathedral Cave · uscita",
       "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
       "to": "world",
       "entry": {
-        "x": 14,
-        "y": 3
+        "x": 13,
+        "y": 2
       },
       "arrival": {
-        "x": 33,
-        "y": 98
+        "x": -28,
+        "y": -16
       },
-      "activation": "walk"
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-a5ce990d-eeea-4229-8cba-05ba96a359bc"
     },
     {
       "id": "warp-bdfbd315-2f49-4a0a-8a41-a9871cc4d3de",
-      "name": "Entrata",
+      "name": "Northpost Ruins · Entrata",
       "from": "world",
       "to": "interior-ccfc2688-bbe0-485d-9987-d3f8ad11aff1",
       "entry": {
-        "x": 7,
-        "y": 147
+        "x": 27,
+        "y": 179
       },
       "arrival": {
         "x": 0,
@@ -5226,19 +11122,672 @@
       "reverseId": "warp-31e488cf-f172-4dee-add8-d409d1287dec"
     },
     {
-      "id": "warp-09158c51-440c-4f1b-bc22-ac9816748550",
-      "name": "entratanoexit",
-      "from": "interior-ccfc2688-bbe0-485d-9987-d3f8ad11aff1",
-      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "id": "warp-d7a4b5eb-28d3-452d-a71d-d6d0fdae5fe1",
+      "name": "cazzo · Passaggio 1",
+      "from": "world",
+      "to": "interior-b84880cc-d5df-444f-9048-abe0889a852c",
       "entry": {
-        "x": 24,
-        "y": 1
+        "x": 66,
+        "y": 137
       },
       "arrival": {
-        "x": 14,
+        "x": 15,
+        "y": 23
+      },
+      "activation": "walk",
+      "reverseId": "warp-f53882f3-7f44-43c8-ad47-6bf67165e6bb"
+    },
+    {
+      "id": "warp-f53882f3-7f44-43c8-ad47-6bf67165e6bb",
+      "name": "Ritorno · cazzo · Passaggio 1",
+      "from": "interior-b84880cc-d5df-444f-9048-abe0889a852c",
+      "to": "world",
+      "entry": {
+        "x": 15,
+        "y": 23
+      },
+      "arrival": {
+        "x": 66,
+        "y": 137
+      },
+      "activation": "walk",
+      "reverseId": "warp-d7a4b5eb-28d3-452d-a71d-d6d0fdae5fe1"
+    },
+    {
+      "id": "warp-8710da8c-68c7-4525-ae5c-28d4f90933b4",
+      "name": "passaggio sospetto · Locanda · Passaggio 2",
+      "from": "interior-a8b3bf2d-5445-43a4-b26d-352054ebdd0a",
+      "to": "interior-39c09fe5-301d-4d55-b6fa-0ad162b35ce2",
+      "entry": {
+        "x": 31,
+        "y": 6
+      },
+      "arrival": {
+        "x": 0,
+        "y": 2
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 1,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 1
+      },
+      "keyGate": {
+        "id": "key-89b2c0c0-867f-4980-821c-1bf0490a2ad3",
+        "mapId": "interior-a8b3bf2d-5445-43a4-b26d-352054ebdd0a",
+        "position": {
+          "x": 22,
+          "y": 2
+        }
+      }
+    },
+    {
+      "id": "warp-10d1bdfe-b7b1-4e24-9d37-cb8291d5c3cc",
+      "name": "Loconda · passaggio sospetto · Passaggio 1",
+      "from": "interior-39c09fe5-301d-4d55-b6fa-0ad162b35ce2",
+      "to": "interior-652aa269-1605-4122-b8c9-3f395469258f",
+      "entry": {
+        "x": 12,
+        "y": 2
+      },
+      "arrival": {
+        "x": 0,
+        "y": 17
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 1,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 1
+      }
+    },
+    {
+      "id": "warp-849bffa3-c90f-4879-adcc-333ed0fdcf60",
+      "name": "Loconda · Passaggio 1",
+      "from": "interior-652aa269-1605-4122-b8c9-3f395469258f",
+      "to": "world",
+      "entry": {
+        "x": 16,
+        "y": 23
+      },
+      "arrival": {
+        "x": 46,
+        "y": 90
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 1,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 1
+      }
+    },
+    {
+      "id": "warp-a5ce990d-eeea-4229-8cba-05ba96a359bc",
+      "name": "Ritorno · Cathedral Cave · uscita",
+      "from": "world",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": -28,
+        "y": -16
+      },
+      "arrival": {
+        "x": 13,
+        "y": 2
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-8f5e04b2-9c17-4272-9a44-33ee5793ccad"
+    },
+    {
+      "id": "warp-41296f9b-8ebe-4023-874a-16987fd840b5",
+      "name": "Cathedral Cave · Passaggio 2",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "world",
+      "entry": {
+        "x": 3,
+        "y": 79
+      },
+      "arrival": {
+        "x": -28,
+        "y": 4
+      },
+      "activation": "walk",
+      "keyGate": {
+        "id": "key-68d5e411-fefc-4cd9-a7d1-f7af969ea58d",
+        "mapId": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+        "position": {
+          "x": 33,
+          "y": 5
+        }
+      }
+    },
+    {
+      "id": "warp-971b4160-2e2e-48b1-9baa-e9b390a17c99",
+      "name": "Cathedral Cave · Passaggio 3",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "world",
+      "entry": {
+        "x": 2,
+        "y": 78
+      },
+      "arrival": {
+        "x": -27,
+        "y": 4
+      },
+      "activation": "walk",
+      "reverseId": "warp-d6a4a834-2e3c-42af-b126-1439b664bdc4"
+    },
+    {
+      "id": "warp-d6a4a834-2e3c-42af-b126-1439b664bdc4",
+      "name": "Ritorno · Cathedral Cave · Passaggio 3",
+      "from": "world",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": -27,
+        "y": 4
+      },
+      "arrival": {
+        "x": 2,
+        "y": 78
+      },
+      "activation": "walk",
+      "reverseId": "warp-971b4160-2e2e-48b1-9baa-e9b390a17c99"
+    },
+    {
+      "id": "warp-eac60df0-1938-4ae2-9c74-35601b6fed65",
+      "name": "Cathedral Cave · Stanza 1 → Stanza 3",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 63,
         "y": 71
       },
-      "activation": "walk"
+      "arrival": {
+        "x": 64,
+        "y": 71
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 1,
+        "y": 3
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 3
+      },
+      "reverseId": "warp-abb90004-01e4-4c2b-a1a5-7393d637c8ed"
+    },
+    {
+      "id": "warp-abb90004-01e4-4c2b-a1a5-7393d637c8ed",
+      "name": "Ritorno · Cathedral Cave · Passaggio 4",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 64,
+        "y": 71
+      },
+      "arrival": {
+        "x": 63,
+        "y": 71
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 1,
+        "y": 3
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 3
+      },
+      "reverseId": "warp-eac60df0-1938-4ae2-9c74-35601b6fed65"
+    },
+    {
+      "id": "warp-02af4c69-12d0-45b0-bba7-e67489850b29",
+      "name": "Cathedral Cave · Stanza 2 → Stanza 1",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 52,
+        "y": 62
+      },
+      "arrival": {
+        "x": 52,
+        "y": 63
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-43e44824-40f8-4c36-852d-fb7ddb6b4c0e"
+    },
+    {
+      "id": "warp-43e44824-40f8-4c36-852d-fb7ddb6b4c0e",
+      "name": "Ritorno · Cathedral Cave · Passaggio 6",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 52,
+        "y": 63
+      },
+      "arrival": {
+        "x": 52,
+        "y": 62
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-02af4c69-12d0-45b0-bba7-e67489850b29"
+    },
+    {
+      "id": "warp-d1ce95c8-54a9-4c9c-b7a0-4717ecfb5ab4",
+      "name": "Cathedral Cave · Stanza 3 → Stanza 4",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 83,
+        "y": 40
+      },
+      "arrival": {
+        "x": 83,
+        "y": 41
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 2,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 2,
+        "y": 1
+      },
+      "reverseId": "warp-59a0904d-ca9b-437f-ab21-03070b18a94a"
+    },
+    {
+      "id": "warp-59a0904d-ca9b-437f-ab21-03070b18a94a",
+      "name": "Ritorno · Cathedral Cave · Passaggio 8",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 83,
+        "y": 41
+      },
+      "arrival": {
+        "x": 83,
+        "y": 40
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 2,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 2,
+        "y": 1
+      },
+      "reverseId": "warp-d1ce95c8-54a9-4c9c-b7a0-4717ecfb5ab4"
+    },
+    {
+      "id": "warp-ed06b905-f693-41b0-89e2-b4c49f00a768",
+      "name": "Cathedral Cave · Stanza 5 → Stanza 5",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 70,
+        "y": 39
+      },
+      "arrival": {
+        "x": 70,
+        "y": 40
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-db709760-ab3e-4d42-9e83-c675c07c2a64"
+    },
+    {
+      "id": "warp-db709760-ab3e-4d42-9e83-c675c07c2a64",
+      "name": "Ritorno · Cathedral Cave · Passaggio 10",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 70,
+        "y": 40
+      },
+      "arrival": {
+        "x": 70,
+        "y": 39
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-ed06b905-f693-41b0-89e2-b4c49f00a768"
+    },
+    {
+      "id": "warp-f3b1291e-69ea-4c93-b723-33f3a65c9bdc",
+      "name": "Cathedral Cave · Stanza 5 → Stanza 5",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 88,
+        "y": 26
+      },
+      "arrival": {
+        "x": 88,
+        "y": 27
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 2,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 2,
+        "y": 1
+      },
+      "reverseId": "warp-16acd7e2-cf0e-4f14-854a-c0e98c56fbf2"
+    },
+    {
+      "id": "warp-16acd7e2-cf0e-4f14-854a-c0e98c56fbf2",
+      "name": "Ritorno · Cathedral Cave · Passaggio 12",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 88,
+        "y": 27
+      },
+      "arrival": {
+        "x": 88,
+        "y": 26
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 2,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 2,
+        "y": 1
+      },
+      "reverseId": "warp-f3b1291e-69ea-4c93-b723-33f3a65c9bdc"
+    },
+    {
+      "id": "warp-a12f2817-2500-4a34-a0da-dcb1e6efe299",
+      "name": "Cathedral Cave · Stanza 2 → Stanza 2",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 58,
+        "y": 13
+      },
+      "arrival": {
+        "x": 58,
+        "y": 12
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-d4d398d3-fc4d-4554-b81b-80fba8620c34"
+    },
+    {
+      "id": "warp-d4d398d3-fc4d-4554-b81b-80fba8620c34",
+      "name": "Ritorno · Cathedral Cave · Passaggio 14",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 58,
+        "y": 12
+      },
+      "arrival": {
+        "x": 58,
+        "y": 13
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-a12f2817-2500-4a34-a0da-dcb1e6efe299"
+    },
+    {
+      "id": "warp-9897fd2e-a958-4372-ad9b-ab78bda19624",
+      "name": "Cathedral Cave · Stanza 5 → Stanza 2",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 61,
+        "y": 12
+      },
+      "arrival": {
+        "x": 61,
+        "y": 13
+      },
+      "activation": "walk",
+      "reverseId": "warp-2f7aca28-022a-449e-b73e-6f3549b34115"
+    },
+    {
+      "id": "warp-2f7aca28-022a-449e-b73e-6f3549b34115",
+      "name": "Ritorno · Cathedral Cave · Passaggio 16",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 61,
+        "y": 13
+      },
+      "arrival": {
+        "x": 61,
+        "y": 12
+      },
+      "activation": "walk",
+      "reverseId": "warp-9897fd2e-a958-4372-ad9b-ab78bda19624"
+    },
+    {
+      "id": "warp-0393ad58-fd75-4c75-86fe-defbb01163a4",
+      "name": "Cathedral Cave · Stanza 5 → Stanza 6",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 40,
+        "y": 10
+      },
+      "arrival": {
+        "x": 40,
+        "y": 11
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-51d185b5-8b0c-4c5c-a1f7-c4d7bda5ccb5"
+    },
+    {
+      "id": "warp-51d185b5-8b0c-4c5c-a1f7-c4d7bda5ccb5",
+      "name": "Ritorno · Cathedral Cave · Passaggio 18",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 40,
+        "y": 11
+      },
+      "arrival": {
+        "x": 40,
+        "y": 10
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 3,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 3,
+        "y": 1
+      },
+      "reverseId": "warp-0393ad58-fd75-4c75-86fe-defbb01163a4"
+    },
+    {
+      "id": "warp-6eb5f320-7a31-46d0-8e4a-fea392e7c3d2",
+      "name": "Cathedral Cave · Stanza 6 → Stanza 7",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 7,
+        "y": 22
+      },
+      "arrival": {
+        "x": 5,
+        "y": 22
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 1,
+        "y": 2
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 2
+      },
+      "reverseId": "warp-fea9c3c8-95b1-4fdd-ac49-f78656565315"
+    },
+    {
+      "id": "warp-fea9c3c8-95b1-4fdd-ac49-f78656565315",
+      "name": "Ritorno · Cathedral Cave · Passaggio 20",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 5,
+        "y": 22
+      },
+      "arrival": {
+        "x": 7,
+        "y": 22
+      },
+      "activation": "walk",
+      "entrySize": {
+        "x": 1,
+        "y": 2
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 2
+      },
+      "reverseId": "warp-6eb5f320-7a31-46d0-8e4a-fea392e7c3d2"
+    },
+    {
+      "id": "warp-fb39eee9-3953-4ebb-8a1e-d1a857770fef",
+      "name": "Cathedral Cave · Stanza 7 → Stanza 2",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 4,
+        "y": 28
+      },
+      "arrival": {
+        "x": 4,
+        "y": 29
+      },
+      "activation": "walk",
+      "reverseId": "warp-7760685c-177b-41f5-942e-5794ebaee46c"
+    },
+    {
+      "id": "warp-7760685c-177b-41f5-942e-5794ebaee46c",
+      "name": "Ritorno · Cathedral Cave · Passaggio 22",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 4,
+        "y": 29
+      },
+      "arrival": {
+        "x": 4,
+        "y": 28
+      },
+      "activation": "walk",
+      "reverseId": "warp-fb39eee9-3953-4ebb-8a1e-d1a857770fef"
+    },
+    {
+      "id": "warp-881458b1-baa8-4d10-aec3-71e0f421abca",
+      "name": "Stanza 6 → Stanza 7",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 7,
+        "y": 24
+      },
+      "arrival": {
+        "x": 5,
+        "y": 24
+      },
+      "activation": "walk",
+      "reverseId": "warp-10035974-87b3-416b-94b2-6820e3b908a4"
+    },
+    {
+      "id": "warp-10035974-87b3-416b-94b2-6820e3b908a4",
+      "name": "Ritorno · Cathedral Cave · Passaggio 24",
+      "from": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "to": "interior-f49e6168-9d6b-436d-a419-2421838b5a07",
+      "entry": {
+        "x": 5,
+        "y": 24
+      },
+      "arrival": {
+        "x": 7,
+        "y": 24
+      },
+      "activation": "walk",
+      "reverseId": "warp-881458b1-baa8-4d10-aec3-71e0f421abca"
     }
   ]
 }

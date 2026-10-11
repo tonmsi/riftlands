@@ -7,7 +7,10 @@ export const WARP_RADIUS = TILE_SIZE * .65;
 export const WARP_FADE_MS = 280;
 export function warpPosition(p: Vec2): Vec2 { return { x: (p.x + .5) * TILE_SIZE, y: (p.y + .5) * TILE_SIZE }; }
 export function atWarp(p: Vec2, warp: WorldWarp, extra = 0): boolean {
-  const entry = warpPosition(warp.entry); return Math.hypot(p.x - entry.x, p.y - entry.y) <= WARP_RADIUS + extra;
+  const entry = warpPosition(warp.entry), size=warp.entrySize ?? {x:1,y:1};
+  const dx=Math.max(entry.x-p.x,0,p.x-(entry.x+(size.x-1)*TILE_SIZE));
+  const dy=Math.max(entry.y-p.y,0,p.y-(entry.y+(size.y-1)*TILE_SIZE));
+  return Math.hypot(dx,dy)<=WARP_RADIUS+extra;
 }
 /** Authoring a door keeps its two directional runtime links in sync. */
 export function setWarpReturn(project: WorldDocument, warp: WorldWarp, enabled: boolean, newId: string): void {
@@ -23,6 +26,9 @@ export function setWarpReturn(project: WorldDocument, warp: WorldWarp, enabled: 
       entry: { ...warp.arrival }, arrival: { ...warp.entry }, activation: warp.activation, reverseId: warp.id };
     links.push(reverse); warp.reverseId = reverse.id;
   } else Object.assign(reverse, { from: warp.to, to: warp.from, entry: { ...warp.arrival }, arrival: { ...warp.entry }, activation: warp.activation });
+  if (warp.arrivalSize) reverse.entrySize = {...warp.arrivalSize}; else delete reverse.entrySize;
+  if (warp.entrySize) reverse.arrivalSize = {...warp.entrySize}; else delete reverse.arrivalSize;
+  if (warp.keyGate) reverse.keyGate = structuredClone(warp.keyGate); else delete reverse.keyGate;
 }
 export function mapDocument(project: WorldDocument, id = 'world'): WorldDocument {
   if (id === 'world') return project;

@@ -1,7 +1,9 @@
 import { BOSS_BY_ID } from './bosses';
+import { validDungeonRooms, roomShapeIssues, type DungeonRoom } from './dungeon-rooms';
+import { validNpcSettings, type NpcSettings } from './npc-settings';
 import { packDraftTiles, unpackDraftTiles } from './dungeon-storage';
 import { TILE_SIZE } from './config';
-import { assertValidDungeonDefinition, dungeonEncounters, flameBarrierFromTiles, dungeonTile, DEFAULT_DUNGEON_THEME, type DungeonDefinition, type DungeonRegion } from './dungeons';
+import { assertValidDungeonDefinition, insideDungeonRegion, dungeonEncounters, flameBarrierFromTiles, dungeonTile, DEFAULT_DUNGEON_THEME, type DungeonDefinition, type DungeonRegion } from './dungeons';
 import { NPC_DEFINITIONS, type NpcTemplateId } from './npcs';
 import type { PickupKind, TileKind, Vec2 } from './types';
 import { World, isSolid } from './world';
@@ -21,11 +23,13 @@ export const PICKUP_CATALOG: Record<PickupKind, { name: string; color: string }>
   power: { name: 'Potenza +30% · 10 s', color: '#e5cc81' }, weakness: { name: 'Debolezza −30% · 7 s', color: '#bb99cb' },
 };
 export interface DraftEntity extends Vec2 {
+  settings?: NpcSettings;
   id: string; kind: 'npc' | 'boss' | 'party' | 'activation' | 'flame' | 'pickup'; inheritRadius?: boolean; encounterId?: string; span?: number; vertical?: boolean; aggroRadius?: number; template: string; label: string; level: number; radius: number;
 }
 export const DEFAULT_BOSS_AGGRO_RADIUS = 288;
-export interface DraftEncounter { id: string; name: string; x: number; y: number; width: number; height: number; visitorTiles?: Vec2[]; }
+export interface DraftEncounter { id: string; name: string; x: number; y: number; width: number; height: number; tiles?: Vec2[]; visitorTiles?: Vec2[]; }
 export interface DungeonDraft {
+  rooms?: DungeonRoom[];
   version: 1; id: string; name: string; width: number; height: number;
   encounters: DraftEncounter[]; origin: Vec2; tiles: TileKind[]; entities: DraftEntity[];
   assetPlacements?: AssetPlacement[];
@@ -49,17 +53,22 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
   if (!value || value.version !== 1 || typeof value.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(value.id)
     || typeof value.name !== 'string' || !value.name.trim() || value.name.length > 80) fail();
   const draft = newDungeonDraft(value.width, value.height);
+  if (value.rooms !== undefined) {
+    if (!validDungeonRooms(value.rooms, { minTx: 0, minTy: 0, maxTx: value.width - 1, maxTy: value.height - 1 })) fail();
+    draft.rooms = structuredClone(value.rooms);
+  }
   if (!value.origin || ![value.origin.x, value.origin.y].every(n => Number.isInteger(n) && Math.abs(n) <= 10_000_000)
     || !Array.isArray(value.tiles) || value.tiles.length !== value.width * value.height
     || value.tiles.some(tile => !Object.hasOwn(TERRAIN_CATALOG, tile)) || !Array.isArray(value.entities) || value.entities.length > 500) fail();
   const encounters = value.encounters ?? draft.encounters;
-  if (!Array.isArray(encounters) || !encounters.length || encounters.length > 16) fail();
+  if (!Array.isArray(encounters) || encounters.length > 16) fail();
   const groupIds = new Set<string>();
   draft.encounters = encounters.map(group => {
     if (!group || typeof group.id !== 'string' || !/^[a-zA-Z0-9-]{1,64}$/.test(group.id) || groupIds.has(group.id)
       || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 80
       || ![group.x, group.y, group.width, group.height].every(Number.isInteger)
       || group.x < 0 || group.y < 0 || group.width < 3 || group.height < 3 || group.x + group.width > value.width || group.y + group.height > value.height) fail();
+    if (group.tiles !== undefined && !validDungeonRooms([{id: group.id, name: group.name, tiles: group.tiles}], {minTx:0,minTy:0,maxTx:value.width-1,maxTy:value.height-1})) fail();
     groupIds.add(group.id);
     const seen = new Set<string>();
     if (group.visitorTiles !== undefined && (!Array.isArray(group.visitorTiles) || group.visitorTiles.length > value.width * value.height
@@ -67,6 +76,7 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
         || p.x < 0 || p.y < 0 || p.x >= value.width || p.y >= value.height
         || seen.has(`${p.x},${p.y}`) || !seen.add(`${p.x},${p.y}`)))) fail();
     return { id: group.id, name: group.name, x: group.x, y: group.y, width: group.width, height: group.height,
+      ...(group.tiles !== undefined ? {tiles: group.tiles.map(p => ({x:p.x,y:p.y}))} : {}),
       ...(group.visitorTiles !== undefined ? { visitorTiles: group.visitorTiles.map(p => ({x:p.x,y:p.y})) } : {}) };
   });
   const ids = new Set<string>();
@@ -79,6 +89,7 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
       || !Number.isFinite(entity.radius) || entity.radius < 1 || entity.radius > 96
       || (entity.kind === 'npc' && !Object.hasOwn(NPC_DEFINITIONS, entity.template))
       || (entity.kind === 'pickup' && !Object.hasOwn(PICKUP_CATALOG, entity.template))) fail();
+    if (entity.settings !== undefined && (entity.kind !== 'npc' || !validNpcSettings(entity.settings))) fail();
     if (entity.inheritRadius !== undefined && typeof entity.inheritRadius !== "boolean") fail();
     if (entity.encounterId !== undefined && !groupIds.has(entity.encounterId)) fail();
     if (entity.aggroRadius !== undefined && (entity.kind !== 'boss' || !Number.isFinite(entity.aggroRadius) || entity.aggroRadius <= 0 || entity.aggroRadius > 10000)) fail();
@@ -86,7 +97,7 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
       || (entity.vertical !== undefined && typeof entity.vertical !== 'boolean'))) fail();
     ids.add(entity.id);
     return { ...(entity.inheritRadius !== undefined ? { inheritRadius: entity.inheritRadius } : {}), ...(entity.aggroRadius !== undefined ? { aggroRadius: entity.aggroRadius } : {}), ...(entity.encounterId !== undefined ? { encounterId: entity.encounterId } : {}), ...(entity.kind === 'flame' ? { span: entity.span ?? 1, vertical: entity.vertical ?? false } : {}), id: entity.id, kind: entity.kind, template: entity.template, label: entity.label, x: entity.x, y: entity.y, level: entity.level,
-      radius: entity.kind === 'npc' ? NPC_DEFINITIONS[entity.template as NpcTemplateId].radius : entity.kind === 'pickup' ? 12 : entity.kind === 'party' ? 15 : entity.radius };
+      ...(entity.settings ? { settings: { ...entity.settings } } : {}), radius: entity.kind === 'npc' ? NPC_DEFINITIONS[entity.template as NpcTemplateId].radius : entity.kind === 'pickup' ? 12 : entity.kind === 'party' ? 15 : entity.radius };
   });
   const placements = value.assetPlacements;
   if (placements !== undefined) {
@@ -109,6 +120,7 @@ export class DraftWorld extends World {
     document.assets = assets.map(a => ({ ...a, generation: { ...a.generation, enabled: false } }));
     document.placements = (draft.assetPlacements ?? []).filter(p => assets.some(a => a.id === p.assetId));
     super(document.seed, 16, 'world', document, []);
+    for (const room of draft.rooms ?? []) { this.rooms.push(room); for (const tile of room.tiles) this.roomTiles.set(`${tile.x},${tile.y}`, room.id); }
   }
   override getTile(tx: number, ty: number): TileKind {
     return tx < 0 || ty < 0 || tx >= this.draft.width || ty >= this.draft.height ? 'rock' : this.draft.tiles[ty * this.draft.width + tx];
@@ -126,6 +138,7 @@ export function reachableDraftTiles(draft: DungeonDraft, from: Vec2, assets: rea
     if (visited.has(key)) continue;
     visited.add(key);
     const center = draftEntityPosition(point);
+    if (!world.sameRoom(draftEntityPosition(from), center)) continue;
     if (collidesWorld(center.x, center.y, 15, world)) continue;
     reached.add(key);
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -135,28 +148,45 @@ export function reachableDraftTiles(draft: DungeonDraft, from: Vec2, assets: rea
   }
   return reached;
 }
+/** Reachability is advisory: another entrance or warp may provide access. */
+export function encounterTiles(group: DraftEncounter): Vec2[] {
+  return group.tiles ?? Array.from({length:group.width*group.height}, (_,i)=>({x:group.x+i%group.width,y:group.y+Math.floor(i/group.width)}));
+}
+export function encounterContains(group: DraftEncounter, x: number, y: number): boolean {
+  return group.tiles ? group.tiles.some(p=>p.x===x && p.y===y) : x>=group.x && y>=group.y && x<group.x+group.width && y<group.y+group.height;
+}
+export function isDungeonWarning(message: string): boolean {
+  return message.includes(': non raggiungibile all’interno della sua stanza o dello spazio comune.');
+}
+
 export function validateDungeonDraft(draft: DungeonDraft, assets: readonly WorldAsset[] = WORLD_DOCUMENT.assets): string[] {
-  const issues: string[] = [];
+  const issues: string[] = roomShapeIssues(draft.rooms ?? []);
   const bosses = draft.entities.filter(e => e.kind === 'boss'), party = draft.entities.filter(e => e.kind === 'party');
-  if (!bosses.length || bosses.length > 32) issues.push('Posiziona da 1 a 32 boss, anche come segnaposto.');
+  if (bosses.length > 32) issues.push('Massimo 32 boss.');
+  if (!draft.encounters.length && draft.entities.some(e=>['boss','party','activation','flame'].includes(e.kind))) issues.push('Crea un incontro per boss, spawn gruppo, attivazioni e fiamme.');
   const groups = draft.encounters;
+  const roomWorld = new DraftWorld(draft, assets);
   for (const group of groups) {
-    if (group.visitorTiles?.some(p => p.x < group.x || p.y < group.y || p.x >= group.x + group.width || p.y >= group.y + group.height))
+    if (group.tiles) issues.push(...roomShapeIssues([{id:group.id,name:group.name,tiles:group.tiles}]));
+    if (group.visitorTiles?.some(p => !encounterContains(group,p.x,p.y)))
       issues.push(`${group.name}: zona visitatori fuori dalla regione dell'incontro.`);
     const belongs = (e: DraftEntity) => (e.encounterId ?? groups[0].id) === group.id;
+    const roomBosses = bosses.filter(belongs);
+    if (roomBosses.some(boss => !roomWorld.sameRoom(draftEntityPosition(boss), draftEntityPosition(roomBosses[0])))) issues.push(`${group.name}: boss in stanze diverse. Crea un incontro separato per ciascuna stanza.`);
     if (!bosses.some(belongs)) issues.push(`${group.name}: manca un boss.`);
     const count = party.filter(belongs).length;
     if (count > 5) issues.push(`${group.name}: massimo 5 spawn gruppo opzionali.`);
     for (const e of draft.entities.filter(e => e.kind !== 'npc' && e.kind !== 'pickup' && belongs(e))) {
-      if (e.x < group.x || e.y < group.y || e.x >= group.x + group.width || e.y >= group.y + group.height) issues.push(`${e.label}: fuori dalla regione del suo incontro.`);
-      if (e.kind === 'flame' && draftFlameTiles(e).some(t => t.x < group.x || t.y < group.y || t.x >= group.x + group.width || t.y >= group.y + group.height)) issues.push(`${e.label}: la barriera oltrepassa la regione del suo incontro.`);
+      if (!encounterContains(group,e.x,e.y)) issues.push(`${e.label}: fuori dalla regione del suo incontro.`);
+      if (e.kind === 'flame' && draftFlameTiles(e).some(t => !encounterContains(group,t.x,t.y))) issues.push(`${e.label}: la barriera oltrepassa la regione del suo incontro.`);
       const clearance = e.kind === 'boss' ? e.radius + 14 : e.radius;
-      if (e.kind !== 'flame' && Math.min(e.x+.5-group.x,e.y+.5-group.y,group.x+group.width-e.x-.5,group.y+group.height-e.y-.5)*TILE_SIZE < clearance) issues.push(`${e.label}: ingombro troppo vicino al bordo della regione.`);
+      if (group.tiles && e.kind !== 'flame' && !insideDungeonRegion({kind:'polygon',points:[],tiles:group.tiles},draftEntityPosition(e),-clearance)) issues.push(`${e.label}: ingombro troppo vicino al bordo della regione.`);
+      if (!group.tiles && e.kind !== 'flame' && Math.min(e.x+.5-group.x,e.y+.5-group.y,group.x+group.width-e.x-.5,group.y+group.height-e.y-.5)*TILE_SIZE < clearance) issues.push(`${e.label}: ingombro troppo vicino al bordo della regione.`);
     }
   }
   for (let i = 0; i < groups.length; i++) for (const b of groups.slice(i + 1)) {
     const a = groups[i];
-    if (a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height) issues.push(`${a.name} e ${b.name}: regioni di incontri separati sovrapposte.`);
+    if (encounterTiles(a).some(p=>encounterContains(b,p.x,p.y))) issues.push(`${a.name} e ${b.name}: regioni di incontri separati sovrapposte.`);
   }
   for (const p of draft.assetPlacements ?? []) {
     const asset = assets.find(a => a.id === p.assetId);
@@ -189,8 +219,15 @@ export function validateDungeonDraft(draft: DungeonDraft, assets: readonly World
   const start = party[0] ?? bosses[0];
   if (start) {
     // Reachability uses player-sized clearance, including narrow corridors and diagonals.
-    const reached = reachableDraftTiles(draft, start, assets);
-    for (const entity of draft.entities) if (!reached.has(`${entity.x},${entity.y}`)) issues.push(`${entity.label}: non raggiungibile dal primo ingresso.`);
+    const world = new DraftWorld(draft, assets), reached = new Map<string, Set<string>>();
+    for (const entity of draft.entities) {
+      const position = draftEntityPosition(entity), room = world.roomAt(position.x, position.y);
+      if (!reached.has(room)) {
+        const anchor = draft.entities.find(e => e.kind === 'party' && world.sameRoom(draftEntityPosition(e), draftEntityPosition(entity))) ?? draft.entities.find(e => e.kind === 'boss' && world.sameRoom(draftEntityPosition(e), draftEntityPosition(entity))) ?? entity;
+        reached.set(room, reachableDraftTiles(draft, anchor, assets));
+      }
+      if (!reached.get(room)!.has(`${entity.x},${entity.y}`)) issues.push(`${entity.label}: non raggiungibile all’interno della sua stanza o dello spazio comune.`);
+    }
   }
   return [...new Set(issues)];
 }
@@ -203,6 +240,7 @@ export function draftFromDungeon(definition: DungeonDefinition, bossRadius = 36)
   const position = (point: Vec2) => ({ x: Math.floor(point.x / TILE_SIZE) - b.minTx, y: Math.floor(point.y / TILE_SIZE) - b.minTy });
   draft.entities = [];
   if (definition.assetPlacements) draft.assetPlacements = definition.assetPlacements.map(p => ({ ...p, x: p.x - b.minTx, y: p.y - b.minTy }));
+  if (definition.rooms) draft.rooms = definition.rooms.map(room => ({ ...room, tiles: room.tiles.map(p => ({ x: p.x - b.minTx, y: p.y - b.minTy })) }));
   draft.encounters = [];
   for (const [index, encounter] of dungeonEncounters(definition).entries()) {
     const groupId = encounter.encounterGroupId ?? `encounter-${index}`;
@@ -215,6 +253,7 @@ export function draftFromDungeon(definition: DungeonDefinition, bossRadius = 36)
       const right = Math.min(width, Math.ceil(Math.max(...points.map(p=>p.x))/TILE_SIZE)-b.minTx);
       const bottom = Math.min(height, Math.ceil(Math.max(...points.map(p=>p.y))/TILE_SIZE)-b.minTy);
       draft.encounters.push({ id: groupId, name: `Incontro ${draft.encounters.length+1}`, x, y, width: Math.max(3,right-x), height: Math.max(3,bottom-y),
+        ...(region.kind === 'polygon' && region.tiles ? {tiles:region.tiles.map(p=>({x:p.x-b.minTx,y:p.y-b.minTy}))} : {}),
         ...(encounter.encounter.visitorTiles !== undefined ? { visitorTiles: encounter.encounter.visitorTiles.map(p=>({x:p.x-b.minTx,y:p.y-b.minTy})) } : {}) });
       draft.entities.push(...encounter.spawnPoints.party.map((p,i): DraftEntity=>({id:`party-${index}-${i}`,kind:'party',template:'',label:`Spawn gruppo ${i+1}`,level:1,radius:15,encounterId:groupId,...position(p)})));
       draft.entities.push(...(encounter.encounter.activationPoints ?? []).map((p,i): DraftEntity=>({id:`activation-${index}-${i}`,kind:'activation',template:'',label:'Attivazione',level:1,radius:15,encounterId:groupId,...position(p)})));
@@ -226,7 +265,7 @@ export function draftFromDungeon(definition: DungeonDefinition, bossRadius = 36)
     const aggro = encounter.encounter.regions.bossAggro;
     draft.entities.push({id:`boss-${index}`,kind:'boss',template:template?.templateId??encounter.bossId,label:template?.name??'Boss',level:1,radius:template?.radius??bossRadius,aggroRadius:aggro.kind === 'circle' ? aggro.radius : Math.hypot(width,height)*TILE_SIZE,encounterId:groupId,...position(encounter.spawnPoints.boss)});
   }
-  draft.entities.push(...(definition.npcSpawns??[]).map((p):DraftEntity=>({id:p.id,kind:'npc',template:p.npcKind,label:NPC_DEFINITIONS[p.npcKind].name,level:p.level,radius:NPC_DEFINITIONS[p.npcKind].radius,...position(p)})));
+  draft.entities.push(...(definition.npcSpawns??[]).map((p):DraftEntity=>({id:p.id,kind:'npc',template:p.npcKind,label:p.settings?.name ?? NPC_DEFINITIONS[p.npcKind].name,settings:p.settings,level:p.level,radius:NPC_DEFINITIONS[p.npcKind].radius,...position(p)})));
   draft.entities.push(...(definition.pickupSpawns??[]).map((p):DraftEntity=>({id:p.id,kind:'pickup',template:p.kind,label:PICKUP_CATALOG[p.kind].name,level:1,radius:12,...position(p)})));
   return draft;
 }
@@ -234,18 +273,21 @@ export function draftFromDungeon(definition: DungeonDefinition, bossRadius = 36)
 /** Compile spatial content; boss combat behavior must be explicitly linked before runtime activation. */
 export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldAsset[] = WORLD_DOCUMENT.assets) {
   const draft = parseDungeonDraft(JSON.stringify(input)), issues = validateDungeonDraft(draft, assets);
-  if (issues.length) throw new Error(issues.join('\n'));
+  const errors = issues.filter(issue => !isDungeonWarning(issue));
+  if (errors.length) throw new Error(errors.join('\n'));
   const bosses = draft.entities.filter(e => e.kind === 'boss'), boss = bosses[0];
   const position = (point: Vec2) => ({ x: (point.x + draft.origin.x + .5) * TILE_SIZE, y: (point.y + draft.origin.y + .5) * TILE_SIZE });
   const bounds = { minTx: draft.origin.x, maxTx: draft.origin.x + draft.width - 1, minTy: draft.origin.y, maxTy: draft.origin.y + draft.height - 1 };
   const left = bounds.minTx * TILE_SIZE, top = bounds.minTy * TILE_SIZE, right = (bounds.maxTx + 1) * TILE_SIZE, bottom = (bounds.maxTy + 1) * TILE_SIZE;
   const region: DungeonRegion = { kind: 'polygon', points: [{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }] };
   const definition: DungeonDefinition = {
+    ...(draft.rooms ? { rooms: draft.rooms.map(room => ({ ...room, tiles: room.tiles.map(p => ({ x: p.x + draft.origin.x, y: p.y + draft.origin.y })) })) } : {}),
+    ...(draft.encounters.length ? {} : {noEncounters:true}),
     id: draft.id, name: draft.name, bossId: `boss:${draft.id}:main`,
     area: { x: (left + right) / 2, y: (top + bottom) / 2, radius: Math.hypot(right - left, bottom - top) / 2 },
     layout: { bounds, floor: 'path', obstacles: [], obstacleTiles: [], tiles: draft.tiles.map((kind, i) => ({ x: bounds.minTx + i % draft.width, y: bounds.minTy + Math.floor(i / draft.width), kind })) },
-    passages: [], spawnPoints: { boss: position(boss), party: draft.entities.filter(e => e.kind === 'party').map(position) },
-    npcSpawns: draft.entities.filter(e => e.kind === 'npc').map(e => ({ ...position(e), id: e.id, npcKind: e.template as NpcTemplateId, level: e.level })),
+    passages: [], spawnPoints: { boss: position(boss ?? {x:1,y:1}), party: draft.entities.filter(e => e.kind === 'party').map(position) },
+    npcSpawns: draft.entities.filter(e => e.kind === 'npc').map(e => ({ ...position(e), id: e.id, npcKind: e.template as NpcTemplateId, level: e.level, settings: { ...e.settings, name: e.label } })),
     pickupSpawns: draft.entities.filter(e => e.kind === 'pickup').map(e => ({ ...position(e), id: e.id, kind: e.template as PickupKind, radius: 12 })),
     ...(draft.assetPlacements !== undefined ? { assetPlacements: draft.assetPlacements.map(p => ({ ...p, x: p.x + draft.origin.x, y: p.y + draft.origin.y })) } : {}),
     encounter: { preparationMs: 5000, regions: { trigger: region, admission: region, combat: region, ejectIntruders: region, bossAggro: region, bossLeash: region }, ejectTo: { x: left - 96, y: bottom + 96 } },
@@ -261,7 +303,7 @@ export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldA
     const group = draft.encounters.find(g => g.id === (entity.encounterId ?? draft.encounters[0].id))!;
     const l = (draft.origin.x + group.x) * TILE_SIZE, t = (draft.origin.y + group.y) * TILE_SIZE;
     const r = l + group.width * TILE_SIZE, b = t + group.height * TILE_SIZE;
-    const region: DungeonRegion = { kind: 'polygon', points: [{x:l,y:t},{x:r,y:t},{x:r,y:b},{x:l,y:b}] };
+    const region: DungeonRegion = { kind: 'polygon', points: [{x:l,y:t},{x:r,y:t},{x:r,y:b},{x:l,y:b}], ...(group.tiles ? {tiles:group.tiles.map(p=>({x:p.x+draft.origin.x,y:p.y+draft.origin.y}))} : {}) };
     const flames = draft.entities.filter(e => e.kind === 'flame' && (e.encounterId ?? draft.encounters[0].id) === group.id).map(e => {
       const tiles = draftFlameTiles(e).map(p => ({ x: p.x + draft.origin.x, y: p.y + draft.origin.y }));
       return { id: e.id, position: position(e), tiles, fightState: 'flame' as const, flame: flameBarrierFromTiles(tiles, e.vertical) };
@@ -271,7 +313,7 @@ export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldA
     // Find a free staging tile outside every encounter so ejected outsiders cannot start another fight.
     let ejectTo = definition.encounter.ejectTo;
     for (let y = 0; y < draft.height; y++) for (let x = 0; x < draft.width; x++) {
-      if (!isSolid(draft.tiles[y * draft.width + x]) && !draft.encounters.some(g => x >= g.x && x < g.x + g.width && y >= g.y && y < g.y + g.height)) ejectTo = position({x,y});
+      if (!isSolid(draft.tiles[y * draft.width + x]) && !draft.encounters.some(g => encounterContains(g,x,y))) ejectTo = position({x,y});
     }
     return { bossId: `boss:${draft.id}:${index === 0 ? 'main' : `spawn:${entity.id}`}`, encounterGroupId: group.id,
       spawnPoints: { boss: position(entity), party: party.map(position) }, passages,
@@ -284,7 +326,7 @@ export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldA
   Object.assign(definition, placements[0]);
   definition.additionalEncounters = placements.slice(1);
   for (const encounter of dungeonEncounters(definition)) assertValidDungeonDefinition(encounter);
-  return { definition, bossTemplate: boss.template, bossPlaceholder: { name: boss.label, radius: boss.radius },
+  return { definition, bossTemplate: boss?.template ?? '', bossPlaceholder: { name: boss?.label ?? '', radius: boss?.radius ?? 15 },
     bosses: bosses.map((entity, i) => ({ id: placements[i].bossId, template: entity.template, name: entity.label, radius: entity.radius, inheritRadius: entity.inheritRadius })) };
 
 }

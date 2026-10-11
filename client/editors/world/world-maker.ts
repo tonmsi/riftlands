@@ -1,3 +1,6 @@
+import { organizeWorldPanels } from './world-panels';
+import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../npc-properties';
+import { newDungeonInterior } from '../../../shared/warps';
 import './world-maker.css';
 import { installActorEditor } from './boss-editor';
 import { installPlayerEditor } from './player-editor';
@@ -24,6 +27,7 @@ import { mapDocument } from '../../../shared/warps';
 import { installWarpEditor } from './warp-editor';
 const root = document.getElementById('world-maker')!;
 root.innerHTML = worldMakerLayout;
+organizeWorldPanels(root);
 installActorEditor();
 installPlayerEditor();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -66,6 +70,7 @@ function surface(): WorldDocument {
     return m.document;
 }
 const warpEditor = installWarpEditor(root, {
+    rooms: id => { const doc = mapDocument(draft, id); return worldDungeons(doc, catalog).flatMap(d => (d.rooms ?? []).map(room => ({ ...room, id: `${d.id}:${room.id}` }))); },
     catalog: () => catalog,
     project: () => draft, mapId: () => activeMap, tool: () => tool, selectTool,
     change, center: p => centerAt(p.x + .5, p.y + .5),
@@ -84,6 +89,8 @@ let gesture: {
     start: Vec2;
     last: Vec2;
     pan?: Vec2;
+    spawnMove?: Vec2;
+    warpMove?: { id: string; side: 'entry' | 'arrival'; x: number; y: number };
     move?: { kind: 'placement' | 'npc' | 'dungeon' | 'zone'; id: string; x: number; y: number };
     cell?: boolean;
     image?: { x: number; y: number; scale: number; unit: number };
@@ -128,6 +135,7 @@ function flushCheckpoint(): Promise<void> {
     if (!snapshot) return checkpointQueue;
     checkpointQueue = checkpointQueue.catch(() => { }).then(() => saveWorldCheckpoint(snapshot));
     void checkpointQueue.then(() => {
+        studioChannel?.postMessage({ type: 'world-draft' });
         const signature = JSON.stringify(snapshot.document.assets);
         if (signature !== lastAssetPublication) { lastAssetPublication = signature; studioChannel?.postMessage({ type: 'assets', assets: snapshot.document.assets }); }
     }).catch(() => {});
@@ -180,13 +188,24 @@ function change(action: () => void): void {
         report(e);
     }
 }
-function selectTool(next: string): void { tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === next))); el('tool-label').textContent = tools.find(t => t[0] === next)?.[2] ?? next; schedule(); }
+function selectTool(next: string): void { tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === next))); el('tool-label').textContent = tools.find(t => t[0] === next)?.[2] ?? (next === 'warp' ? 'Passaggio' : next === 'warp-key' ? 'Chiave' : next); schedule(); }
 root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.onclick = () => { warpEditor.clearSelection(); selectTool(b.dataset.tool!); refresh(); });
 function active(): WorldAsset | undefined { return draft.assets.find(a => a.id === activeAsset); }
 function palette(): void {
     assetCatalog.update(draft.assets, activeAsset, val('asset-search'));
 }
+let validationActive = false;
+let validatedDraft: typeof draft | undefined;
+function showValidation(): string[] {
+    const issues = validateWorld(parseWorldDocument(draft), catalog);
+    validatedDraft = draft;
+    for (const id of ['issues', 'validation-details']) el(id).replaceChildren(...issues.map(message => { const li = document.createElement('li'); li.textContent = message; return li; }));
+    el('validation-alert').hidden = !issues.length;
+    el('validation-summary').textContent = issues.length ? `⚠ ${issues.length} ${issues.length === 1 ? 'problema da correggere' : 'problemi da correggere'} · ${issues[0]} · Mostra dettagli` : '';
+    return issues;
+}
 function refresh(): void {
+    if (validationActive && validatedDraft !== draft) showValidation();
     if (activeMap !== 'world' && !draft.interiors?.some(m => m.id === activeMap)) activeMap = 'world';
     warpEditor.refresh();
     if (!active())
@@ -208,7 +227,8 @@ function refresh(): void {
     el('selection-inspector').hidden = !selected || selected.kind === 'zone';
     if (selected && selected.kind !== 'zone')
         refreshSelection();
-    el('asset-inspector').hidden = !!selected || !active() || warpEditor.hasSelection();
+    el('asset-inspector').hidden = !!selected || !active() || tool !== 'asset' || warpEditor.hasSelection();
+    el('inspector-empty').hidden = !!selected || warpEditor.hasSelection() || (tool === 'asset' && !!active());
     if (!selected && active())
         refreshAsset(active()!);
     el('zone-list').replaceChildren(...surface().zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
@@ -286,6 +306,11 @@ function refreshSelection(): void {
     el('selection-title').textContent = selected?.kind === 'dungeon' ? 'Posizione dungeon' : selected?.kind === 'npc' ? 'NPC manuale' : 'Istanza asset';
     el('selection-fields').innerHTML = `<div class="pair">${field('entity-x', 'X · celle')}${field('entity-y', 'Y · celle')}</div>${selected?.kind === 'npc' ? field('entity-level', 'Livello') : ''}${selected?.kind === 'dungeon' ? '<label>PvP del dungeon<select id="entity-pvp"><option value="">Eredita dalla mappa</option><option value="false">Disabilitato</option><option value="true">Abilitato</option></select></label><p class="hint">Le zone con una regola PvP esplicita hanno precedenza.</p>' : ''}`;
     set('entity-x', e.x);
+    if (selected?.kind === 'npc') {
+        el('selection-fields').insertAdjacentHTML('beforeend', npcPropertiesMarkup('selected-npc'));
+        fillNpcProperties(root, 'selected-npc', e.npcKind, e.settings);
+        el('selection-title').textContent = NPC_DEFINITIONS[e.npcKind as keyof typeof NPC_DEFINITIONS].disposition === 'neutral' ? 'NPC' : 'Mob';
+    }
     set('entity-y', e.y);
     if (selected?.kind === 'dungeon') set('entity-pvp', e.pvp === undefined ? '' : String(e.pvp));
     if (selected?.kind === 'npc')
@@ -387,8 +412,28 @@ canvas.addEventListener('pointerdown', event => {
     const p = position(event);
     ensureWorld();
     if (event.button === 0 && !keys.has('Space')) {
-        try { if (warpEditor.place(p)) { schedule(true); return; } }
+        try { if (warpEditor.place(p)) {
+            const endpoint = tool === 'select' ? warpEditor.dragTarget(p) : undefined;
+            if (endpoint) {
+                const before = draft; draft = forkWorldDocument(draft);
+                gesture = { pointer: event.pointerId, before, start: p, last: p, tool: 'move-warp', mass: false, warpMove: endpoint };
+                canvas.setPointerCapture(event.pointerId); event.preventDefault();
+            }
+            schedule(true); return;
+        } }
         catch (e) { report(e); return; }
+    }
+    if (event.button === 0 && tool === 'select' && !keys.has('Space')) {
+        const spawn = surface().spawn, rect = canvas.getBoundingClientRect();
+        const offset = mapDocument(draft, activeMap).interiorBounds ? .5 : 0;
+        const x = rect.left + view.x + (spawn.x + offset) * view.scale;
+        const y = rect.top + view.y + (spawn.y + offset) * view.scale;
+        if (Math.hypot(event.clientX - x, event.clientY - y) <= Math.max(10, view.scale * .35)) {
+            const before = draft; draft = forkWorldDocument(draft);
+            warpEditor.clearSelection(); selected = null; selectedGenerated = undefined;
+            gesture = { pointer: event.pointerId, before, start: p, last: p, tool: 'move-spawn', mass: false, spawnMove: { ...spawn } };
+            canvas.setPointerCapture(event.pointerId); event.preventDefault(); refresh(); schedule(); return;
+        }
     }
     if (event.button === 0 && tool === 'select' && !keys.has('Space')) {
         if (!selectionContains(p)) { selectAt(p); return; }
@@ -461,6 +506,19 @@ canvas.addEventListener('pointermove', event => {
         gesture.pan = { x: event.clientX, y: event.clientY };
         schedule();
         return;
+    }
+    if (gesture.spawnMove) {
+        const bounds = mapDocument(draft, activeMap).interiorBounds;
+        surface().spawn = {
+            x: Math.max(bounds ? 0 : -10_000_000, Math.min(bounds ? bounds.width - 1 : 10_000_000, gesture.spawnMove.x + pointerTile.x - gesture.start.x)),
+            y: Math.max(bounds ? 0 : -10_000_000, Math.min(bounds ? bounds.height - 1 : 10_000_000, gesture.spawnMove.y + pointerTile.y - gesture.start.y)),
+        };
+        refresh(); schedule(true); return;
+    }
+    if (gesture.warpMove) {
+        const endpoint = gesture.warpMove;
+        warpEditor.moveEndpoint(endpoint, { x: endpoint.x + pointerTile.x - gesture.start.x, y: endpoint.y + pointerTile.y - gesture.start.y });
+        refresh(); schedule(true); return;
     }
     if (gesture.move) {
         const move = gesture.move;
@@ -629,7 +687,7 @@ input('zone-music-file').addEventListener('change', () => { void (async () => {
 on('selection-update', () => change(() => { materializeSelection(); const e = selectionEntity(); if (!e)
     return; if (selected?.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id))
     surface().dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'npc')
-    e.level = num('entity-level'); if (selected?.kind === 'dungeon') { if (val('entity-pvp') === '') delete e.pvp; else e.pvp = val('entity-pvp') === 'true'; } }));
+    { e.level = num('entity-level'); const properties = readNpcProperties(root, 'selected-npc'); e.npcKind = properties.kind; e.settings = properties.settings; } if (selected?.kind === 'dungeon') { if (val('entity-pvp') === '') delete e.pvp; else e.pvp = val('entity-pvp') === 'true'; } }));
 on('selection-delete', () => change(() => { materializeSelection(); if (selected?.kind === 'placement')
     surface().placements = surface().placements.filter(p => p.id !== selected!.id); if (selected?.kind === 'npc')
     surface().npcs = surface().npcs.filter(n => n.id !== selected!.id); if (selected?.kind === 'dungeon') {
@@ -655,7 +713,7 @@ input('preview-fade').addEventListener('change', () => schedule());
 input('asset-search').addEventListener('input', palette);
 on('assets-expand', () => assetCatalog.expandAll(true));
 on('assets-collapse', () => assetCatalog.expandAll(false));
-on('validate', () => { const issues = validateWorld(parseWorldDocument(draft), catalog); el('issues').replaceChildren(...issues.map(message => { const li = document.createElement('li'); li.textContent = message; return li; })); status(issues.length ? `${issues.length} problemi da correggere.` : 'Progetto valido: ingombri e riferimenti verificati.'); });
+on('validate', () => { validationActive = true; const issues = showValidation(); status(issues.length ? `${issues.length} problemi da correggere.` : 'Progetto valido: ingombri e riferimenti verificati.'); });
 document.addEventListener('keydown', e => { if ((e.target as HTMLElement).matches('input,select,textarea'))
     return; keys.add(e.code); if (e.code === 'Space')
     e.preventDefault(); if (e.code === 'Escape') {
@@ -803,8 +861,32 @@ async function load(reload = false): Promise<void> {
     }
     finally {
         ready = true;
+        const requested = new URLSearchParams(location.search);
+        const dungeonId = requested.get('dungeon');
+        const requestedAsset = requested.get('asset');
+        if (requestedAsset && draft.assets.some(a => a.id === requestedAsset)) { activeAsset = requestedAsset; selected = null; selectTool('asset'); }
+        if (requested.get('passages') === '1' && dungeonId) {
+            let map = draft.interiors?.find(m => m.document.dungeons.some(d => d.dungeonId === dungeonId && d.enabled !== false));
+            const definition = catalog.find(d => d.id === dungeonId);
+            if (!map && definition) {
+                const created = newDungeonInterior(`interior-${crypto.randomUUID()}`, definition, false, draft.seed);
+                change(() => { (draft.interiors ??= []).push(created); for (const placement of draft.dungeons) if (placement.dungeonId === dungeonId) placement.enabled = false; });
+                map = created;
+            }
+            if (map) {
+                activeMap = map.id; refresh();
+                el<HTMLSelectElement>('area-kind').value = 'dungeon'; el('area-kind').dispatchEvent(new Event('change'));
+                el<HTMLSelectElement>('area-map').value = map.id; el('area-map').dispatchEvent(new Event('change'));
+                el<HTMLDetailsElement>('areas-controls-panel').open = true;
+                if (window.parent !== window) document.body.classList.add('passages-embedded');
+            } else status('Installa prima la bozza del dungeon nel catalogo, poi riapri Passaggi.');
+        }
         refresh();
         centerAt(surface().spawn.x, surface().spawn.y);
+        if (requested.get('passages') === '1' && requested.get('room')) {
+            el<HTMLSelectElement>('warp-destination').value = activeMap; el('warp-destination').dispatchEvent(new Event('change'));
+            el<HTMLSelectElement>('warp-room').value = `${dungeonId}:${requested.get('room')}`; el('warp-room').dispatchEvent(new Event('change'));
+        }
         schedule(true);
     }
 }
@@ -819,6 +901,11 @@ function openDungeonMaker(id?: string): void {
 }
 el('open-dungeon-maker').onclick = event => { event.preventDefault(); openDungeonMaker(); };
 el('edit-dungeon').onclick = () => openDungeonMaker(val('dungeon'));
+el('edit-map-dungeon').onclick = () => {
+    const dungeonMap = draft.interiors?.find(m => m.id === val('area-map'));
+    const dungeon = dungeonMap?.document.dungeons.find(d => d.enabled !== false && catalog.some(item => item.id === d.dungeonId));
+    if (dungeon) openDungeonMaker(dungeon.dungeonId);
+};
 async function refreshDungeonCatalog(): Promise<void> {
     if (!ready || !token) return;
     await settleGesture();

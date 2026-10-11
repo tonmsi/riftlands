@@ -55,6 +55,8 @@ export async function setupDungeonLibrary(getDraft: () => DungeonDraft, open: (d
             open(parseDungeonDraft(JSON.stringify(draft)));
         };
         const requested = new URLSearchParams(location.search).get('dungeon');
+        const current = requested ?? getDraft().id;
+        if (library.dungeons.some(d => d.id === current)) select.value = current;
         if (requested && library.dungeons.some(d => d.id === requested)) {
             select.value = requested;
             panel.querySelector<HTMLButtonElement>('[data-library="open"]')!.click();
@@ -73,6 +75,10 @@ export async function setupDungeonLibrary(getDraft: () => DungeonDraft, open: (d
                 }
                 const message = `Dungeon ${action === 'remove' ? 'eliminato' : action === 'update' ? 'aggiornato' : 'installato'}. Ricompila il gioco prima di avviarlo. Backup: ${result.backups.join(', ')}`;
                 sessionStorage.setItem('riftlands.studio-result', message);
+                const url = new URL(location.href);
+                if (action === 'install' || action === 'update') url.searchParams.set('dungeon', id);
+                else if (url.searchParams.get('dungeon') === id) url.searchParams.delete('dungeon');
+                history.replaceState(null, '', url);
                 location.reload();
             } catch (error) { status(error instanceof Error ? error.message : String(error)); }
             finally { for (const b of buttons()) b.disabled = false; refreshBackups(); }

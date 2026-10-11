@@ -4,6 +4,7 @@ import type { Account } from './store';
 /** Gameplay requests saves without owning credentials, file paths or disk I/O. */
 export interface GameplayPersistence {
   readonly accounts: ReadonlyMap<string, Account>;
+  warpGateStates?: Record<string, number>;
   bossStates: Record<string, BossState>;
   touch(): void;
   flush(): void;

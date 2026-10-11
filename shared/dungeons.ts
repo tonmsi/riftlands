@@ -1,3 +1,5 @@
+import { validNpcSettings } from './npc-settings';
+import { validDungeonRooms, roomShapeIssues, type DungeonRoom } from './dungeon-rooms';
 import { TILE_SIZE } from './config';
 import type { Pickup, TileKind, Vec2 } from './types';
 import { NPC_DEFINITIONS, type NpcTemplateId } from './npcs';
@@ -29,6 +31,8 @@ export type DungeonRegion = {
 } | {
   kind: 'polygon';
   points: readonly Vec2[];
+  /** Optional exact tile mask for painted encounter regions. */
+  tiles?: readonly Vec2[];
 };
 export interface DungeonEncounterDefinition {
   preparationMs: number;
@@ -71,8 +75,10 @@ export interface DungeonTheme {
   markerRune: string;
 }
 export interface DungeonDefinition {
+  rooms?: DungeonRoom[];
   id: string;
   name: string;
+  noEncounters?: boolean;
   bossId: string;
   encounterGroupId?: string;
   additionalEncounters?: readonly { bossId: string; encounterGroupId: string; spawnPoints: DungeonDefinition['spawnPoints']; encounter: DungeonEncounterDefinition; passages: readonly DungeonPassage[] }[];
@@ -87,7 +93,7 @@ export interface DungeonDefinition {
   passages: readonly DungeonPassage[];
   /** An empty party list keeps entrants at their current position. */
   spawnPoints: { boss: Vec2; party: readonly Vec2[] };
-  npcSpawns?: readonly (Vec2 & { id: string; npcKind: NpcTemplateId; level: number })[];
+  npcSpawns?: readonly (Vec2 & { id: string; npcKind: NpcTemplateId; level: number; settings?: import('./npc-settings').NpcSettings })[];
   pickupSpawns?: readonly Pickup[];
   /** Shared world catalog references, positioned in world tile coordinates. */
   assetPlacements?: readonly AssetPlacement[];
@@ -127,6 +133,7 @@ export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] =
     return placement ? relocateDungeon(entry.definition, placement) : entry.definition;
   });
 export function dungeonEncounters(definition: DungeonDefinition): DungeonDefinition[] {
+  if (definition.noEncounters) return [];
   return [definition, ...(definition.additionalEncounters ?? []).map(encounter => ({ ...definition, ...encounter, additionalEncounters: undefined }))];
 }
 if (new Set(DUNGEON_DEFINITIONS.map(dungeon => dungeon.id)).size !== DUNGEON_DEFINITIONS.length
@@ -181,8 +188,20 @@ export function dungeonAt(position: Vec2, margin = 0): DungeonDefinition | undef
   return DUNGEON_DEFINITIONS.find(definition => insideDungeon(definition, position, margin));
 }
 
+const regionTileCache = new WeakMap<object, Set<string>>();
 export function insideDungeonRegion(region: DungeonRegion, position: Vec2, margin = 0): boolean {
   if (region.kind === 'circle') return Math.hypot(position.x - region.center.x, position.y - region.center.y) < region.radius + margin;
+  if (region.tiles) {
+    let cells = regionTileCache.get(region.tiles);
+    if (!cells) { cells = new Set(region.tiles.map(p=>`${p.x},${p.y}`)); regionTileCache.set(region.tiles,cells); }
+    const tx=Math.floor(position.x/TILE_SIZE), ty=Math.floor(position.y/TILE_SIZE);
+    if (!cells.has(`${tx},${ty}`)) return false;
+    const radius=Math.max(0,-margin);
+    for(let y=Math.floor((position.y-radius)/TILE_SIZE);y<=Math.floor((position.y+radius)/TILE_SIZE);y++)
+      for(let x=Math.floor((position.x-radius)/TILE_SIZE);x<=Math.floor((position.x+radius)/TILE_SIZE);x++)
+        if(!cells.has(`${x},${y}`) && Math.hypot(Math.max(x*TILE_SIZE-position.x,0,position.x-(x+1)*TILE_SIZE),Math.max(y*TILE_SIZE-position.y,0,position.y-(y+1)*TILE_SIZE))<radius) return false;
+    return true;
+  }
   let inside = false;
   for (let index = 0, previous = region.points.length - 1; index < region.points.length; previous = index++) {
     const a = region.points[index], b = region.points[previous];
@@ -345,6 +364,7 @@ function distanceToSegment(point: Vec2, from: Vec2, to: Vec2): number {
 const finitePoint = (point: Vec2): boolean => Number.isFinite(point.x) && Number.isFinite(point.y);
 const tileKey = (tile: Vec2): string => `${tile.x},${tile.y}`;
 function regionSamples(region: DungeonRegion): Vec2[] {
+  if (region.kind === 'polygon' && region.tiles) return region.tiles.map(dungeonTileCenter);
   if (region.kind === 'polygon') return region.points.flatMap((point, index) => {
     const next = region.points[(index + 1) % region.points.length];
     return [point, { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 }];
@@ -359,6 +379,7 @@ const regionContained = (inner: DungeonRegion, outer: DungeonRegion): boolean =>
 
 /** Runtime validation complements TypeScript with spatial and topology invariants. */
 export function assertValidDungeonDefinition(definition: DungeonDefinition): void {
+  if (definition.rooms !== undefined && (!validDungeonRooms(definition.rooms, definition.layout.bounds) || roomShapeIssues(definition.rooms).length)) throw new Error('Stanze dungeon non valide: controlla forma e sovrapposizioni.');
   const fail = (message: string): never => { throw new Error(`Dungeon ${definition.id || '<senza id>'}: ${message}`); };
   if (!definition.id || !definition.name || !definition.bossId) fail('id, nome e bossId sono obbligatori.');
   const bounds = definition.layout.bounds;
@@ -380,7 +401,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
     || definition.spawnPoints.party.some(point => !finitePoint(point))) fail('spawn boss/party non validi.');
   for (const [name, point] of [['boss', definition.spawnPoints.boss], ...definition.spawnPoints.party.map((point, index) => [`party ${index}`, point] as const)] as const) {
     const tx = Math.floor(point.x / TILE_SIZE), ty = Math.floor(point.y / TILE_SIZE);
-    if (!walkable(dungeonTile(definition, tx, ty))) fail(`spawn ${name} sopra una tile solida o fuori mappa.`);
+    if (!definition.noEncounters && !walkable(dungeonTile(definition, tx, ty))) fail(`spawn ${name} sopra una tile solida o fuori mappa.`);
   }
   const paintedKeys = new Set<string>();
   for (const tile of definition.layout.tiles ?? []) {
@@ -403,7 +424,9 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
       || !Number.isInteger(npc.level) || npc.level < 1 || npc.level > 25
       || !walkable(dungeonTile(definition, Math.floor(npc.x / TILE_SIZE), Math.floor(npc.y / TILE_SIZE)))) fail('spawn NPC non valido.');
     npcIds.add(npc.id);
+    if (npc.settings !== undefined && !validNpcSettings(npc.settings)) fail('proprietà NPC non valide.');
   }
+  if (definition.noEncounters) { if (definition.additionalEncounters?.length) fail('dungeon senza incontri con incontri aggiuntivi.'); return; }
   if (!Number.isFinite(definition.encounter.preparationMs) || definition.encounter.preparationMs < 0) fail('preparationMs non valido.');
   if (!finitePoint(definition.encounter.ejectTo)) fail('destinazione di espulsione non valida.');
   const activationPoints = definition.encounter.activationPoints ?? [];
@@ -448,6 +471,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
       if (!finitePoint(region.center) || !Number.isFinite(region.radius) || region.radius <= 0) fail(`regione ${name} non valida.`);
     } else if (region.points.length < 3 || region.points.some(point => !finitePoint(point))) fail(`poligono ${name} non valido.`);
   }
+  for (const region of Object.values(definition.encounter.regions)) if (region.kind === 'polygon' && region.tiles && (!validDungeonRooms([{id:'mask',name:'Incontro',tiles:region.tiles}],bounds) || roomShapeIssues([{id:'mask',name:'Incontro',tiles:[...region.tiles]}]).length)) fail('forma incontro non valida.');
   const regions = definition.encounter.regions;
   if (!insideDungeonRegion(regions.trigger, definition.spawnPoints.boss)
     || !insideDungeonRegion(regions.combat, definition.spawnPoints.boss)

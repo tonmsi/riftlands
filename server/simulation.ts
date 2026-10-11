@@ -28,7 +28,7 @@ const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
 const copyActor = (actor: Actor): Actor => ({ ...actor, ...(actor.loadout ? { loadout: { ...actor.loadout } } : {}), effects: actor.effects.map(effect => ({ ...effect })), cooldowns: { ...actor.cooldowns } });
 type Connection = { account: Account; connected: boolean; removeAt: number; inputs: InputCommand[]; ack: number; highestSeq: number; combatAt: number; combatUntil?: number };
-type NpcMeta = { home: Vec2; chunk: string; nextAttack: number; aggroTargetId?: string; windup?: { targetId: string; readyAt: number }; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
+type NpcMeta = { settings?: import('../shared/npc-settings').NpcSettings; home: Vec2; chunk: string; nextAttack: number; aggroTargetId?: string; windup?: { targetId: string; readyAt: number }; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
 type ActiveChunk = { key: string; lastUsed: number; npcIds: string[]; pickupIds: string[] };
 type Team = { id: string; leaderId: string; members: Set<string> };
 type Invite = { fromId: string; teamId: string; expiresAt: number };
@@ -306,7 +306,7 @@ export class WorldSimulation {
     this.stepPickups();
     if (this.mode === 'world') this.interactions.step(this.now);
     this.fishing.step(this.now);
-    for (const encounter of this.bosses.values()) for (const player of this.players.values()) encounter.collect(player, this.accounts.get(player.id)!, !!this.connections.get(player.id)?.connected, this.now);
+    for (const encounter of this.bosses.values()) for (const player of this.players.values()) encounter.collect(player, this.accounts.get(player.id)!, !!this.connections.get(player.id)?.connected, this.now, this.world);
     while (this.events.length && this.events[0].at + 1800 < this.now) this.events.shift();
     if (this.tick % 150 === 0) {
       this.checkpoint();
@@ -369,7 +369,7 @@ export class WorldSimulation {
   }
 
   private visibleTo(observer: Actor, target: Actor): boolean {
-    return actorVisibleTo(observer, target, this.now);
+    return actorVisibleTo(observer, target, this.now, this.world);
   }
 
   private nearestEnemy(actor: Actor): Actor | undefined {
@@ -616,6 +616,7 @@ export class WorldSimulation {
   }
 
   private damage(target: Actor, attacker: Actor | undefined, amount: number): boolean {
+    if (attacker && !this.world.sameRoom(attacker, target)) return false;
     if (target.disposition === 'neutral' || target.hp <= 0 || target.spawnProtectedUntil > this.now || (attacker && this.allied(attacker, target))) return false;
     const encounter = target.bossKey ? this.bosses.get(target.bossKey) : undefined;
     if (encounter && !encounter.canDamage(attacker)) return false;
@@ -648,8 +649,8 @@ export class WorldSimulation {
         || insideDungeon(definition, this.npcMeta.get(target.id)?.home ?? target)) : undefined;
     if (dungeon) this.dungeonCorpses.set(target.id, dungeon.id);
     target.deadUntil = dungeon ? Number.MAX_SAFE_INTEGER : this.now + (target.kind === 'npc'
-      ? (target.npcKind === 'boss' ? 55_000 : target.npcKind && target.npcKind in NPC_COMBAT
-        ? NPC_COMBAT[target.npcKind as keyof typeof NPC_COMBAT].respawnMs : 120_000) : 5000);
+      ? (this.npcMeta.get(target.id)?.settings?.respawnMs ?? (target.npcKind === 'boss' ? 55_000 : target.npcKind && target.npcKind in NPC_COMBAT
+        ? NPC_COMBAT[target.npcKind as keyof typeof NPC_COMBAT].respawnMs : 120_000)) : 5000);
     const deadMeta = this.npcMeta.get(target.id);
     if (deadMeta) { deadMeta.windup = undefined; deadMeta.aggroTargetId = undefined; }
     target.effects = [];
@@ -738,15 +739,15 @@ export class WorldSimulation {
           const spec = NPC_DEFINITIONS[npc.npcKind];
           const actor: Actor = slept ? copyActor(slept.body) : {
             id: npc.id, kind: 'npc', npcKind: npc.npcKind, classId: spec.classId,
-            name: spec.name,
-            disposition: spec.disposition, ...(spec.dialogueId ? { dialogueId: spec.dialogueId } : {}),
+            name: npc.settings?.name || spec.name,
+            disposition: spec.disposition, ...((npc.settings?.dialogueId ?? spec.dialogueId) ? { dialogueId: npc.settings?.dialogueId ?? spec.dialogueId } : {}),
             x: npc.x, y: npc.y, radius: spec.radius,
-            hp: npcHp, maxHp: npcHp, resource: 0, maxResource: 100, aim: 0, speed: spec.speed,
+            hp: npcHp, maxHp: npcHp, resource: 0, maxResource: 100, aim: (npc.settings?.initialAngle ?? 0) * Math.PI / 180, speed: npc.settings?.speed ?? spec.speed,
             level: npc.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: EMPTY_COOLDOWNS(),
           };
           this.npcs.set(actor.id, actor);
           if (this.dungeonCorpses.has(actor.id)) { actor.hp = 0; actor.deadUntil = Number.MAX_SAFE_INTEGER; }
-          this.npcMeta.set(actor.id, { home: { x: npc.x, y: npc.y }, chunk: key, nextAttack: slept?.nextAttack ?? this.now + 1500 });
+          this.npcMeta.set(actor.id, { settings: npc.settings, home: { x: npc.x, y: npc.y }, chunk: key, nextAttack: slept?.nextAttack ?? this.now + 1500 });
           this.npcSleep.delete(actor.id);
           chunk.npcIds.push(actor.id);
         }
@@ -801,7 +802,7 @@ export class WorldSimulation {
     for (const slime of this.npcs.values()) {
       if (slime.npcKind !== 'slime' || (slime.hp <= 0 && slime !== hit)) continue;
       const meta = this.npcMeta.get(slime.id);
-      if (!meta || distance(slime, hit) > NPC_COMBAT.slime.aggroRadius || distance(attacker, meta.home) >= 650
+      if (!meta || distance(slime, hit) > (meta?.settings?.aggroRadius ?? NPC_COMBAT.slime.aggroRadius) || distance(attacker, meta.home) >= (meta.settings?.leashRadius ?? 650)
         || !hasLineOfSight(slime, hit, this.world)) continue;
       if (meta.aggroTargetId !== attacker.id) meta.windup = undefined;
       meta.aggroTargetId = attacker.id;
@@ -832,7 +833,7 @@ export class WorldSimulation {
     for (const npc of this.npcs.values()) {
       if (npc.npcKind === 'boss') continue;
       const meta = this.npcMeta.get(npc.id)!;
-      if (npc.disposition === 'neutral') { this.stepWanderingNpc(npc, meta, npc.npcKind ? NPC_DEFINITIONS[npc.npcKind].behavior : undefined, dt); continue; }
+      if (npc.disposition === 'neutral') { this.stepWanderingNpc(npc, meta, npc.npcKind ? (meta.settings?.wanderRadius !== undefined ? { kind: 'wander', radius: meta.settings.wanderRadius, pauseMs: [3500, 6000] } : NPC_DEFINITIONS[npc.npcKind].behavior) : undefined, dt); continue; }
       if (npc.hp <= 0) {
         if (this.now >= npc.deadUntil) { Object.assign(npc, meta.home); npc.hp = npc.maxHp; npc.deadUntil = 0; npc.effects = []; meta.nextAttack = this.now + 1200; }
         continue;
@@ -840,10 +841,10 @@ export class WorldSimulation {
       npc.effects = npc.effects.filter(effect => effect.until > this.now);
       const combat = NPC_COMBAT[npc.npcKind as keyof typeof NPC_COMBAT];
       if (!combat) continue;
-      const candidates = this.near(npc, combat.aggroRadius).filter(actor => actor.kind === 'player' && actor.hp > 0 && actor.spawnProtectedUntil <= this.now
+      const candidates = this.near(npc, meta.settings?.aggroRadius ?? combat.aggroRadius).filter(actor => actor.kind === 'player' && actor.hp > 0 && actor.spawnProtectedUntil <= this.now
         && (!combat.retaliatesOnly || actor.id === meta.aggroTargetId)
         && (!actor.hidden || actor.revealedUntil > this.now || distance(npc, actor) < 100));
-      const target = candidates.filter(actor => distance(actor, meta.home) < 650 && hasLineOfSight(npc, actor, this.world)).sort((a, b) => distance(npc, a) - distance(npc, b))[0];
+      const target = candidates.filter(actor => distance(actor, meta.home) < (meta.settings?.leashRadius ?? 650) && hasLineOfSight(npc, actor, this.world)).sort((a, b) => distance(npc, a) - distance(npc, b))[0];
       if (!target) meta.aggroTargetId = undefined;
       const objective = target ?? meta.home;
       const d = distance(npc, objective);
@@ -874,7 +875,7 @@ export class WorldSimulation {
     for (const player of this.players.values()) {
       if (player.hp <= 0) continue;
       for (const [id, pickup] of this.pickups) {
-        if (distance(player, pickup) > player.radius + pickup.radius) continue;
+        if (!this.world.sameRoom(player, pickup) || distance(player, pickup) > player.radius + pickup.radius) continue;
         if (pickup.kind === 'heal') this.heal(player, 35);
         else this.effect(player, pickup.kind, pickup.kind === 'weakness' ? 7000 : 10_000);
         this.pickups.delete(id);

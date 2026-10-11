@@ -7,8 +7,9 @@ export function collidesWorld(x: number, y: number, radius: number, world: World
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius) || radius < 0) return true;
   const minX = Math.floor((x - radius) / TILE_SIZE), maxX = Math.floor((x + radius) / TILE_SIZE);
   const minY = Math.floor((y - radius) / TILE_SIZE), maxY = Math.floor((y + radius) / TILE_SIZE);
+  const room = world.roomAt(x, y);
   for (let ty = minY; ty <= maxY; ty++) for (let tx = minX; tx <= maxX; tx++) {
-    if (!world.isBlocked(tx, ty)) continue;
+    if (!world.isBlocked(tx, ty) && (world.roomTiles.get(`${tx},${ty}`) ?? '') === room) continue;
     const nearestX = Math.max(tx * TILE_SIZE, Math.min(x, (tx + 1) * TILE_SIZE));
     const nearestY = Math.max(ty * TILE_SIZE, Math.min(y, (ty + 1) * TILE_SIZE));
     if ((x - nearestX) ** 2 + (y - nearestY) ** 2 < radius ** 2 + 1e-8) return true;
@@ -31,20 +32,21 @@ export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number,
   const dirY = dy / magnitude;
   
   let x = actor.x, y = actor.y;
+  const blocked = (tx: number, ty: number) => !world.sameRoom(actor, { x: tx, y: ty }) || collidesWorld(tx, ty, actor.radius, world);
   for (let i = 0; i < steps; i++) {
     const targetX = x + dirX * stepDist;
     const targetY = y + dirY * stepDist;
     
     // Prova il movimento diagonale diretto
-    if (!collidesWorld(targetX, targetY, actor.radius, world)) {
+    if (!blocked(targetX, targetY)) {
       x = targetX;
       y = targetY;
       continue;
     }
 
     // Se sbatte, prova a scivolare mantenendo l'intera velocità lungo l'asse libero
-    const canMoveX = !collidesWorld(x + Math.sign(dirX) * stepDist, y, actor.radius, world);
-    const canMoveY = !collidesWorld(x, y + Math.sign(dirY) * stepDist, actor.radius, world);
+    const canMoveX = !blocked(x + Math.sign(dirX) * stepDist, y);
+    const canMoveY = !blocked(x, y + Math.sign(dirY) * stepDist);
 
     if (canMoveX && !canMoveY) {
       // Parete orizzontale: scivola orizzontalmente a piena velocità
@@ -54,8 +56,8 @@ export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number,
       y += Math.sign(dirY) * stepDist;
     } else {
       // Tentativo standard a componenti ridotte se entrambi o nessuno sono completamente liberi
-      if (!collidesWorld(x + dirX * stepDist, y, actor.radius, world)) x += dirX * stepDist;
-      if (!collidesWorld(x, y + dirY * stepDist, actor.radius, world)) y += dirY * stepDist;
+      if (!blocked(x + dirX * stepDist, y)) x += dirX * stepDist;
+      if (!blocked(x, y + dirY * stepDist)) y += dirY * stepDist;
     }
   }
   return { x, y };
@@ -77,11 +79,14 @@ export function terrainSpeed(actor: Vec2, world: World): number {
 
 /** Grid traversal checks every crossed tile, including diagonal corner cracks. */
 export function hasLineOfSight(a: Vec2, b: Vec2, world: World): boolean {
+  if (!world.sameRoom(a, b)) return false;
+  const room = world.roomAt(a.x, a.y);
+  const blocked = (tx: number, ty: number) => world.isBlocked(tx, ty) || (world.roomTiles.get(`${tx},${ty}`) ?? '') !== room;
   const dx = b.x - a.x, dy = b.y - a.y;
   // Grid DDA checks every crossed tile, including the two corner-adjacent cells.
   let tx = Math.floor(a.x / TILE_SIZE), ty = Math.floor(a.y / TILE_SIZE);
   const endX = Math.floor(b.x / TILE_SIZE), endY = Math.floor(b.y / TILE_SIZE);
-  if (world.isBlocked(tx, ty)) return false;
+  if (blocked(tx, ty)) return false;
   const stepX = Math.sign(dx), stepY = Math.sign(dy);
   const deltaX = dx === 0 ? Infinity : Math.abs(TILE_SIZE / dx), deltaY = dy === 0 ? Infinity : Math.abs(TILE_SIZE / dy);
   let nextX = dx === 0 ? Infinity : ((tx + (stepX > 0 ? 1 : 0)) * TILE_SIZE - a.x) / dx;
@@ -89,11 +94,11 @@ export function hasLineOfSight(a: Vec2, b: Vec2, world: World): boolean {
   const max = Math.abs(endX - tx) + Math.abs(endY - ty) + 2;
   for (let i = 0; i < max && (tx !== endX || ty !== endY); i++) {
     if (Math.abs(nextX - nextY) < 1e-10) {
-      if (world.isBlocked(tx + stepX, ty) || world.isBlocked(tx, ty + stepY)) return false;
+      if (blocked(tx + stepX, ty) || blocked(tx, ty + stepY)) return false;
       tx += stepX; ty += stepY; nextX += deltaX; nextY += deltaY;
     } else if (nextX < nextY) { tx += stepX; nextX += deltaX; }
     else { ty += stepY; nextY += deltaY; }
-    if (world.isBlocked(tx, ty)) return false;
+    if (blocked(tx, ty)) return false;
   }
   return true;
 }
@@ -119,6 +124,7 @@ export function resolveActorCollisions(actors: Actor[], world: World): void {
     for (const a of living) {
       const bx = Math.floor(a.x / 80), by = Math.floor(a.y / 80);
       for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) for (const b of buckets.get(`${bx + ox},${by + oy}`) ?? []) {
+        if (!world.sameRoom(a, b)) continue;
         const dx = a.x - b.x, dy = a.y - b.y, dist = Math.hypot(dx, dy), minimum = a.radius + b.radius;
         if (dist >= minimum) continue;
         const nx = dist > 0.0001 ? dx / dist : 1, ny = dist > 0.0001 ? dy / dist : 0;

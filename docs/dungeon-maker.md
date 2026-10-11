@@ -144,3 +144,5 @@ Per azzerare tutto il catalogo, compresi tutti gli stati persistenti dei boss (a
 ## Limiti ancora presenti
 
 Regioni rettangolari condivise tra ammissione, combattimento e leash; aggro circolare per boss e attivatori puntuali; non ancora poligoni distinti disegnabili. Mancano playtest multiplayer nell’editor, libreria multiprogetto e pubblicazione amministrativa remota. Aggiornare una mappa azzera lo stato dei suoi boss: non migra un fight in corso. Il database non è necessario per questo flusso.
+
+Gli incontri supportano forme disegnate: seleziona un incontro e usa Pennello, Rettangolo o Ritaglia. Un nuovo incontro parte vuoto; quelli esistenti mantengono la regione precedente finché non viene modificata. Il rettangolo aggiunge un’area piena alla forma. La forma deve essere continua e includere boss e spawn con spazio sufficiente per il loro ingombro. Le zone visitatori devono rimanere dentro la forma. Le forme vengono conservate nell’installazione, nell’esportazione e nell’importazione e determinano i confini dello scontro nel gioco.

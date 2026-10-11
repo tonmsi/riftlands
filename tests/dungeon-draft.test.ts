@@ -1,7 +1,10 @@
+import { createDungeonPlaytest } from '../client/editors/dungeon/dungeon-playtest';
+import { buildDungeonBundle } from '../shared/dungeon-install';
+import { relocateDungeon } from '../shared/dungeon-relocation';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileDungeonDraft, draftFromDungeon, DraftWorld, newDungeonDraft, parseDungeonDraft, validateDungeonDraft } from '../shared/dungeon-draft';
-import { DUNGEON_DEFINITIONS, dungeonTile, type DungeonDefinition } from '../shared/dungeons';
+import { insideDungeonRegion, DUNGEON_DEFINITIONS, dungeonTile, type DungeonDefinition } from '../shared/dungeons';
 import { World } from '../shared/world';
 import { moveWithCollisions } from '../shared/physics';
 import { parseDungeonFile } from '../shared/dungeon-import';
@@ -33,15 +36,17 @@ test('invalid files, dimensions, catalog values and duplicate entity identities 
   draft.entities[2].template = 'slime'; draft.entities[2].id = 'boss';
   assert.throws(() => parseDungeonDraft(JSON.stringify(draft)));
 });
-test('solid terrain, actor clearance, overlap and disconnected rooms prevent runtime export', () => {
+test('unreachable content is advisory while actor clearance and overlap prevent runtime export', () => {
   const draft = ready();
   for (let y = 0; y < draft.height; y++) draft.tiles[y * draft.width + 8] = 'rock';
   assert.ok(validateDungeonDraft(draft).some(issue => issue.includes('non raggiungibile')));
-  assert.throws(() => compileDungeonDraft(draft));
+  assert.doesNotThrow(() => compileDungeonDraft(draft));
   const other = ready(); other.entities[1].x = 1;
   assert.ok(validateDungeonDraft(other).some(issue => issue.includes('ingombro')));
+  assert.throws(() => compileDungeonDraft(other));
   other.entities[1].x = 3; other.entities[1].y = 3;
   assert.ok(validateDungeonDraft(other).some(issue => issue.includes('sovrapposte')));
+  assert.throws(() => compileDungeonDraft(other));
 });
 test('exported tiles and fixed NPC spawns are consumed by the actual world generator', () => {
   const draft = ready(), definition = compileDungeonDraft(draft).definition;
@@ -96,4 +101,29 @@ test('painted visitor areas preserve the terrain and roundtrip through runtime a
   assert.throws(()=>parseDungeonDraft(JSON.stringify(draft)));
   draft.encounters[0].visitorTiles=[{x:1,y:3}]; draft.encounters[0].x=2; draft.encounters[0].width-=2;
   assert.ok(validateDungeonDraft(draft).some(issue=>issue.includes('zona visitatori')));
+});
+
+ test('painted encounter masks preserve cutouts in compilation, relocation and import', () => {
+  const draft=ready();
+  const group=draft.encounters[0]; group.tiles=[];
+  for(let y=2;y<=14;y++)for(let x=2;x<=20;x++)if(x<=5 || y>=7)group.tiles.push({x,y});
+  const definition=compileDungeonDraft(draft).definition;
+  const region=definition.encounter.regions.combat;
+  assert.equal(insideDungeonRegion(region,{x:(draft.origin.x+10.5)*48,y:(draft.origin.y+4.5)*48}),false);
+  assert.equal(insideDungeonRegion(region,{x:(draft.origin.x+3.5)*48,y:(draft.origin.y+4.5)*48}),true);
+  assert.deepEqual(draftFromDungeon(definition).encounters[0].tiles,group.tiles);
+  const moved=relocateDungeon(definition,{x:100,y:200});
+  assert.equal(insideDungeonRegion(moved.encounter.regions.combat,{x:110.5*48,y:204.5*48}),false);
+  assert.deepEqual(draftFromDungeon(moved).encounters[0].tiles,group.tiles);
+ });
+
+test('zero encounters installs and roundtrips without spawning a placeholder boss', () => {
+  const draft=newDungeonDraft();draft.encounters=[];draft.entities=[];draft.tiles[3*draft.width]='path';
+  draft.entities.push({id:'mob',kind:'npc',template:'slime',label:'Mob',x:4,y:4,level:1,radius:13});
+  assert.deepEqual(validateDungeonDraft(draft),[]);
+  const bundle=buildDungeonBundle(draft,[],{checkPlacement:false});
+  assert.equal(bundle.definition.noEncounters,true);assert.deepEqual(bundle.bosses,[]);
+  const playtest=createDungeonPlaytest(draft);assert.equal(playtest.simulation.bosses.size,0);playtest.step(.05,{dx:0,dy:0,aim:0});
+  const restored=parseDungeonFile(JSON.stringify(compileDungeonDraft(draft))).draft;
+  assert.deepEqual(restored.encounters,[]);assert.equal(restored.entities.some(e=>e.kind==='boss'),false);
 });

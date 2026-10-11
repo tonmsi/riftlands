@@ -22,12 +22,13 @@ export const ITEM_DEFINITIONS: Readonly<Record<string, ItemDefinition>> = {
   }])),
 };
 export interface ItemStack { itemId: string; quantity: number; }
-export interface Inventory { version: 1; capacity: number; slots: (ItemStack | null)[]; backpackId?: string; }
+export interface Inventory { warpKeys?: import('./warp-keys').WarpKeyItem[]; version: 1; capacity: number; slots: (ItemStack | null)[]; backpackId?: string; }
 export const newInventory = (): Inventory => ({ version: 1, capacity: 1, slots: [null] });
 export function validInventory(value: unknown): value is Inventory {
   const inventory = value as Inventory;
   return !!inventory && inventory.version === 1 && Number.isSafeInteger(inventory.capacity) && inventory.capacity >= 1 && inventory.capacity <= MAX_BACKPACK_SLOTS
     && (inventory.backpackId === undefined || typeof inventory.backpackId === 'string' && ITEM_DEFINITIONS[inventory.backpackId]?.backpackSlots === inventory.capacity)
+    && (inventory.warpKeys === undefined || Array.isArray(inventory.warpKeys) && inventory.warpKeys.length <= 4096 && new Set(inventory.warpKeys.map(key => key?.id)).size === inventory.warpKeys.length && inventory.warpKeys.every(key => key && typeof key.id === 'string' && key.id.length > 0 && key.id.length <= 160 && typeof key.name === 'string' && key.name.length <= 160))
     && Array.isArray(inventory.slots) && inventory.slots.length === inventory.capacity && inventory.slots.every(stack => stack === null || !!stack
       && typeof stack.itemId === 'string' && Object.hasOwn(ITEM_DEFINITIONS, stack.itemId) && !ITEM_DEFINITIONS[stack.itemId].currency && Number.isSafeInteger(stack.quantity)
       && stack.quantity > 0 && stack.quantity <= ITEM_DEFINITIONS[stack.itemId].maxStack);

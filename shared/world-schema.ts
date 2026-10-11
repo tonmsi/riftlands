@@ -1,4 +1,5 @@
 import type { TileKind, Vec2 } from './types';
+import { validNpcSettings, type NpcSettings } from './npc-settings';
 import { NPC_DEFINITIONS, type NpcKind, type NpcTemplateId } from './npcs';
 import { WORLD_TILE_TERRAINS, type WorldTileChunk } from './world-tiles';
 
@@ -41,15 +42,16 @@ export interface WorldZone {
   questId?: string;
   music?: ZoneMusic;
 }
-export interface WorldNpc extends Vec2 { id: string; npcKind: NpcTemplateId; level: number; }
+export interface WorldNpc extends Vec2 { id: string; npcKind: NpcTemplateId; level: number; settings?: NpcSettings; }
 /** One placement per installed dungeon, preserving encounter/boss identity and persistence. */
 export interface WorldDungeon extends Vec2 { dungeonId: string; enabled?: boolean; pvp?: boolean; }
 export interface WorldInterior { id: string; name: string; width: number; height: number; document: WorldDocument; pvp?: boolean; kind?: 'building' | 'dungeon'; }
 /** Coordinates are tile centres. Each link is directional; return doors are explicit links. */
 export interface WorldWarp {
-  id: string; name: string; from: string; to: string; entry: Vec2; arrival: Vec2;
+  id: string; name: string; from: string; to: string; entry: Vec2; arrival: Vec2; entrySize?: Vec2; arrivalSize?: Vec2;
   activation: 'walk' | 'interact';
   reverseId?: string;
+  keyGate?: { id: string; mapId: string; position: Vec2 };
 }
 export interface WorldDocument {
   version: 1 | 2; generatorVersion: 1; seed: number; spawn: Vec2;
@@ -169,7 +171,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     }
   }
   unique(d.zones, z => z.id, 'zone');
-  for (const n of d.npcs) if (!point(n) || !id(n.id) || !Object.hasOwn(NPC_DEFINITIONS, n.npcKind) || !integer(n.level, 1, 100)) fail('NPC manuale');
+  for (const n of d.npcs) if (!point(n) || !id(n.id) || !Object.hasOwn(NPC_DEFINITIONS, n.npcKind) || !integer(n.level, 1, 100) || (n.settings !== undefined && !validNpcSettings(n.settings))) fail('NPC manuale');
   unique(d.npcs, n => n.id, 'NPC manuali');
   for (const p of d.dungeons) if (!point(p) || !id(p.dungeonId) || (p.enabled !== undefined && !boolean(p.enabled)) || (p.pvp !== undefined && !boolean(p.pvp))) fail('piazzamento dungeon');
   unique(d.dungeons, p => p.dungeonId, 'dungeon');
@@ -186,8 +188,10 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     list(d.warps, 4096, 'warp'); unique(d.warps, (w: any) => w.id, 'warp');
     const maps = new Set(['world', ...(d.interiors ?? []).map((m: any) => m.id)]);
     for (const w of d.warps) if (!object(w) || !id(w.id) || !name(w.name) || !maps.has(w.from) || !maps.has(w.to)
+      || [w.entrySize,w.arrivalSize].some(size => size !== undefined && (!point(size) || !['1,1','2,1','1,2','1,3','3,1'].includes(`${size.x},${size.y}`)))
       || !point(w.entry) || !point(w.arrival) || !['walk', 'interact'].includes(w.activation)
-      || (w.reverseId !== undefined && (!id(w.reverseId) || w.reverseId === w.id))) fail('collegamento warp');
+      || (w.reverseId !== undefined && (!id(w.reverseId) || w.reverseId === w.id))
+      || (w.keyGate !== undefined && (!object(w.keyGate) || !id(w.keyGate.id) || !maps.has(w.keyGate.mapId) || !point(w.keyGate.position)))) fail('collegamento warp');
   }
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
   const result: WorldDocument = structuredClone({ version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
@@ -196,7 +200,8 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       ...(m.pvp !== undefined ? { pvp: m.pvp } : {}), ...(m.kind !== undefined ? { kind: m.kind } : {}),
       document: { ...parseWorldDocument({ ...m.document, assets: d.assets, seed: d.seed }), assets: [] } })) } : {}),
     ...(d.warps !== undefined ? { warps: d.warps.map((w: WorldWarp) => ({ id: w.id, name: w.name, from: w.from, to: w.to, entry: w.entry, arrival: w.arrival, activation: w.activation,
-      ...(w.reverseId !== undefined ? { reverseId: w.reverseId } : {}) })) } : {}) });
+      ...(w.entrySize ? {entrySize:w.entrySize} : {}), ...(w.arrivalSize ? {arrivalSize:w.arrivalSize} : {}),
+      ...(w.reverseId !== undefined ? { reverseId: w.reverseId } : {}), ...(w.keyGate ? { keyGate: w.keyGate } : {}) })) } : {}) });
   // Persist recovered animation before an export can rename the image again.
   for (const asset of result.assets) if (!asset.visual && worldAssetVisual(asset).kind === 'fire') asset.visual = worldAssetVisual(asset);
   return result;

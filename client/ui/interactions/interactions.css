@@ -76,3 +76,5 @@
   .rift-app.touch-layout .dialogue-choices { gap:5px; }
   .rift-app.touch-layout .dialogue-choices button { padding:6px 8px; }
 }
+
+.warp-key-inventory{display:flex;flex-direction:column;gap:5px;max-width:260px;padding:8px;color:#ffe18a;font-size:11px;background:#19251df2;border:1px solid #6e623d;border-radius:5px}.warp-key-inventory:empty{display:none}

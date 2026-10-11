@@ -255,3 +255,38 @@ test('an installed dungeon can live indoors with its boss and disappear from the
   assert.ok(manager.simulationFor(a.id).bosses.has(dungeon.bossId));
   assert.equal(manager.simulationFor(a.id).world.getTile(-1, 5), 'rock');
 });
+
+
+test('bilateral A/B warps can teleport within the same world or interior without bouncing back', () => {
+  for (const mapId of ['world', 'house']) {
+    const p = warpProject();
+    const w = { id: 'local-a', name: 'A ↔ B', from: mapId, to: mapId, entry: { x: 8, y: 8 }, arrival: { x: 18, y: 12 }, activation: 'walk' as const };
+    p.warps!.push(w); setWarpReturn(p, w, true, 'local-b');
+    const m = new RoomManager(undefined, p.seed, 1_000_000, p), a = account(`local-${mapId}`);
+    m.connect(a, 'warrior'); advance(m, .1);
+    if (mapId === 'house') enter(m, a.id, 'door-a');
+    Object.assign(m.simulationFor(a.id).players.get(a.id)!, warpPosition({ x: 10, y: 10 })); advance(m, .1);
+    const simulation = m.simulationFor(a.id);
+    enter(m, a.id, 'local-a');
+    assert.equal(m.simulationFor(a.id), simulation); assert.equal(m.stateFor(a.id).mapId ?? 'world', mapId);
+    assert.deepEqual({ x: simulation.players.get(a.id)!.x, y: simulation.players.get(a.id)!.y }, warpPosition(w.arrival));
+    advance(m, 1);
+    assert.deepEqual({ x: simulation.players.get(a.id)!.x, y: simulation.players.get(a.id)!.y }, warpPosition(w.arrival));
+    Object.assign(simulation.players.get(a.id)!, warpPosition({ x: 10, y: 10 })); advance(m, .1);
+    enter(m, a.id, 'local-b');
+    assert.deepEqual({ x: simulation.players.get(a.id)!.x, y: simulation.players.get(a.id)!.y }, warpPosition(w.entry));
+  }
+});
+
+test('rectangular warp sizes roundtrip, activate across every cell and swap on return', () => {
+  const project=newWorldDocument();
+  const warp={id:'wide',name:'Porta',from:'world',to:'world',entry:{x:0,y:0},arrival:{x:20,y:20},entrySize:{x:3,y:1},arrivalSize:{x:1,y:2},activation:'walk' as const};
+  project.warps=[warp];setWarpReturn(project,warp,true,'back');
+  const parsed=parseWorldDocument(JSON.stringify(project));
+  const a=parsed.warps![0],b=parsed.warps![1];
+  assert.deepEqual(b.entrySize,{x:1,y:2});assert.deepEqual(b.arrivalSize,{x:3,y:1});
+  assert.equal(atWarp(warpPosition({x:2,y:0}),a),true);
+  assert.equal(atWarp(warpPosition({x:0,y:1}),a),false);
+  assert.equal(atWarp(warpPosition({x:20,y:21}),b),true);
+  assert.throws(()=>parseWorldDocument(JSON.stringify({...project,warps:[{...warp,entrySize:{x:2,y:2}}]})));
+});

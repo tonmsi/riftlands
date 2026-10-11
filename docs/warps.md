@@ -1,15 +1,15 @@
 # Interni e warp
 
-Il World Maker contiene la sezione **Interni, dungeon e passaggi**. L'open world e gli interni sono superfici separate: l'interno non occupa un'area della mappa globale e viene simulato in una stanza condivisa. Inventario, missioni, vita, risorse e cooldown restano quelli del personaggio.
+Il World Maker divide la barra sinistra in **Mappe**, **Costruisci**, **Popola** e **Dungeon e interni**. L'open world e gli interni sono superfici separate: l'interno non occupa un'area della mappa globale e viene simulato in una stanza condivisa. Inventario, missioni, vita, risorse e cooldown restano quelli del personaggio.
 
-I controlli sono nella sezione richiudibile **Interni, dungeon e passaggi**, chiusa inizialmente. Il campo **PvP dell'interno** sceglie la regola generale di edifici e dungeon separati: gli interni esistenti e quelli nuovi sono sicuri per impostazione predefinita. Salva le modifiche con **Aggiorna interno**, poi **Applica al gioco**. Le zone con PvP esplicito hanno precedenza, poi l'eventuale regola del dungeon, poi quella della mappa. Disabilitare il PvP non disabilita nemici e boss.
+Nella sezione **Dungeon e interni**, scegli il tipo e poi l’area nella lista filtrata. Gli interni hanno **Crea / modifica interno**; i dungeon hanno **Dungeon Maker e boss**. I passaggi si gestiscono nella stessa sezione. Il campo **PvP dell'interno** sceglie la regola generale di edifici e dungeon separati: gli interni esistenti e quelli nuovi sono sicuri per impostazione predefinita. Salva le modifiche con **Aggiorna interno**, poi **Applica al gioco**. Le zone con PvP esplicito hanno precedenza, poi l'eventuale regola del dungeon, poi quella della mappa. Disabilitare il PvP non disabilita nemici e boss.
 
 ## Creare un edificio
 
 1. Inserisci nome, larghezza e altezza, quindi premi **Crea interno**. Le dimensioni vanno da 4 a 512 caselle per lato; il nuovo interno ha un pavimento calpestabile e limiti invalicabili.
 2. Disegna pavimento e pareti con il pennello terreno. Piazza gli asset del catalogo condiviso e gli NPC con gli strumenti esistenti. All'interno non vengono generati cespugli, nemici o pickup casuali. Scegli se abilitare il PvP nel campo dell'interno; puoi aggiungere zone con regole diverse.
-3. Seleziona **Open world**, premi **Posiziona warp** e clicca sulla porta dell'edificio.
-4. Nell'ispettore scegli nome, destinazione, casella d'arrivo e attivazione: attraversamento automatico oppure interazione con **F** o pulsante su schermo.
+3. Seleziona **Mondo**. Nella sezione dell’interno selezionato, scegli la mappa interna come destinazione, premi **Collega A ↔ B** e clicca sulla porta dell'edificio.
+4. La vista apre l'interno: clicca il punto di arrivo. Si creano entrambe le porte e la vista torna alla partenza. Nell'ispettore puoi cambiare nome e attivazione: attraversamento automatico oppure interazione con **F** o pulsante su schermo.
 5. Il passaggio è bidirezionale per impostazione predefinita. **Apri altro lato** apre la mappa collegata e centra la porta, senza spostarla. **Sposta passaggio** permette di cliccare la nuova casella della porta sulla mappa attualmente visualizzata. Per spostare il lato opposto, aprilo e usa lo stesso comando. Modificando un lato si aggiorna anche il ritorno. Cambiare la destinazione aggiorna subito il collegamento; se non specifichi nuove coordinate, l'arrivo iniziale è lo spawn della nuova mappa. Nome, coordinate e attivazione si modificano nell'ispettore con **Aggiorna passaggio** o prima di usare i comandi di apertura/spostamento.
 6. Ripeti per altre porte o uscite segrete. **Solo andata** elimina il ritorno della porta selezionata: prevedi un'altra uscita per l'interno. Aprire l'altro lato non abilita il ritorno; togli la spunta a **Solo andata** per renderlo bidirezionale. Eliminare un passaggio bidirezionale elimina entrambi i lati.
 7. Premi **Verifica progetto**, correggi gli eventuali problemi, quindi **Applica al gioco**. Come per gli altri contenuti compilati, riavvia il gioco/server per caricare il progetto applicato.
@@ -39,3 +39,44 @@ Il collegamento contiene ID di mappa e coordinate, senza indirizzi di server. Og
 ## Verifica
 
 `tests/warps.test.ts` verifica porte multiple, isolamento delle mappe, personaggio persistente, salvataggio/riavvio, recupero di mappe rimosse, annulla e validazione. I test browser coprono l'autore del World Maker, la dissolvenza su desktop/mobile e il client reale con WebSocket, snapshot compressi, cambio stanza e riconnessione.
+
+
+## Organizzazione del World Maker
+
+La barra sinistra contiene **Mappe**, **Costruisci**, **Popola** e **Dungeon e interni**. Nell’ultima sezione scegli **Tipo di area → Dungeon / Interni**, poi l’area nella lista filtrata. Gli interni hanno **Crea / modifica interno**; i dungeon hanno **Dungeon Maker e boss**, il catalogo e le proprietà della mappa. Sotto trovi i passaggi dell’area scelta, con una sola voce per coppia bilaterale.
+
+Premi **Collega A ↔ B** e clicca A sulla mappa aperta. La vista apre la mappa scelta per B; mentre aspetta B puoi cambiare destinazione con **Mappa per il punto B**, **Mappa da modificare** oppure selezionando un’altra area. Clicca B per creare entrambi i versi insieme. Puoi collegare mondo e interno, due interni, due dungeon o due punti diversi della stessa mappa. **Annulla posizionamento** interrompe senza creare porte.
+
+Viola indica A, azzurro B; sulla stessa mappa il collegamento selezionato è mostrato anche da una linea. **Apri altro lato** centra B (o A al ritorno); **Sposta passaggio** modifica il lato selezionato mantenendo sincronizzato il ritorno. I nomi includono quello dell’area; rinominandola si aggiornano anche i suoi collegamenti.
+
+
+La barra sopra la mappa offre **Seleziona** e **Cancella**. Con Seleziona trascina direttamente un ingresso per spostarlo sulla griglia: la porta e l’arrivo del ritorno si aggiornano insieme. Il trascinamento è una sola modifica annullabile; nei limiti di un interno l’ingresso resta dentro la mappa. Con Cancella clicca un ingresso per eliminare entrambi i versi del collegamento, ripristinabili con Annulla.
+
+
+Il punto di spawn (croce dorata) si sposta trascinandolo con **Seleziona**, nel mondo e negli interni. Lo spostamento è annullabile.
+
+Premi direttamente **A ↔ B** per creare entrambi i versi, oppure **A → B** per creare solo la porta A e l’arrivo B. Il pulsante avvia subito il posizionamento di A. B non permette di tornare ad A. Puoi spostare entrambi i punti e convertire un collegamento esistente dall’ispettore tramite **Solo andata**.
+
+## Passaggi con chiave
+
+La casella **Richiede chiave** nell’ispettore abilita il requisito solo sul passaggio selezionato e sul suo ritorno. Se disattivata, il passaggio resta libero. **Posiziona chiave sulla mappa** permette di scegliere una mappa e cliccare il punto della chiave unica. Nel gioco si raccoglie camminandoci sopra o premendo **F** nelle vicinanze. All’attraversamento la chiave viene consumata e la porta resta aperta per tutti per cinque minuti; poi si richiude e la chiave riappare nella posizione configurata. Altri attraversamenti non prolungano il timer.
+
+## Dungeon Maker: strumenti e passaggi
+
+La palette del Dungeon Maker raggruppa Mappe, Costruisci, Popola, Passaggi e Boss. Seleziona e Cancella restano sopra la mappa; entità, spawn di incontro e asset si trascinano con Seleziona. Gli errori del dungeon appaiono sopra la mappa e nei dettagli cliccabili.
+
+In Passaggi, Modifica passaggi sulla mappa apre nel maker la vista condivisa del progetto mondo. Per un dungeon installato seleziona il suo interno esistente, oppure crea la mappa dungeon nella bozza mondo disabilitando la vecchia collocazione esterna. A ↔ B, A → B, trascinamento degli estremi, chiavi e verifica usano gli stessi dati e strumenti del World Maker. I passaggi sono salvati nella bozza mondo e diventano attivi con Applica al gioco; Salva dungeon continua a esportare terreno e incontri. Per una bozza nuova installare prima il dungeon nel catalogo.
+
+## Proprietà di NPC e mob
+
+World Maker e Dungeon Maker condividono i controlli di modello e nome, con Avanzate per dialogo, velocità, movimento, aggro, distanza massima dall’origine, respawn e direzione iniziale. I campi numerici vuoti ereditano il modello; zero è un valore esplicito. Le impostazioni appartengono al singolo piazzamento, si conservano nell’esportazione e sono applicate dal server. Nei dungeon i mob sconfitti durante uno scontro mantengono la regola di permanenza del cadavere fino al reset dell’incontro.
+
+Nel Dungeon Maker la selezione di asset indica dimensioni, livello di disegno e celle bloccanti e offre un collegamento al catalogo del World Maker. Dimensioni, collisioni e visibilità sono proprietà condivise da tutte le istanze dello stesso asset. Ruolo e missioni degli NPC dipendono dai dialoghi esistenti.
+
+## Stanze interne al dungeon
+
+Le stanze sono maschere di caselle, indipendenti da terreno e regioni degli incontri. In Stanze si creano, rinominano, disegnano e ritagliano forme libere, anche a L. Il pennello interpola i trascinamenti e offre dimensioni 1, 3 e 5 caselle; non ruba caselle ad altre stanze. La forma deve essere connessa e non può sovrapporsi. Annulla, Ripeti, salvataggio locale ed esportazione conservano le forme. Il maker mostra tutte le stanze insieme, con contorni e nomi.
+
+Installare o aggiornare la bozza trasferisce le stanze nel dungeon runtime. Collega passaggio apre la vista condivisa del progetto sulla stanza scelta; la tendina Passaggi interni al dungeon centra un’altra stanza mentre si posizionano A e B. I collegamenti fra stanze riutilizzano i normali warp sulla stessa mappa, inclusi A ↔ B, A → B, trascinamento e Richiede chiave. La lista distingue passaggi fra stanze e collegamenti con altre mappe. Nella mappa del Dungeon Maker sono visibili gli estremi e le linee dei passaggi salvati nella bozza mondo. Applicare il progetto mondo e ricompilare/riavviare il gioco rende attivi i collegamenti.
+
+Dentro una stanza il giocatore vede solo quella; nello spazio comune non vede contenuti delle stanze. Il server filtra anche compagni, nemici, boss, oggetti, proiettili, eventi e chiavi appartenenti ad altre stanze. I bordi virtuali bloccano movimento, scivolamento, dash, proiettili e linea di vista; i warp possono superarli. I boss non si attivano attraverso il confine, e gli spawn di incontro rimangono nella stanza del partecipante. Boss in stanze diverse richiedono incontri separati. Le mappe senza stanze mantengono il comportamento precedente.

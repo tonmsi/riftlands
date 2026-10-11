@@ -117,7 +117,8 @@ export class BossEncounter {
       this.threat.set(id, (this.threat.get(id) ?? 0) + amount);
     }
   }
-  private detects(player: Actor): boolean {
+  private detects(player: Actor, world: World): boolean {
+    if (!world.sameRoom(player, this.boss)) return false;
     return insideDungeonRegion(this.dungeon.encounter.regions.combat, player, -player.radius)
       && insideDungeonRegion(this.dungeon.encounter.regions.bossAggro, player);
   }
@@ -146,9 +147,9 @@ export class BossEncounter {
       ...this.state.corpse, availableAt: now + 500, expiresAt: now + this.definition.reward.lootMs });
   }
 
-  collect(player: Actor, account: Account, connected: boolean, now: number): void {
+  collect(player: Actor, account: Account, connected: boolean, now: number, world?: World): void {
     if (!connected || player.hp <= 0) return;
-    const collectible = this.state.drops.filter(drop => drop.ownerId === player.id && drop.availableAt <= now && drop.expiresAt > now
+    const collectible = this.state.drops.filter(drop => (!world || world.sameRoom(player, drop)) && drop.ownerId === player.id && drop.availableAt <= now && drop.expiresAt > now
       && Math.hypot(player.x - drop.x, player.y - drop.y) <= player.radius + 18);
     if (!collectible.length) return;
     const gold = (account.gold ?? 0) + collectible.reduce((sum, drop) => sum + drop.amount, 0);
@@ -194,12 +195,12 @@ export class BossEncounter {
           }
           for (const player of players) {
             if (this.belongsToPreparation(player) && player.hp > 0 && connected(player.id)
-              && insideDungeonRegion(this.dungeon.encounter.regions.admission, player)) this.preparedIds.add(player.id);
+              && world.sameRoom(initiator, player) && insideDungeonRegion(this.dungeon.encounter.regions.admission, player)) this.preparedIds.add(player.id);
             if (this.preparedIds.has(player.id) && (!this.belongsToPreparation(player) || player.hp <= 0 || !connected(player.id)
               || !insideDungeonRegion(this.dungeon.encounter.regions.combat, player))) this.preparedIds.delete(player.id);
           }
           const entrants = players.filter(player => this.preparedIds.has(player.id) && player.hp > 0 && connected(player.id)
-            && this.belongsToPreparation(player) && insideDungeonRegion(this.dungeon.encounter.regions.combat, player));
+            && this.belongsToPreparation(player) && world.sameRoom(initiator, player) && insideDungeonRegion(this.dungeon.encounter.regions.combat, player));
           this.preparationEntrants = this.preparedIds.size;
           if (now < this.preparation.endsAt) return;
           const aggroBossIds = this.preparation.aggroBossIds;
@@ -207,11 +208,11 @@ export class BossEncounter {
           this.beginEncounter(initiator, entrants, now, world, aggroBossIds);
         } else {
           const leader = players.find(player => player.hp > 0 && connected(player.id) && !this.reentryBlocked.has(player.id)
-            && this.group.some(member => member.boss.hp > 0 && (atDungeonActivation(member.dungeon, player, player.radius) || member.detects(player))));
+            && this.group.some(member => member.boss.hp > 0 && world.sameRoom(player, member.boss) && (atDungeonActivation(member.dungeon, player, player.radius) || member.detects(player, world))));
           if (!leader) { this.resetFight(); return; }
           const duration = leader.teamId ? Math.max(DUNGEON_ENTRY_MS, this.dungeon.encounter.preparationMs) : DUNGEON_ENTRY_MS;
           this.preparation = { initiatorId: leader.id, teamId: leader.teamId, startedAt: now, endsAt: now + duration,
-            aggroBossIds: this.group.filter(member => member.boss.hp > 0 && member.detects(leader)).map(member => member.definition.id) };
+            aggroBossIds: this.group.filter(member => member.boss.hp > 0 && member.detects(leader, world)).map(member => member.definition.id) };
           this.preparedIds.add(leader.id);
           this.preparationEntrants = 1;
           this.resetFight();
@@ -225,7 +226,7 @@ export class BossEncounter {
       if (!this.ownerId) return;
       for (const player of players) if (!this.isActiveParticipant(player.id) && player.hp > 0
         && insideDungeonRegion(this.dungeon.encounter.regions.ejectIntruders, player)
-        && !insideDungeonVisitorArea(this.dungeon, player, player.radius)) this.eject(player);
+        && !insideDungeonVisitorArea(this.dungeon, player, player.radius)) this.eject(player, world);
       for (const player of players) if (this.isActiveParticipant(player.id) && player.hp > 0
         && !insideDungeonRegion(this.dungeon.encounter.regions.combat, player)) damage(player, Number.MAX_SAFE_INTEGER);
     }
@@ -233,10 +234,10 @@ export class BossEncounter {
     const active = players.filter(player => this.isActiveParticipant(player.id) && player.hp > 0);
     if (!active.length) { this.fail(world); return; }
 
-    if (!this.engaged) this.engaged = active.some(player => this.detects(player));
+    if (!this.engaged) this.engaged = active.some(player => this.detects(player, world));
     if (!this.engaged) return;
     boss.bossAwakenedAt ??= now;
-    const targets = active.filter(player => insideDungeonRegion(this.dungeon.encounter.regions.combat, player));
+    const targets = active.filter(player => world.sameRoom(player, boss) && insideDungeonRegion(this.dungeon.encounter.regions.combat, player));
     if (!targets.length) {
       this.targetId = undefined;
       this.windup = undefined;
@@ -452,12 +453,15 @@ export class BossEncounter {
     this.eliminatedIds.clear();
     for (const entrant of entrants) { this.participantIds.add(entrant.id); this.threat.set(entrant.id, 0); }
     for (const member of this.group) {
-      member.engaged = aggroBossIds.includes(member.definition.id) || entrants.some(player => member.detects(player));
+      member.engaged = aggroBossIds.includes(member.definition.id) || entrants.some(player => member.detects(player, world));
       member.boss.bossAwakenedAt = member.engaged ? now : undefined;
     }
     for (const member of this.group) world.setBossLocked(member.definition.id, true);
     const spawns = this.dungeon.spawnPoints.party;
-    const partySpawns = entrants.map((entrant, index) => this.safeSpawn(spawns.length ? spawns[index % spawns.length] : entrant, entrant.radius, world));
+    const partySpawns = entrants.map((entrant, index) => {
+      const localSpawns = spawns.filter(spawn => world.sameRoom(entrant, spawn));
+      return this.safeSpawn(localSpawns[index % localSpawns.length] ?? entrant, entrant.radius, world);
+    });
     const bossSpawns = this.group.map(member => member.safeSpawn(member.boss, member.boss.radius, world));
     if (partySpawns.some(spawn => !spawn) || bossSpawns.some(spawn => !spawn)) { this.fail(world); return; }
     entrants.forEach((entrant, index) => Object.assign(entrant, partySpawns[index]));
@@ -465,7 +469,7 @@ export class BossEncounter {
     for (const member of this.group) member.nextAttack = Math.max(member.nextAttack, now + DUNGEON_ARRIVAL_MS);
   }
   private safeSpawn(preferred: Vec2, radius: number, world: World): Vec2 | undefined {
-    const safe = (point: Vec2) => insideDungeonRegion(this.dungeon.encounter.regions.combat, point, -radius)
+    const safe = (point: Vec2) => world.sameRoom(preferred, point) && insideDungeonRegion(this.dungeon.encounter.regions.combat, point, -radius)
       && !collidesWorld(point.x, point.y, radius, world) && !touchesDungeonFlame(this.dungeon, point, radius);
     if (safe(preferred)) return preferred;
     const bounds = this.dungeon.layout.bounds, tx = Math.floor(preferred.x / 48), ty = Math.floor(preferred.y / 48);
@@ -484,7 +488,8 @@ export class BossEncounter {
     return undefined;
   }
   private cancelPreparation(): void { this.preparation = undefined; this.preparationEntrants = 0; this.preparedIds.clear(); }
-  private eject(player: Actor): void {
+  private eject(player: Actor, world: World): void {
+    if (!world.sameRoom(player, this.dungeon.encounter.ejectTo)) return;
     Object.assign(player, this.dungeon.encounter.ejectTo);
   }
   private fail(world: World): void { for (const member of this.group) { member.resetVersion++; member.resetFight(); member.state.respawnAt = 0; } this.unlock(world); }

@@ -81,6 +81,7 @@ function getJwtSecret(baseDir: string): string {
 }
 
 export class AccountStore implements GameplayPersistence {
+  warpGateStates: Record<string, number> = {};
   bossStates: Record<string, BossState> = {};
   readonly accounts = new Map<string, Account>();
   private readonly accountsByName = new Map<string, string>(); // nameLower -> account.id
@@ -106,6 +107,11 @@ export class AccountStore implements GameplayPersistence {
         throw new Error('Formato account non supportato.');
       }
 
+      if ('warpGateStates' in parsed) {
+        const states = parsed.warpGateStates;
+        if (!states || typeof states !== 'object' || Array.isArray(states) || Object.entries(states).some(([id, until]) => !id || id.length > 160 || typeof until !== 'number' || !Number.isFinite(until) || until < 0)) throw new Error('Stato chiavi non valido.');
+        this.warpGateStates = states as Record<string, number>;
+      }
       for (const entry of parsed.accounts) {
         if (!entry || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.nameLower !== 'string' || typeof entry.salt !== 'string' || typeof entry.passwordHash !== 'string' || !Array.isArray(entry.friends) || !Array.isArray(entry.requests) || ![entry.xp, entry.kills, entry.deaths, entry.lastSeen].every(Number.isFinite)) {
           throw new Error('Account danneggiato.');
@@ -326,7 +332,7 @@ export class AccountStore implements GameplayPersistence {
 
   flush(): void {
     if (!this.dirty) return;
-    this.writer.write(this.path, { version: 2, accounts: [...this.accounts.values()] });
+    this.writer.write(this.path, { version: 2, accounts: [...this.accounts.values()], ...(Object.keys(this.warpGateStates).length ? { warpGateStates: this.warpGateStates } : {}) });
     this.dirty = false;
   }
 

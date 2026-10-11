@@ -13,9 +13,10 @@ export function relocateDungeon(source: DungeonDefinition, origin: Vec2): Dungeo
   const encounter = (e: DungeonEncounterDefinition): DungeonEncounterDefinition => ({ ...e, ejectTo: position(e.ejectTo),
     activationPoints: e.activationPoints?.map(position), visitorTiles: e.visitorTiles?.map(tile),
     regions: Object.fromEntries(Object.entries(e.regions).map(([key, r]) => [key, r.kind === 'circle'
-      ? { ...r, center: position(r.center) } : { ...r, points: r.points.map(position) }])) as DungeonEncounterDefinition['regions'] });
+      ? { ...r, center: position(r.center) } : { ...r, points: r.points.map(position), ...(r.tiles ? {tiles:r.tiles.map(tile)} : {}) }])) as DungeonEncounterDefinition['regions'] });
   const spawns = (s: DungeonDefinition['spawnPoints']) => ({ boss: position(s.boss), party: s.party.map(position) });
   d.area = position(d.area); d.layout.bounds = rect(d.layout.bounds);
+  d.rooms = d.rooms?.map(room => ({ ...room, tiles: room.tiles.map(tile) }));
   d.layout.obstacles = d.layout.obstacles.map(rect); d.layout.obstacleTiles = d.layout.obstacleTiles.map(tile); d.layout.tiles = d.layout.tiles?.map(tile);
   d.passages = passages(d.passages); d.spawnPoints = spawns(d.spawnPoints); d.encounter = encounter(d.encounter);
   d.additionalEncounters = d.additionalEncounters?.map(e => ({ ...e, passages: passages(e.passages), spawnPoints: spawns(e.spawnPoints), encounter: encounter(e.encounter) }));

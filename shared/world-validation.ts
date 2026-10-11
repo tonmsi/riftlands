@@ -77,14 +77,29 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
       const source = maps.get(w.from), target = maps.get(w.to);
       if (!source || !target) { issues.push(`${w.name}: destinazione assente.`); continue; }
       for (const [label, map, p] of [['ingresso', source, w.entry], ['arrivo', target, w.arrival]] as const) {
+        const size=(label==='ingresso' ? w.entrySize : w.arrivalSize) ?? {x:1,y:1};
+        const anchor=warpPosition(p);
+        for(let y=0;y<size.y;y++)for(let x=0;x<size.x;x++){
+          const cell=warpPosition({x:p.x+x,y:p.y+y});
+          if(collidesWorld(cell.x,cell.y,PLAYER_RADIUS+2,map)) issues.push(`${w.name}: ${label} su un ostacolo alla casella ${p.x+x}, ${p.y+y}.`);
+          if(!map.sameRoom(anchor,cell)) issues.push(`${w.name}: ${label} attraversa il confine di una stanza.`);
+        }
         const pos = warpPosition(p);
         if (collidesWorld(pos.x, pos.y, PLAYER_RADIUS + 2, map)) issues.push(`${w.name}: ${label} su un ostacolo.`);
         if (map.arenaAt(pos.x, pos.y)) issues.push(`${w.name}: ${label} sovrapposto a un ingresso arena.`);
       }
+      if (w.keyGate) {
+        const keyMap = maps.get(w.keyGate.mapId), point = warpPosition(w.keyGate.position);
+        if (!keyMap || collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, keyMap)) issues.push(`${w.name}: chiave su un ostacolo.`);
+        if ((document.warps ?? []).some(other => other.id !== w.id && other.id !== w.reverseId && other.keyGate?.id === w.keyGate!.id)) issues.push(`${w.name}: chiave assegnata a un altro passaggio.`);
+      }
       if (w.reverseId) {
         const reverse = document.warps?.find(other => other.id === w.reverseId);
         if (!reverse || reverse.reverseId !== w.id || reverse.from !== w.to || reverse.to !== w.from
-          || reverse.entry.x !== w.arrival.x || reverse.entry.y !== w.arrival.y || reverse.arrival.x !== w.entry.x || reverse.arrival.y !== w.entry.y)
+          || reverse.entry.x !== w.arrival.x || reverse.entry.y !== w.arrival.y || reverse.arrival.x !== w.entry.x || reverse.arrival.y !== w.entry.y
+          || JSON.stringify(reverse.entrySize ?? {x:1,y:1}) !== JSON.stringify(w.arrivalSize ?? {x:1,y:1})
+          || JSON.stringify(reverse.arrivalSize ?? {x:1,y:1}) !== JSON.stringify(w.entrySize ?? {x:1,y:1})
+          || JSON.stringify(reverse.keyGate) !== JSON.stringify(w.keyGate))
           issues.push(`${w.name}: passaggio di ritorno non coerente.`);
       }
     }

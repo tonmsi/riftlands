@@ -174,6 +174,15 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         art.draw(ctx, a, { ...pointerTile, id: 'preview', assetId: a.id }, .45, s, time);
         animated ||= worldAssetVisual(a).kind === 'fire';
     }
+    for (const room of world.rooms) {
+      const cells = new Set(room.tiles.map(p => `${p.x},${p.y}`)); ctx.strokeStyle = '#c6a2ff'; ctx.lineWidth = 2;
+      for (const tile of room.tiles) for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) if (!cells.has(`${tile.x + dx},${tile.y + dy}`)) {
+        const x = (tile.x + (dx === 1 ? 1 : 0)) * s, y = (tile.y + (dy === 1 ? 1 : 0)) * s;
+        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x + (dx === 0 ? s : 0), y + (dy === 0 ? s : 0)); ctx.stroke();
+      }
+      const first = room.tiles.slice().sort((a,b) => a.y - b.y || a.x - b.x)[0];
+      if (first) { ctx.fillStyle = '#dbc6ff'; ctx.font = '12px system-ui'; ctx.textAlign = 'left'; ctx.fillText(room.name, first.x * s + 4, first.y * s + 14); }
+    }
     return animated;
 }
 function drawZone(ctx: CanvasRenderingContext2D, z: WorldZone, view: EditorView, selected: EditorSelection | null): void {

@@ -22,9 +22,10 @@ export function parseDungeonFile(raw: string, assets?: readonly WorldAsset[]): {
         const definition = value.definition as DungeonDefinition;
         const bounds = definition.layout.bounds;
         newDungeonDraft(bounds.maxTx - bounds.minTx + 1, bounds.maxTy - bounds.minTy + 1);
-        if (!Array.isArray(value.bosses) || !value.bosses.length || value.bosses.length > 32
+        if (!Array.isArray(value.bosses) || (!definition.noEncounters && !value.bosses.length) || value.bosses.length > 32
             || (definition.additionalEncounters?.length ?? 0) > 31)
             throw new Error('Elenco boss mancante o troppo lungo.');
+        assertValidDungeonDefinition(definition);
         const encounters = dungeonEncounters(definition);
         if (new Set(value.bosses.map((b: any) => b.id)).size !== encounters.length || value.bosses.length !== encounters.length)
             throw new Error('I collegamenti dei boss non corrispondono agli incontri.');
