@@ -379,6 +379,7 @@ function frame(now: number): void {
   const frameEvents = combat.events;
   if (audible && self) audio.update(self, actors, frameEvents, latest?.bossWindups ?? [], time);
   renderer.render({
+    warpTransition: warpUI.blocked,
     ambientSpeechBlocked: !connection.connected || document.hidden || ui.inputBlocked || !!latest?.dialogue || !!latest?.fishing || bettingUI.visible,
     spectating: !!latest?.betting?.spectating,
     fishing: latest?.fishing,

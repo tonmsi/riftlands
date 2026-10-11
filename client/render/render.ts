@@ -68,7 +68,7 @@ export class Renderer {
 
   private readonly restoreContext = (): void => { this.terrain.invalidate(); };
 
-  weather: 'clear' | 'rain' | 'snow' = 'rain';
+  weather: 'clear' | 'rain' | 'snow' = 'clear';
   private lastWeatherCheck = 0;
   constructor(private readonly canvas: HTMLCanvasElement, private readonly localDungeons?: readonly DungeonDefinition[]) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -185,7 +185,10 @@ export class Renderer {
     }
     const worldAssets = this.world.assetsIn({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
       right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE });
-    const groundAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'ground');
+    // Background assets use the same depth order as the World Maker, regardless of insertion order.
+    const groundAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'ground')
+      .sort((a, b) => (a.y + this.world.authoring.assets.get(a.assetId)!.height * this.world.authoring.assets.get(a.assetId)!.pivot.y)
+        - (b.y + this.world.authoring.assets.get(b.assetId)!.height * this.world.authoring.assets.get(b.assetId)!.pivot.y));
     const objectAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'object')
       .sort((a, b) => (a.y + this.world.authoring.assets.get(a.assetId)!.height * this.world.authoring.assets.get(a.assetId)!.pivot.y)
         - (b.y + this.world.authoring.assets.get(b.assetId)!.height * this.world.authoring.assets.get(b.assetId)!.pivot.y) || a.id.localeCompare(b.id));
@@ -383,7 +386,12 @@ export class Renderer {
     if (frame.self && frame.fishing) drawFishingWorld(ctx, frame.self, frame.fishing, frame.fishingTarget, frame.time, this.reducedMotion.matches);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-    if (frame.time - this.lastWeatherCheck > 1000) {
+    const outdoorWeather = this.world.mode === 'world' && !this.world.authoring.document.interiorBounds && !frame.warpTransition;
+    if (!outdoorWeather) {
+      this.weather = 'clear';
+      // Recalculate immediately when returning outdoors, including within the same weather tick.
+      this.lastWeatherCheck = -Infinity;
+    } else if (frame.time - this.lastWeatherCheck > 1000) {
       this.lastWeatherCheck = frame.time;
       const px = frame.self?.x ?? this.camera.x, py = frame.self?.y ?? this.camera.y;
       const isStorm = this.world.mode === 'world' && (frame.time % 600_000) < 180_000;

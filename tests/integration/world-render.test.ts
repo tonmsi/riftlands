@@ -17,8 +17,11 @@ test('game renderer draws authored layers around players and fades overhead cell
       const { newWorldDocument, newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
       const document = newWorldDocument(), roof = newWorldAsset('roof', 'Chioma', '/world-assets/bush.svg'), floor = newWorldAsset('floor', 'Sfondo', '/world-assets/waystone.svg');
       resizeWorldAsset(roof, 2, 2); roof.cells[2].visibility = 'fade'; roof.cells[1].visibility = 'hide'; floor.layer = 'ground';
+      floor.pivot.y = 0;
+      const brazier = newWorldAsset('brazier', 'Braciere', '/world-assets/brazier.svg'); brazier.layer = 'ground';
       document.zones.push({ id: 'docks', name: 'Southern Docks', priority: 20, shape: { kind: 'rect', x: -3, y: -3, width: 6, height: 6 }, pvp: false });
-      document.assets.push(roof, floor); document.placements.push({ id: 'roof-1', assetId: roof.id, x: 0, y: 0 }, { id: 'floor-1', assetId: floor.id, x: 0, y: 0 });
+      document.assets.push(roof, floor, brazier); document.placements.push({ id: 'roof-1', assetId: roof.id, x: 0, y: 0 },
+        { id: 'brazier-1', assetId: brazier.id, x: 0, y: 0 }, { id: 'floor-1', assetId: floor.id, x: 0, y: 0 });
       for (let y = -4; y < 5; y++) for (let x = -4; x < 5; x++) document.tiles.push({ x, y, terrain: 'grass' });
       const renderer = new Renderer(window.document.querySelector('canvas')!); await renderer.spritesReady; renderer.weather = 'clear';
       renderer.world = new World(42, 16, 'world', document, []);
@@ -33,11 +36,28 @@ test('game renderer draws authored layers around players and fades overhead cell
       let rects = 0; const rect = renderer.ctx.rect.bind(renderer.ctx); renderer.ctx.rect = (...args: number[]) => { rects++; rect(...args); };
       renderer.drawWorldZones(1400); renderer.ctx.rect = rect;
       const location = renderer.world.locationAt(24, 72);
-      renderer.destroy(); return { faded, hiding, hiddenByWorld, fadeHiddenByWorld, rects, location };
+      const precipitation: string[] = [];
+      renderer.drawRain = () => precipitation.push('rain'); renderer.drawSnow = () => precipitation.push('snow');
+      renderer.world.getTemperature = () => 1;
+      renderer.render({ ...frame, time: 3000 });
+      const outdoors = precipitation.splice(0);
+      renderer.world.authoring.document.interiorBounds = { id: 'inn', name: 'Locanda', width: 8, height: 8 };
+      renderer.render({ ...frame, time: 3010 });
+      const indoors = precipitation.splice(0);
+      delete renderer.world.authoring.document.interiorBounds;
+      renderer.render({ ...frame, time: 3020, warpTransition: true });
+      const warp = precipitation.splice(0);
+      renderer.render({ ...frame, time: 3030 });
+      const returnedOutdoors = precipitation.splice(0);
+      renderer.destroy(); return { faded, hiding, hiddenByWorld, fadeHiddenByWorld, rects, location, outdoors, indoors, warp, returnedOutdoors };
     });
     assert.equal(result.faded.find(e => e.id === 'floor-1')!.opacity, 1); assert.ok(result.faded.find(e => e.id === 'roof-1')!.fade! > .99);
     assert.equal(result.rects, 0); assert.equal(result.location, 'Southern Docks');
+    assert.deepEqual(result.outdoors, ['rain']); assert.deepEqual(result.indoors, []); assert.deepEqual(result.warp, []);
+    assert.deepEqual(result.returnedOutdoors, ['rain']);
     assert.ok(result.faded.findIndex(e => e.id === 'floor-1') < result.faded.findIndex(e => e.id === 'self'));
+    assert.ok(result.faded.findIndex(e => e.id === 'floor-1') < result.faded.findIndex(e => e.id === 'brazier-1'),
+      'a background floor placed last must draw beneath an earlier background brazier, as in the World Maker');
     assert.ok(result.faded.findIndex(e => e.id === 'self') < result.faded.findIndex(e => e.id === 'roof-1'));
     assert.equal(result.hiding.find(e => e.id === 'roof-1')!.opacity, 1); assert.equal(result.hiddenByWorld, true); assert.equal(result.fadeHiddenByWorld, false);
     assert.equal(result.faded.find(e => e.id === 'floor-1')!.time, 1300);

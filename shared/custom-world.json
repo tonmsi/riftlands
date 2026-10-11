@@ -1544,10 +1544,10 @@
       "id": "asset-8fcbc776-e0d9-4fbd-8042-b3401ec4ded4",
       "name": "Casa di campagna con tetto rosso terracotta",
       "image": "/world-assets/d16b3fde4956546f8e1aa37613f0c66ab4f7813caba263a49c9576f47ee1847c.png",
-      "width": 6,
-      "height": 6,
-      "columns": 6,
-      "rows": 6,
+      "width": 8,
+      "height": 8,
+      "columns": 8,
+      "rows": 8,
       "cells": [
         {
           "blocked": false,
@@ -1587,7 +1587,23 @@
         },
         {
           "blocked": false,
-          "visibility": "normal"
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
         },
         {
           "blocked": false,
@@ -1599,6 +1615,58 @@
         },
         {
           "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
           "visibility": "normal"
         },
         {
@@ -1610,7 +1678,27 @@
           "visibility": "normal"
         },
         {
-          "blocked": false,
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
           "visibility": "normal"
         },
         {
@@ -1619,6 +1707,30 @@
         },
         {
           "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
           "visibility": "normal"
         },
         {
@@ -1694,7 +1806,7 @@
           "visibility": "normal"
         }
       ],
-      "layer": "object",
+      "layer": "ground",
       "pivot": {
         "x": 0.5,
         "y": 1
@@ -1726,6 +1838,11 @@
         "opacity": 0.28,
         "feather": 0.35,
         "durationMs": 180
+      },
+      "imageTransform": {
+        "x": -1.0336,
+        "y": -0.1507,
+        "scale": 1
       }
     },
     {
@@ -2596,7 +2713,7 @@
           "visibility": "normal"
         }
       ],
-      "layer": "object",
+      "layer": "ground",
       "pivot": {
         "x": 0.5,
         "y": 1
@@ -3161,6 +3278,851 @@
         "feather": 0.35,
         "durationMs": 180
       }
+    },
+    {
+      "id": "locanda-3",
+      "name": "locanda (3)",
+      "image": "/world-assets/locanda-3.png",
+      "width": 2,
+      "height": 2,
+      "columns": 2,
+      "rows": 2,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "imageTransform": {
+        "x": -0.2852,
+        "y": -0.2152,
+        "scale": 1.25
+      }
+    },
+    {
+      "id": "locanda-1",
+      "name": "locanda (1)",
+      "image": "/world-assets/locanda-1.png",
+      "width": 5,
+      "height": 5,
+      "columns": 5,
+      "rows": 5,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "locanda-2",
+      "name": "locanda (2)",
+      "image": "/world-assets/locanda-2.png",
+      "width": 5,
+      "height": 5,
+      "columns": 5,
+      "rows": 5,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "imageTransform": {
+        "x": 0.9919,
+        "y": 0.7025,
+        "scale": 0.6
+      }
+    },
+    {
+      "id": "locanda-4",
+      "name": "locanda (4)",
+      "image": "/world-assets/locanda-4.png",
+      "width": 2,
+      "height": 2,
+      "columns": 2,
+      "rows": 2,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "imageTransform": {
+        "x": -0.4065,
+        "y": -0.3394,
+        "scale": 1.4
+      }
+    },
+    {
+      "id": "pavimento-no-sfondo-1",
+      "name": "pavimento-no-sfondo (1)",
+      "image": "/world-assets/pavimento-no-sfondo-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "pavimento-no-sfondo-2",
+      "name": "pavimento-no-sfondo (2)",
+      "image": "/world-assets/pavimento-no-sfondo-2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "pavimento-no-sfondo-4",
+      "name": "pavimento-no-sfondo (4)",
+      "image": "/world-assets/pavimento-no-sfondo-4.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "pavimento-no-sfondo-3",
+      "name": "pavimento-no-sfondo (3)",
+      "image": "/world-assets/pavimento-no-sfondo-3.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "pavi-nobg-4",
+      "name": "pavi-nobg (4)",
+      "image": "/world-assets/pavi-nobg-4.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 0
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "pavi-nobg-2",
+      "name": "pavi-nobg (2)",
+      "image": "/world-assets/pavi-nobg-2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 0
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "pavi-nobg-1",
+      "name": "pavi-nobg (1)",
+      "image": "/world-assets/pavi-nobg-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "pavi-nobg-3",
+      "name": "pavi-nobg (3)",
+      "image": "/world-assets/pavi-nobg-3.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "pavi-nobg-5",
+      "name": "pavi-nobg (5)",
+      "image": "/world-assets/pavi-nobg-5.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 0,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
     }
   ],
   "placements": [
@@ -3245,14 +4207,14 @@
     {
       "id": "asset-67bdc517-0813-4e30-b3ff-364b3f35c7c1",
       "assetId": "asset-8fcbc776-e0d9-4fbd-8042-b3401ec4ded4",
-      "x": 30,
-      "y": 93
+      "x": 29,
+      "y": 91
     },
     {
       "id": "asset-f208b993-1a09-4a84-9a6c-4760115ad7e0",
       "assetId": "asset-8fcbc776-e0d9-4fbd-8042-b3401ec4ded4",
-      "x": 43,
-      "y": 85
+      "x": 42,
+      "y": 84
     },
     {
       "id": "asset-0b7c6699-50e3-4114-9630-e564e79a42db",
@@ -3709,6 +4671,66 @@
       "assetId": "brazier",
       "x": 8,
       "y": 148
+    },
+    {
+      "id": "asset-fc885d5a-35e4-49d8-af6a-5005d223a94e",
+      "assetId": "pavi-nobg-1",
+      "x": 5,
+      "y": 155
+    },
+    {
+      "id": "asset-3c1e6e11-05b5-473a-a6ae-a0bfff3ce68b",
+      "assetId": "pavi-nobg-1",
+      "x": 3,
+      "y": 154
+    },
+    {
+      "id": "asset-ddb87d4a-3caa-4933-9020-2780ce65cc1d",
+      "assetId": "pavi-nobg-3",
+      "x": 6,
+      "y": 154
+    },
+    {
+      "id": "asset-6bf4fe82-81d3-463c-8293-e287e4f7f5c9",
+      "assetId": "pavi-nobg-3",
+      "x": 4,
+      "y": 155
+    },
+    {
+      "id": "asset-d2f101e1-2dcb-491e-9e99-e66f2576ff10",
+      "assetId": "pavi-nobg-5",
+      "x": 6,
+      "y": 155
+    },
+    {
+      "id": "asset-325e2e6d-ed2a-48ff-9f06-52b368f16268",
+      "assetId": "pavi-nobg-2",
+      "x": 7,
+      "y": 156
+    },
+    {
+      "id": "asset-11978a0e-1b15-438d-ad7c-1420e5257349",
+      "assetId": "pavi-nobg-2",
+      "x": 4,
+      "y": 150
+    },
+    {
+      "id": "asset-908763be-d02a-40ce-a706-b32c8cf83d0a",
+      "assetId": "pavi-nobg-2",
+      "x": 3,
+      "y": 148
+    },
+    {
+      "id": "asset-0ccd230e-8bb8-4575-ae80-2c925b9b944c",
+      "assetId": "pavi-nobg-1",
+      "x": 7,
+      "y": 152
+    },
+    {
+      "id": "asset-8e9dfedc-d856-4026-94c2-d5f8fe965b6a",
+      "assetId": "pavi-nobg-1",
+      "x": 5,
+      "y": 147
     }
   ],
   "tiles": [],
@@ -5067,11 +6089,4675 @@
             "assetId": "brazier",
             "x": 31,
             "y": 3
+          },
+          {
+            "id": "asset-815d5abb-47a5-44fc-ba4d-a11158d532ba",
+            "assetId": "locanda-2",
+            "x": 3,
+            "y": 12
+          },
+          {
+            "id": "asset-a804cae0-b99b-4645-aaf5-cfba90da3a38",
+            "assetId": "locanda-3",
+            "x": 12,
+            "y": 17
+          },
+          {
+            "id": "asset-955f01f4-210e-412e-8a70-9569d5549a9c",
+            "assetId": "locanda-3",
+            "x": 22,
+            "y": 15
+          },
+          {
+            "id": "asset-c6df8646-9063-4976-93ff-224707c8a043",
+            "assetId": "locanda-3",
+            "x": 16,
+            "y": 9
+          },
+          {
+            "id": "asset-305cf37c-70f5-49e7-880a-b32ba0213191",
+            "assetId": "locanda-3",
+            "x": 11,
+            "y": 2
+          },
+          {
+            "id": "asset-d46c7a68-deed-4a6f-96e3-dc0d98440a6d",
+            "assetId": "locanda-3",
+            "x": 22,
+            "y": 2
+          },
+          {
+            "id": "asset-47f50347-5221-4cd5-b261-e4bdc5f75fd5",
+            "assetId": "locanda-4",
+            "x": 25,
+            "y": 9
+          },
+          {
+            "id": "asset-8ced3463-4ec7-444b-8615-7c93f5e18e09",
+            "assetId": "locanda-4",
+            "x": 3,
+            "y": 3
+          },
+          {
+            "id": "asset-1a4253a5-6b14-47ba-a031-b149d3733e89",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 0
+          },
+          {
+            "id": "asset-7ed2a7ed-8fba-4389-a39d-56554fe902de",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 0
+          },
+          {
+            "id": "asset-3756d2e3-7db2-4340-8665-e278625a8b50",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 0
+          },
+          {
+            "id": "asset-32c8f90b-e6ba-4230-9d80-000498fccbd3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 0
+          },
+          {
+            "id": "asset-27813572-cf3b-4bea-8cb6-3af71847c62b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 0
+          },
+          {
+            "id": "asset-e17003c4-c49b-4e0d-aee0-0eb653edf8ef",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 0
+          },
+          {
+            "id": "asset-d6fa2deb-6efa-4fdd-bc1f-8ea11ac221cf",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 0
+          },
+          {
+            "id": "asset-84c8bd7f-d979-42d9-8aad-9d3502a83ed0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 0
+          },
+          {
+            "id": "asset-33d5ccd5-e34f-4538-9331-5fcc7325ec22",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 0
+          },
+          {
+            "id": "asset-e66a5f27-8c64-463c-9774-f3868752ff4d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 0
+          },
+          {
+            "id": "asset-72e705a4-1bf4-4168-9a7c-43764ae81832",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 0
+          },
+          {
+            "id": "asset-10451311-8cd5-4a62-80e0-1de795365f98",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 0
+          },
+          {
+            "id": "asset-63745deb-a82c-4266-a145-eb5b755a5b5a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 0
+          },
+          {
+            "id": "asset-3b43508d-b13c-453f-ae4f-41e8ef3c9257",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 0
+          },
+          {
+            "id": "asset-29709d97-17ed-4bdf-9a85-3366b613d712",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 0
+          },
+          {
+            "id": "asset-91806b80-ec99-4faf-bbdc-e95ebe2244eb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 0
+          },
+          {
+            "id": "asset-204d0347-16c8-40eb-839f-4ce85e6adf81",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 0
+          },
+          {
+            "id": "asset-4d8fbc89-c43f-4032-a6be-19dc60801617",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 0
+          },
+          {
+            "id": "asset-72c4e7a4-d270-480b-91f2-7ae878b7d2ef",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 0
+          },
+          {
+            "id": "asset-66143007-f312-41ac-bc1a-2ba00f2c0e21",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 0
+          },
+          {
+            "id": "asset-60882729-a49c-4ce1-a6ca-311c0bc7047c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 0
+          },
+          {
+            "id": "asset-82828ea9-1d63-4e5f-9c8e-022e21ad5ffb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 0
+          },
+          {
+            "id": "asset-a44a75f9-aeae-4383-879b-ba7c5dcf93ff",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 0
+          },
+          {
+            "id": "asset-0a61d9a5-7a74-476e-9434-e7fe03a6d637",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 0
+          },
+          {
+            "id": "asset-d4f2851e-9b2e-435b-b960-901ae0565865",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 0
+          },
+          {
+            "id": "asset-50552f3b-eb94-46fe-8e1c-eb0807c4d6f5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 1
+          },
+          {
+            "id": "asset-50762ddc-71eb-41d6-9f3b-23a85f3635b2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 1
+          },
+          {
+            "id": "asset-bcd85a4d-d963-4aab-9f75-ad0b6650c07c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 1
+          },
+          {
+            "id": "asset-3ceedc9f-a6d2-4b43-9b65-a4c1f652608c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 1
+          },
+          {
+            "id": "asset-9af8e165-8397-4d9f-97bf-8cc8fc47ae1f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 1
+          },
+          {
+            "id": "asset-0032f9b6-1be5-444a-b9a1-d5ded561ec68",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 1
+          },
+          {
+            "id": "asset-8d23f69c-d8d4-4dc5-9e3e-56694b75d37a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 1
+          },
+          {
+            "id": "asset-fd0ee473-f788-4d2d-9005-163cc519ccdf",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 1
+          },
+          {
+            "id": "asset-8e3ab6b2-e289-4f30-953f-a3bbfef7cee6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 1
+          },
+          {
+            "id": "asset-3fcdef7f-5ad4-441b-a428-f15d5f1de78a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 1
+          },
+          {
+            "id": "asset-63f4329e-a1c1-45c0-a9ad-3709c14ab184",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 1
+          },
+          {
+            "id": "asset-18860ed1-d8a4-4ef8-a5a3-94dbd4ce5e30",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 1
+          },
+          {
+            "id": "asset-03775934-10fe-43f1-bd3a-2b731dff5959",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 1
+          },
+          {
+            "id": "asset-c666719c-8c26-4580-8d3f-95d66c2449e1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 1
+          },
+          {
+            "id": "asset-daad48ef-b91c-419c-8c34-8109bf8a412c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 1
+          },
+          {
+            "id": "asset-56711997-f696-4115-b340-1cb77e4070de",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 1
+          },
+          {
+            "id": "asset-b2a9bc9d-5b28-48b4-9836-fae2126a1b60",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 1
+          },
+          {
+            "id": "asset-bcbbc07c-cdc3-4a60-9e59-ca2376e97ece",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 1
+          },
+          {
+            "id": "asset-e98fa25d-a1b2-4d1b-8291-2c3eddd868b9",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 1
+          },
+          {
+            "id": "asset-41760653-a617-4c65-bcaf-e8031255c535",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 1
+          },
+          {
+            "id": "asset-48ad9b44-15ae-4b4f-b9c4-c2ade60e59f1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 1
+          },
+          {
+            "id": "asset-af9e906b-9f6c-4681-a03c-3632f043048b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 1
+          },
+          {
+            "id": "asset-8ebe1438-1b10-4331-a7ea-7ac5eaf537e7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 1
+          },
+          {
+            "id": "asset-6bb4d1a6-fbc9-4d0b-b631-dacb0283c1cf",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 1
+          },
+          {
+            "id": "asset-47b01df3-f50b-4fbf-a8ea-0f1ec5d80b57",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 1
+          },
+          {
+            "id": "asset-1edc31c5-7965-423a-9ed9-80cdf55a0446",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 1
+          },
+          {
+            "id": "asset-d2b759be-c4aa-45db-9f5f-ebd3a4fcaf7b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 1
+          },
+          {
+            "id": "asset-11137632-1371-4ee3-b3ae-b3f9fae09de3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 2
+          },
+          {
+            "id": "asset-b46337e7-42a2-4a7f-a8f1-fefe26bc7b89",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 2
+          },
+          {
+            "id": "asset-7e83c0bf-9e5c-437d-8795-52fbcd85eca4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 2
+          },
+          {
+            "id": "asset-bbc0f49f-3857-466b-872e-f754fc7a1307",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 2
+          },
+          {
+            "id": "asset-532b591a-ddd0-4230-ae4e-4da37dd6ffee",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 2
+          },
+          {
+            "id": "asset-f3ff80b6-224c-404d-8c66-0d0e918619fa",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 2
+          },
+          {
+            "id": "asset-06a2ff35-1ad9-4bee-b58c-1ba10fcf7b94",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 2
+          },
+          {
+            "id": "asset-49c6995d-8a99-43a3-815c-8bd56242c7ad",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 2
+          },
+          {
+            "id": "asset-42d986db-a216-4cc1-a94a-f84f442b22b4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 2
+          },
+          {
+            "id": "asset-7f9e5813-0c12-4c92-b7ed-4f0f9f422cd6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 2
+          },
+          {
+            "id": "asset-4a9ab37b-9444-443c-a4f0-a028cfea0014",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 2
+          },
+          {
+            "id": "asset-e3f9b566-5722-4728-b07b-b116d277523d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 2
+          },
+          {
+            "id": "asset-31da92d7-ba79-4a84-87e3-9b1ee7007571",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 2
+          },
+          {
+            "id": "asset-46b7f20c-58dc-4a7e-9c77-76cdda838997",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 2
+          },
+          {
+            "id": "asset-93d04918-366e-4d41-8acf-b02746d6e802",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 2
+          },
+          {
+            "id": "asset-01f67e16-2aae-4cb6-b97b-ddc21c60f483",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 2
+          },
+          {
+            "id": "asset-ef73259d-e924-4b30-a7b5-886425f4426f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 2
+          },
+          {
+            "id": "asset-79c9c937-55d6-4667-9286-49d93332e831",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 2
+          },
+          {
+            "id": "asset-d261d19e-b491-46fe-ba8f-d3bc059ee8e1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 2
+          },
+          {
+            "id": "asset-d471c807-d60b-46c3-856a-4d24e2557423",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 2
+          },
+          {
+            "id": "asset-2537bdb5-aade-412b-aa13-3f4f9988558c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 2
+          },
+          {
+            "id": "asset-3e49d77c-d94c-44f5-9cc2-9d4f2fa870bc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 2
+          },
+          {
+            "id": "asset-8e1e9900-3ffe-4c04-8cec-7e4720dc99f0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 2
+          },
+          {
+            "id": "asset-c0a85dd5-72d6-4462-8a32-185f7400cbda",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 2
+          },
+          {
+            "id": "asset-1a5576b6-0c1f-494f-bf23-2325afce7d26",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 2
+          },
+          {
+            "id": "asset-986ad6f2-ef1e-48a4-b231-2fb4fa8f5cdf",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 2
+          },
+          {
+            "id": "asset-f0477b5e-c3b2-4cd8-b486-9e4f2607bc0a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 2
+          },
+          {
+            "id": "asset-bbdca70c-ecaf-4605-8f06-25fb998f51b7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 3
+          },
+          {
+            "id": "asset-1c0079f0-7cd8-4bf1-9d1a-18e3b1b9bdf5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 3
+          },
+          {
+            "id": "asset-36bcb4c1-080f-4dc8-833a-4b356c0bba41",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 3
+          },
+          {
+            "id": "asset-65836e35-1670-4089-8dd4-e0b718f6e2ee",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 3
+          },
+          {
+            "id": "asset-9824bb05-4440-42cd-9584-6643e71a2365",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 3
+          },
+          {
+            "id": "asset-1c1d728e-76ae-40e0-aee6-a10a385144dd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 3
+          },
+          {
+            "id": "asset-f3cc4f19-b038-459b-9263-5bfabd1a8e7c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 3
+          },
+          {
+            "id": "asset-6e16be4a-2566-44e7-84da-0175d4d631fb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 3
+          },
+          {
+            "id": "asset-fdc53aa0-9d7c-4027-9347-b263ee8372d0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 3
+          },
+          {
+            "id": "asset-594a9a37-7f08-4e01-90ee-a4e37a903dc0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 3
+          },
+          {
+            "id": "asset-40882ab3-7027-415b-8262-be056232e346",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 3
+          },
+          {
+            "id": "asset-8e5f3fe9-6ccc-4035-a1c7-72af8a83e24f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 3
+          },
+          {
+            "id": "asset-9573a0d3-176b-49be-aed3-883c7041a8f4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 3
+          },
+          {
+            "id": "asset-7b846cef-f669-494b-98ae-910e7d197363",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 3
+          },
+          {
+            "id": "asset-240b89a0-69e7-43fc-873f-63480e793d49",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 3
+          },
+          {
+            "id": "asset-901dcaad-350e-423d-8390-c18bc2021d75",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 3
+          },
+          {
+            "id": "asset-6946af41-3a68-43d0-a145-ee619d14ea4f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 3
+          },
+          {
+            "id": "asset-2026052e-3d75-4359-84bc-40a75c3660ad",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 3
+          },
+          {
+            "id": "asset-5bad85dc-032f-44eb-b425-447f502e85a4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 3
+          },
+          {
+            "id": "asset-69815a6e-e8e8-4f43-b7b9-2340c38cd646",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 3
+          },
+          {
+            "id": "asset-5b9791e8-6670-4766-b25c-2b9426484f51",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 3
+          },
+          {
+            "id": "asset-99c34023-d7b5-45be-af51-af9bdaf68f63",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 3
+          },
+          {
+            "id": "asset-58f130a2-c4dc-4d03-8591-1dbfa33b8028",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 3
+          },
+          {
+            "id": "asset-3d0e9468-8bf5-4db0-9752-ee76d58b8a1f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 3
+          },
+          {
+            "id": "asset-201bbe13-0d49-4bc1-a699-d6e2c3a435f9",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 3
+          },
+          {
+            "id": "asset-4bb63f53-93bc-4d3e-ae7b-4ac2f6445a24",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 3
+          },
+          {
+            "id": "asset-2578ea4e-e90a-4a7c-bef0-10332b2c65df",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 3
+          },
+          {
+            "id": "asset-092ca59f-fe85-451f-8da1-10bb99347073",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 3
+          },
+          {
+            "id": "asset-068e4428-255b-46d5-95ee-e05c0b5346be",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 4
+          },
+          {
+            "id": "asset-c4b08035-a785-4c8a-918a-254889c1c383",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 4
+          },
+          {
+            "id": "asset-16f09fd5-6f19-4879-9eb9-a69b4688a841",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 4
+          },
+          {
+            "id": "asset-09b43adf-a3e7-46c2-9fb8-b28483a76038",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 4
+          },
+          {
+            "id": "asset-5104ff5f-4e76-42b9-bcf8-874a502c152e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 4
+          },
+          {
+            "id": "asset-ab8267ab-c13c-4a07-967e-3c170fef30b6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 4
+          },
+          {
+            "id": "asset-316e5884-68f2-446c-8eb4-ccc180d13f7d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 4
+          },
+          {
+            "id": "asset-59015708-bb2e-4f1d-beed-1e04d0b95912",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 4
+          },
+          {
+            "id": "asset-44bc3c89-69af-47c5-850e-c9e92c431739",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 4
+          },
+          {
+            "id": "asset-dd657985-b0ef-4fbb-abae-51c1f01a160d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 4
+          },
+          {
+            "id": "asset-f14735ac-5874-49be-9bcd-e50bd9ebd17a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 4
+          },
+          {
+            "id": "asset-db556370-41aa-4e47-ac66-38134a3b22e2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 4
+          },
+          {
+            "id": "asset-e50f3b02-6b16-4d25-a243-38be224dbdb2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 4
+          },
+          {
+            "id": "asset-b3893cb6-f4e4-449f-b35e-34a3728f3d7e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 4
+          },
+          {
+            "id": "asset-475ff71f-e040-42b1-b972-1e05cfcf1284",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 4
+          },
+          {
+            "id": "asset-b7a9bfc8-7580-4d6f-bcb4-6290673ecd4c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 4
+          },
+          {
+            "id": "asset-cdd14c57-3a1d-45a2-b9ef-85487ea976cd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 4
+          },
+          {
+            "id": "asset-a7206a51-1880-4c79-a73b-f8216eb09088",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 4
+          },
+          {
+            "id": "asset-54164ee3-548a-48e5-93b4-fdcebe876134",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 4
+          },
+          {
+            "id": "asset-100d641e-87c4-4113-a742-e48c3e11d0e5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 4
+          },
+          {
+            "id": "asset-a810761f-1ae5-428d-94c3-2381c6d76d3a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 4
+          },
+          {
+            "id": "asset-0eb0725b-2cd4-424e-984d-089da1239b71",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 4
+          },
+          {
+            "id": "asset-4d58c5f4-457d-4774-a72e-c2349d3aefbf",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 4
+          },
+          {
+            "id": "asset-d6ae8933-2663-4cd1-95ef-179e22cf33ac",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 4
+          },
+          {
+            "id": "asset-b501fbe2-5d76-49ce-9223-e2536701d6ea",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 4
+          },
+          {
+            "id": "asset-939c425a-137a-4bbd-a287-d8441066f6d3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 4
+          },
+          {
+            "id": "asset-ce403b3b-6c7c-4831-b4c1-0ef3a68d7f3c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 4
+          },
+          {
+            "id": "asset-a56e9999-89b2-428e-97f1-b6b6475f9ce4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 4
+          },
+          {
+            "id": "asset-8cedd6aa-73f5-48c0-9a2c-f993e65e6dae",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 5
+          },
+          {
+            "id": "asset-712b2766-71d2-4357-84c0-77eac93ebbc6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 5
+          },
+          {
+            "id": "asset-72c44e6a-b210-4781-8cef-654f3a7c7e78",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 5
+          },
+          {
+            "id": "asset-09bb1c5a-7f18-4798-b37b-95b7de2c8967",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 5
+          },
+          {
+            "id": "asset-dd234442-9fca-48dd-86b6-ce1fac96c947",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 5
+          },
+          {
+            "id": "asset-373e3e34-cc51-41d4-ab63-215fdc472861",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 5
+          },
+          {
+            "id": "asset-9a80ef4c-a551-44fb-851e-4ac4f4185c91",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 5
+          },
+          {
+            "id": "asset-bd80b89a-6b43-4a9f-b143-e7840bd4d122",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 5
+          },
+          {
+            "id": "asset-2921ecf3-d961-4b94-8a67-f3e87520d86d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 5
+          },
+          {
+            "id": "asset-a0256728-9980-40aa-b3b2-216d0471c9e2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 5
+          },
+          {
+            "id": "asset-61c94cf5-fead-407e-bd3b-8faca5777efb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 5
+          },
+          {
+            "id": "asset-9b9520b2-263a-4350-b04c-847b260a1531",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 5
+          },
+          {
+            "id": "asset-8b2007b0-f7c2-4150-9be2-029bec252c43",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 5
+          },
+          {
+            "id": "asset-2af8f0e6-0f4c-4d7e-b6f7-533758fc22cc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 5
+          },
+          {
+            "id": "asset-df7d6af1-0e60-4167-a7e1-b65c1b0ad151",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 5
+          },
+          {
+            "id": "asset-a5a0920b-b41a-4d7f-b505-cd3fc09e4f81",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 5
+          },
+          {
+            "id": "asset-c1fbcd31-a621-4847-be2b-5c5ef151bc40",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 5
+          },
+          {
+            "id": "asset-008d4006-9c19-4de1-b7ab-f35cd17d533a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 5
+          },
+          {
+            "id": "asset-ef2f5257-3513-4c74-b717-71728bbaa44a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 5
+          },
+          {
+            "id": "asset-a1701c41-a1e5-4c2c-a4b3-345e12e2cb86",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 5
+          },
+          {
+            "id": "asset-12df4835-f147-4ae8-978b-a60503e6e52e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 5
+          },
+          {
+            "id": "asset-1e066607-d24f-46e1-a291-53574e83d857",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 5
+          },
+          {
+            "id": "asset-5f83e3ac-bb37-417b-b61b-a08b739e9137",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 5
+          },
+          {
+            "id": "asset-2068ed0c-770a-4111-8144-d8f95e733657",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 5
+          },
+          {
+            "id": "asset-e48829ef-3fe9-43f0-9e53-8f986c3aada1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 5
+          },
+          {
+            "id": "asset-a906f030-83b0-41f8-b9b6-479b8e6b2c63",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 5
+          },
+          {
+            "id": "asset-85b14f82-6a17-489b-b38a-28ce153897c3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 5
+          },
+          {
+            "id": "asset-43c7cee0-8448-41c3-afd8-e2026bdac0d8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 5
+          },
+          {
+            "id": "asset-0d97f7d9-a15c-4767-8d56-84d2cdbac004",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 5
+          },
+          {
+            "id": "asset-5406544f-db33-4405-b32f-c0072b4e8adb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 6
+          },
+          {
+            "id": "asset-921b4277-fb95-4855-af82-320575cddbd0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 6
+          },
+          {
+            "id": "asset-a1642886-4c55-4732-8eb0-649854923948",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 6
+          },
+          {
+            "id": "asset-55ddf1bf-3726-4dd0-a0b7-ddf6e127944a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 6
+          },
+          {
+            "id": "asset-ccf5dd66-d77e-4454-ac17-8fb8f58f196d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 6
+          },
+          {
+            "id": "asset-616f918e-016d-480d-89a6-7248449299f5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 6
+          },
+          {
+            "id": "asset-7f5e151c-5bb8-48a2-b2dc-e267f63e9e33",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 6
+          },
+          {
+            "id": "asset-d162a9e4-1f8c-4f6f-83a7-f56e02894b6c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 6
+          },
+          {
+            "id": "asset-8f41cfdf-ff8c-46f1-808c-5ee58e8f459f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 6
+          },
+          {
+            "id": "asset-62534875-ce61-4a23-856b-62e8e873a3e3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 6
+          },
+          {
+            "id": "asset-79514597-9530-412a-b543-dfdd5a71c98e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 6
+          },
+          {
+            "id": "asset-9ef4e621-ec62-41c4-8ea0-7d8c94344fa7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 6
+          },
+          {
+            "id": "asset-b0edba84-938f-4982-b2a1-92f7d1263445",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 6
+          },
+          {
+            "id": "asset-f5524652-83b5-4a95-b496-faceeaf3e44e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 6
+          },
+          {
+            "id": "asset-d692719b-8b18-4ea3-91c7-a74e3e703072",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 6
+          },
+          {
+            "id": "asset-a675338a-270f-4564-8564-2edeb304fe97",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 6
+          },
+          {
+            "id": "asset-3ae0b298-f825-409a-bb4f-24dc4ab73b82",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 6
+          },
+          {
+            "id": "asset-a54823c8-429b-404d-a35b-b676cf25c94a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 6
+          },
+          {
+            "id": "asset-bd7298d1-fba2-4ce0-ab14-4e3de348e09e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 6
+          },
+          {
+            "id": "asset-c6a8805f-cb31-45e2-8c2a-3d225d3a7c31",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 6
+          },
+          {
+            "id": "asset-b3af72eb-9136-48b5-aec0-d5d9eecb4775",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 6
+          },
+          {
+            "id": "asset-c41d9919-03a8-4444-84f2-022a67ee459c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 6
+          },
+          {
+            "id": "asset-886c3947-f7a5-41c3-b364-5e5ad5db7b51",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 6
+          },
+          {
+            "id": "asset-49aeda01-4e82-4988-bc92-c687db22d2a7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 6
+          },
+          {
+            "id": "asset-e5fcadb0-0574-4e43-a770-d21df796c523",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 6
+          },
+          {
+            "id": "asset-602650dd-0164-4388-8bd2-053150a98c8a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 6
+          },
+          {
+            "id": "asset-a017cd3b-739f-40ff-80ba-a22adcdec139",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 6
+          },
+          {
+            "id": "asset-88025f87-9de1-40e0-a111-4c26016fdc84",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 6
+          },
+          {
+            "id": "asset-5e48ea0c-5709-440c-ba1a-d37819c2b57f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 6
+          },
+          {
+            "id": "asset-424f18ca-9e4f-4217-adf9-854139c6947b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 7
+          },
+          {
+            "id": "asset-57bc52c1-9f03-4ec6-8912-53dc0dad2eea",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 7
+          },
+          {
+            "id": "asset-e5381d1d-77eb-4863-a2e5-d8bd0a750ea2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 7
+          },
+          {
+            "id": "asset-0fc9c6fe-748c-4533-9a57-ad07e275d37e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 7
+          },
+          {
+            "id": "asset-dbd84e22-d700-4eb9-b13a-45deeba453e4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 7
+          },
+          {
+            "id": "asset-95916827-4154-42fc-a648-50ea53af27ea",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 7
+          },
+          {
+            "id": "asset-20ab3291-698a-448c-92f2-08fd7b2213be",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 7
+          },
+          {
+            "id": "asset-61a7e9f0-0c6d-4e43-9041-30df83ae33f4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 7
+          },
+          {
+            "id": "asset-f295f234-915c-4578-b312-7e9778a3e2f1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 7
+          },
+          {
+            "id": "asset-e25f5268-842e-46e3-a730-9a31557671f8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 7
+          },
+          {
+            "id": "asset-a5012645-bfd7-485c-9d0f-d8078ec69cd4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 7
+          },
+          {
+            "id": "asset-27a1c074-eee1-49b3-b588-e5f89bf95ce4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 7
+          },
+          {
+            "id": "asset-9c16f735-3f65-4d26-8402-b4415a6470d7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 7
+          },
+          {
+            "id": "asset-c8e61741-98d9-4fb9-906a-3b91d52b58d2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 7
+          },
+          {
+            "id": "asset-96bfcc5f-07b2-4bec-a57d-947389b65408",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 7
+          },
+          {
+            "id": "asset-945e1c36-7efa-45a1-bc7d-be5249937b59",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 7
+          },
+          {
+            "id": "asset-17f093b7-e52e-4e9a-ac51-eea3444ed3fe",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 7
+          },
+          {
+            "id": "asset-88a3c62d-bac1-4cda-a977-7a9d1f48f9f4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 7
+          },
+          {
+            "id": "asset-b92afe8b-a750-4386-85ee-0201765675de",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 7
+          },
+          {
+            "id": "asset-fcd93fb1-519d-4428-9077-39c896869535",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 7
+          },
+          {
+            "id": "asset-b1b3aa7a-342f-456c-9dae-259490f36ea1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 7
+          },
+          {
+            "id": "asset-079f0909-06a6-4c2f-beb1-40b471b157ae",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 7
+          },
+          {
+            "id": "asset-4c4060bd-2dab-40a5-abb3-9f4d021624b5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 7
+          },
+          {
+            "id": "asset-d4ce0084-58fa-4ae8-941f-ddc3abd6d353",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 7
+          },
+          {
+            "id": "asset-d8222a4c-e5cb-47a8-afee-fea673378bd1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 7
+          },
+          {
+            "id": "asset-6fe01f63-36b8-401b-bcb8-6782007e28b6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 7
+          },
+          {
+            "id": "asset-0f5c4a02-47a8-4883-a4bf-843f257b61ee",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 7
+          },
+          {
+            "id": "asset-36d18cfb-d6a0-4ba5-83df-789d33cbac61",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 7
+          },
+          {
+            "id": "asset-7dbc89cd-2bc5-4493-8d0f-e0e668e48687",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 7
+          },
+          {
+            "id": "asset-5df2917b-2c90-4d16-9b4e-aa8058d06a50",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 8
+          },
+          {
+            "id": "asset-e3b1f338-90c6-4a8b-aae4-004a279dfe11",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 8
+          },
+          {
+            "id": "asset-f5365db1-6d2f-4ef6-84dc-cd3413995530",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 8
+          },
+          {
+            "id": "asset-904fd1a2-aba3-47e9-a252-f07978c48f29",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 8
+          },
+          {
+            "id": "asset-f166a17d-8d54-43af-bd2e-df7d66469f25",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 8
+          },
+          {
+            "id": "asset-b091a730-c5b5-477b-a3e3-94100e3ba3ff",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 8
+          },
+          {
+            "id": "asset-fd3a2e65-55d3-4a45-ac87-c8645af82019",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 8
+          },
+          {
+            "id": "asset-0720a61d-1f0d-4e0a-9569-42f371dbc3cd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 8
+          },
+          {
+            "id": "asset-09dd236f-fc6f-4eb9-8581-9a9d913c68ac",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 8
+          },
+          {
+            "id": "asset-2b657aba-1be6-4c3f-a69a-1f8fc7a0521a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 8
+          },
+          {
+            "id": "asset-015236d1-cad4-40b6-8955-c14cdbe49817",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 8
+          },
+          {
+            "id": "asset-a10f0aeb-e767-41a9-bc1c-2a6890800512",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 8
+          },
+          {
+            "id": "asset-71adb254-8973-4618-8e3d-77a2d9d9c6b0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 8
+          },
+          {
+            "id": "asset-032e4d99-d1e4-4f13-a394-3f2939e5dcd6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 8
+          },
+          {
+            "id": "asset-00112209-c886-4c84-9d0e-e86eea5d246b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 8
+          },
+          {
+            "id": "asset-c0f7583d-57f2-45ac-880b-c2be4f1bcf90",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 8
+          },
+          {
+            "id": "asset-db58df2a-e84d-49d5-a552-098a0b46331f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 8
+          },
+          {
+            "id": "asset-a52880ee-0828-43e3-a141-0ea1e6cbf9c5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 8
+          },
+          {
+            "id": "asset-4c1a42d0-4b72-45c4-a9d8-79f51461b322",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 8
+          },
+          {
+            "id": "asset-1162928b-adf0-43c3-858c-a2c42758a29f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 8
+          },
+          {
+            "id": "asset-25c7ad6c-36a1-4c8f-91c8-4bebfce8b26b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 8
+          },
+          {
+            "id": "asset-4de76c82-1f61-474c-914e-6b8172c4455b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 8
+          },
+          {
+            "id": "asset-c4192eef-8e13-42e8-8643-723f71317ad3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 8
+          },
+          {
+            "id": "asset-8b5da764-a24e-4728-9f8e-b6f6fcda3102",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 8
+          },
+          {
+            "id": "asset-e8cb6f30-d5b2-4e02-a2df-9cecd49c7ed2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 8
+          },
+          {
+            "id": "asset-a618d8ec-139e-4e84-ad95-8bfbc7960f1b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 8
+          },
+          {
+            "id": "asset-6dd880c3-6113-48ed-9bce-4acae1d63663",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 8
+          },
+          {
+            "id": "asset-623f473c-7308-4e26-9724-31c7bf705f46",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 8
+          },
+          {
+            "id": "asset-179c0f7f-3723-47b7-8667-172f2edeae19",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 8
+          },
+          {
+            "id": "asset-d8c12188-676e-4963-bc0d-0e6f40e5f000",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 9
+          },
+          {
+            "id": "asset-7289d8fa-6a72-4157-a2e5-a4e332e0538d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 9
+          },
+          {
+            "id": "asset-b2252afc-815d-4cff-a73f-f9cbe49de039",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 9
+          },
+          {
+            "id": "asset-8273d9e1-482a-4bbb-8e80-ed875919d710",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 9
+          },
+          {
+            "id": "asset-1bbf9160-8b68-4f97-8053-ec76dd6f3671",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 9
+          },
+          {
+            "id": "asset-2288e83f-74b1-4700-8e40-ea5b13434404",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 9
+          },
+          {
+            "id": "asset-73ff6265-87ee-443e-a592-4205d0a420b1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 9
+          },
+          {
+            "id": "asset-2adc8fa3-1454-467f-81f8-2efbd1ffa665",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 9
+          },
+          {
+            "id": "asset-d37a0d0c-e6fb-4672-8d0f-c6707db59edc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 9
+          },
+          {
+            "id": "asset-39733626-fdba-4f41-8b4f-104389853450",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 9
+          },
+          {
+            "id": "asset-cf380d84-6032-452b-8ce0-c7e18c0d4cd6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 9
+          },
+          {
+            "id": "asset-ae17abca-fcfa-4867-aeb9-27ffb4e5a76d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 9
+          },
+          {
+            "id": "asset-5990e336-7507-4321-bc3d-fd644f8f9f61",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 9
+          },
+          {
+            "id": "asset-4a1c8a46-5407-44a4-8490-8c52d04283d2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 9
+          },
+          {
+            "id": "asset-461993d0-4415-473b-a0d3-aeeea46948bb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 9
+          },
+          {
+            "id": "asset-6e77c96f-fb14-42f5-a9d7-f7e2427a0278",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 9
+          },
+          {
+            "id": "asset-0c47d9e7-3990-465d-8f7e-e8baf5754344",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 9
+          },
+          {
+            "id": "asset-22896ea3-663d-41a7-9b42-16a58ac81899",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 9
+          },
+          {
+            "id": "asset-b58c409a-4a06-4b9f-ad23-4f2b6d04a7bd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 9
+          },
+          {
+            "id": "asset-db715221-e6ca-47ed-8fce-e3ced734389d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 9
+          },
+          {
+            "id": "asset-ee5260eb-92c6-441e-a2b5-c4bb7e202620",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 9
+          },
+          {
+            "id": "asset-a52d8462-81d8-4aef-82f1-5200a04182c9",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 9
+          },
+          {
+            "id": "asset-10919ed1-d185-4182-9f64-4009028edbe2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 9
+          },
+          {
+            "id": "asset-d8b4d234-44be-4dde-b3b1-10f955a8abc9",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 9
+          },
+          {
+            "id": "asset-d1393b2c-8d7e-4599-91e0-a9a38ac09475",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 9
+          },
+          {
+            "id": "asset-1f9df303-0f88-4bf4-857f-07ab36ea5c2d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 9
+          },
+          {
+            "id": "asset-c0523ef2-f45c-4b7f-9b2d-22062dc75aac",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 9
+          },
+          {
+            "id": "asset-2fc3934c-dfee-436b-8214-3085a986ba54",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 9
+          },
+          {
+            "id": "asset-ae6d5f49-effd-4c62-821a-fc0c8a1b6a13",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 9
+          },
+          {
+            "id": "asset-abc1729f-4f40-4331-b9e6-5c56ee99e740",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 10
+          },
+          {
+            "id": "asset-24edd474-e494-455c-8658-9a89f2c86756",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 10
+          },
+          {
+            "id": "asset-cb0d7851-615f-4566-85c8-e051453036b4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 10
+          },
+          {
+            "id": "asset-c9508c07-72df-46f6-808d-501434a9de5f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 10
+          },
+          {
+            "id": "asset-c4e29fc0-c00a-497b-8200-5b01223943a4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 10
+          },
+          {
+            "id": "asset-77460210-f02a-4d3a-a81e-0dda96c82710",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 10
+          },
+          {
+            "id": "asset-7768bf95-884f-4141-8caa-3d367f142dd5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 10
+          },
+          {
+            "id": "asset-43b44741-9127-4f60-8916-2331739c252c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 10
+          },
+          {
+            "id": "asset-fa5ce227-9400-49d0-ba43-f0fbb0828f90",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 10
+          },
+          {
+            "id": "asset-11b2cf08-f38d-4a7f-a57a-b1b7b8168846",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 10
+          },
+          {
+            "id": "asset-88656562-7860-4c8c-a953-00174fc61ce1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 10
+          },
+          {
+            "id": "asset-373a7786-25ff-484b-b6eb-cc0c524df813",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 10
+          },
+          {
+            "id": "asset-91aba854-10e2-4fa6-bcee-7087f92a922e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 10
+          },
+          {
+            "id": "asset-27bb795a-7d20-4813-93a5-edfe697ec771",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 10
+          },
+          {
+            "id": "asset-525853d9-4435-47a5-ab62-3169b823caa4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 10
+          },
+          {
+            "id": "asset-2e1c8efe-ad08-4a2f-a913-7ef246905ba0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 10
+          },
+          {
+            "id": "asset-68bda95b-8fa0-471a-84f5-eaee73011e9b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 10
+          },
+          {
+            "id": "asset-2ffabf84-6c00-4d33-a9a5-113dcfb3266c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 10
+          },
+          {
+            "id": "asset-4efccb8c-22b4-4a5c-8c1c-cc9789e4a571",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 10
+          },
+          {
+            "id": "asset-3ac8252e-92e3-4db8-827f-a01f1d2eb849",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 10
+          },
+          {
+            "id": "asset-11a3e007-e7d0-417c-b34b-67a4ff693113",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 10
+          },
+          {
+            "id": "asset-29f6a0da-504f-4a01-83ab-e4d617915293",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 10
+          },
+          {
+            "id": "asset-3c11282a-345b-4652-94d6-97f56abe6307",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 10
+          },
+          {
+            "id": "asset-62a4f500-1002-4b52-9a1d-2b4967690305",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 10
+          },
+          {
+            "id": "asset-7d87e954-94a2-49b4-a058-1b1abebef323",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 10
+          },
+          {
+            "id": "asset-a7c1cfd6-d000-4114-af4c-e3dfcf3221e8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 10
+          },
+          {
+            "id": "asset-7a0c3899-2001-4ab9-a531-e874d8300ef6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 10
+          },
+          {
+            "id": "asset-2434619c-6ff4-4507-819b-97fe1f080ca0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 10
+          },
+          {
+            "id": "asset-a7b65506-4720-442b-8217-081467f376c0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 10
+          },
+          {
+            "id": "asset-30340892-a49f-4b8a-bbd6-88aa08233596",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 10
+          },
+          {
+            "id": "asset-aa1d47ba-bcb9-49ea-8584-d06b832cf275",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 11
+          },
+          {
+            "id": "asset-da25a63a-249f-41ed-8c8f-7c8b593e8fef",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 11
+          },
+          {
+            "id": "asset-39ba4e35-8abe-4f97-813c-c135c472f5bd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 11
+          },
+          {
+            "id": "asset-9fc7ee51-1344-4859-9fda-ff9367bb5524",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 11
+          },
+          {
+            "id": "asset-b4347bcd-6164-4e96-85c3-f7f6604a62ea",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 11
+          },
+          {
+            "id": "asset-e98297bc-6108-4799-a3ce-1c8772dd7e53",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 11
+          },
+          {
+            "id": "asset-2efe2810-ff33-4095-9251-bcba619669d1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 11
+          },
+          {
+            "id": "asset-185bb4df-5699-494e-8302-02c5d4c4039b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 11
+          },
+          {
+            "id": "asset-827d8876-833d-4488-9547-9d983e63cb31",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 11
+          },
+          {
+            "id": "asset-09928d3a-be46-4fae-b1f6-ec56f4bc55aa",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 11
+          },
+          {
+            "id": "asset-f6d49ce0-99dd-4da2-8bf8-c93ca4061fc6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 11
+          },
+          {
+            "id": "asset-61fcd01d-fc7c-4789-8cb9-5820584e21b9",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 11
+          },
+          {
+            "id": "asset-ca0dec39-9398-4246-8422-84ff6f4582fd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 11
+          },
+          {
+            "id": "asset-5b16484d-8c04-4f4e-8aaa-555a0400a44d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 11
+          },
+          {
+            "id": "asset-69720ce0-e8f3-45fe-ad98-b41ce12a33c5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 11
+          },
+          {
+            "id": "asset-36ca24fe-fe8b-4aab-94ec-7010153899cc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 11
+          },
+          {
+            "id": "asset-c364d46b-a5e7-4cff-aff4-8286cb9c4d6e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 11
+          },
+          {
+            "id": "asset-496b12af-ac79-4f17-90ab-6856a0b4a9e8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 11
+          },
+          {
+            "id": "asset-3aa27af3-7179-4600-a10e-7500f660265d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 11
+          },
+          {
+            "id": "asset-387a9eb3-bce5-43fc-8973-d32ed0abf32a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 11
+          },
+          {
+            "id": "asset-d98ecb5c-349a-4bcf-92b4-13774de58b53",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 11
+          },
+          {
+            "id": "asset-8e596424-4455-4449-a35c-50ccbac7c71c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 11
+          },
+          {
+            "id": "asset-1e6975c7-8886-45a5-af81-3caae10fd077",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 11
+          },
+          {
+            "id": "asset-17bdd466-8b03-4e19-86c2-5ea4fe5dbdfb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 11
+          },
+          {
+            "id": "asset-53d17a60-b744-4419-9275-fc8dc3099265",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 11
+          },
+          {
+            "id": "asset-47f4045e-0281-43bc-a195-5e217a39d45a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 11
+          },
+          {
+            "id": "asset-3acc0b82-da1e-4818-a3e5-4b8c88d99e05",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 11
+          },
+          {
+            "id": "asset-93a808e9-cc15-4790-a433-dc78de5a6e12",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 11
+          },
+          {
+            "id": "asset-9d9ddb73-fa1e-4505-b1f4-e3b39b8d38c0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 11
+          },
+          {
+            "id": "asset-35d4304c-cc1a-4857-a023-4f5be3797241",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 12
+          },
+          {
+            "id": "asset-5fccd63e-aea3-45a7-800f-e3cf66f74f44",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 12
+          },
+          {
+            "id": "asset-ac1e7a74-f3a2-414f-bdae-8438af1dcb39",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 12
+          },
+          {
+            "id": "asset-6a280751-35ef-4566-82de-9ccd0623d088",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 12
+          },
+          {
+            "id": "asset-b33d90aa-c158-46aa-8154-5e9b59d8d566",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 12
+          },
+          {
+            "id": "asset-a42b264f-fc1e-479c-a0c3-1b3bd3181b76",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 12
+          },
+          {
+            "id": "asset-856ee74e-a1db-4386-84e5-7777dc53caa5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 12
+          },
+          {
+            "id": "asset-abf55025-5bae-4910-a837-08453bb9be43",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 12
+          },
+          {
+            "id": "asset-b70c6819-084d-4f7a-9846-98043d53f7cb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 12
+          },
+          {
+            "id": "asset-05fe8ace-75d4-44ab-8cbc-3db7edcb0095",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 12
+          },
+          {
+            "id": "asset-d6dbded1-383c-491d-845d-a641f49fd8d2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 12
+          },
+          {
+            "id": "asset-d38b70d9-3fdc-43ff-820f-920afee0b322",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 12
+          },
+          {
+            "id": "asset-2abb6be7-3414-47c1-9090-dfc0dc35acf3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 12
+          },
+          {
+            "id": "asset-d7e6d5e4-5fac-435d-bc80-55003e8c667a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 12
+          },
+          {
+            "id": "asset-6b0142f6-a9ad-4565-b16c-54bd03554c8e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 12
+          },
+          {
+            "id": "asset-0f05468e-6a02-40ce-88ad-cc43dd1d0c48",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 12
+          },
+          {
+            "id": "asset-8c4e6040-b476-4cf0-8d57-43f661447da6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 12
+          },
+          {
+            "id": "asset-9518653e-de63-460e-a44e-265ac50fb897",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 12
+          },
+          {
+            "id": "asset-3331175e-6253-472f-b568-a118e383fbe8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 12
+          },
+          {
+            "id": "asset-c2dc9922-10ac-4295-8a0e-6dd8cd37e95f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 12
+          },
+          {
+            "id": "asset-bd092de5-5b64-485a-85e0-3edecee60c48",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 12
+          },
+          {
+            "id": "asset-0b93006a-a30b-46ef-8460-199ec89a5706",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 12
+          },
+          {
+            "id": "asset-ae39dd15-f9c5-44d5-973f-83cf806fdb7b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 12
+          },
+          {
+            "id": "asset-7183610a-7b44-4685-a83d-383173fb2657",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 12
+          },
+          {
+            "id": "asset-20d63c76-6102-4da3-b26a-51cd7a66b60c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 12
+          },
+          {
+            "id": "asset-c95b4d02-e67f-46cd-9bab-bd53f6d5b67b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 12
+          },
+          {
+            "id": "asset-6a728257-a903-4309-9ff2-7f57743e37f1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 12
+          },
+          {
+            "id": "asset-5f3ff1ac-bcb4-4485-a49e-85484e1f2959",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 12
+          },
+          {
+            "id": "asset-56545e05-aecd-45a2-a547-0c234849301f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 12
+          },
+          {
+            "id": "asset-c89d3aae-1a2c-4776-bbbe-f5d5d9ba5d0d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 13
+          },
+          {
+            "id": "asset-352de327-3dbf-4500-aa6f-0fbd13d1e9c1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 13
+          },
+          {
+            "id": "asset-2d4425a4-0f5f-4ac8-8e4c-73c1d9d1964f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 13
+          },
+          {
+            "id": "asset-f4a24e29-6283-4925-9cba-6055b8c2a065",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 13
+          },
+          {
+            "id": "asset-406e3a2a-d67e-4389-bac4-12fcfad26aed",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 13
+          },
+          {
+            "id": "asset-811af907-c52a-4271-a1e7-bb5a7959a832",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 13
+          },
+          {
+            "id": "asset-29190e4b-5aba-4c89-97e2-b801a06a8bed",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 13
+          },
+          {
+            "id": "asset-cdad192d-3f50-48b8-8774-f35ee6387cfa",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 13
+          },
+          {
+            "id": "asset-db0e773e-25d2-4f31-9537-ee52604337e2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 13
+          },
+          {
+            "id": "asset-1e49e8b8-6efa-4b0f-a99b-6e452357ea1b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 13
+          },
+          {
+            "id": "asset-ea2d5c9c-0a0d-4208-abf1-5721b74b0f6d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 13
+          },
+          {
+            "id": "asset-a3642bfd-4b5a-43b8-9410-e5c65cbb3c0a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 13
+          },
+          {
+            "id": "asset-4cf8cf9d-30da-49a6-a96e-8bf93f13f654",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 13
+          },
+          {
+            "id": "asset-f94d12cc-2f03-440a-8685-2f1dfd4a1ad7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 13
+          },
+          {
+            "id": "asset-8c428801-f2d0-46fb-8151-5c1aa61fd40a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 13
+          },
+          {
+            "id": "asset-8c140e47-1526-4748-bdac-980dfa4d29b4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 13
+          },
+          {
+            "id": "asset-c4e9d6b4-affd-478a-8f20-b0346230dfb8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 13
+          },
+          {
+            "id": "asset-05ce123c-8614-45fb-be60-c41eeaf9aa3e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 13
+          },
+          {
+            "id": "asset-669ebf57-2f28-4bc6-bd22-63650d59c997",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 13
+          },
+          {
+            "id": "asset-569b7656-da63-4a06-9d59-51f945e3f8b9",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 13
+          },
+          {
+            "id": "asset-f888281d-fa58-4ac8-bfec-9a2049a52325",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 13
+          },
+          {
+            "id": "asset-53829f95-d985-4b9b-9ead-65b5bafd1b39",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 13
+          },
+          {
+            "id": "asset-bdb8b8f8-2a5a-4703-b4d0-b39edba7e5ec",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 13
+          },
+          {
+            "id": "asset-f4b7b03a-92e0-4bb6-ba9f-5a426192bca6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 13
+          },
+          {
+            "id": "asset-76b51026-d7fb-4e04-a786-4fb322b41e65",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 13
+          },
+          {
+            "id": "asset-139ad2aa-a99c-43ec-87b8-a8d30386f58b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 13
+          },
+          {
+            "id": "asset-12e8a4ee-d236-4650-817d-b575a0ae85dc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 13
+          },
+          {
+            "id": "asset-0433adeb-f6bc-47bc-93dd-f47e57c80bef",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 13
+          },
+          {
+            "id": "asset-bfd305f8-8da2-4d30-801b-721903fd051b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 13
+          },
+          {
+            "id": "asset-88b9aee1-c194-4204-a3bf-293acd2070e1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 14
+          },
+          {
+            "id": "asset-966a70c7-0726-4f5d-8529-8a8300144ce8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 14
+          },
+          {
+            "id": "asset-c70941dc-462b-464a-a280-54a1367dc6e8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 14
+          },
+          {
+            "id": "asset-d434395f-1fde-4f60-8124-d25ba9459921",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 14
+          },
+          {
+            "id": "asset-0222529b-8c6a-47ff-9e63-3a20ee3400bd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 14
+          },
+          {
+            "id": "asset-45733104-4c0e-4c6a-b90d-122f45f1fd6e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 14
+          },
+          {
+            "id": "asset-cb51780b-e779-42ed-b89f-b29e5588800e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 14
+          },
+          {
+            "id": "asset-16e216e1-66e2-41bb-b135-110cbd1a2e50",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 14
+          },
+          {
+            "id": "asset-3fa619f9-e7eb-4b41-a664-83c7a5d69347",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 14
+          },
+          {
+            "id": "asset-f6d7ba39-3316-4e5e-8c5d-f12e9913cd7f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 14
+          },
+          {
+            "id": "asset-671522f3-657b-4970-b316-27a989b44719",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 14
+          },
+          {
+            "id": "asset-6aa608d9-8604-42f5-95e4-e76ca532622f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 14
+          },
+          {
+            "id": "asset-26b90cf3-7498-4276-90b3-01365b995157",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 14
+          },
+          {
+            "id": "asset-c88b0969-935b-420b-aec1-eb4ec21f64d1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 14
+          },
+          {
+            "id": "asset-810b435b-1307-4a46-8474-6c69081c7893",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 14
+          },
+          {
+            "id": "asset-beff9bdf-f658-4c0e-aba9-4b02dec26442",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 14
+          },
+          {
+            "id": "asset-234b33ba-1240-4600-9723-4a60cf4f4a03",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 14
+          },
+          {
+            "id": "asset-cff6bc23-7e06-41ff-8787-f2159ca16e35",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 14
+          },
+          {
+            "id": "asset-363a6916-8827-48ab-86ad-62f72e8c0e13",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 14
+          },
+          {
+            "id": "asset-9e184a0f-3a06-41fa-ac3e-2abff9603347",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 14
+          },
+          {
+            "id": "asset-e2b07d03-5293-4247-a55c-08bf75f4b257",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 14
+          },
+          {
+            "id": "asset-4877aa3b-08d7-4d97-9eaf-87e36078e0c3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 14
+          },
+          {
+            "id": "asset-a9b6a4be-94a0-4377-8272-b5484a4f59c2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 14
+          },
+          {
+            "id": "asset-3555122b-b7ba-4e1c-aa01-5c80c3acaf93",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 14
+          },
+          {
+            "id": "asset-513d7101-9b27-401f-a284-871b40ce5db6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 14
+          },
+          {
+            "id": "asset-0222b874-c1ae-423d-abe2-3fa2c40698f4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 14
+          },
+          {
+            "id": "asset-825b37b9-32de-4566-b377-f22edf896d1e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 14
+          },
+          {
+            "id": "asset-08441b80-02de-4bb6-88ba-72ee89f0f977",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 14
+          },
+          {
+            "id": "asset-f860b430-732a-4dc5-91cb-8bf7d40a977a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 14
+          },
+          {
+            "id": "asset-62dc91af-3fc6-4e2f-bf49-84b5b7e67f29",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 15
+          },
+          {
+            "id": "asset-155d8c4b-175d-4271-a05f-d986e44b3bba",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 15
+          },
+          {
+            "id": "asset-c00d91b0-d229-4938-afe8-7cdcb355430c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 15
+          },
+          {
+            "id": "asset-44017851-0322-4031-9b20-28aff5a9710a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 15
+          },
+          {
+            "id": "asset-03d7c0a9-1833-498c-b197-5590e28d29a0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 15
+          },
+          {
+            "id": "asset-cd79cb82-65a3-4d84-967d-91d4dad96717",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 15
+          },
+          {
+            "id": "asset-6bc5453b-708d-4fa8-9673-6d5a66aefff3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 15
+          },
+          {
+            "id": "asset-98679287-c065-4ccf-aea7-a55ad0a73255",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 15
+          },
+          {
+            "id": "asset-51654a42-43f9-4141-9a70-87041143f06b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 15
+          },
+          {
+            "id": "asset-fd9af6bd-76c4-4377-a1d1-2c44b59aa28f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 15
+          },
+          {
+            "id": "asset-e26fd375-74b2-4edf-98ce-9c54a2e7863b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 15
+          },
+          {
+            "id": "asset-3c46cfe0-92da-4180-9a66-1c30fdc4b07d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 15
+          },
+          {
+            "id": "asset-afad893b-140d-42ee-8393-12c71e1ce078",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 15
+          },
+          {
+            "id": "asset-77fba048-ca7a-4a71-87f4-1fe73b7d663b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 15
+          },
+          {
+            "id": "asset-ae4b6b07-161c-4070-b9a5-e725518f9eaa",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 15
+          },
+          {
+            "id": "asset-44846ca8-3b9a-4f9f-9c9b-d7f62d5080dc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 15
+          },
+          {
+            "id": "asset-46724eb8-ae3b-4057-be8f-a139d32e9e7a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 15
+          },
+          {
+            "id": "asset-8ed2236b-f50d-4783-8a69-33656923979e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 15
+          },
+          {
+            "id": "asset-68e397d5-0b8b-40b9-a01b-ffcb98052efa",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 15
+          },
+          {
+            "id": "asset-5a0d700b-8904-4d22-a93d-9161515682f5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 15
+          },
+          {
+            "id": "asset-91ecdcf7-299e-44b5-a6a1-60aa4b95394d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 15
+          },
+          {
+            "id": "asset-52e9cb7c-1042-415e-8806-19a147eb130b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 15
+          },
+          {
+            "id": "asset-2ab1f94a-1924-4c9e-9e27-132acbd57414",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 15
+          },
+          {
+            "id": "asset-032091cd-d40e-4d10-9df0-2a517e2ca7c4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 15
+          },
+          {
+            "id": "asset-5c4665ec-2d63-4b49-bfef-bd9f38589d6b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 15
+          },
+          {
+            "id": "asset-3f4b0710-facb-4f7e-9955-35afb7eac6fb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 15
+          },
+          {
+            "id": "asset-2a863e96-57d7-43ba-8fa1-b68c9cc337eb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 15
+          },
+          {
+            "id": "asset-efc6680e-5209-4e09-a923-9b40a8d8c75f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 15
+          },
+          {
+            "id": "asset-611fb427-c6a9-474d-a8c6-21761ac21101",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 15
+          },
+          {
+            "id": "asset-d897d883-41f8-406c-83b8-f5b5eb61a3e5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 16
+          },
+          {
+            "id": "asset-62d54e75-683b-4473-8e20-0cdd9e28de1b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 16
+          },
+          {
+            "id": "asset-0b696a13-d646-4108-aa0b-936829a8da06",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 16
+          },
+          {
+            "id": "asset-2479861a-9811-4ba4-b406-10ac8acc194a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 16
+          },
+          {
+            "id": "asset-1a33a58f-5c6a-4aa4-b6d6-6b66e62900a0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 16
+          },
+          {
+            "id": "asset-27e81de3-a4d0-42bb-9744-888db106b472",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 16
+          },
+          {
+            "id": "asset-44484272-6bdb-4499-b36c-83362ab03010",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 16
+          },
+          {
+            "id": "asset-04a1cfb1-bf2c-4237-bcf8-e49f02a36024",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 16
+          },
+          {
+            "id": "asset-27aa501c-3081-46a0-b9c5-6fb0ae1d86e6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 16
+          },
+          {
+            "id": "asset-2f68f4fd-ceea-42c5-b467-417be25e436c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 16
+          },
+          {
+            "id": "asset-78965684-7868-4f59-9fdf-420a1cc234e7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 16
+          },
+          {
+            "id": "asset-4a3d0a3d-74c4-4aba-b8a2-e04e9354f57e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 16
+          },
+          {
+            "id": "asset-21bb1253-3a02-42b2-8151-5bd9294b6eec",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 16
+          },
+          {
+            "id": "asset-f062187a-8951-4214-995a-c747981e6a3f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 16
+          },
+          {
+            "id": "asset-b2e662a2-bc15-47e3-bce4-0806d2bb88d3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 16
+          },
+          {
+            "id": "asset-2efca34d-a0d1-4f53-9800-c9d3e9126639",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 16
+          },
+          {
+            "id": "asset-b80c6cda-0402-438a-95ad-fea1e14862dd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 16
+          },
+          {
+            "id": "asset-2fd87c95-9f88-4a4c-9b1c-2ef11fcc1cec",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 16
+          },
+          {
+            "id": "asset-db43601d-46fd-4544-b276-8b3f01e2b21a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 16
+          },
+          {
+            "id": "asset-1fcdba8d-5ca5-439d-ba15-47b2d394a190",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 16
+          },
+          {
+            "id": "asset-2392b8ec-5d9a-44ec-902e-d49f75d59ca5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 16
+          },
+          {
+            "id": "asset-f5baaf7c-f487-4690-8ec7-99bc74e0f865",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 16
+          },
+          {
+            "id": "asset-0c1f493b-738d-44a6-9f45-492ac858a507",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 16
+          },
+          {
+            "id": "asset-8550c801-9010-4283-bd04-6980e9742f67",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 16
+          },
+          {
+            "id": "asset-6162ce2d-85d9-43d1-91ff-fd47e5ff3b82",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 16
+          },
+          {
+            "id": "asset-74390d0b-b82f-47de-b36d-73c512ffb755",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 16
+          },
+          {
+            "id": "asset-47d4b6f5-a4bb-42f7-8e21-8f424657b953",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 16
+          },
+          {
+            "id": "asset-22973cda-ea56-491f-bb24-718dd589af79",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 16
+          },
+          {
+            "id": "asset-d8360059-ecd3-4806-a389-721e07f4b5b2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 17
+          },
+          {
+            "id": "asset-1c282454-4db0-41b7-905e-d5548183795b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 17
+          },
+          {
+            "id": "asset-62ce59a1-99af-4faa-9fee-89fd105173a1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 17
+          },
+          {
+            "id": "asset-c4ee01e8-c24f-4ba2-a6dc-7eb059bf3476",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 17
+          },
+          {
+            "id": "asset-6e85407a-bc4e-42f8-8182-dc30e98640ab",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 17
+          },
+          {
+            "id": "asset-f11b1112-42eb-40d0-ae62-51cfdbf84176",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 17
+          },
+          {
+            "id": "asset-162a7bf3-a489-4f8f-b57e-b0f20b30beb0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 17
+          },
+          {
+            "id": "asset-5753fe3a-6d5a-4c62-b4c1-9925bfe7ce4a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 17
+          },
+          {
+            "id": "asset-285f20bb-5ed0-4e5f-9f1d-c95c452c5edd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 17
+          },
+          {
+            "id": "asset-bd12936d-9379-40c5-98b2-c116c2ee77ed",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 17
+          },
+          {
+            "id": "asset-a87437f4-559b-4072-b7a3-10c3e28c880b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 17
+          },
+          {
+            "id": "asset-4ae58c12-6bc8-4d14-9acb-46c77b3fded6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 17
+          },
+          {
+            "id": "asset-b2c06738-9b49-48e4-bb88-9e951d2c4711",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 17
+          },
+          {
+            "id": "asset-c9cc7eb9-665b-4e15-b9fa-0b562b06ab82",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 17
+          },
+          {
+            "id": "asset-85bae191-93ec-4619-b0f8-d256dc3cbc43",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 17
+          },
+          {
+            "id": "asset-4e3d5f79-f416-4684-9faa-f56a615a43a7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 17
+          },
+          {
+            "id": "asset-cdae8dea-78f3-4e6f-81b7-b8c7ab256e17",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 17
+          },
+          {
+            "id": "asset-5edd2d08-895a-4391-861c-8104fc69d394",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 17
+          },
+          {
+            "id": "asset-19c4b06d-9155-45c2-85d3-cdd9f2ff5041",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 17
+          },
+          {
+            "id": "asset-a94ab9ac-9627-4b0b-8829-ff04c0288fb2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 17
+          },
+          {
+            "id": "asset-b58476d3-de81-4dd9-8644-74994857d289",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 17
+          },
+          {
+            "id": "asset-90bf642c-4ed1-4c18-baf3-7965a0fa17ea",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 17
+          },
+          {
+            "id": "asset-2c268acf-1b9d-4fee-89bb-0ff56dd10a77",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 17
+          },
+          {
+            "id": "asset-ab94a2b3-ed13-422c-b2e1-5a0829b6be83",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 17
+          },
+          {
+            "id": "asset-72d2cf63-b808-46b3-aef8-c5f0e4f002a5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 17
+          },
+          {
+            "id": "asset-5d61539f-f502-4cb7-a856-4f40ec018413",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 17
+          },
+          {
+            "id": "asset-c284f4bb-2cbd-4d2e-ac78-96cf32eacbec",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 17
+          },
+          {
+            "id": "asset-f5487e3e-4ee9-4e0a-85c3-0790ef24cdd7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 17
+          },
+          {
+            "id": "asset-cc03eb47-bd83-4007-a2e0-db6d2aa7c32a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 18
+          },
+          {
+            "id": "asset-2e383121-783e-4bf8-881f-33888d32a24c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 18
+          },
+          {
+            "id": "asset-699ce4cd-3f76-47ed-9aec-a5d446d15858",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 18
+          },
+          {
+            "id": "asset-f6ebfab8-18dd-426c-bebb-74ed20d258d0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 18
+          },
+          {
+            "id": "asset-1e75c505-6222-4cab-be4e-0e35ef0decba",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 18
+          },
+          {
+            "id": "asset-307a514f-eb63-4618-9457-9f9bace8d575",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 18
+          },
+          {
+            "id": "asset-98f29db1-5ec4-4fe1-af01-79255acdac4c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 18
+          },
+          {
+            "id": "asset-dbd5e6f6-4e79-4c96-aed7-7510cf35d286",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 18
+          },
+          {
+            "id": "asset-232d3c09-ee35-4961-a8bc-d34d3901f165",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 18
+          },
+          {
+            "id": "asset-74b1817b-b1aa-484e-bcdd-22c6a6df2b16",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 18
+          },
+          {
+            "id": "asset-46932019-d5c6-4407-b540-77e36cada204",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 18
+          },
+          {
+            "id": "asset-686907c4-31b5-431b-a33c-b2660fdda01b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 18
+          },
+          {
+            "id": "asset-4758e850-4d92-4a7c-8366-48100815b5c1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 18
+          },
+          {
+            "id": "asset-6bd9d57d-674a-4420-b5f9-aa5b685fdc96",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 18
+          },
+          {
+            "id": "asset-0fe8b997-aa83-4989-8b6b-769bff157e40",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 18
+          },
+          {
+            "id": "asset-cbde8447-17d6-4932-be1c-0124cb028502",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 18
+          },
+          {
+            "id": "asset-52edd0ba-d6f5-49ed-bbde-a42414578e4b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 18
+          },
+          {
+            "id": "asset-35add514-7e4a-4afd-983d-2baaa20e5520",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 18
+          },
+          {
+            "id": "asset-591c2679-81d9-4703-b682-74ff3ae841d4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 18
+          },
+          {
+            "id": "asset-d4c17d49-dcbe-4e74-adb6-8141163cf0d5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 18
+          },
+          {
+            "id": "asset-e6f670a3-7f75-4bb8-882b-c44ff5aadd6b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 18
+          },
+          {
+            "id": "asset-d6cf8b93-dda4-4322-9f3d-935891d4266f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 18
+          },
+          {
+            "id": "asset-1e418dfe-ac05-4a15-ae88-557c84c1ef26",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 18
+          },
+          {
+            "id": "asset-1b321007-3082-468a-987b-d2f898bba341",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 18
+          },
+          {
+            "id": "asset-2aef9870-581f-49d9-a0b0-36b55131ef88",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 18
+          },
+          {
+            "id": "asset-16f9705d-0cbd-47df-864a-e5c7d8453951",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 18
+          },
+          {
+            "id": "asset-8bf9ab67-4d80-43c6-abfc-acfdcdb0b582",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 18
+          },
+          {
+            "id": "asset-efcc7f7a-00c6-44ef-afe7-eee8e91b295e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 19
+          },
+          {
+            "id": "asset-ff62b3c4-e178-4eab-8fb0-b39b4eba92dc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 19
+          },
+          {
+            "id": "asset-bda61904-25e0-4fe1-9406-f899e0bc8865",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 19
+          },
+          {
+            "id": "asset-c869149c-932b-49f1-b52d-aa9f7476d4f1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 19
+          },
+          {
+            "id": "asset-918821e8-dd93-4007-b834-5855098de236",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 19
+          },
+          {
+            "id": "asset-9e154a74-31b9-4988-939d-278f7cca7363",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 19
+          },
+          {
+            "id": "asset-b82994a7-7236-4b19-a5ea-e69da79f49f7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 19
+          },
+          {
+            "id": "asset-1d7e752c-2e60-4b61-a820-812200f879ec",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 19
+          },
+          {
+            "id": "asset-c9481798-d3b4-41c8-a83e-8b8f67feefc6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 19
+          },
+          {
+            "id": "asset-16c68953-8ebd-4df3-912a-b835fb5b1d00",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 19
+          },
+          {
+            "id": "asset-6223a5cb-6f62-4617-82aa-3c8b9d889684",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 19
+          },
+          {
+            "id": "asset-1fd8c21f-cf6e-4f59-be78-4e3988729703",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 19
+          },
+          {
+            "id": "asset-dbd8189f-4a64-41aa-ab49-f1c7bdfe81fd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 19
+          },
+          {
+            "id": "asset-301202ca-c320-444a-a682-232f33527e1e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 19
+          },
+          {
+            "id": "asset-df4a2e64-8aa8-4d90-8d71-0662f91d311c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 19
+          },
+          {
+            "id": "asset-c85e4220-4a52-4e43-a7b6-fb05e31226db",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 19
+          },
+          {
+            "id": "asset-508bb27d-8d5a-40f1-b91e-0de18befed12",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 19
+          },
+          {
+            "id": "asset-5b4cdd83-6f53-4e24-bef0-6b2e29bf63af",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 19
+          },
+          {
+            "id": "asset-a0577f73-acc3-47bf-aa85-7e0af7023533",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 19
+          },
+          {
+            "id": "asset-400ddb97-0e41-483b-bb38-582b24a5e7eb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 19
+          },
+          {
+            "id": "asset-f0f46358-548b-4292-a927-641847cf2d18",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 19
+          },
+          {
+            "id": "asset-ef371da1-5975-4c41-a71b-de7302204a5e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 19
+          },
+          {
+            "id": "asset-fc6d0dbf-8d2f-4a04-aa56-8c663253ab38",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 19
+          },
+          {
+            "id": "asset-e60c4349-8e77-4856-8d00-747685711601",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 19
+          },
+          {
+            "id": "asset-7182637c-ee80-4abd-9d05-bdab1ad6d7a3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 19
+          },
+          {
+            "id": "asset-bbd79d98-39c2-4c2a-8b42-bbcf00e8da83",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 19
+          },
+          {
+            "id": "asset-0d66dbff-e423-4542-ba2b-c500d2e6c9c9",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 19
+          },
+          {
+            "id": "asset-7823d32e-e424-40f3-a3ac-b0a8d3d42da9",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 20
+          },
+          {
+            "id": "asset-64d4d06a-8bbe-4162-a55e-5be96e06013e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 20
+          },
+          {
+            "id": "asset-5e92647d-d569-41ab-91c3-beebf89863de",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 20
+          },
+          {
+            "id": "asset-8d3528dc-f82e-419d-9909-e03f46e8ec07",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 20
+          },
+          {
+            "id": "asset-f3dfb9eb-5d0e-46c4-b0f3-4949c2db1fde",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 20
+          },
+          {
+            "id": "asset-025fd5d1-122d-4f8c-8309-3b82ec3e66f6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 20
+          },
+          {
+            "id": "asset-9eda6e54-6678-42d9-a2b0-1614a3016faf",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 20
+          },
+          {
+            "id": "asset-d34efd5f-4ee2-4aaa-95f8-19ccb0511aac",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 20
+          },
+          {
+            "id": "asset-02843d2b-3b8a-484a-8c26-86aaf0eaae19",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 20
+          },
+          {
+            "id": "asset-4e721465-222d-4423-a62d-c3a96f7aba2e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 20
+          },
+          {
+            "id": "asset-3237d0af-0424-46fa-aed8-776e0ce08af2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 20
+          },
+          {
+            "id": "asset-99e57d31-089b-4862-ab48-f975708d56f1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 20
+          },
+          {
+            "id": "asset-f92f0288-ded7-4ffa-94d4-96c2296c1073",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 20
+          },
+          {
+            "id": "asset-cc1dc108-9512-428b-8359-28850e851f7f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 20
+          },
+          {
+            "id": "asset-60208866-9317-481a-97ef-da67990aecd7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 20
+          },
+          {
+            "id": "asset-d19aaf92-aeb1-4645-b032-1e5ad52aa589",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 20
+          },
+          {
+            "id": "asset-deec665f-c71e-4564-96c9-04b2934188be",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 20
+          },
+          {
+            "id": "asset-b40f738f-513f-4d15-9aab-c42054e63c2f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 20
+          },
+          {
+            "id": "asset-38fe05c0-84cf-471d-84ee-2a37546b2907",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 20
+          },
+          {
+            "id": "asset-280d83ed-250c-4ae2-bdcb-48456c1de57a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 20
+          },
+          {
+            "id": "asset-c442e297-216f-46da-b685-572f67d7d9ee",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 20
+          },
+          {
+            "id": "asset-02f02dc5-aad2-4d59-a228-41cdfa521d00",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 20
+          },
+          {
+            "id": "asset-99e5ddbe-f46c-493b-82ce-0942ba5fe7bc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 20
+          },
+          {
+            "id": "asset-6ca03628-c9c7-4ec2-a2fa-32e74a142848",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 20
+          },
+          {
+            "id": "asset-2561afcc-f24f-44f0-8a17-902f68675eb5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 20
+          },
+          {
+            "id": "asset-d267b84f-3173-4550-99b3-c363c44ceb2b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 21
+          },
+          {
+            "id": "asset-7a30eb63-8bb0-4dcd-9885-56b7389bcb70",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 21
+          },
+          {
+            "id": "asset-04e5dc89-e979-47c2-b276-66eef648089d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 21
+          },
+          {
+            "id": "asset-15e24564-d944-4d9f-9066-da7579327307",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 21
+          },
+          {
+            "id": "asset-2af8bc12-d7d1-4cf8-8ce5-768a8ec02ef8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 21
+          },
+          {
+            "id": "asset-e4a09304-6d48-45e1-b434-fc458da73cf3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 21
+          },
+          {
+            "id": "asset-0524adf5-10f3-4fbc-a62e-a63edd9ec01d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 21
+          },
+          {
+            "id": "asset-22bb443a-d9f7-4306-af6c-9149cf98d1d6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 21
+          },
+          {
+            "id": "asset-3f389232-56fc-4267-811d-5ad22c04ca08",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 21
+          },
+          {
+            "id": "asset-6e157d42-95bc-41eb-bec2-7a570ac67135",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 21
+          },
+          {
+            "id": "asset-43663dc1-d3a4-46d7-b913-d8c53fdbc6c7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 21
+          },
+          {
+            "id": "asset-2d1536a9-18ad-46f7-ad27-0725a15d18b5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 21
+          },
+          {
+            "id": "asset-e6d365a0-7397-4293-b2eb-2a4fcc120d82",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 21
+          },
+          {
+            "id": "asset-95fdc03f-2f73-4032-b007-cda8e7e0a598",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 21
+          },
+          {
+            "id": "asset-6c5d634f-1a10-4b31-b175-eb260a31764f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 21
+          },
+          {
+            "id": "asset-a66baa1e-fd85-4b57-9a12-22d7eec6ba17",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 21
+          },
+          {
+            "id": "asset-13451d6c-2175-406d-a22f-4b825c2b8c36",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 21
+          },
+          {
+            "id": "asset-50fcab99-1b29-476a-9dc8-eb3ec0340b5c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 21
+          },
+          {
+            "id": "asset-df01561b-90a7-4215-834f-3081ee833754",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 21
+          },
+          {
+            "id": "asset-94d671e3-6171-4704-bba1-8b8bed55834c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 21
+          },
+          {
+            "id": "asset-e931cbaa-e998-48ed-b0aa-31e0bcab42a7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 21
+          },
+          {
+            "id": "asset-b87a7eeb-1251-45ab-9a55-ae55c0a2edc1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 21
+          },
+          {
+            "id": "asset-ec41fc0d-fafd-4f53-8310-f06daef92ddc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 21
+          },
+          {
+            "id": "asset-4445da8b-f985-4b29-9dc5-1a8d1dd10b95",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 22
+          },
+          {
+            "id": "asset-afd72eee-697d-4bb9-a241-82034d7c5b02",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 22
+          },
+          {
+            "id": "asset-de8e4e21-e19c-438e-9832-8c60b0bb176c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 22
+          },
+          {
+            "id": "asset-04e66ca5-b159-4d3d-bf50-8f3017c1bc14",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 22
+          },
+          {
+            "id": "asset-0166cae7-fc92-422f-a8b0-d0f9392552da",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 22
+          },
+          {
+            "id": "asset-9ef986b0-4cb9-447b-b9c3-ce7f49a2ad77",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 22
+          },
+          {
+            "id": "asset-c16d2894-6574-4494-8254-0bf4023d03e2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 22
+          },
+          {
+            "id": "asset-aed88d24-82b4-4125-86b0-59dfd75ad585",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 22
+          },
+          {
+            "id": "asset-78f23bfd-a83f-408e-8575-5e1252e39226",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 22
+          },
+          {
+            "id": "asset-12e3f8b1-ce7f-4d3b-bfa7-01ebefc9a198",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 22
+          },
+          {
+            "id": "asset-8e08490c-487e-4ba0-add3-9f29b8585d95",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 22
+          },
+          {
+            "id": "asset-7fc16de4-bc3c-4aa5-a6d2-146a5da42ca6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 22
+          },
+          {
+            "id": "asset-1e1a3aa5-11ec-4ebe-843a-86df07097e0d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 22
+          },
+          {
+            "id": "asset-29eb748e-64ce-41e9-9be8-2202fec9253b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 22
+          },
+          {
+            "id": "asset-8792009a-1b5c-40da-9233-d45cc28f75c2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 22
+          },
+          {
+            "id": "asset-8d35e2e8-1971-4845-ab6b-3f521e2f934e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 22
+          },
+          {
+            "id": "asset-6de1e9e5-759c-4f94-b9e9-8f6456c8b55e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 22
+          },
+          {
+            "id": "asset-128192a2-acba-44ae-99b0-9837098aedfb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 22
+          },
+          {
+            "id": "asset-d74da0e1-fc09-47f3-b440-2a9f996f5580",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 22
+          },
+          {
+            "id": "asset-88f8f561-4a16-49b4-8358-9e173cd4f3ca",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 22
+          },
+          {
+            "id": "asset-43139154-2d04-45e4-922c-921d5138cc98",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 22
+          },
+          {
+            "id": "asset-e19b08b0-5682-4ede-b552-64d150e9ea23",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 4,
+            "y": 23
+          },
+          {
+            "id": "asset-6e67aaa8-eddb-4a5a-9e13-3269ca5a2fb0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 5,
+            "y": 23
+          },
+          {
+            "id": "asset-5e6197ab-c3cd-464e-a87d-bd5d0999f443",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 6,
+            "y": 23
+          },
+          {
+            "id": "asset-913129c3-5a8c-4ccc-902a-f4ea8a37d2d6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 7,
+            "y": 23
+          },
+          {
+            "id": "asset-7b092983-e081-4f1e-a8c3-45a6ccaae0c8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 8,
+            "y": 23
+          },
+          {
+            "id": "asset-c0ec1b71-3fe5-4136-9884-06475c615981",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 9,
+            "y": 23
+          },
+          {
+            "id": "asset-549d09f8-b7d2-48d5-8b8f-b14874501068",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 10,
+            "y": 23
+          },
+          {
+            "id": "asset-89435a45-314e-4e69-8c2e-4304190aad1d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 11,
+            "y": 23
+          },
+          {
+            "id": "asset-7dfc01b7-d52e-425c-8644-4e191068a53f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 12,
+            "y": 23
+          },
+          {
+            "id": "asset-1072d1a1-b1b8-40ed-a8be-1f21d49a37cc",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 13,
+            "y": 23
+          },
+          {
+            "id": "asset-8d98725f-b86a-47d9-9823-ad717167d29b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 14,
+            "y": 23
+          },
+          {
+            "id": "asset-9628549c-0830-49eb-9b91-4b40d4f3a47f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 15,
+            "y": 23
+          },
+          {
+            "id": "asset-e6577af0-d721-4a32-b18a-b598db11fcac",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 16,
+            "y": 23
+          },
+          {
+            "id": "asset-a62e2f43-5ccf-435e-b20c-f7e9fa49aaf1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 17,
+            "y": 23
+          },
+          {
+            "id": "asset-ae7dfe77-2591-4b97-8267-eb598c64f644",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 18,
+            "y": 23
+          },
+          {
+            "id": "asset-bb7a3580-39b4-4712-b059-492a45dd5c5f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 19,
+            "y": 23
+          },
+          {
+            "id": "asset-9735bfac-1e4c-4055-a582-8c3ec7287e0d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 20,
+            "y": 23
+          },
+          {
+            "id": "asset-9213c425-164b-4039-b4da-8310eae067ca",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 21,
+            "y": 23
+          },
+          {
+            "id": "asset-129e87d9-6eb1-411e-a29e-6dc98e356157",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 22,
+            "y": 23
+          },
+          {
+            "id": "asset-d1f14688-f38e-46a0-90be-39de27374699",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 13
+          },
+          {
+            "id": "asset-5ef2c794-fe45-401b-a168-fe238766af93",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 16
+          },
+          {
+            "id": "asset-0e31f219-ac56-4681-bb47-a9d3fc8f2523",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 17
+          },
+          {
+            "id": "asset-50e65ca5-e2b3-4663-a4f0-11b90f8ce26a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 18
+          },
+          {
+            "id": "asset-7d6fe44f-0b60-437c-9ed3-59d0a397165c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 18
+          },
+          {
+            "id": "asset-fbc2486d-3a43-405c-b7a0-e76d8e0846f0",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 19
+          },
+          {
+            "id": "asset-e2504523-d9d7-4e2c-8aae-61ccfe5774e6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 20
+          },
+          {
+            "id": "asset-aeae053e-d735-46d6-8556-40b83210f8bb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 20
+          },
+          {
+            "id": "asset-203a7bfb-11da-4d4f-973d-207322fbd482",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 20
+          },
+          {
+            "id": "asset-531c0fe3-7375-4854-a33a-dc968956bea7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 21
+          },
+          {
+            "id": "asset-1b30a677-97a5-4e2b-a3b7-9f3e1d6a8b9e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 21
+          },
+          {
+            "id": "asset-63b3d53b-587b-4364-9835-2986b9214db9",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 21
+          },
+          {
+            "id": "asset-1b653c69-e9d7-4835-b9ee-6f4cc068f9fa",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 21
+          },
+          {
+            "id": "asset-835afe33-a4f5-448b-a91e-c3e2ac2b3d97",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 22
+          },
+          {
+            "id": "asset-9a95de05-9bd7-4861-8b59-99195a584281",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 22
+          },
+          {
+            "id": "asset-8e762890-e841-403e-b56e-cf9806a8f66f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 22
+          },
+          {
+            "id": "asset-1269d5d8-d130-4c50-b570-d792ee2dd5ef",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 22
+          },
+          {
+            "id": "asset-2d0b1a7b-5a3b-49ed-9d63-8a7a61bfc039",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 22
+          },
+          {
+            "id": "asset-aa82b7bf-9241-483d-abf0-0607cf14d77e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 22
+          },
+          {
+            "id": "asset-03d04571-e61f-4035-b254-0009f6f869d5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 1,
+            "y": 23
+          },
+          {
+            "id": "asset-b76cb1f3-c0bb-46b8-87ce-caeea1395897",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 2,
+            "y": 23
+          },
+          {
+            "id": "asset-fadc4492-1802-473e-a7fd-573b4baa6e15",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 3,
+            "y": 23
+          },
+          {
+            "id": "asset-e57ee79a-adf4-422d-9405-5df14319e478",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 23,
+            "y": 23
+          },
+          {
+            "id": "asset-7fcbb068-9c6b-4a99-9920-b5c4dc3eada5",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 24,
+            "y": 23
+          },
+          {
+            "id": "asset-961890c2-abb7-4232-a624-b83cda21fc49",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 25,
+            "y": 23
+          },
+          {
+            "id": "asset-0f708b0e-59c0-43d7-a6c1-35945f87335b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 14
+          },
+          {
+            "id": "asset-d937751a-bdb8-4011-ab32-348bd4651e0c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 19
+          },
+          {
+            "id": "asset-4793c91f-7e7a-430a-93ad-1a3e3ca5cfa4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 21
+          },
+          {
+            "id": "asset-e27610e8-6714-47a9-87b0-34283f2950ca",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 23
+          },
+          {
+            "id": "asset-490cd2da-dc3c-4b7e-b704-5a43cf0619ec",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 23
+          },
+          {
+            "id": "asset-4a867e9f-d042-46c8-9af3-71e7d8c02316",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 26,
+            "y": 0
+          },
+          {
+            "id": "asset-7f9547cd-078a-4eb7-b1c0-c7a2387c6e64",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 0
+          },
+          {
+            "id": "asset-40346b38-ddb2-47f5-a605-00c0d0da7c66",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 0
+          },
+          {
+            "id": "asset-96f8cb23-25c6-418a-9f85-61e1cc5520c3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 0
+          },
+          {
+            "id": "asset-d10b4583-3f33-4f5e-bbfc-8968852d5959",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 1
+          },
+          {
+            "id": "asset-4a941f5c-21ec-4bd0-bb19-eebf417c66c7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 1
+          },
+          {
+            "id": "asset-063eaf0a-6f09-48c4-b184-217c9df6c61c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 1
+          },
+          {
+            "id": "asset-d5e36820-c03a-4f23-ba6a-a80c2f63da0e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 1
+          },
+          {
+            "id": "asset-5ffb2c6e-60c1-4104-bd17-b3531c5b463d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 2
+          },
+          {
+            "id": "asset-80ae526d-f9b2-4ec1-8af0-a07f7ca21c5e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 2
+          },
+          {
+            "id": "asset-e6ac806e-6d29-4b85-ba97-31f0d13d1c88",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 2
+          },
+          {
+            "id": "asset-c4346498-fd69-4f77-a6c1-65bc053d5c45",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 2
+          },
+          {
+            "id": "asset-8390d899-8a46-432c-824a-6de8e0a61ce4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 2
+          },
+          {
+            "id": "asset-a824ab31-83a9-47d9-8b4c-604017771781",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 3
+          },
+          {
+            "id": "asset-415b638c-8987-47d7-9be2-4cd7655fc4fd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 3
+          },
+          {
+            "id": "asset-f9d9995b-a964-410e-b4a6-0c6526b5c8fa",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 3
+          },
+          {
+            "id": "asset-c314135c-8bff-414f-9c91-2afe4595cea6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 3
+          },
+          {
+            "id": "asset-9604c57d-f6fb-4fd6-bed7-40b7f6996e5b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 4
+          },
+          {
+            "id": "asset-a7e0b63e-7812-497f-a193-155d3aa31564",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 4
+          },
+          {
+            "id": "asset-b3255f00-c8b6-4654-83d0-dc436032e7a7",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 4
+          },
+          {
+            "id": "asset-56ed40d2-feb5-40ab-83ad-4bc009bbe51c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 4
+          },
+          {
+            "id": "asset-a0e02af8-e02e-4614-b51d-0b57665c91d3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 5
+          },
+          {
+            "id": "asset-492947ca-1b68-4b9e-92cc-bc594aca6178",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 5
+          },
+          {
+            "id": "asset-8eb197af-2209-457f-abbf-17de817a0078",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 5
+          },
+          {
+            "id": "asset-b00f41d5-3e96-46c9-92df-d24a005f428d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 6
+          },
+          {
+            "id": "asset-476f9e81-2d8c-438e-8344-d80436e74ef3",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 6
+          },
+          {
+            "id": "asset-5197d896-b9b9-45d1-847e-0e5129c48186",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 6
+          },
+          {
+            "id": "asset-3e39e7ee-048e-4cba-8f55-d8f88271560f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 7
+          },
+          {
+            "id": "asset-1e83f66f-ddb6-4258-b86e-40221bd3ffe8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 7
+          },
+          {
+            "id": "asset-add19837-deff-417e-ac4d-c3f16069a896",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 7
+          },
+          {
+            "id": "asset-95082b00-0062-48b4-a4f2-4df87885755e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 8
+          },
+          {
+            "id": "asset-53658fb8-7664-4ff9-8c6c-98fad20a0e46",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 8
+          },
+          {
+            "id": "asset-98d489d8-70a2-4db9-bba8-074b78cc817f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 8
+          },
+          {
+            "id": "asset-d72f2b30-9e3b-437d-adf2-0fa748c9dfff",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 9
+          },
+          {
+            "id": "asset-cf69267f-8658-4ddb-974a-0d70a9d6a186",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 9
+          },
+          {
+            "id": "asset-3725a3f6-5d55-42e2-a099-b02d9e5e801c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 9
+          },
+          {
+            "id": "asset-7edd245b-dfc0-4930-8573-35271ec99320",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 10
+          },
+          {
+            "id": "asset-214fc9f3-7081-46cb-92c5-e867c4d6dae2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 10
+          },
+          {
+            "id": "asset-93dcd514-a8bc-4a53-9772-118d83a75f6a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 11
+          },
+          {
+            "id": "asset-b6ec5c5a-33be-4fa4-8e56-4897074c93df",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 11
+          },
+          {
+            "id": "asset-0e2de648-6f69-4626-881a-3eda8cf9e2a6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 11
+          },
+          {
+            "id": "asset-c138f4c7-cc1a-4936-b8db-e08452431f0e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 12
+          },
+          {
+            "id": "asset-32c226b8-10d6-43c5-9582-b84e0b879c75",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 12
+          },
+          {
+            "id": "asset-eeafc62e-cb5c-487e-99c5-d09f67f3b33d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 12
+          },
+          {
+            "id": "asset-76ee4e88-8020-4c75-a4e6-50c9372ab9dd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 13
+          },
+          {
+            "id": "asset-39d6a585-eea6-469e-8ae0-5db4b3eca18a",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 13
+          },
+          {
+            "id": "asset-db0e9a85-2b2b-40ed-a7aa-d19e24c2c9bd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 14
+          },
+          {
+            "id": "asset-cda77926-2669-45ae-b88d-897a10cb5d7f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 14
+          },
+          {
+            "id": "asset-57c99774-17d1-43e0-98c3-76a426d9e63e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 15
+          },
+          {
+            "id": "asset-d1a097b1-bc3a-4df1-b2a6-43daf2d363bd",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 15
+          },
+          {
+            "id": "asset-d4f3a342-1be7-4082-8163-2c6e7b879eab",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 15
+          },
+          {
+            "id": "asset-9e0f8bc0-23f6-4406-8203-13d64c7dee73",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 16
+          },
+          {
+            "id": "asset-3c1be248-5efc-4cbf-8c67-f3e15c4b4786",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 16
+          },
+          {
+            "id": "asset-f3032ef7-5884-488c-8f88-97da541ba88e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 16
+          },
+          {
+            "id": "asset-76c828e8-f10b-4ef7-af2b-823aa5c606d1",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 17
+          },
+          {
+            "id": "asset-cf0565ec-9bf7-4e69-b96e-fef09f61f58f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 17
+          },
+          {
+            "id": "asset-c20ecd3d-c0ee-48c5-96f5-89bf9d755e31",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 17
+          },
+          {
+            "id": "asset-7c4b66a4-d799-43c4-b3a1-082fc5f4f672",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 18
+          },
+          {
+            "id": "asset-7dd04715-fc5e-4cb3-a68f-e730e27dcadb",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 18
+          },
+          {
+            "id": "asset-9c27c8fe-6480-4858-aaca-6760ee734c9c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 18
+          },
+          {
+            "id": "asset-0eaecde3-2b46-48c1-a6cb-98fd0b5cb5c4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 19
+          },
+          {
+            "id": "asset-0d8f2f4a-9c6e-4785-a802-fcdb11653e52",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 19
+          },
+          {
+            "id": "asset-9008f7a4-ab51-4d10-acce-40401279c214",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 19
+          },
+          {
+            "id": "asset-79905df1-6671-4611-8d8d-edc59741723d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 20
+          },
+          {
+            "id": "asset-e98fb905-83d1-405c-b812-ed9bb93a2747",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 20
+          },
+          {
+            "id": "asset-c9a6b9dd-4314-4faf-a447-e45a30cfed82",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 20
+          },
+          {
+            "id": "asset-2026d271-0bca-43c0-8da1-492afed3856e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 20
+          },
+          {
+            "id": "asset-0ae6a48b-680b-4696-8b3c-5bac197db173",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 21
+          },
+          {
+            "id": "asset-a929b51c-a47b-4a75-ae64-15ce1214119f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 21
+          },
+          {
+            "id": "asset-d29dd8cc-b76e-4c1b-9812-c5cd2736b44f",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 21
+          },
+          {
+            "id": "asset-b13b97d4-1dd3-4ac5-add3-cde043ef3c3c",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 21
+          },
+          {
+            "id": "asset-263dfdbb-70f1-4021-b5c6-ff939e84ee71",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 22
+          },
+          {
+            "id": "asset-788f325e-03e5-4acc-b0f5-e93a1f5e5325",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 22
+          },
+          {
+            "id": "asset-2d28d396-804b-4366-a47a-29858545686d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 22
+          },
+          {
+            "id": "asset-91e93e2a-3617-49e4-b1f2-50828bf52551",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 22
+          },
+          {
+            "id": "asset-36eb234a-4df1-4161-a874-5c487701cb88",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 22
+          },
+          {
+            "id": "asset-d5256f54-4469-442a-8fd5-9d778f24b7f4",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 27,
+            "y": 23
+          },
+          {
+            "id": "asset-8c5aed2b-1735-473c-a6cc-731a54c50be2",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 28,
+            "y": 23
+          },
+          {
+            "id": "asset-eb6d5033-2034-48de-b99a-1d35125f5895",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 29,
+            "y": 23
+          },
+          {
+            "id": "asset-9e496d23-6f61-4df0-9908-71fa562f879e",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 23
+          },
+          {
+            "id": "asset-734b957b-ff2e-4218-bc2b-7ac7bf4e8550",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 30,
+            "y": 0
+          },
+          {
+            "id": "asset-6f6ac2d9-359d-44f7-bef1-a4a4d46b4e1d",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 0
+          },
+          {
+            "id": "asset-20cd37b8-e478-41ab-8199-5f23637853b8",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 1
+          },
+          {
+            "id": "asset-885e5868-1913-4a88-891b-8dd2ae12d61b",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 31,
+            "y": 23
+          },
+          {
+            "id": "asset-28e3aa62-63b0-4f35-ab5a-93884a6756f6",
+            "assetId": "pavimento-no-sfondo-1",
+            "x": 0,
+            "y": 0
           }
         ],
         "tiles": [],
         "zones": [],
-        "npcs": [],
+        "npcs": [
+          {
+            "x": 5,
+            "y": 13,
+            "id": "npc-4ecb9cfe-e620-43fc-af47-6fc9d379afe3",
+            "npcKind": "arena-bookmaker",
+            "level": 1
+          }
+        ],
         "dungeons": [],
         "tileChunks": [
           [
