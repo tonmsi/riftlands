@@ -12,7 +12,7 @@ Importa uno o più PNG/SVG. Le immagini vengono conservate in `public/world-asse
 
 Le dimensioni sono in quadratini, anche frazionarie, da 0,25 a 32 per asse. **Mantieni proporzioni** collega larghezza e altezza; disattivalo per dimensionarle separatamente. Le celle occupate sono arrotondate per eccesso. Nell’anteprima ogni cella ha proprietà indipendenti:
 
-- Movimento: calpestabile oppure bloccante. Il terreno sottostante mantiene le sue collisioni: per un ponte sopra acqua va definito anche il percorso calpestabile.
+- Movimento: calpestabile oppure bloccante, sulla superficie dell’istanza. Per un ponte sopra acqua usa una superficie ponte: acqua e percorso superiore rimangono distinti.
 - Visibilità: normale, nascondiglio oppure trasparente al passaggio. Il nascondiglio usa la stessa logica autorevole dei cespugli; la trasparenza non imposta il player come nascosto.
 - **Nascondiglio + trasparenza** combina i due comportamenti. La trasparenza interessa solo le celle marcate: le altre parti dell’immagine conservano la propria opacità. **Opacità residua**, **Sfumatura** (in celle) e **Transizione** (millisecondi) controllano intensità, bordo graduale e ingresso/uscita. **Anteprima trasparenza parziale** mostra la maschera sull’immagine nell’ispettore. La sfumatura resta dentro le celle trasparenti, senza rendere trasparente il tronco o le altre parti opache.
 
@@ -22,7 +22,7 @@ Scegli le due proprietà e dipingi sulle celle, oppure applicale a tutto l’ass
 
 La vista delle celle ha uno zoom indipendente dalla scala dell’asset: rotella attorno al cursore, pulsanti **− / ＋**, **Adatta** per inquadrare griglia e immagine intere, compresi gli sbordi. Spazio + trascina, tasto centrale o destro spostano la vista. **Ingrandisci** apre una vista ampia con gli stessi controlli di movimento, visibilità e anteprima; **Chiudi**, **Riduci** o Escape riportano la vista nell’ispettore. Le celle modificate restano annullabili. **Aggiorna sfumatura** salva i parametri anche dalla vista ingrandita.
 
-**Gruppo catalogo** organizza gli asset in gruppi a un solo livello, indipendenti dalla categoria del generatore. Inserisci un nome o scegli un gruppo già esistente; lascia vuoto per **Senza gruppo**. Le nuove immagini vanno in **Importati**. Ogni gruppo mostra il numero di asset e si apre/chiude dalla sua intestazione; **Espandi tutti / Comprimi tutti** agiscono sull’elenco. La scelta resta nel browser. La ricerca comprende nome, gruppo e categoria e apre temporaneamente i gruppi con risultati. I gruppi chiusi non creano miniature; quelli aperti mostrano 40 asset per volta, con **Mostra altri**.
+**Cartella asset** mostra il gruppo ricavato dal percorso dell’immagine in `public/world-assets`: il campo è in sola lettura. Le sottocartelle compongono il nome del gruppo; **Sincronizza cartelle** riallinea il catalogo alle immagini presenti. Ogni gruppo mostra il numero di asset e si apre/chiude dalla sua intestazione; **Espandi tutti / Comprimi tutti** agiscono sull’elenco. La scelta resta nel browser. La ricerca comprende nome, cartella e categoria e apre temporaneamente i gruppi con risultati. I gruppi chiusi non creano miniature; quelli aperti mostrano 40 asset per volta, con **Mostra altri**.
 
 Aggiornare un asset aggiorna tutte le sue istanze. **Verifica ingombri e riferimenti** segnala, tra l’altro, spawn bloccati e asset dentro dungeon. La validazione è ripetuta sul server locale prima dell’applicazione.
 
@@ -46,6 +46,22 @@ Il mondo non ha larghezza o altezza iniziali. La vista esplora coordinate positi
 Una pennellata è una singola operazione annullabile. Ctrl+Z annulla; Ctrl+Shift+Z ripete. La cronologia è limitata sia nel numero di transazioni sia nella memoria. Le proprietà di collisione e visibilità possono essere mostrate sopra la mappa.
 
 Il raggio del pennello è espresso in celle del mondo, indipendentemente dallo zoom: raggio 16 copre circa 800 celle per impronta. Il contatore sotto la mappa mostra quante celle sono state modificate. I tratti lunghi vengono elaborati a gruppi con un budget di lavoro per fotogramma, mantenendo l’interpolazione e un’unica operazione di undo. La palette mostra gli asset a gruppi e riusa il DOM durante le pennellate.
+
+## Alture, acqua e ponti
+
+Il pannello **Alture, acqua e ponti** offre **Alza +1** e **Abbassa −1**: il pennello conserva materiali, proprietà di passaggio e oggetti ancorati al terreno. **Dipingi livello**, nelle opzioni precise, imposta quota 0–16 e materiali: erba sopra roccia, lastre sopra mattoni e altre combinazioni. Le pareti naturali hanno contorni arrotondati e irregolari; pietra lavorata e mattoni mantengono gli spigoli costruiti. **Ripristina terreno** elimina l’intervento e i suoi accessi. **Terreno** cambia anche il materiale di una superficie rialzata, conservandone quota e pareti.
+
+**Laboratorio alture e ponti ↗** apre una zona di prova separata dal progetto, in cui verificare materiali, scale e passaggi sopra e sotto il ponte.
+
+Per l’acqua scegli **Acqua** come materiale e imposta il livello con **Dipingi livello**. I confini con il terreno producono automaticamente rive, pareti o bordi costruiti secondo materiali e dislivelli. L’acqua rimane non percorribile salvo una proprietà esplicita già impostata.
+
+**Traccia ponte** collega due sponde percorribili allineate e alla stessa altezza: trascina tra gli estremi oppure cliccali. L’anteprima verde o rossa indica la validità. Piano, identificatore e accessi vengono creati insieme e partecipano a un solo undo; terreno e acqua sottostanti restano presenti. Il ponte deve superare il terreno sottostante, oppure attraversare acqua alla stessa quota. **Rimuovi ponte** cancella solo il piano cliccato e gli accessi che terminano sulla cella.
+
+Per scale, rampe o accessi a ponti esistenti scegli **Scala / rampa** e clicca due piani adiacenti. I piani sono dedotti dalla superficie visibile; un passaggio tra superfici diverse alla stessa altezza diventa automaticamente un ingresso ponte. Il collegamento funziona in entrambi i sensi. Un contorno tratteggiato evidenzia la partenza e una linea indica la destinazione. **Annulla primo punto** o Escape annullano il gesto.
+
+Il click seleziona il piano visibile anche per nuovi asset, NPC e spawn. **Mostra sotto i ponti** nasconde ponti e oggetti superiori per modificare il terreno sottostante. Il menu avanzato **Piano per gli oggetti** permette una scelta esplicita con nomi leggibili. Trascinare un oggetto o uno spawn conserva il suo piano. Collisioni, nascondigli e trasparenza valgono per il piano occupato.
+
+La mappa dell’editor usa gli stessi materiali, sagome, pareti e collegamenti del renderer del gioco, con quote proiettate e click sulle superfici visibili. A zoom lontano il terreno di base è campionato, mentre le superfici disegnate mantengono la proiezione. Quote, ponti e accessi partecipano a undo/redo, bozze, importazione ed esportazione. **Roccia naturale** usa il kit ricavato dagli asset forniti; le scale riconoscono la parete rocciosa e mostrano pedate, alzate e bordi coerenti. Il ridisegno dei ponti con asset dedicati resta separato.
 
 ## Generazione e clima
 
@@ -86,6 +102,8 @@ Il crocevia iniziale è migrato nel documento: terreno, zona sicura, esclusione 
 La bozza usa IndexedDB, separata dal progetto applicato. Ogni applicazione usa una revisione del file per impedire che una finestra sovrascriva gli aggiornamenti di un’altra. **Ricarica progetto** sostituisce la bozza con il progetto sul disco; esporta prima se vuoi conservare entrambe le versioni. Una bozza recuperata da una revisione superata deve essere esportata e riconciliata prima di applicarla.
 
 Il formato 2 conserva il terreno in chunk di 32×32 celle, codificati come intervalli di valori uguali. Le aree uniformi costano pochi numeri, senza un oggetto JSON per cella. Il runtime conserva i chunk codificati e decodifica al massimo 128 chunk recenti; l’editor sostituisce soltanto quelli toccati. Undo/redo conservano le differenze tra chunk entro un budget comune di 24 MB. IndexedDB salva i chunk in record separati e riscrive soltanto quelli cambiati, con salvataggi ravvicinati accorpati. Terreno dell’editor e minimappa hanno cache di rendering, indipendenti dai marker in movimento.
+
+I campi opzionali `surfaceCells` e `surfaceLinks` conservano le superfici e i collegamenti senza alterare i chunk del terreno. Le vecchie mappe prive di questi campi rimangono a quota zero sulla superficie `ground`. Asset, NPC e spawn possono conservare `surfaceId` ed `elevation`; lo stesso punto può avere terreno e ponte a quote diverse.
 
 Le bozze e gli archivi del formato 1 vengono convertiti senza perdere terreno o maschere. `node --import tsx scripts/compact-world.ts` converte il file applicato, confronta ogni cella e conserva un backup `.before-chunks-….bak`. Il piccolo file `.format-migration.bak` permette di riconoscere la revisione precedente soltanto quando è cambiata la rappresentazione, e smette di essere valido dopo una modifica dei contenuti. La vecchia bozza IndexedDB viene risalvata automaticamente nel formato a chunk al primo caricamento.
 

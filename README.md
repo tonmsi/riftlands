@@ -8,6 +8,10 @@ La review di rete, mobile e architettura, con misure e priorità, è in [docs/co
 
 Il [World Maker locale](docs/world-maker.md) si avvia con `npm run world:studio`: importa PNG/SVG, definisce ingombri e comportamenti per cella, dipinge terreno e asset sul mondo procedurale e gestisce clima, PvP, ingressi arena e popolazione NPC. I dungeon si costruiscono nel Dungeon Maker e si posizionano nel World Maker.
 
+Il [terreno ibrido con alture e ponti](docs/terrain-surfaces.md) aggiunge texture illustrate, quote, materiali di parete e superfici sovrapposte. `/surface-lab.html?scene=reference` apre una scena locale separata con terrazze, sei scale, un ponte a L/T e percorsi sopra/sotto; il Dungeon Maker include la stessa bozza modificabile. Entrambi gli editor costruiscono scale su più celle e ponti larghi con svolte e prolungamenti.
+
+Le alture accettano [kit PNG con nomi convenzionali](docs/wall-sprite-kits.md) in `public/terrain-walls`: corpo, sommità, piede, fianchi e angoli vengono scelti automaticamente. **Kit PNG delle pareti** cambia il disegno delle superfici negli editor; **Kit parete** permette il confronto nel laboratorio.
+
 ## Avvio
 
 Serve **Node.js 22.12 o successivo** (verificato con Node 24). Nella cartella del progetto:
@@ -43,7 +47,7 @@ La modalità **Segui il cursore** muove il personaggio verso il puntatore mentre
 
 Su dispositivi touch, l'ingresso richiede subito il fullscreen con `navigationUI: 'hide'` e prova a bloccare l'orientamento landscape. Il gioco resta utilizzabile anche in portrait o se il browser rifiuta il fullscreen; il pulsante **Schermo intero** consente di riprovare. Il primo Indietro durante la partita apre la conferma d'uscita. Uscire ripristina scorrimento, orientamento e presentazione del menu. CSS limita overscroll, pull-to-refresh e gesti sulle superfici di gioco; le gesture riservate al sistema operativo e l'effettiva disponibilità del fullscreen rimangono sotto il controllo del browser/dispositivo. `client/ui/game-display.ts` concentra questa integrazione per il futuro wrapper Android.
 
-HUD touch e desktop condividono dati, abilità e cooldown. `client/styles/mobile.css` organizza le aree touch con margini per notch e barre di sistema, pulsanti di almeno 44 px e layout dedicati a portrait, landscape e tablet. Canvas del mondo e minimappa si ridimensionano alla superficie disponibile e alla densità del display (massimo DPR 2). In arena touch la camera segue il personaggio senza rimpicciolire gli attori per far entrare tutta la mappa. **Mostra/Nascondi mappa** funziona anche su PC e salva la preferenza localmente; sui dispositivi touch la mappa è inizialmente nascosta.
+HUD touch e desktop condividono dati, abilità e cooldown. `client/styles/mobile.css` organizza le aree touch con margini per notch e barre di sistema, pulsanti di almeno 44 px e layout dedicati a portrait, landscape e tablet. Canvas del mondo e minimappa si ridimensionano alla superficie disponibile e alla densità del display (DPR massimo 1,25 per il mondo su touch; 1,5 su desktop e per la minimappa). In arena touch la camera segue il personaggio senza rimpicciolire gli attori per far entrare tutta la mappa. **Mostra/Nascondi mappa** funziona anche su PC e salva la preferenza localmente; sui dispositivi touch la mappa è inizialmente nascosta.
 
 | Comando | Azione |
 | --- | --- |

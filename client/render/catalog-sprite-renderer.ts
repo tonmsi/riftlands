@@ -13,7 +13,8 @@ function loadCatalog(): Promise<ActorCatalog> {
 }
 export class CatalogSpriteRenderer {
   private catalog = ACTOR_CATALOG;
-  private readonly sprites = new ActorSpriteRenderer();
+  private readonly sprites: ActorSpriteRenderer;
+  constructor(maxFrameSize = Infinity) { this.sprites = new ActorSpriteRenderer(maxFrameSize); }
   playerDrawSize(classId: ClassId): number { return playerDrawSize(this.catalog, classId); }
   async prepare(): Promise<void> {
     this.catalog = await loadCatalog();

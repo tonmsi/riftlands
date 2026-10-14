@@ -22,6 +22,9 @@ export function relocateDungeon(source: DungeonDefinition, origin: Vec2): Dungeo
   d.additionalEncounters = d.additionalEncounters?.map(e => ({ ...e, passages: passages(e.passages), spawnPoints: spawns(e.spawnPoints), encounter: encounter(e.encounter) }));
   d.npcSpawns = d.npcSpawns?.map(position); d.pickupSpawns = d.pickupSpawns?.map(position);
   d.assetPlacements = d.assetPlacements?.map(tile);
+  d.surfaceCells = d.surfaceCells?.map(tile);
+  d.surfaceStairs = d.surfaceStairs?.map(stair => ({ ...stair, from: tile(stair.from), to: tile(stair.to) }));
+  d.surfaceLinks = d.surfaceLinks?.map(link => ({ ...link, from: tile(link.from), to: tile(link.to) }));
   d.approach = { ...d.approach, from: position(d.approach.from), to: position(d.approach.to) };
   return d;
 }

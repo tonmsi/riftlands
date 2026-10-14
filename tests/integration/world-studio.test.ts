@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromium, expect } from '@playwright/test';
 import { startWorldStudio } from '../../scripts/world-studio-server';
-import { newWorldDocument } from '../../shared/world-schema';
+import { newWorldAsset, newWorldDocument } from '../../shared/world-schema';
 import { acquireDataLease } from '../../server/data-lease';
 import { World } from '../../shared/world';
 
@@ -15,7 +15,7 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
   const document = newWorldDocument();
   for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) document.tiles.push({ x, y, terrain: 'grass' });
   await Promise.all([cp(join(root, 'client'), join(directory, 'client'), { recursive: true }), cp(join(root, 'shared'), join(directory, 'shared'), { recursive: true }),
-    cp(join(root, 'world-maker.html'), join(directory, 'world-maker.html')), mkdir(join(directory, 'public/world-assets'), { recursive: true }),
+    cp(join(root, 'world-maker.html'), join(directory, 'world-maker.html')), cp(join(root, 'public/terrain-textures'), join(directory, 'public/terrain-textures'), { recursive: true }), mkdir(join(directory, 'public/world-assets'), { recursive: true }),
     writeFile(options.documentPath, JSON.stringify(document)), writeFile(options.dungeonPath, '[]')]);
   const studio = await startWorldStudio(options);
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
@@ -31,11 +31,13 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     await page.locator('#asset-files').setInputFiles([{ name: 'Albero.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg) }, { name: 'Pietra.png', mimeType: 'image/png', buffer: png }]);
     await expect(page.locator('#asset-list button')).toHaveCount(2);
     await page.locator('#asset-list button').first().click();
-    await page.locator('#keep-ratio').uncheck(); await page.locator('#asset-width').fill('2'); await page.locator('#asset-height').fill('2'); await page.locator('#asset-group').fill('Natura'); await page.locator('#asset-update').click();
+    await page.locator('#keep-ratio').uncheck(); await page.locator('#asset-width').fill('2'); await page.locator('#asset-height').fill('2');
+    await expect(page.locator('#asset-group')).toHaveAttribute('readonly', ''); await expect(page.locator('#asset-group')).toHaveValue('world-assets');
+    await page.locator('#asset-update').click();
     await page.locator('#assets-collapse').click(); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(0);
-    await page.locator('#asset-list [data-group="Natura"] summary').click(); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(1);
+    await page.locator('#asset-list [data-group="world-assets"] summary').click(); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(2);
     await page.locator('#asset-search').fill('Pietra'); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(1);
-    await page.locator('#asset-search').fill(''); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(1);
+    await page.locator('#asset-search').fill(''); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(2);
     await page.locator('#cell-blocked').selectOption('true'); await page.locator('#cell-visibility').selectOption('normal');
     const grid = (await page.locator('#asset-grid').boundingBox())!, cell = Math.min((grid.width - 28) / 2, (grid.height - 28) / 2);
     const left = grid.x + (grid.width - 2 * cell) / 2, top = grid.y + (grid.height - 2 * cell) / 2;
@@ -88,7 +90,7 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     const saved = JSON.parse(await readFile(options.documentPath, 'utf8'));
     assert.equal(saved.assets.length, 2); assert.equal(saved.assets[0].width, 2); assert.equal(saved.assets[0].cells[0].blocked, true);
     assert.equal(saved.assets[0].cells[1].visibility, 'hide'); assert.equal(saved.assets[0].cells[2].visibility, 'fade');
-    assert.equal(saved.assets[0].cells[3].visibility, 'hide-fade'); assert.equal(saved.assets[0].group, 'Natura'); assert.equal(saved.assets[0].generation.category, 'vegetation');
+    assert.equal(saved.assets[0].cells[3].visibility, 'hide-fade'); assert.equal(saved.assets[0].group, 'Importati'); assert.equal(saved.assets[0].generation.category, 'vegetation');
     assert.equal(saved.assets[0].fade.opacity, .2);
     assert.equal(saved.assets[0].imageTransform.scale, 1.75);
     await page.locator('#asset-list [data-asset="Albero"]').click();
@@ -108,7 +110,7 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
     await page.locator('#world-file').setInputFiles(archivePath); await expect(page.locator('#status')).toContainText('Progetto importato');
     await page.locator('#apply-world').click(); await expect(page.locator('#status')).toContainText('Progetto applicato');
     await page.reload(); await expect(page.locator('#status')).toContainText('World Studio pronto');
-    await expect(page.locator('#asset-list [data-asset]')).toHaveCount(1);
+    await expect(page.locator('#asset-list [data-asset]')).toHaveCount(2);
     await page.locator('#assets-expand').click(); await expect(page.locator('#asset-list [data-asset]')).toHaveCount(2);
     await page.locator('#show-zones').check(); await page.locator('#home').click(); await page.locator('#zoom-out').click(); await expect(page.locator('#zoom-label')).toHaveText('77%');
     await page.locator('#goto').click(); await page.locator('#goto-x').fill('100'); await page.locator('#goto-y').fill('100'); await page.locator('#goto-confirm').click();
@@ -132,6 +134,88 @@ test('offline world editor imports images, edits per-cell behavior, paints areas
       root.remove(); return { initial, paged, collapsed, searched, reused };
     });
     assert.deepEqual(catalog, { initial: 40, paged: 80, collapsed: 0, searched: 1, reused: true });
+    assert.deepEqual(errors, []);
+  } finally { await browser?.close(); await studio.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('world editor authors material heights, water, layered bridges and bidirectional links with undo and persistent surface placement', { timeout: 90_000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'riftlands-world-surfaces-'));
+  const source = resolve('.');
+  const options = { root: directory, port: 0, documentPath: join(directory, 'world.json'), dungeonPath: join(directory, 'dungeons.json'), dataPath: join(directory, 'accounts.json') };
+  const document = newWorldDocument();
+  document.assets = [newWorldAsset('surface-marker', 'Segnaposto ponte', '/world-assets/bush.svg')];
+  for (let y = -8; y <= 8; y++) for (let x = -8; x <= 8; x++) document.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
+  await writeFile(options.documentPath, JSON.stringify(document)); await writeFile(options.dungeonPath, '[]');
+  await Promise.all([cp(join(source, 'client'), join(directory, 'client'), { recursive: true }), cp(join(source, 'shared'), join(directory, 'shared'), { recursive: true }),
+    cp(join(source, 'world-maker.html'), join(directory, 'world-maker.html')), cp(join(source, 'public/terrain-textures'), join(directory, 'public/terrain-textures'), { recursive: true }), mkdir(join(directory, 'public/world-assets'), { recursive: true })]);
+  await writeFile(join(directory, 'public/world-assets/bush.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="15" fill="#66894e"/></svg>');
+  const studio = await startWorldStudio(options);
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  try {
+    browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL ?? 'chrome', headless: true });
+    const page = await browser.newPage({ viewport: { width: 1640, height: 1100 } }), errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
+    const box = (await page.locator('#map').boundingBox())!;
+    const point = (x: number, y: number) => ({ x: box.x + box.width / 2 + (x + .5) * 24, y: box.y + box.height / 2 + (y + .5) * 24 });
+    const click = async (x: number, y = 0, elevation = 0) => { const p = point(x, y - elevation / 3); await page.mouse.click(p.x, p.y); };
+    await page.locator('#brush-radius').fill('0');
+    await page.locator('[data-tool="height"]').click(); await page.locator('#surface-elevation').fill('2');
+    await page.locator('#surface-wall').selectOption('rock'); await click(1);
+    await page.locator('[data-tool="raise-height"]').click(); await click(1, 0, 2);
+    await page.locator('[data-tool="lower-height"]').click(); await click(1, 0, 3);
+    await page.locator('[data-tool="terrain"]').click(); await page.locator('#terrain').selectOption('path'); await click(1, 0, 2);
+    await page.locator('#undo').click(); await page.locator('#redo').click();
+    await page.locator('[data-tool="height"]').click();
+    await page.locator('#surface-material').selectOption('stone'); await page.locator('#surface-wall').selectOption('brick'); await click(5);
+    await page.locator('#surface-elevation').fill('0'); await page.locator('#surface-material').selectOption('water');
+    await click(2); await click(3); await click(4);
+    await page.locator('[data-tool="bridge"]').click();
+    await page.locator('#surface-elevation').fill('2'); await page.locator('#surface-material').selectOption('wood'); await page.locator('#surface-wall').selectOption('wood');
+    const start = point(1, -2 / 3), end = point(5, -2 / 3);
+    await page.mouse.move(start.x, start.y); await page.mouse.down(); await page.mouse.move(end.x, end.y, { steps: 5 }); await page.mouse.up();
+    await expect(page.locator('#map-info')).toContainText('2 accessi');
+    const bridgeId = await page.locator('#placement-surface option').last().getAttribute('value') ?? ''; assert.ok(bridgeId.startsWith('bridge-'));
+    await page.locator('#undo').click(); await expect(page.locator('#map-info')).toContainText('0 accessi');
+    await page.locator('#redo').click(); await expect(page.locator('#map-info')).toContainText('2 accessi');
+    await page.locator('[data-tool="surface-link"]').click(); await page.locator('#surface-link-kind').selectOption('ramp');
+    await click(0); await click(1, 0, 2);
+    // Cancel a pending endpoint and clear a bridge end; undo restores its connector too.
+    await click(4, 0, 2); await page.locator('#surface-link-cancel').click();
+    await page.locator('[data-tool="clear-bridge"]').click(); await click(4, 0, 2); await page.locator('#undo').click();
+    await page.locator('#redo').click(); await page.locator('#undo').click();
+    await expect(page.locator('#placement-surface')).toHaveValue('auto');
+    await page.locator('#asset-list [data-asset="surface-marker"]').click(); await click(3, 0, 2);
+    await page.locator('[data-tool="select"]').click(); await click(3, 0, 2); await expect(page.locator('#entity-surface')).toHaveValue(bridgeId!);
+    await page.locator('[data-tool="npc"]').click(); await click(2, 0, 2);
+    await page.locator('[data-tool="spawn"]').click(); await click(3, 0, 2);
+    await page.locator('#project-settings > summary').click();
+    await page.locator('#validate').click();
+    assert.equal(await page.locator('#issues').innerText(), '', 'layered spawn, NPC and bridge access must validate');
+    await page.locator('#apply-world').click(); await expect(page.locator('#status')).toContainText('Progetto applicato');
+    const saved = JSON.parse(await readFile(options.documentPath, 'utf8'));
+    assert.equal(saved.surfaceCells.length, 8); assert.equal(saved.surfaceLinks.length, 3);
+    assert.ok(saved.surfaceCells.some((cell: any) => cell.x === 5 && cell.material === 'stone' && cell.wallMaterial === 'brick'));
+    assert.ok(saved.surfaceCells.some((cell: any) => cell.x === 1 && cell.surfaceId === 'ground' && cell.elevation === 2 && cell.material === 'path' && cell.wallMaterial === 'rock'), 'sculpting and terrain painting preserve elevation and wall style through undo');
+    assert.ok(saved.surfaceCells.some((cell: any) => cell.x === 3 && cell.surfaceId === 'ground' && cell.material === 'water' && cell.elevation === 0));
+    assert.deepEqual(saved.spawn, { x: 3, y: 0, surfaceId: bridgeId, elevation: 2 });
+    assert.equal(saved.placements[0].surfaceId, bridgeId); assert.equal(saved.placements[0].elevation, 2);
+    assert.equal(saved.npcs[0].surfaceId, bridgeId);
+    const runtime = new World(saved.seed, 16, 'world', saved, []);
+    assert.equal(runtime.isBlocked(3, 0), true); assert.equal(runtime.isBlocked(3, 0, { x: 3 * 48 + 24, y: 24, surfaceId: bridgeId, elevation: 2 }), false);
+    assert.equal(runtime.canTraverse({ x: 72, y: 24, surfaceId: 'ground' }, 120, 24)?.surfaceId, bridgeId);
+    await page.reload(); await expect(page.locator('#status')).toContainText('World Studio pronto');
+    await page.locator('[data-tool="select"]').click();
+    await page.locator('#goto').click(); await page.locator('#goto-x').fill('0'); await page.locator('#goto-y').fill('0'); await page.locator('#goto-confirm').click();
+    await click(2, 0, 2); await expect(page.locator('#entity-surface')).toHaveValue(bridgeId!);
+    await page.locator('#surface-show-under').check(); await expect(page.locator('#placement-surface')).toHaveValue('auto');
+    await page.mouse.move(point(3, 0).x, point(3, 0).y); await expect(page.locator('#coordinates')).toContainText('livello 0');
+    await page.locator('#surface-show-under').uncheck(); await page.mouse.move(point(3, -2 / 3).x, point(3, -2 / 3).y); await expect(page.locator('#coordinates')).toContainText('livello 2');
+    await page.locator('#zoom-out').click(); await page.locator('#zoom-out').click();
+    const scale = 24 / 1.3 / 1.3, low = { x: box.x + box.width / 2 + 2.5 * scale, y: box.y + box.height / 2 + (.5 - 2 / 3) * scale };
+    await page.mouse.click(low.x, low.y); await expect(page.locator('#entity-surface')).toHaveValue(bridgeId!);
+    await page.locator('#zoom-in').click(); await page.locator('#zoom-in').click();
+    await mkdir(join(source, 'artifacts'), { recursive: true }); await page.screenshot({ path: join(source, 'artifacts/world-terrain-friendly.png') });
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); await studio.close(); await rm(directory, { recursive: true, force: true }); }
 });

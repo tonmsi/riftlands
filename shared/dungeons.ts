@@ -8,6 +8,8 @@ import { unpackDungeonCatalog } from './dungeon-storage';
 import { WORLD_DOCUMENT } from './world-content';
 import { relocateDungeon } from './dungeon-relocation';
 import type { AssetPlacement } from './world-schema';
+import { BASE_SURFACE, type SurfaceCell, type SurfaceLink, type SurfaceStair } from './world-surfaces';
+import { parseDungeonSurfaces } from './dungeon-surfaces';
 
 export interface DungeonTileRect { minTx: number; maxTx: number; minTy: number; maxTy: number; }
 export interface DungeonFlameBarrier extends Vec2 { length: number; thickness: number; angle: number; }
@@ -97,6 +99,9 @@ export interface DungeonDefinition {
   pickupSpawns?: readonly Pickup[];
   /** Shared world catalog references, positioned in world tile coordinates. */
   assetPlacements?: readonly AssetPlacement[];
+  surfaceCells?: readonly SurfaceCell[];
+  surfaceLinks?: readonly SurfaceLink[];
+  surfaceStairs?: readonly SurfaceStair[];
   encounter: DungeonEncounterDefinition;
   spawnExclusionMargin: number;
   approach: DungeonApproach;
@@ -109,6 +114,8 @@ export function flameBarrierFromTiles(tiles: readonly Vec2[], singleTileVertical
   const horizontal = tiles.every(tile => tile.y === tiles[0].y);
   if (!vertical && !horizontal) throw new Error('Le tile di una barriera dungeon devono essere allineate.');
   return {
+    ...(tiles[0].surfaceId !== undefined ? { surfaceId: tiles[0].surfaceId } : {}),
+    ...(tiles[0].elevation !== undefined ? { elevation: tiles[0].elevation } : {}),
     x: tiles.reduce((sum, tile) => sum + (tile.x + 0.5) * TILE_SIZE, 0) / tiles.length,
     y: tiles.reduce((sum, tile) => sum + (tile.y + 0.5) * TILE_SIZE, 0) / tiles.length,
     length: tiles.length * TILE_SIZE,
@@ -125,10 +132,10 @@ export function inwardFlameAngle(flame: DungeonFlameBarrier, bounds: DungeonTile
 }
 export const DEFAULT_DUNGEON_THEME: DungeonTheme = { floor: '#918567', wall: '#5c5d52', wallTop: '#92917e', minimap: '#d8bd79', markerStone: '#777864', markerEdge: '#464e42', markerRune: '#d0b97999' };
 
-export const INSTALLED_DUNGEON_DEFINITIONS = unpackDungeonCatalog(customDungeons).map(entry => entry.definition);
+export const INSTALLED_DUNGEON_DEFINITIONS = unpackDungeonCatalog(customDungeons, undefined, false).map(entry => entry.definition);
 const indoorDungeonIds = new Set((WORLD_DOCUMENT.interiors ?? []).flatMap(m => m.document.dungeons.filter(p => p.enabled !== false).map(p => p.dungeonId)));
 export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] =
-  unpackDungeonCatalog(customDungeons).filter(entry => !indoorDungeonIds.has(entry.definition.id) && WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id)?.enabled !== false).map(entry => {
+  unpackDungeonCatalog(customDungeons, undefined, false).filter(entry => !indoorDungeonIds.has(entry.definition.id) && WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id)?.enabled !== false).map(entry => {
     const placement = WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id);
     return placement ? relocateDungeon(entry.definition, placement) : entry.definition;
   });
@@ -263,13 +270,17 @@ export function dungeonFlames(definition: DungeonDefinition): readonly DungeonFl
 }
 
 export function touchesDungeonFlame(definition: DungeonDefinition, position: Vec2, radius = 0): boolean {
-  return dungeonFlames(definition).some(flame => touchesFlame(flame, position, radius));
+  return dungeonFlames(definition).some(flame => dungeonElevationAt(definition, flame) === dungeonElevationAt(definition, position) && touchesFlame(flame, position, radius));
+}
+function dungeonElevationAt(definition: DungeonDefinition, point: Vec2): number {
+  return point.elevation ?? definition.surfaceCells?.find(c => c.x === Math.floor(point.x / TILE_SIZE) && c.y === Math.floor(point.y / TILE_SIZE) && c.surfaceId === (point.surfaceId ?? BASE_SURFACE))?.elevation ?? 0;
 }
 
 export function atDungeonActivation(definition: DungeonDefinition, position: Vec2, radius = 0): boolean {
   return insideDungeonRegion(definition.encounter.regions.trigger, position)
     && insideDungeonRegion(definition.encounter.regions.combat, position, -radius)
-    && (definition.encounter.activationPoints ?? []).some(point => Math.hypot(position.x - point.x, position.y - point.y) <= TILE_SIZE / 2 + radius);
+    && (definition.encounter.activationPoints ?? []).some(point => dungeonElevationAt(definition, point) === dungeonElevationAt(definition, position)
+      && Math.hypot(position.x - point.x, position.y - point.y) <= TILE_SIZE / 2 + radius);
 }
 
 const visitorIndexes = new WeakMap<object, Set<string>>();
@@ -344,7 +355,8 @@ export function isClosedDungeonTile(tx: number, ty: number, lockedBosses: Readon
 }
 
 export function dungeonTileCenter(tile: Vec2): Vec2 {
-  return { x: (tile.x + 0.5) * TILE_SIZE, y: (tile.y + 0.5) * TILE_SIZE };
+  return { x: (tile.x + 0.5) * TILE_SIZE, y: (tile.y + 0.5) * TILE_SIZE,
+    ...(tile.surfaceId !== undefined ? { surfaceId: tile.surfaceId } : {}), ...(tile.elevation !== undefined ? { elevation: tile.elevation } : {}) };
 }
 
 export function touchesFlame(flame: DungeonFlameBarrier, position: Vec2, radius = 0): boolean {
@@ -383,7 +395,15 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   const fail = (message: string): never => { throw new Error(`Dungeon ${definition.id || '<senza id>'}: ${message}`); };
   if (!definition.id || !definition.name || !definition.bossId) fail('id, nome e bossId sono obbligatori.');
   const bounds = definition.layout.bounds;
+  parseDungeonSurfaces(definition, bounds);
   const walkable = (tile: TileKind | undefined) => tile !== undefined && tile !== 'water' && tile !== 'rock';
+  const supported = (point: Vec2): boolean => {
+    const tx = Math.floor(point.x / TILE_SIZE), ty = Math.floor(point.y / TILE_SIZE), id = point.surfaceId ?? BASE_SURFACE;
+    const surface = definition.surfaceCells?.find(c => c.x === tx && c.y === ty && c.surfaceId === id);
+    if (point.elevation !== undefined && (!Number.isInteger(point.elevation) || point.elevation < 0 || point.elevation > 16 || point.elevation !== (surface?.elevation ?? 0))) return false;
+    if (surface) return !(surface.blocked ?? surface.material === 'water');
+    return id === BASE_SURFACE && walkable(dungeonTile(definition, tx, ty));
+  };
   if (![bounds.minTx, bounds.maxTx, bounds.minTy, bounds.maxTy].every(Number.isInteger)
     || bounds.minTx > bounds.maxTx || bounds.minTy > bounds.maxTy) fail('limiti della mappa non validi.');
   if (!finitePoint(definition.area) || !Number.isFinite(definition.area.radius) || definition.area.radius <= 0) fail('area mondo non valida.');
@@ -400,8 +420,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   if (!finitePoint(definition.spawnPoints.boss) || !Array.isArray(definition.spawnPoints.party)
     || definition.spawnPoints.party.some(point => !finitePoint(point))) fail('spawn boss/party non validi.');
   for (const [name, point] of [['boss', definition.spawnPoints.boss], ...definition.spawnPoints.party.map((point, index) => [`party ${index}`, point] as const)] as const) {
-    const tx = Math.floor(point.x / TILE_SIZE), ty = Math.floor(point.y / TILE_SIZE);
-    if (!definition.noEncounters && !walkable(dungeonTile(definition, tx, ty))) fail(`spawn ${name} sopra una tile solida o fuori mappa.`);
+    if (!definition.noEncounters && !supported(point)) fail(`spawn ${name} sopra una tile solida o fuori mappa.`);
   }
   const paintedKeys = new Set<string>();
   for (const tile of definition.layout.tiles ?? []) {
@@ -416,13 +435,13 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   for (const pickup of definition.pickupSpawns ?? []) {
     if (!pickup || !pickup.id || pickupIds.has(pickup.id) || !finitePoint(pickup)
       || !['heal', 'haste', 'power', 'weakness'].includes(pickup.kind) || pickup.radius !== 12
-      || !walkable(dungeonTile(definition, Math.floor(pickup.x / TILE_SIZE), Math.floor(pickup.y / TILE_SIZE)))) fail('bonus non valido o su terreno solido.');
+      || !supported(pickup)) fail('bonus non valido o su terreno solido.');
     pickupIds.add(pickup.id);
   }
   for (const npc of definition.npcSpawns ?? []) {
     if (!npc.id || npcIds.has(npc.id) || !Object.hasOwn(NPC_DEFINITIONS, npc.npcKind) || !finitePoint(npc)
       || !Number.isInteger(npc.level) || npc.level < 1 || npc.level > 25
-      || !walkable(dungeonTile(definition, Math.floor(npc.x / TILE_SIZE), Math.floor(npc.y / TILE_SIZE)))) fail('spawn NPC non valido.');
+      || !supported(npc)) fail('spawn NPC non valido.');
     npcIds.add(npc.id);
     if (npc.settings !== undefined && !validNpcSettings(npc.settings)) fail('proprietà NPC non valide.');
   }
@@ -433,7 +452,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
   if (!Array.isArray(activationPoints) || activationPoints.length > 500
     || activationPoints.some(point => !finitePoint(point)
       || !insideDungeonRegion(definition.encounter.regions.trigger, point)
-      || !walkable(dungeonTile(definition, Math.floor(point.x / TILE_SIZE), Math.floor(point.y / TILE_SIZE))))) fail('punti di attivazione non validi.');
+      || !supported(point))) fail('punti di attivazione non validi.');
   const visitorTiles = definition.encounter.visitorTiles ?? [], visitorKeys = new Set<string>();
   if (!Array.isArray(visitorTiles) || visitorTiles.length > (bounds.maxTx-bounds.minTx+1)*(bounds.maxTy-bounds.minTy+1)
     || visitorTiles.some(p => !p || !Number.isInteger(p.x) || !Number.isInteger(p.y) || !insideRect(p.x,p.y,bounds)
@@ -447,7 +466,7 @@ export function assertValidDungeonDefinition(definition: DungeonDefinition): voi
     if (!finitePoint(passage.position) || !passage.tiles.length) fail(`passaggio ${passage.id} senza posizione o tile.`);
     for (const tile of passage.tiles) {
       if (!Number.isInteger(tile.x) || !Number.isInteger(tile.y) || !insideRect(tile.x, tile.y, bounds)) fail(`tile fuori mappa nel passaggio ${passage.id}.`);
-      if (!walkable(dungeonTile(definition, tile.x, tile.y))) fail(`il passaggio ${passage.id} occupa una tile solida.`);
+      if (!supported({ ...tile, x: (tile.x + .5) * TILE_SIZE, y: (tile.y + .5) * TILE_SIZE })) fail(`il passaggio ${passage.id} occupa una tile solida.`);
       const key = tileKey(tile), previous = passageTiles.get(key);
       if (previous) fail(`i passaggi ${previous} e ${passage.id} condividono la tile ${key}.`);
       passageTiles.set(key, passage.id);

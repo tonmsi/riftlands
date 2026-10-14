@@ -3,28 +3,40 @@ import { spriteDirectionRow } from '../shared/sprite-direction';
 import type { Actor, Vec2 } from '../shared/types';
 import type { BossAttackDefinition, BossDefinition, BossLockState, BossPreparationState, BossState, BossWindup } from '../shared/bosses';
 import { DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, BOSS_WAKE_MS } from '../shared/bosses';
-import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, segmentCircleHit } from '../shared/physics';
+import { collidesWorld, hasLineOfSight, moveWithCollisions, moveWalkingWithCollisions, movementSpeed, segmentCircleHit } from '../shared/physics';
+import { walkingStepDistance } from '../shared/stair-walking';
 import type { World } from '../shared/world';
 import { DUNGEON_BY_BOSS_ID, clampToDungeonRegion, insideDungeonRegion, insideDungeonVisitorArea, touchesDungeonFlame, atDungeonActivation } from '../shared/dungeons';
 import type { DungeonDefinition } from '../shared/dungeons';
 import type { Account } from './store';
 import type { GameplayPersistence } from './gameplay-persistence';
+import { BASE_SURFACE, copySurfacePoint } from '../shared/world-surfaces';
+
+function placeOnSurface(body: Vec2, point: Vec2, world?: World): void {
+  delete body.surfaceId; delete body.elevation;
+  Object.assign(body, point, world ? world.surfaceState(point) : copySurfacePoint(point));
+}
 
 /** Verifica se il volume fisico del boss (con margine di sicurezza) può passare in linea retta senza ostacoli. */
 export function canWalkDirectly(from: Vec2, to: Vec2, radius: number, world: World, dungeon: DungeonDefinition): boolean {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const distance = Math.hypot(dx, dy);
-  if (distance <= 1) return true;
+  if (distance <= 1) return world.sameLevel(from, to) && (from.surfaceId ?? BASE_SURFACE) === (to.surfaceId ?? BASE_SURFACE);
   const steps = Math.max(1, Math.ceil(distance / 12));
+  let previous = from;
   for (let i = 1; i <= steps; i++) {
     const t = i / steps;
     const x = from.x + dx * t;
     const y = from.y + dy * t;
     if (!insideDungeonRegion(dungeon.encounter.regions.bossLeash, { x, y }, -radius - 4)) return false;
-    if (collidesWorld(x, y, radius, world)) return false;
+    const support = world.canTraverse(previous, x, y);
+    if (!support) return false;
+    const point = { x, y, surfaceId: support.surfaceId, elevation: support.elevation };
+    if (collidesWorld(x, y, radius, world, point)) return false;
+    previous = point;
   }
-  return true;
+  return world.sameLevel(previous, to) && (previous.surfaceId ?? BASE_SURFACE) === (to.surfaceId ?? BASE_SURFACE);
 }
 
 /** Shared runtime for data-defined bosses. Unique mechanics can extend this class later without duplicating its lifecycle. */
@@ -36,7 +48,6 @@ export class BossEncounter {
   readonly state: BossState;
   windup?: BossWindup;
   private group: BossEncounter[] = [this];
-  private killedBy?: string;
   private engaged = false;
   private readonly reentryBlocked = new Set<string>();
   private lifecycle: { ownerId?: string; startedAt?: number; preparation?: { initiatorId: string; teamId: string | null; startedAt: number; endsAt: number; aggroBossIds: string[] }; preparationEntrants: number; participants: Set<string>; prepared: Set<string>; eliminated: Set<string> } = { preparationEntrants: 0, participants: new Set(), prepared: new Set(), eliminated: new Set() };
@@ -74,6 +85,7 @@ export class BossEncounter {
     this.boss = {
       id: definition.id, bossKey: definition.id, bossSkin: definition.skin, name: definition.name, kind: 'npc', npcKind: 'boss', classId: definition.classId,
       x: dead ? this.state.corpse.x : spawn.x, y: dead ? this.state.corpse.y : spawn.y,
+      ...copySurfacePoint(dead ? this.state.corpse : spawn),
       radius: definition.radius, hp: dead ? 0 : definition.hp, maxHp: definition.hp, resource: 0, maxResource: 100, aim: Math.PI / 2,
       speed: definition.speed, level: definition.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0,
       deadUntil: dead ? this.state.respawnAt : 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 },
@@ -99,7 +111,7 @@ export class BossEncounter {
   private belongsToPreparation(player: Actor): boolean {
     return !!this.preparation && (this.preparation.teamId ? player.teamId === this.preparation.teamId : player.id === this.preparation.initiatorId && !player.teamId);
   }
-  canDamage(attacker: Actor | undefined): boolean { return !!attacker && attacker.kind === 'player' && this.isActiveParticipant(attacker.id); }
+  canDamage(attacker: Actor | undefined): boolean { return !!attacker && attacker.kind === 'player' && this.isActiveParticipant(attacker.id) && (attacker.elevation ?? 0) === (this.boss.elevation ?? 0); }
   hasParticipant(id: string): boolean { return this.participantIds.has(id); }
   isActiveParticipant(id: string): boolean { return this.participantIds.has(id) && !this.eliminatedIds.has(id); }
   isEliminated(id: string): boolean { return this.eliminatedIds.has(id); }
@@ -118,14 +130,13 @@ export class BossEncounter {
     }
   }
   private detects(player: Actor, world: World): boolean {
-    if (!world.sameRoom(player, this.boss)) return false;
+    if (!world.sameRoom(player, this.boss) || !world.sameLevel(player, this.boss)) return false;
     return insideDungeonRegion(this.dungeon.encounter.regions.combat, player, -player.radius)
       && insideDungeonRegion(this.dungeon.encounter.regions.bossAggro, player);
   }
 
   killed(ownerId: string | undefined, now: number, world: World): { id: string; xp: number }[] {
     if (this.state.respawnAt > now || !ownerId || !this.participantIds.has(ownerId)) return [];
-    this.killedBy = ownerId;
     this.windup = undefined;
     if (this.group.some(member => member.boss.hp > 0)) return [];
     const respawnAt = now + Math.max(...this.group.map(member => member.definition.respawnMs));
@@ -140,7 +151,7 @@ export class BossEncounter {
     this.resetPath();
     this.state.respawnAt = respawnAt;
     this.boss.deadUntil = respawnAt;
-    this.state.corpse = { x: this.boss.x, y: this.boss.y };
+    this.state.corpse = { x: this.boss.x, y: this.boss.y, ...copySurfacePoint(this.boss) };
     this.state.drops = this.state.drops.filter(drop => drop.expiresAt > now);
     const recipients = [...this.participantIds], share = Math.floor(this.definition.reward.gold / recipients.length);
     if (share > 0) for (const recipient of recipients) this.state.drops.push({ id: randomUUID(), bossId: this.definition.id, ownerId: recipient, amount: share,
@@ -149,7 +160,7 @@ export class BossEncounter {
 
   collect(player: Actor, account: Account, connected: boolean, now: number, world?: World): void {
     if (!connected || player.hp <= 0) return;
-    const collectible = this.state.drops.filter(drop => (!world || world.sameRoom(player, drop)) && drop.ownerId === player.id && drop.availableAt <= now && drop.expiresAt > now
+    const collectible = this.state.drops.filter(drop => (!world ? (player.elevation ?? 0) === (drop.elevation ?? 0) : world.sameRoom(player, drop) && world.sameLevel(player, drop)) && drop.ownerId === player.id && drop.availableAt <= now && drop.expiresAt > now
       && Math.hypot(player.x - drop.x, player.y - drop.y) <= player.radius + 18);
     if (!collectible.length) return;
     const gold = (account.gold ?? 0) + collectible.reduce((sum, drop) => sum + drop.amount, 0);
@@ -164,6 +175,7 @@ export class BossEncounter {
 
   step(now: number, dt: number, players: Actor[], connected: (id: string) => boolean, world: World, damage: (target: Actor, amount: number) => void): void {
     const boss = this.boss;
+    Object.assign(boss, world.surfaceState(boss));
     boss.spriteMoving = false;
     if (this.state.drops.some(drop => drop.expiresAt <= now)) {
       this.state.drops = this.state.drops.filter(drop => drop.expiresAt > now);
@@ -173,7 +185,8 @@ export class BossEncounter {
       if (this.ownerId && this.group.some(member => member.boss.hp > 0)) return;
       this.unlock(world);
       if (now < this.state.respawnAt) return;
-      Object.assign(boss, { ...this.dungeon.spawnPoints.boss, hp: this.definition.hp, deadUntil: 0, effects: [] });
+      placeOnSurface(boss, this.dungeon.spawnPoints.boss, world);
+      Object.assign(boss, { hp: this.definition.hp, deadUntil: 0, effects: [] });
       this.resetVersion++;
       this.state.respawnAt = 0; this.nextAttack = now + 1500; this.attackIndex = 0; this.resetPath();
       this.save();
@@ -280,6 +293,7 @@ export class BossEncounter {
       return;
     }
     const windup: BossWindup = { bossId: this.definition.id, kind: attack.kind, x: boss.x, y: boss.y, radius: attack.radius,
+      ...copySurfacePoint(boss),
       damage: attack.damage, startedAt: now, resolvesAt: now + attack.windupMs, innerRadius: attack.innerRadius };
     if (attack.kind === 'charge') {
       const length = Math.min(attack.travel ?? 250, Math.max(115, distance + 35));
@@ -294,13 +308,13 @@ export class BossEncounter {
     if (now < windup.resolvesAt) return;
     if (windup.kind === 'charge') {
       const target = { x: windup.targetX ?? windup.x, y: windup.targetY ?? windup.y };
-      const dx = target.x - this.boss.x, dy = target.y - this.boss.y, start = { x: this.boss.x, y: this.boss.y };
+      const dx = target.x - this.boss.x, dy = target.y - this.boss.y, start = { x: this.boss.x, y: this.boss.y, ...copySurfacePoint(this.boss) };
       this.moveBody(moveWithCollisions(this.boss, dx, dy, Math.hypot(dx, dy), world));
-      for (const player of players) if (segmentCircleHit(start, this.boss, player, windup.radius + player.radius) !== null) damage(player, windup.damage);
+      for (const player of players) if (world.sameRoom(player, windup) && world.sameLevel(player, windup) && world.sameLevel(this.boss, windup) && segmentCircleHit(start, this.boss, player, windup.radius + player.radius) !== null) damage(player, windup.damage);
     } else {
       for (const player of players) {
         const distance = Math.hypot(player.x - windup.x, player.y - windup.y);
-        if (distance > windup.radius + player.radius || distance < (windup.innerRadius ?? 0) - player.radius) continue;
+        if (!world.sameLevel(player, windup) || distance > windup.radius + player.radius || distance < (windup.innerRadius ?? 0) - player.radius) continue;
         if (hasLineOfSight(windup, player, world)) damage(player, windup.damage);
       }
     }
@@ -339,7 +353,7 @@ export class BossEncounter {
     const waypointRadius = Math.max(28, this.boss.radius + 6);
     while (this.path.length) {
       const distToCurrent = Math.hypot(this.path[0].x - this.boss.x, this.path[0].y - this.boss.y);
-      if (distToCurrent < waypointRadius) {
+      if (distToCurrent < waypointRadius && world.sameLevel(this.boss, this.path[0]) && (this.boss.surfaceId ?? BASE_SURFACE) === (this.path[0].surfaceId ?? BASE_SURFACE)) {
         this.path.shift();
         continue;
       }
@@ -357,15 +371,17 @@ export class BossEncounter {
 
     // Calcoliamo la distanza prima del movimento per misurare il progresso REALE verso il waypoint
     const distBefore = Math.hypot(waypoint.x - this.boss.x, waypoint.y - this.boss.y);
-    this.moveBody(moveWithCollisions(this.boss, Math.cos(angle), Math.sin(angle), movementSpeed(this.boss, now) * speed * dt, world));
+    const budget = movementSpeed(this.boss, now) * speed * dt;
+    const expectedStride = walkingStepDistance(this.boss, Math.cos(angle), Math.sin(angle), budget, world);
+    this.moveBody(moveWalkingWithCollisions(this.boss, Math.cos(angle), Math.sin(angle), budget, world));
     const distAfter = Math.hypot(waypoint.x - this.boss.x, waypoint.y - this.boss.y);
 
     // Se struscia lateralmente contro una roccia, il progresso verso il waypoint è nullo o negativo!
     const progress = distBefore - distAfter;
     const unstuck = this.definition.behavior.unstuck ?? { afterMs: 500, durationMs: 450, probeDistance: 48 };
-    const minExpectedProgress = movementSpeed(this.boss, now) * speed * dt * 0.25;
+    const minExpectedProgress = expectedStride * 0.25;
 
-    if (progress > Math.max(0.4, minExpectedProgress)) {
+    if (progress > Math.max(Math.min(0.4, expectedStride * 0.1), minExpectedProgress)) {
       this.stalledSince = undefined;
       return false;
     }
@@ -404,7 +420,7 @@ export class BossEncounter {
     if (now >= this.unstuckUntil) return false;
     this.boss.aim = this.unstuckAngle;
     const distance = movementSpeed(this.boss, now) * dt;
-    this.moveBody(moveWithCollisions(this.boss, Math.cos(this.unstuckAngle), Math.sin(this.unstuckAngle), distance, world));
+    this.moveBody(moveWalkingWithCollisions(this.boss, Math.cos(this.unstuckAngle), Math.sin(this.unstuckAngle), distance, world));
     return true;
   }
 
@@ -441,7 +457,7 @@ export class BossEncounter {
     return this.definition.attacks.find(candidate => candidate.kind === 'charge' && distance <= candidate.range);
   }
   private clampToLeash(point: Vec2): Vec2 {
-    return clampToDungeonRegion(this.dungeon.encounter.regions.bossLeash, this.boss, point, -this.definition.radius - 14);
+    return { ...copySurfacePoint(point), ...clampToDungeonRegion(this.dungeon.encounter.regions.bossLeash, this.boss, point, -this.definition.radius - 14) };
   }
   private beginEncounter(leader: Actor, entrants: Actor[], now: number, world: World, aggroBossIds: string[] = []): void {
     this.ownerId = leader.id;
@@ -464,13 +480,13 @@ export class BossEncounter {
     });
     const bossSpawns = this.group.map(member => member.safeSpawn(member.boss, member.boss.radius, world));
     if (partySpawns.some(spawn => !spawn) || bossSpawns.some(spawn => !spawn)) { this.fail(world); return; }
-    entrants.forEach((entrant, index) => Object.assign(entrant, partySpawns[index]));
-    this.group.forEach((member, index) => Object.assign(member.boss, bossSpawns[index]));
+    entrants.forEach((entrant, index) => placeOnSurface(entrant, partySpawns[index]!, world));
+    this.group.forEach((member, index) => placeOnSurface(member.boss, bossSpawns[index]!, world));
     for (const member of this.group) member.nextAttack = Math.max(member.nextAttack, now + DUNGEON_ARRIVAL_MS);
   }
   private safeSpawn(preferred: Vec2, radius: number, world: World): Vec2 | undefined {
     const safe = (point: Vec2) => world.sameRoom(preferred, point) && insideDungeonRegion(this.dungeon.encounter.regions.combat, point, -radius)
-      && !collidesWorld(point.x, point.y, radius, world) && !touchesDungeonFlame(this.dungeon, point, radius);
+      && !collidesWorld(point.x, point.y, radius, world, point) && !touchesDungeonFlame(this.dungeon, point, radius);
     if (safe(preferred)) return preferred;
     const bounds = this.dungeon.layout.bounds, tx = Math.floor(preferred.x / 48), ty = Math.floor(preferred.y / 48);
     const limit = Math.max(bounds.maxTx - bounds.minTx, bounds.maxTy - bounds.minTy);
@@ -479,7 +495,9 @@ export class BossEncounter {
       for (let x = Math.max(bounds.minTx, tx - ring); x <= Math.min(bounds.maxTx, tx + ring); x++)
         for (let y = Math.max(bounds.minTy, ty - ring); y <= Math.min(bounds.maxTy, ty + ring); y++) {
           if (Math.max(Math.abs(x - tx), Math.abs(y - ty)) !== ring) continue;
-          const point = { x: (x + .5) * 48, y: (y + .5) * 48 };
+          const point = { x: (x + .5) * 48, y: (y + .5) * 48, ...copySurfacePoint(preferred) };
+          if (!world.surfaceFor(point)) continue;
+          Object.assign(point, world.surfaceState(point));
           if (safe(point)) candidates.push(point);
         }
       candidates.sort((a, b) => Math.hypot(a.x - preferred.x, a.y - preferred.y) - Math.hypot(b.x - preferred.x, b.y - preferred.y));
@@ -490,7 +508,7 @@ export class BossEncounter {
   private cancelPreparation(): void { this.preparation = undefined; this.preparationEntrants = 0; this.preparedIds.clear(); }
   private eject(player: Actor, world: World): void {
     if (!world.sameRoom(player, this.dungeon.encounter.ejectTo)) return;
-    Object.assign(player, this.dungeon.encounter.ejectTo);
+    placeOnSurface(player, this.dungeon.encounter.ejectTo, world);
   }
   private fail(world: World): void { for (const member of this.group) { member.resetVersion++; member.resetFight(); member.state.respawnAt = 0; } this.unlock(world); }
   private resetFight(): void {
@@ -498,8 +516,8 @@ export class BossEncounter {
     this.boss.bossAwakenedAt = undefined;
     this.boss.bossMeleeAt = undefined;
     this.boss.bossDiedAt = undefined;
-    this.killedBy = undefined;
-    Object.assign(this.boss, { ...this.dungeon.spawnPoints.boss, hp: this.definition.hp, deadUntil: 0, effects: [] });
+    placeOnSurface(this.boss, this.dungeon.spawnPoints.boss);
+    Object.assign(this.boss, { hp: this.definition.hp, deadUntil: 0, effects: [] });
     this.windup = undefined; this.nextAttack = 0; this.attackIndex = 0; this.resetPath(); this.resetStallTimer(); this.lastUnstuckSector = -1;
   }
   private unlock(world: World): void {
@@ -515,86 +533,95 @@ export class BossEncounter {
 /** Bounded A* su griglia con respingimento dagli ostacoli per curve larghe. */
 export function findBossPath(definition: BossDefinition, start: Vec2, goal: Vec2, world: World, dungeon = DUNGEON_BY_BOSS_ID.get(definition.id)): Vec2[] {
   if (!dungeon) return [];
-  const toTile = (point: Vec2) => ({ tx: Math.floor(point.x / 48), ty: Math.floor(point.y / 48) });
+  type Node = { tx: number; ty: number; surfaceId: string; elevation: number };
+  const toTile = (point: Vec2): Node => ({ tx: Math.floor(point.x / 48), ty: Math.floor(point.y / 48), surfaceId: point.surfaceId ?? BASE_SURFACE, elevation: world.elevationAt(point) });
+  const center = (node: Node): Vec2 => ({ x: node.tx * 48 + 24, y: node.ty * 48 + 24,
+    ...(world.surfaceIndex.hasSurfaces || node.surfaceId !== BASE_SURFACE ? { surfaceId: node.surfaceId, elevation: node.elevation } : {}) });
   
   // Distanzia i waypoint dalle rocce adiacenti per evitare che il raggio (28px) le tocchi
-  const getPaddedCenter = (tx: number, ty: number): Vec2 => {
+  const getPaddedCenter = (node: Node): Vec2 => {
+    const { tx, ty } = node, support = center(node);
     let px = tx * 48 + 24;
     let py = ty * 48 + 24;
     const offset = Math.max(6, definition.radius - 20); // Spinta all'esterno (8px per raggio 28)
 
-    if (collidesWorld((tx - 1) * 48 + 24, ty * 48 + 24, 16, world)) px += offset;
-    if (collidesWorld((tx + 1) * 48 + 24, ty * 48 + 24, 16, world)) px -= offset;
-    if (collidesWorld(tx * 48 + 24, (ty - 1) * 48 + 24, 16, world)) py += offset;
-    if (collidesWorld(tx * 48 + 24, (ty + 1) * 48 + 24, 16, world)) py -= offset;
+    if (collidesWorld((tx - 1) * 48 + 24, ty * 48 + 24, 16, world, support)) px += offset;
+    if (collidesWorld((tx + 1) * 48 + 24, ty * 48 + 24, 16, world, support)) px -= offset;
+    if (collidesWorld(tx * 48 + 24, (ty - 1) * 48 + 24, 16, world, support)) py += offset;
+    if (collidesWorld(tx * 48 + 24, (ty + 1) * 48 + 24, 16, world, support)) py -= offset;
 
-    return { x: px, y: py };
+    return { ...support, x: px, y: py };
   };
 
-  const valid = (tx: number, ty: number): boolean => {
-    const point = { x: tx * 48 + 24, y: ty * 48 + 24 };
+  const valid = (node: Node): boolean => {
+    const point = center(node);
     return insideDungeonRegion(dungeon.encounter.regions.bossLeash, point, -8)
-      && !collidesWorld(point.x, point.y, 16, world);
+      && !collidesWorld(point.x, point.y, 16, world, point);
   };
 
   const nearest = (point: Vec2) => {
     const base = toTile(point);
-    if (valid(base.tx, base.ty)) return base;
+    if (valid(base)) return base;
     for (let radius = 1; radius <= 6; radius++) {
-      let best: { tx: number; ty: number; dist: number } | undefined;
+      let best: Node & { dist: number } | undefined;
       for (let dx = -radius; dx <= radius; dx++) {
         for (let dy = -radius; dy <= radius; dy++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
           const tx = base.tx + dx, ty = base.ty + dy;
-          if (valid(tx, ty)) {
+          const support = world.surfaceAt(tx, ty, base.surfaceId);
+          if (!support || support.elevation !== base.elevation) continue;
+          const node = { tx, ty, surfaceId: support.surfaceId, elevation: support.elevation };
+          if (valid(node)) {
             const p = { x: tx * 48 + 24, y: ty * 48 + 24 };
             const dist = Math.hypot(p.x - point.x, p.y - point.y);
-            if (!best || dist < best.dist) best = { tx, ty, dist };
+            if (!best || dist < best.dist) best = { ...node, dist };
           }
         }
       }
-      if (best) return { tx: best.tx, ty: best.ty };
+      if (best) return { tx: best.tx, ty: best.ty, surfaceId: best.surfaceId, elevation: best.elevation };
     }
     return undefined;
   };
 
   const from = nearest(start), to = nearest(goal);
   if (!from || !to) return [];
-  if (from.tx === to.tx && from.ty === to.ty) return [];
+  if (from.tx === to.tx && from.ty === to.ty && from.surfaceId === to.surfaceId && from.elevation === to.elevation) return [];
 
-  const key = (tx: number, ty: number) => `${tx},${ty}`;
-  const open = [{ ...from, score: 0 }], came = new Map<string, string>(), cost = new Map([[key(from.tx, from.ty), 0]]);
-  const coords = new Map([[key(from.tx, from.ty), from]]);
+  const key = (node: Node) => `${node.tx},${node.ty}@${node.surfaceId}:${node.elevation}`;
+  const open = [{ ...from, score: 0 }], came = new Map<string, string>(), cost = new Map([[key(from), 0]]);
+  const coords = new Map([[key(from), from]]);
 
   for (let visited = 0; open.length && visited < 600; visited++) {
     open.sort((a, b) => a.score - b.score);
     const current = open.shift()!;
-    if (current.tx === to.tx && current.ty === to.ty) {
+    if (key(current) === key(to)) {
       const result: Vec2[] = []; 
-      let cursor = key(to.tx, to.ty);
-      while (cursor !== key(from.tx, from.ty)) { 
+      let cursor = key(to);
+      while (cursor !== key(from)) {
         const node = coords.get(cursor)!; 
-        result.unshift(getPaddedCenter(node.tx, node.ty)); 
+        result.unshift(getPaddedCenter(node));
         cursor = came.get(cursor)!; 
       }
       return smoothBossPath(definition, dungeon, start, result, world);
     }
-    const baseCost = cost.get(key(current.tx, current.ty))!;
+    const baseCost = cost.get(key(current))!;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       const tx = current.tx + dx, ty = current.ty + dy;
-      if (!valid(tx, ty)) continue;
-      if (dx && dy && (!valid(current.tx + dx, current.ty) && !valid(current.tx, current.ty + dy))) continue;
+      const support = world.canTraverse(center(current), tx * 48 + 24, ty * 48 + 24);
+      if (!support) continue;
+      const node = { tx, ty, surfaceId: support.surfaceId, elevation: support.elevation };
+      if (!valid(node)) continue;
       
-      const nextKey = key(tx, ty);
+      const nextKey = key(node);
       const nextCost = baseCost + (dx && dy ? Math.SQRT2 : 1);
       if (nextCost >= (cost.get(nextKey) ?? Infinity)) continue;
       
       cost.set(nextKey, nextCost); 
-      came.set(nextKey, key(current.tx, current.ty)); 
-      coords.set(nextKey, { tx, ty });
+      came.set(nextKey, key(current));
+      coords.set(nextKey, node);
       
       const hx = Math.abs(to.tx - tx), hy = Math.abs(to.ty - ty);
-      open.push({ tx, ty, score: nextCost + Math.max(hx, hy) + (Math.SQRT2 - 1) * Math.min(hx, hy) });
+      open.push({ ...node, score: nextCost + Math.max(hx, hy) + (Math.SQRT2 - 1) * Math.min(hx, hy) });
     }
   }
   return [];

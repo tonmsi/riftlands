@@ -2,10 +2,12 @@ import { sweptWorldHit } from '../shared/projectiles';
 export { sweptWorldHit } from '../shared/projectiles';
 import { randomUUID } from '../shared/id';
 import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, levelFromXp } from '../shared/config';
-import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
+import { collidesWorld, hasLineOfSight, moveWithCollisions, moveWalkingWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
 import { playerSpriteDirectionRow } from '../shared/sprite-direction';
 import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2, RoomMode } from '../shared/types';
 import { World, chunkCoords, chunkKey, coordinateHash } from '../shared/world';
+import { copySurfacePoint } from '../shared/world-surfaces';
+import { findSurfacePath } from '../shared/surface-navigation';
 import { OUTPOST } from '../shared/outpost';
 import { BOSS_BY_ID, type BossDefinition } from '../shared/bosses';
 import { DUNGEON_BY_BOSS_ID, insideDungeon, type DungeonDefinition } from '../shared/dungeons';
@@ -27,8 +29,8 @@ import { DEVELOPER_XP, equippedAbility, normalizeLoadout } from '../shared/progr
 const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
 const copyActor = (actor: Actor): Actor => ({ ...actor, ...(actor.loadout ? { loadout: { ...actor.loadout } } : {}), effects: actor.effects.map(effect => ({ ...effect })), cooldowns: { ...actor.cooldowns } });
-type Connection = { account: Account; connected: boolean; removeAt: number; inputs: InputCommand[]; ack: number; highestSeq: number; combatAt: number; combatUntil?: number };
-type NpcMeta = { settings?: import('../shared/npc-settings').NpcSettings; home: Vec2; chunk: string; nextAttack: number; aggroTargetId?: string; windup?: { targetId: string; readyAt: number }; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
+type Connection = { account: Account; connected: boolean; removeAt: number; inputs: InputCommand[]; movementInput?: InputCommand; ack: number; highestSeq: number; combatAt: number; combatUntil?: number };
+type NpcMeta = { settings?: import('../shared/npc-settings').NpcSettings; home: Vec2; chunk: string; nextAttack: number; aggroTargetId?: string; windup?: { targetId: string; readyAt: number }; wander?: { destination?: Vec2; nextAt: number; sequence: number }; route?: { key: string; until: number; path?: Vec2[] } };
 type ActiveChunk = { key: string; lastUsed: number; npcIds: string[]; pickupIds: string[] };
 type Team = { id: string; leaderId: string; members: Set<string> };
 type Invite = { fromId: string; teamId: string; expiresAt: number };
@@ -173,6 +175,7 @@ export class WorldSimulation {
     const player: Actor = {
       id: account.id, kind: 'player', name: account.name, classId,
       x: validSaved ? saved.x : spawn.x, y: validSaved ? saved.y : spawn.y,
+      ...copySurfacePoint(validSaved ? saved : spawn),
       radius: PLAYER_RADIUS, hp: validSaved ? Math.max(0, Math.min(spec.maxHp, spec.maxHp * saved.hp / saved.maxHp)) : spec.maxHp,
       maxHp: spec.maxHp, resource: validSaved ? (sameClass ? Math.min(spec.maxResource, saved.resource) : 0) : (spec.resource === 'mana' ? spec.maxResource : 0),
       maxResource: spec.maxResource, aim: 0, speed: spec.speed, level: levelFromXp(character.xp), xp: character.xp,
@@ -185,7 +188,8 @@ export class WorldSimulation {
       effects: validSaved ? saved.effects.filter(effect => effect.until > this.now).map(effect => ({ ...effect })) : [],
       cooldowns: validSaved ? { ...saved.cooldowns } : EMPTY_COOLDOWNS(),
     };
-    if (collidesWorld(player.x, player.y, player.radius, this.world)) Object.assign(player, spawn);
+    if (collidesWorld(player.x, player.y, player.radius, this.world, player)) Object.assign(player, { surfaceId: 'ground', elevation: 0 }, spawn);
+    Object.assign(player, this.world.surfaceState(player));
     if (this.mode === 'world' && this.world.pvpAt(player.x, player.y)) player.spawnProtectedUntil = 0;
     if (player.hp <= 0 && player.deadUntil <= 0) player.deadUntil = this.now + 5000;
     syncSoulEscort(player, account.narrative, this.mode === 'world');
@@ -267,6 +271,7 @@ export class WorldSimulation {
         clearSoulFarewell(actor);
       }
       const input = connection.inputs.shift();
+      connection.movementInput = input;
       actor.spriteMoving = actor.hp > 0 && !!input && Math.hypot(input.dx, input.dy) > 0;
       if (input) connection.ack = input.seq;
       if (actor.hp <= 0) {
@@ -281,9 +286,9 @@ export class WorldSimulation {
         actor.spriteRow = playerSpriteDirectionRow(input.dx, input.dy, actor.spriteRow ?? 0, input.analogMovement === true);
         if (input.cast && !this.fishing.active(id)) this.pendingCasts.set(id, input);
         const magnitude = Math.hypot(input.dx, input.dy);
-        if (magnitude > 0) Object.assign(actor, moveWithCollisions(actor, input.dx / Math.max(1, magnitude), input.dy / Math.max(1, magnitude), movementSpeed(actor, this.now) * terrainSpeed(actor, this.world) * dt, this.world));
+        if (magnitude > 0) Object.assign(actor, moveWalkingWithCollisions(actor, input.dx / Math.max(1, magnitude), input.dy / Math.max(1, magnitude), movementSpeed(actor, this.now) * terrainSpeed(actor, this.world) * dt, this.world));
       }
-      actor.hidden = this.world.isHiding(actor.x, actor.y);
+      actor.hidden = this.world.isHiding(actor.x, actor.y, actor);
       if (this.mode === 'world' && this.world.pvpAt(actor.x, actor.y)) actor.spawnProtectedUntil = 0;
     }
     this.rebuildCells();
@@ -332,11 +337,14 @@ export class WorldSimulation {
     for (let i = 0; i < 1200; i++) {
       const r = 40 + (Math.floor(i / 12) % 9) * 18;
       const origin = this.world.authoring.document.spawn;
-      const offset = this.world.authoring.document.interiorBounds ? .5 : 0;
-      const point = { x: (origin.x + offset) * TILE_SIZE + Math.cos(angle + i * 2.4) * r, y: (origin.y + offset) * TILE_SIZE + Math.sin(angle + i * 2.4) * r };
-      if (!this.world.arenaAt(point.x, point.y) && !collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, this.world) && ![...this.players.values()].some(actor => actor.hp > 0 && distance(actor, point) < 40)) return point;
+      const offset = this.world.authoring.document.interiorBounds || origin.surfaceId !== undefined || origin.elevation !== undefined ? .5 : 0;
+      const radius = i === 0 && origin.surfaceId !== undefined ? 0 : r;
+      const point = { ...copySurfacePoint(origin), x: (origin.x + offset) * TILE_SIZE + Math.cos(angle + i * 2.4) * radius, y: (origin.y + offset) * TILE_SIZE + Math.sin(angle + i * 2.4) * radius };
+      if (!this.world.arenaAt(point.x, point.y) && !collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, this.world, point) && ![...this.players.values()].some(actor => actor.hp > 0 && this.world.sameLevel(actor, point) && distance(actor, point) < 40)) return { ...point, ...this.world.surfaceState(point) };
     }
-    return { x: this.world.authoring.document.spawn.x * TILE_SIZE + TILE_SIZE / 2, y: this.world.authoring.document.spawn.y * TILE_SIZE + TILE_SIZE / 2 };
+    const origin = this.world.authoring.document.spawn;
+    const point = { ...copySurfacePoint(origin), x: origin.x * TILE_SIZE + TILE_SIZE / 2, y: origin.y * TILE_SIZE + TILE_SIZE / 2 };
+    return { ...point, ...this.world.surfaceState(point) };
   }
 
   private rebuildCells(): void {
@@ -391,7 +399,9 @@ export class WorldSimulation {
   }
 
   private emit(event: Omit<GameEvent, 'id' | 'at'>): void {
-    this.events.push({ ...event, id: randomUUID(), at: this.now });
+    const sourceId = event.targetId ?? event.actorId;
+    const source = sourceId ? this.players.get(sourceId) ?? this.npcs.get(sourceId) : undefined;
+    this.events.push({ ...(source ? this.world.surfaceState(source) : {}), ...event, id: randomUUID(), at: this.now });
     if (this.events.length > 500) this.events.splice(0, this.events.length - 500);
   }
 
@@ -419,7 +429,7 @@ export class WorldSimulation {
             expiresAt: this.now + (burst.range / burst.speed) * 1000,
             color: burst.color,
           };
-          this.projectiles.set(projectile.id, projectile);
+          this.addProjectile(projectile);
           this.projectileTeams.set(projectile.id, owner.teamId);
           this.emit({
             kind: 'cast',
@@ -452,11 +462,11 @@ export class WorldSimulation {
       let triggered = false;
 
       for (const target of this.near(trap, trap.radius)) {
-        if (target.id === trap.ownerId || target.hp <= 0 || target.spawnProtectedUntil > this.now) continue;
+        if (!this.world.sameLevel(trap, target) || target.id === trap.ownerId || target.hp <= 0 || target.spawnProtectedUntil > this.now) continue;
         if (owner && this.allied(owner, target)) continue;
         if (trap.teamId && target.teamId === trap.teamId) continue;
 
-        if (!this.damage(target, owner, trap.damage)) continue;
+        if (!this.damage(target, owner, trap.damage, trap)) continue;
         triggered = true;
         this.effect(target, 'root', trap.duration);
         this.emit({
@@ -505,7 +515,7 @@ export class WorldSimulation {
       const speed = ability.speed ?? 400;
       const projectile: Projectile = { id: randomUUID(), ownerId: actor.id, x: actor.x, y: actor.y, vx: Math.cos(actor.aim) * speed, vy: Math.sin(actor.aim) * speed, radius: ability.radius, damage: ability.damage * this.damageMultiplier(actor), expiresAt: this.now + ability.range / speed * 1000, color: ability.color, slow: ability.slow };
       if (inputSeq !== undefined) projectile.inputSeq = inputSeq;
-      this.projectiles.set(projectile.id, projectile);
+      this.addProjectile(projectile);
       this.projectileTeams.set(projectile.id, actor.teamId);
       return true;
     }
@@ -527,6 +537,9 @@ export class WorldSimulation {
         expiresAt: this.now + (ability.duration ?? 30) * 1000,
         color: ability.color,
       };
+      const support = this.world.surfaceAt(Math.floor(placeX / TILE_SIZE), Math.floor(placeY / TILE_SIZE), actor.surfaceId ?? 'ground');
+      if (!support || support.blocked || support.elevation !== this.world.elevationAt(actor)) { trap.x = actor.x; trap.y = actor.y; }
+      Object.assign(trap, this.world.surfaceState(actor));
       this.traps.set(trapId, trap);
       this.emit({ kind: 'cast', x: placeX, y: placeY, radius: trap.radius, color: trap.color, duration: 450, actorId: actor.id, abilityKind: 'trap', text: ability.name });
       return true;
@@ -554,7 +567,7 @@ export class WorldSimulation {
         expiresAt: this.now + (range / speed) * 1000,
         color: ability.color,
       };
-      this.projectiles.set(firstShot.id, firstShot);
+      this.addProjectile(firstShot);
       this.projectileTeams.set(firstShot.id, actor.teamId);
 
       // Gli altri 5 colpi sparati in sequenza con 70 ms di scarto
@@ -574,20 +587,23 @@ export class WorldSimulation {
       return true;
     }
     if (ability.kind === 'dash') {
-      const start = { x: actor.x, y: actor.y };
+      const start = { x: actor.x, y: actor.y, ...copySurfacePoint(actor) };
       const intended = { x: start.x + Math.cos(actor.aim) * ability.range, y: start.y + Math.sin(actor.aim) * ability.range };
       const wall = sweptWorldHit(start, intended, actor.radius, this.world);
       const travel = wall === null ? 1 : Math.max(0, wall - 0.001);
-      const end = { x: start.x + (intended.x - start.x) * travel, y: start.y + (intended.y - start.y) * travel };
+      const end = this.world.surfaceIndex.hasSurfaces
+        ? moveWithCollisions(actor, Math.cos(actor.aim), Math.sin(actor.aim), ability.range, this.world)
+        : { x: start.x + (intended.x - start.x) * travel, y: start.y + (intended.y - start.y) * travel };
       let contact: Actor | undefined;
       let fraction = 1;
       for (const target of this.near(start, ability.range + 50)) {
-        if (target.id === actor.id) continue;
+        if (target.id === actor.id || !this.world.sameLevel(actor, target)) continue;
         const hit = segmentCircleHit(start, end, target, target.radius + actor.radius + 0.5);
         if (hit !== null && hit < fraction) { fraction = hit; contact = target; }
       }
       actor.x = start.x + (end.x - start.x) * fraction;
       actor.y = start.y + (end.y - start.y) * fraction;
+      Object.assign(actor, this.world.surfaceState({ ...actor, ...copySurfacePoint(end) }));
       if (contact && !this.allied(actor, contact) && hasLineOfSight(actor, contact, this.world)) this.damage(contact, actor, ability.damage * this.damageMultiplier(actor));
       return true;
     }
@@ -615,8 +631,9 @@ export class WorldSimulation {
     return (actor.effects.some(effect => effect.kind === 'power' && effect.until > this.now) ? 1.3 : 1) * (actor.effects.some(effect => effect.kind === 'weakness' && effect.until > this.now) ? 0.7 : 1);
   }
 
-  private damage(target: Actor, attacker: Actor | undefined, amount: number): boolean {
-    if (attacker && !this.world.sameRoom(attacker, target)) return false;
+  private damage(target: Actor, attacker: Actor | undefined, amount: number, origin?: Vec2): boolean {
+    const source = origin ?? attacker;
+    if (source && (!this.world.sameRoom(source, target) || !this.world.sameLevel(source, target))) return false;
     if (target.disposition === 'neutral' || target.hp <= 0 || target.spawnProtectedUntil > this.now || (attacker && this.allied(attacker, target))) return false;
     const encounter = target.bossKey ? this.bosses.get(target.bossKey) : undefined;
     if (encounter && !encounter.canDamage(attacker)) return false;
@@ -682,7 +699,7 @@ export class WorldSimulation {
   }
 
   private respawn(actor: Actor): void {
-    Object.assign(actor, this.safeSpawn(actor.id));
+    Object.assign(actor, { surfaceId: 'ground', elevation: 0 }, this.safeSpawn(actor.id));
     actor.hp = actor.maxHp;
     actor.resource = CLASSES[actor.classId].resource === 'mana' ? actor.maxResource : 0;
     actor.deadUntil = 0;
@@ -697,19 +714,19 @@ export class WorldSimulation {
     for (const [id, projectile] of this.projectiles) {
       const owner = this.players.get(projectile.ownerId) ?? this.npcs.get(projectile.ownerId);
       const travelDt = Math.min(dt, Math.max(0, (projectile.expiresAt - (this.now - dt * 1000)) / 1000));
-      const start = { x: projectile.x, y: projectile.y };
+      const start = { x: projectile.x, y: projectile.y, ...copySurfacePoint(projectile) };
       const end = { x: start.x + projectile.vx * travelDt, y: start.y + projectile.vy * travelDt };
       const wallAt = sweptWorldHit(start, end, projectile.radius, this.world) ?? 1.01;
       let hit: Actor | undefined;
       let hitAt = wallAt;
       const oldTeam = this.projectileTeams.get(id);
       for (const actor of this.near(start, distance(start, end) + projectile.radius + 30)) {
-        if (actor.disposition === 'neutral' || actor.id === projectile.ownerId || actor.spawnProtectedUntil > this.now || (owner && this.allied(owner, actor)) || (oldTeam && actor.teamId === oldTeam)) continue;
+        if (!this.world.sameLevel(projectile, actor) || actor.disposition === 'neutral' || actor.id === projectile.ownerId || actor.spawnProtectedUntil > this.now || (owner && this.allied(owner, actor)) || (oldTeam && actor.teamId === oldTeam)) continue;
         const t = segmentCircleHit(start, end, actor, actor.radius + projectile.radius);
         if (t !== null && t < hitAt) { hitAt = t; hit = actor; }
       }
       if (hit) {
-        const applied = this.damage(hit, owner, projectile.damage);
+        const applied = this.damage(hit, owner, projectile.damage, projectile);
         if (applied && projectile.slow && hit.hp > 0) this.effect(hit, 'slow', projectile.slow);
       }
       if (hit || wallAt <= 1 || this.now >= projectile.expiresAt) {
@@ -717,6 +734,21 @@ export class WorldSimulation {
         this.projectileTeams.delete(id);
       } else Object.assign(projectile, end);
     }
+  }
+
+  private addProjectile(projectile: Projectile): void {
+    const owner = this.players.get(projectile.ownerId) ?? this.npcs.get(projectile.ownerId);
+    if (owner) Object.assign(projectile, this.world.surfaceState(owner));
+    this.projectiles.set(projectile.id, projectile);
+  }
+
+  private npcWaypoint(npc: Actor, meta: NpcMeta, target: Vec2): Vec2 | undefined {
+    if (!this.world.surfaceIndex.hasSurfaces) return target;
+    const key = `${Math.floor(target.x / TILE_SIZE)},${Math.floor(target.y / TILE_SIZE)}@${target.surfaceId ?? 'ground'}:${this.world.lockRevision}:${this.world.authoringRevision}`;
+    if (!meta.route || meta.route.key !== key || meta.route.until <= this.now) meta.route = { key, until: this.now + 700, path: findSurfacePath(this.world, npc, target, npc.radius, 1024) };
+    const path = meta.route.path; if (!path) return;
+    while (path.length > 1 && this.world.sameLevel(npc, path[0]) && distance(npc, path[0]) < 8) path.shift();
+    return path[0] ?? target;
   }
 
   private updateChunks(): void {
@@ -741,19 +773,19 @@ export class WorldSimulation {
             id: npc.id, kind: 'npc', npcKind: npc.npcKind, classId: spec.classId,
             name: npc.settings?.name || spec.name,
             disposition: spec.disposition, ...((npc.settings?.dialogueId ?? spec.dialogueId) ? { dialogueId: npc.settings?.dialogueId ?? spec.dialogueId } : {}),
-            x: npc.x, y: npc.y, radius: spec.radius,
+            x: npc.x, y: npc.y, ...this.world.surfaceState(npc), radius: spec.radius,
             hp: npcHp, maxHp: npcHp, resource: 0, maxResource: 100, aim: (npc.settings?.initialAngle ?? 0) * Math.PI / 180, speed: npc.settings?.speed ?? spec.speed,
             level: npc.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: EMPTY_COOLDOWNS(),
           };
           this.npcs.set(actor.id, actor);
           if (this.dungeonCorpses.has(actor.id)) { actor.hp = 0; actor.deadUntil = Number.MAX_SAFE_INTEGER; }
-          this.npcMeta.set(actor.id, { settings: npc.settings, home: { x: npc.x, y: npc.y }, chunk: key, nextAttack: slept?.nextAttack ?? this.now + 1500 });
+          this.npcMeta.set(actor.id, { settings: npc.settings, home: { x: npc.x, y: npc.y, ...this.world.surfaceState(npc) }, chunk: key, nextAttack: slept?.nextAttack ?? this.now + 1500 });
           this.npcSleep.delete(actor.id);
           chunk.npcIds.push(actor.id);
         }
         for (const pickup of generated.pickups) {
           chunk.pickupIds.push(pickup.id);
-          if ((this.pickupReady.get(pickup.id) ?? 0) <= this.now) this.pickups.set(pickup.id, { ...pickup });
+          if ((this.pickupReady.get(pickup.id) ?? 0) <= this.now) this.pickups.set(pickup.id, { ...pickup, ...this.world.surfaceState(pickup) });
         }
       }
     }
@@ -783,16 +815,21 @@ export class WorldSimulation {
       const radius = behavior.radius * (.3 + .5 * coordinateHash(meta.home.x, meta.home.y + state.sequence, this.seed));
       for (let i = 0; i < 12; i++) {
         const direction = angle + i * Math.PI / 6;
-        const destination = { x: meta.home.x + Math.cos(direction) * radius, y: meta.home.y + Math.sin(direction) * radius };
-        if (distance(npc, destination) > 8 && !collidesWorld(destination.x, destination.y, npc.radius, this.world) && hasLineOfSight(npc, destination, this.world)) { state.destination = destination; break; }
+        const position = { x: meta.home.x + Math.cos(direction) * radius, y: meta.home.y + Math.sin(direction) * radius, ...copySurfacePoint(meta.home) };
+        if (!this.world.surfaceFor(position)) continue;
+        const destination = { ...position, ...this.world.surfaceState(position) };
+        if (distance(npc, destination) > 8 && !collidesWorld(destination.x, destination.y, npc.radius, this.world, destination)
+          && (hasLineOfSight(npc, destination, this.world) || this.world.surfaceIndex.hasSurfaces && this.npcWaypoint(npc, meta, destination))) { state.destination = destination; break; }
       }
       if (!state.destination) pause();
     }
     if (!state.destination) return;
     const remaining = distance(npc, state.destination);
     if (remaining <= 3) { pause(); return; }
-    const before = { x: npc.x, y: npc.y }, dx = (state.destination.x - npc.x) / remaining, dy = (state.destination.y - npc.y) / remaining;
-    Object.assign(npc, moveWithCollisions(npc, dx, dy, Math.min(remaining, movementSpeed(npc, this.now) * terrainSpeed(npc, this.world) * dt), this.world));
+    const waypoint = this.npcWaypoint(npc, meta, state.destination) ?? state.destination;
+    const distanceToWaypoint = Math.max(.001, distance(npc, waypoint));
+    const before = { x: npc.x, y: npc.y }, dx = (waypoint.x - npc.x) / distanceToWaypoint, dy = (waypoint.y - npc.y) / distanceToWaypoint;
+    Object.assign(npc, moveWalkingWithCollisions(npc, dx, dy, Math.min(remaining, movementSpeed(npc, this.now) * terrainSpeed(npc, this.world) * dt), this.world));
     npc.spriteMoving = distance(before, npc) > .001;
     if (npc.spriteMoving) { npc.aim = Math.atan2(npc.y - before.y, npc.x - before.x); npc.spriteRow = playerSpriteDirectionRow(npc.x - before.x, npc.y - before.y, npc.spriteRow ?? 0, true); }
     else pause();
@@ -844,17 +881,20 @@ export class WorldSimulation {
       const candidates = this.near(npc, meta.settings?.aggroRadius ?? combat.aggroRadius).filter(actor => actor.kind === 'player' && actor.hp > 0 && actor.spawnProtectedUntil <= this.now
         && (!combat.retaliatesOnly || actor.id === meta.aggroTargetId)
         && (!actor.hidden || actor.revealedUntil > this.now || distance(npc, actor) < 100));
-      const target = candidates.filter(actor => distance(actor, meta.home) < (meta.settings?.leashRadius ?? 650) && hasLineOfSight(npc, actor, this.world)).sort((a, b) => distance(npc, a) - distance(npc, b))[0];
+      const target = candidates.filter(actor => distance(actor, meta.home) < (meta.settings?.leashRadius ?? 650))
+        .sort((a, b) => distance(npc, a) - distance(npc, b)).slice(0, 4)
+        .find(actor => hasLineOfSight(npc, actor, this.world) || this.world.surfaceIndex.hasSurfaces && this.npcWaypoint(npc, meta, actor) !== undefined);
       if (!target) meta.aggroTargetId = undefined;
       const objective = target ?? meta.home;
       const d = distance(npc, objective);
       const attackRange = combat.attackRange;
       const ranged = npc.npcKind === 'wisp';
-      npc.aim = Math.atan2(objective.y - npc.y, objective.x - npc.x);
-      const moving = d > (target ? (ranged ? attackRange * .85 : attackRange) : 8);
-      if (moving) Object.assign(npc, moveWithCollisions(npc, Math.cos(npc.aim), Math.sin(npc.aim), movementSpeed(npc, this.now) * terrainSpeed(npc, this.world) * dt, this.world));
+      const waypoint = this.npcWaypoint(npc, meta, objective) ?? objective;
+      npc.aim = Math.atan2(waypoint.y - npc.y, waypoint.x - npc.x);
+      const moving = !this.world.sameLevel(npc, objective) || d > (target ? (ranged ? attackRange * .85 : attackRange) : 8);
+      if (moving) Object.assign(npc, moveWalkingWithCollisions(npc, Math.cos(npc.aim), Math.sin(npc.aim), movementSpeed(npc, this.now) * terrainSpeed(npc, this.world) * dt, this.world));
       if (!target || moving || d > attackRange || meta.windup?.targetId !== target.id) meta.windup = undefined;
-      const canAttack = target && d <= attackRange && (ranged || !moving) && this.now >= meta.nextAttack;
+      const canAttack = target && this.world.sameLevel(npc, target) && hasLineOfSight(npc, target, this.world) && d <= attackRange && (ranged || !moving) && this.now >= meta.nextAttack;
       if (canAttack && !ranged && !meta.windup) meta.windup = { targetId: target.id, readyAt: this.now + combat.windupMs };
       if (canAttack && (ranged || (meta.windup && this.now >= meta.windup.readyAt))) {
         meta.windup = undefined;
@@ -862,12 +902,12 @@ export class WorldSimulation {
         if (ranged) {
           if (this.projectiles.size >= 1000) continue;
           const projectile: Projectile = { id: randomUUID(), ownerId: npc.id, x: npc.x, y: npc.y, vx: Math.cos(npc.aim) * 270, vy: Math.sin(npc.aim) * 270, radius: 7, damage: 9 + Math.min(10, npc.level), expiresAt: this.now + 1300, color: '#b5dff2' };
-          this.projectiles.set(projectile.id, projectile);
+          this.addProjectile(projectile);
           this.projectileTeams.set(projectile.id, null);
         } else this.damage(target, npc, 8 + Math.min(npc.level, 10));
         this.emit({ kind: 'cast', actorId: npc.id, x: npc.x, y: npc.y, aim: npc.aim, abilityKind: ranged ? 'projectile' : 'melee', radius: attackRange, duration: 300, color: '#e4b79d' });
       } else if (!target && d < 15) npc.hp = Math.min(npc.maxHp, npc.hp + 8 * dt);
-      npc.hidden = this.world.getTile(Math.floor(npc.x / TILE_SIZE), Math.floor(npc.y / TILE_SIZE)) === 'bush';
+      npc.hidden = this.world.isHiding(npc.x, npc.y, npc);
     }
   }
 
@@ -875,7 +915,7 @@ export class WorldSimulation {
     for (const player of this.players.values()) {
       if (player.hp <= 0) continue;
       for (const [id, pickup] of this.pickups) {
-        if (!this.world.sameRoom(player, pickup) || distance(player, pickup) > player.radius + pickup.radius) continue;
+        if (!this.world.sameRoom(player, pickup) || !this.world.sameLevel(player, pickup) || distance(player, pickup) > player.radius + pickup.radius) continue;
         if (pickup.kind === 'heal') this.heal(player, 35);
         else this.effect(player, pickup.kind, pickup.kind === 'weakness' ? 7000 : 10_000);
         this.pickups.delete(id);

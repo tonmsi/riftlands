@@ -1,4 +1,6 @@
 import type { Actor, Vec2 } from '../../shared/types';
+import type { World } from '../../shared/world';
+import { canInterpolateSurfaceTransition } from '../../shared/surface-presentation';
 
 /** Presentation only: authoritative/predicted states never receive smoothed coordinates. */
 export class LocalMovementView {
@@ -10,13 +12,13 @@ export class LocalMovementView {
     this.offset = { x: 0, y: 0 };
   }
 
-  advance(before: Actor, after: Actor): void {
-    if (this.discontinuity(before, after)) this.reset(after);
+  advance(before: Actor, after: Actor, world?: World): void {
+    if (this.discontinuity(before, after, world)) this.reset(after);
     else this.previous = { x: before.x, y: before.y };
   }
 
-  correct(before: Actor | null, after: Actor): void {
-    if (!before || !this.previous || this.discontinuity(before, after)) { this.reset(after); return; }
+  correct(before: Actor | null, after: Actor, world?: World): void {
+    if (!before || !this.previous || this.discontinuity(before, after, world)) { this.reset(after); return; }
     const dx = after.x - before.x, dy = after.y - before.y;
     // Rebase both endpoints, then compensate visually. An ACK between ticks cannot restart a step.
     this.previous.x += dx; this.previous.y += dy;
@@ -36,8 +38,9 @@ export class LocalMovementView {
     };
   }
 
-  private discontinuity(before: Actor, after: Actor): boolean {
+  private discontinuity(before: Actor, after: Actor, world?: World): boolean {
     return before.id !== after.id || before.classId !== after.classId || (before.hp <= 0) !== (after.hp <= 0)
+      || !canInterpolateSurfaceTransition(before, after, world)
       || before.deadUntil !== after.deadUntil || Math.hypot(after.x - before.x, after.y - before.y) > 100;
   }
 }

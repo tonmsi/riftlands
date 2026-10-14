@@ -20,12 +20,12 @@ import { DUNGEON_ENTRY_MS } from '../shared/bosses';
 test('shared asset references survive export, import and relocation and drive runtime collision and hiding', () => {
     const draft = studioDraft(), asset = newWorldAsset('shared-tree', 'Albero condiviso', '/world-assets/tree.svg');
     resizeWorldAsset(asset, 2, 2); asset.cells[0].blocked = true; asset.cells[1].visibility = 'hide-fade';
-    draft.assetPlacements = [{ id: 'decoration', assetId: asset.id, x: 6, y: 6 }];
+    draft.assetPlacements = [{ id: 'decoration', assetId: asset.id, x: 6, y: 6, pivotY: .37 }];
     const compiled = compileDungeonDraft(draft, [asset]);
     assert.deepEqual(parseDungeonDraft(JSON.stringify(draft)), draft);
     assert.deepEqual(parseDungeonFile(JSON.stringify(compiled), [asset]).draft.assetPlacements, draft.assetPlacements);
     const moved = relocateDungeon(compiled.definition, { x: 400, y: -400 });
-    assert.deepEqual(moved.assetPlacements![0], { id: 'decoration', assetId: asset.id, x: 406, y: -394 });
+    assert.deepEqual(moved.assetPlacements![0], { id: 'decoration', assetId: asset.id, x: 406, y: -394, pivotY: .37 });
     const document = newWorldDocument(); document.assets = [asset];
     const world = new World(document.seed, 16, 'world', document, [moved]);
     assert.equal(world.isBlocked(406, -394), true);

@@ -1,20 +1,24 @@
 import { TILE_SIZE } from '../../shared/config';
 import type { Actor, Pickup } from '../../shared/types';
 import type { World } from '../../shared/world';
-import { DUNGEON_DEFINITIONS, dungeonAtTile } from '../../shared/dungeons';
 import { shapeBounds } from '../../shared/world-authoring';
 import { mapTerrainColor } from './terrain-style';
+import { MATERIAL_COLORS } from './terrain-materials';
+import type { TileKind } from '../../shared/types';
+import type { SurfaceCell } from '../../shared/world-surfaces';
 import { renderDpr } from '../core/frame-budget';
 import { PICKUP_COLORS, circle, noise } from './render-primitives';
 import { activeQuestAreas } from '../../shared/quest-areas';
 import type { NarrativeProgress } from '../../shared/narrative';
 
 /** Mappa locale limitata del terreno procedurale noto. */
-const minimapTerrainViews = new WeakMap<HTMLCanvasElement, { world: World; key: string; canvas: HTMLCanvasElement; width: number; height: number }>();
+const minimapTerrainViews = new WeakMap<HTMLCanvasElement, { world: World; key: string; canvas: HTMLCanvasElement; width: number; height: number; left: number; top: number; right: number; bottom: number }>();
 export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600, viewSign = 1, narrative?: NarrativeProgress): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const rect = canvas.getBoundingClientRect(), dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  const dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
   const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
     canvas.width = Math.round(width * dpr);
@@ -37,25 +41,31 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
 
   const startX = Math.floor(left / TILE_SIZE), startY = Math.floor(top / TILE_SIZE);
   const cols = Math.ceil(width / scale / TILE_SIZE) + 2, rows = Math.ceil(height / scale / TILE_SIZE) + 2;
-  const terrainKey = `${world.lockRevision}:${world.authoringRevision}:${startX}:${startY}:${width}:${height}:${visibleSpan}:${dpr}`;
+  const terrainKey = `${world.lockRevision}:${world.authoringRevision}:${width}:${height}:${visibleSpan}:${dpr}`;
   let cached = minimapTerrainViews.get(canvas);
-  if (!cached || cached.world !== world || cached.key !== terrainKey) {
-    const bitmap = document.createElement('canvas'), bitmapWidth = cols * TILE_SIZE * scale, bitmapHeight = rows * TILE_SIZE * scale;
+  if (!cached || cached.world !== world || cached.key !== terrainKey || startX < cached.left || startY < cached.top
+    || startX + cols > cached.right || startY + rows > cached.bottom) {
+    const margin = 8, cacheLeft = startX - margin, cacheTop = startY - margin;
+    const cacheCols = cols + margin * 2, cacheRows = rows + margin * 2;
+    const bitmap = document.createElement('canvas'), bitmapWidth = cacheCols * TILE_SIZE * scale, bitmapHeight = cacheRows * TILE_SIZE * scale;
     bitmap.width = Math.ceil(bitmapWidth * dpr); bitmap.height = Math.ceil(bitmapHeight * dpr);
     const paint = bitmap.getContext('2d')!; paint.setTransform(dpr, 0, 0, dpr, 0, 0);
-    for (let ty = startY; ty < startY + rows; ty++) {
-      for (let tx = startX; tx < startX + cols; tx++) {
-      const tile = world.getTile(tx, ty);
+    for (let ty = cacheTop; ty < cacheTop + cacheRows; ty++) {
+      for (let tx = cacheLeft; tx < cacheLeft + cacheCols; tx++) {
+      const authored = world.surfaceIndex.atColumn(tx, ty).reduce<SurfaceCell | undefined>((highest, cell) => !highest || cell.elevation > highest.elevation ? cell : highest, undefined);
+      const tile = authored?.material ?? world.getTile(tx, ty);
       const dungeon = world.mode === 'world' ? world.dungeons.find(d => tx >= d.layout.bounds.minTx && tx <= d.layout.bounds.maxTx && ty >= d.layout.bounds.minTy && ty <= d.layout.bounds.maxTy) : undefined;
-      paint.fillStyle = dungeon && tile === 'rock' ? dungeon.theme.wallTop
-        : dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor
-        : mapTerrainColor(tile, world.getMoisture((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE), noise(tx, ty));
-      paint.fillRect((tx - startX) * TILE_SIZE * scale, (ty - startY) * TILE_SIZE * scale, TILE_SIZE * scale + 0.5, TILE_SIZE * scale + 0.5);
+      paint.fillStyle = !authored && dungeon && tile === 'rock' ? dungeon.theme.wallTop
+        : !authored && dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor
+        : ['stone', 'brick', 'sand', 'wood'].includes(tile) ? MATERIAL_COLORS[tile]
+        : mapTerrainColor(tile as TileKind, world.getMoisture((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE), noise(tx, ty), world.getTemperature(tx, ty));
+      paint.fillRect((tx - cacheLeft) * TILE_SIZE * scale, (ty - cacheTop) * TILE_SIZE * scale, TILE_SIZE * scale + 0.5, TILE_SIZE * scale + 0.5);
       }
     }
-    cached = { world, key: terrainKey, canvas: bitmap, width: bitmap.width / dpr, height: bitmap.height / dpr }; minimapTerrainViews.set(canvas, cached);
+    cached = { world, key: terrainKey, canvas: bitmap, width: bitmap.width / dpr, height: bitmap.height / dpr,
+      left: cacheLeft, top: cacheTop, right: cacheLeft + cacheCols, bottom: cacheTop + cacheRows }; minimapTerrainViews.set(canvas, cached);
   }
-  ctx.drawImage(cached.canvas, (startX * TILE_SIZE - left) * scale, (startY * TILE_SIZE - top) * scale, cached.width, cached.height);
+  ctx.drawImage(cached.canvas, (cached.left * TILE_SIZE - left) * scale, (cached.top * TILE_SIZE - top) * scale, cached.width, cached.height);
 
   ctx.strokeStyle = 'rgba(235,227,192,0.1)';
   ctx.lineWidth = 1;

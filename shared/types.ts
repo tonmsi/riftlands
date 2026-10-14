@@ -7,7 +7,7 @@ import type { SnapshotActor } from './snapshot-actor';
 import type { Loadout, CharacterSummary } from './progression';
 export type ClassId = 'mage' | 'warrior' | 'paladin' | 'hunter';
 export type AbilitySlot = 'basic' | 'q' | 'e' | 'r';
-export type Vec2 = { x: number; y: number };
+export type Vec2 = { x: number; y: number; surfaceId?: string; elevation?: number };
 export type RoomMode = 'world' | 'arena' | 'battleground';
 export interface Actor { pvpUntil?: number; }
 export interface Actor { soulEscort?: boolean; soulFarewellAt?: number; soulFarewellX?: number; soulFarewellY?: number; }

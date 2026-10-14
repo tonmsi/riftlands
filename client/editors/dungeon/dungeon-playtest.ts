@@ -7,14 +7,16 @@ import type { ClassId, InputCommand, TileKind } from '../../../shared/types';
 import { WorldSimulation } from '../../../server/simulation';
 import { WORLD_DOCUMENT } from '../../../shared/world-content';
 import { newWorldDocument, type WorldAsset } from '../../../shared/world-schema';
+import { BASE_SURFACE, type SurfaceCell } from '../../../shared/world-surfaces';
 
 /** Isolated authored map: no procedural terrain, population, accounts or network. */
 export class DungeonPlaytestWorld extends World {
   private readonly stones: Map<string, Set<string>>;
   private readonly encounters: DungeonDefinition[];
-  constructor(readonly dungeon: DungeonDefinition, assets: readonly WorldAsset[] = WORLD_DOCUMENT.assets) {
+  constructor(readonly dungeon: DungeonDefinition, assets: readonly WorldAsset[] = WORLD_DOCUMENT.assets, staging: SurfaceCell[] = []) {
     const document = newWorldDocument();
     document.assets = assets.map(a => ({ ...a, generation: { ...a.generation, enabled: false } }));
+    document.surfaceCells = staging;
     super(document.seed, 16, 'world', document, [dungeon]);
     this.encounters = dungeonEncounters(dungeon);
     this.stones = new Map(this.encounters.map(e => [e.bossId, new Set(dungeonStoneTiles(e).map(t => `${t.x},${t.y}`))]));
@@ -51,10 +53,16 @@ export function createDungeonPlaytest(draft: DungeonDraft, classId: ClassId = 'w
   if (!entrance) throw new Error('Apri un ingresso sul bordo con erba o pavimento e collegalo alla stanza per iniziare la prova fuori dal dungeon.');
   const tile = entrance.tiles[0];
   const normal = tile.x === b.minTx ? { x: -1, y: 0 } : tile.x === b.maxTx ? { x: 1, y: 0 } : tile.y === b.minTy ? { x: 0, y: -1 } : { x: 0, y: 1 };
-  const spawn = { x: entrance.position.x + normal.x * TILE_SIZE * 2, y: entrance.position.y + normal.y * TILE_SIZE * 2 };
+  const landing = definition.surfaceCells?.find(c => c.x === tile.x && c.y === tile.y && c.surfaceId === BASE_SURFACE);
+  const spawn = { x: entrance.position.x + normal.x * TILE_SIZE * 2, y: entrance.position.y + normal.y * TILE_SIZE * 2,
+    ...(landing?.elevation ? { elevation: landing.elevation } : {}) };
   const encounters = dungeonEncounters(definition);
   for (const encounter of encounters) encounter.encounter.ejectTo = { ...spawn };
-  const world = new DungeonPlaytestWorld(definition, assets);
+  // A raised doorway needs a matching temporary landing outside the authored map.
+  // This staging pad belongs only to the local preview, never to exported content.
+  const staging: SurfaceCell[] = landing?.elevation ? [1, 2].flatMap(distance => [-1, 0, 1].map(side => ({ ...landing,
+    x: tile.x + normal.x * distance - normal.y * side, y: tile.y + normal.y * distance + normal.x * side }))) : [];
+  const world = new DungeonPlaytestWorld(definition, assets, staging);
   const simulation = new WorldSimulation(734291, 1_000_000, undefined, 'world', { world, dungeons: encounters, bosses: new Map(bosses.map(boss => [boss.id, boss])), spawn });
   const player = simulation.addPlayer({ id: 'local-playtest', name: 'Prova locale', nameLower: 'prova locale', salt: '', passwordHash: '', xp: 0, kills: 0, deaths: 0, friends: [], requests: [], lastSeen: 0, gold: 0 }, classId);
   // The offline editor previews the full catalog, independent of account progression.

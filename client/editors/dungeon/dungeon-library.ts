@@ -1,4 +1,4 @@
-import { parseDungeonDraft, compactDungeonDraft, type DungeonDraft } from '../../../shared/dungeon-draft';
+import { parseDungeonDraft, type DungeonDraft } from '../../../shared/dungeon-draft';
 import { parseActorCatalog } from '../../../shared/actor-catalog';
 import { BOSS_TEMPLATES, BOSS_TEMPLATE_BY_ID } from '../../../shared/boss-templates';
 

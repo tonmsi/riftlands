@@ -18,9 +18,17 @@ import { INSTALLED_BOSS_BY_ID as BOSS_BY_ID } from '../shared/bosses';
 import { worldDungeons } from '../shared/world-validation';
 import { collidesWorld } from '../shared/physics';
 import { TILE_SIZE, PLAYER_RADIUS } from '../shared/config';
-import { atWarp, mapDocument, warpPosition, WARP_FADE_MS } from '../shared/warps';
+import { movingThroughWarp, atWarp, mapDocument, warpPosition, WARP_FADE_MS } from '../shared/warps';
 import { validInteractionCommand } from '../shared/interactions';
 import type { WorldDocument, WorldWarp } from '../shared/world-schema';
+import { BASE_SURFACE } from '../shared/world-surfaces';
+import type { Vec2 } from '../shared/types';
+
+/** Transfers replace the support as well as coordinates, including legacy destinations. */
+function relocateBody(body: Vec2, point: Vec2, world: World): void {
+  delete body.surfaceId; delete body.elevation;
+  Object.assign(body, point, world.surfaceState(point));
+}
 
 type Membership = { roomId: string; epoch: number; account: Account; classId: ClassId; connected: boolean; expiresAt?: number };
 export interface MatchRoom {
@@ -61,7 +69,8 @@ export class RoomManager {
     this.warpKeys = new WarpKeys(project, store);
     const world = new World(seed, 160, 'world', project, worldDungeons(project, DUNGEON_DEFINITIONS));
     this.global = new WorldSimulation(seed, now, store, 'world', { world, dungeons: world.dungeons.flatMap(dungeonEncounters), bosses: BOSS_BY_ID,
-      spawn: { x: project.spawn.x * TILE_SIZE, y: project.spawn.y * TILE_SIZE } });
+      spawn: { ...project.spawn, x: (project.spawn.x + (project.spawn.surfaceId !== undefined || project.spawn.elevation !== undefined ? .5 : 0)) * TILE_SIZE,
+        y: (project.spawn.y + (project.spawn.surfaceId !== undefined || project.spawn.elevation !== undefined ? .5 : 0)) * TILE_SIZE } });
   }
 
   private interior(id: string): WorldSimulation {
@@ -103,7 +112,7 @@ export class RoomManager {
         member = { roomId: `interior:${account.location.mapId}`, epoch: 0, account, classId, connected: true };
         this.memberships.set(account.id, member); this.global.awayPlayers.add(account.id);
       } else {
-        if (account.body) Object.assign(account.body, account.location.returnTo);
+        if (account.body) relocateBody(account.body, account.location.returnTo, this.global.world);
         delete account.location; this.store?.touch();
       }
     }
@@ -183,7 +192,7 @@ export class RoomManager {
     if (command.kind === 'collect-warp-key') {
       const actor = this.simulationFor(id).players.get(id);
       const pickup = this.warpKeys.pickups(this.mapId(id), this.global.now).find(key => key.id === command.keyId);
-      if (actor && pickup && !this.simulationFor(id).world.sameRoom(actor, pickup)) throw new Error('La chiave si trova in un’altra stanza.');
+      if (actor && pickup && (!this.simulationFor(id).world.sameRoom(actor, pickup) || !this.simulationFor(id).world.sameLevel(actor, pickup))) throw new Error('La chiave si trova in un’altra stanza o su un’altra quota.');
       if (!actor || actor.hp <= 0 || this.simulationFor(id).mode !== 'world' || !member.account.inventory || !this.warpKeys.collect(command.keyId, member.account.inventory, this.mapId(id), actor, INTERACTION_RANGE, this.global.now)) throw new Error('Chiave non disponibile: avvicinati per raccoglierla.');
       this.notices.set(id, 'Chiave raccolta.'); return true;
     }
@@ -233,6 +242,7 @@ export class RoomManager {
         actor.teamId = `${id}:${teamIndex}`;
         actor.x = mode === 'arena' ? (slot - (team.length - 1) / 2) * 70 : (teamIndex === 0 ? -1 : 1) * 700;
         actor.y = mode === 'arena' ? (teamIndex === 0 ? -240 : 240) : slot * 70 - 140;
+        relocateBody(actor, { x: actor.x, y: actor.y }, simulation.world);
         actor.aim = mode === 'arena' ? (teamIndex === 0 ? Math.PI / 2 : -Math.PI / 2) : teamIndex === 0 ? 0 : Math.PI;
       }
       this.rooms.set(id, { id, mode, simulation, members: new Set(ids), endsAt: this.global.now + durationSeconds * 1000,
@@ -269,7 +279,7 @@ export class RoomManager {
     if (member.roomId === 'world') return;
     if (member.roomId.startsWith('interior:')) {
       const sim = this.simulationFor(id); sim.detachPlayer(id);
-      if (member.account.body && member.account.location) Object.assign(member.account.body, member.account.location.returnTo);
+      if (member.account.body && member.account.location) relocateBody(member.account.body, member.account.location.returnTo, this.global.world);
       delete member.account.location;
       member.roomId = 'world'; member.epoch++; this.global.awayPlayers.delete(id);
       if (member.connected) this.global.addPlayer(member.account, member.classId);
@@ -348,7 +358,7 @@ export class RoomManager {
     for (const [id, member] of this.memberships) {
       if (!member.connected || this.spectators.has(id) || this.warpRequests.has(id) || this.simulationFor(id).mode !== 'world') continue;
       const actor = this.simulationFor(id).players.get(id); if (!actor || actor.hp <= 0 || !member.account.inventory) continue;
-      for (const key of this.warpKeys.pickups(this.mapId(id), this.global.now)) if (this.simulationFor(id).world.sameRoom(actor, key) && this.warpKeys.collect(key.id, member.account.inventory, this.mapId(id), actor, TILE_SIZE * .65, this.global.now)) this.notices.set(id, 'Chiave raccolta.');
+      for (const key of this.warpKeys.pickups(this.mapId(id), this.global.now)) if (this.simulationFor(id).world.sameRoom(actor, key) && this.simulationFor(id).world.sameLevel(actor, key) && this.warpKeys.collect(key.id, member.account.inventory, this.mapId(id), actor, TILE_SIZE * .65, this.global.now)) this.notices.set(id, 'Chiave raccolta.');
     }
     this.stepWarps();
   }
@@ -360,7 +370,7 @@ export class RoomManager {
     }
     const eligible = (id: string): boolean => {
       const member = this.memberships.get(id), actor = this.global.players.get(id);
-      return !!member?.connected && member.roomId === 'world' && !!actor && !!this.global.world.arenaAt(actor.x, actor.y) && !this.mustExitGate.has(id) && this.global.canTransfer(id);
+      return !!member?.connected && member.roomId === 'world' && !!actor && (actor.surfaceId ?? BASE_SURFACE) === BASE_SURFACE && !!this.global.world.arenaAt(actor.x, actor.y) && !this.mustExitGate.has(id) && this.global.canTransfer(id);
     };
     for (const id of this.gateEntries.keys()) if (!eligible(id)) this.gateEntries.delete(id);
     for (const id of this.global.players.keys()) if (eligible(id) && !this.gateEntries.has(id)) this.gateEntries.set(id, this.global.now);
@@ -387,7 +397,7 @@ export class RoomManager {
 
   gateStateFor(id: string): ArenaGateState | undefined {
     const member = this.membership(id), actor = this.global.players.get(id);
-    if (member.roomId !== 'world' || !actor) return undefined;
+    if (member.roomId !== 'world' || !actor || (actor.surfaceId ?? BASE_SURFACE) !== BASE_SURFACE) return undefined;
     const entrance = this.global.world.arenaAt(actor.x, actor.y);
     if (!entrance) return undefined;
     const players = Math.min(2, [...this.gateEntries.keys()].filter(id => { const a = this.global.players.get(id)!; return this.global.world.arenaAt(a.x, a.y) === entrance; }).length);
@@ -461,20 +471,20 @@ export class RoomManager {
 
   bookmakerNearby(id: string): boolean {
     const actor = this.global.players.get(id), npc = this.global.npcs.get('authored:npc-arena-bookmaker');
-    return !!actor && !!npc && Math.hypot(actor.x - npc.x, actor.y - npc.y) <= INTERACTION_RANGE;
+    return !!actor && !!npc && this.global.world.sameRoom(actor, npc) && this.global.world.sameLevel(actor, npc) && Math.hypot(actor.x - npc.x, actor.y - npc.y) <= INTERACTION_RANGE;
   }
 
   private requestWarp(id: string, warp: WorldWarp): void {
     const member = this.membership(id), sim = this.simulationFor(id), actor = sim.players.get(id);
     if (this.transfersStopped || this.pendingPlayers.has(id) || this.warpRequests.has(id) || this.spectators.has(id)
-      || !member.connected || sim.mode !== 'world' || !actor || actor.hp <= 0 || !atWarp(actor, warp) || !sim.world.sameRoom(actor, warpPosition(warp.entry)) || this.mapId(id) !== warp.from)
+      || !member.connected || sim.mode !== 'world' || !actor || actor.hp <= 0 || !atWarp(actor, warp) || !sim.world.sameRoom(actor, warpPosition(warp.entry)) || !sim.world.sameLevel(actor, warpPosition(warp.entry)) || this.mapId(id) !== warp.from)
       throw new Error('Avvicinati al passaggio per attraversarlo.');
     if (this.warpRearm.has(id)) throw new Error('Allontanati dalla porta e rientra per attraversarla di nuovo.');
     if (sim.fishing.busy(id)) throw new Error('Ritira la lenza prima di attraversare.');
     if (Math.max(sim.connections.get(id)?.combatUntil ?? 0, actor.pvpUntil ?? 0) > sim.now
       || [...sim.bosses.values()].some(b => b.participantIds.has(id) && b.ownerId)) throw new Error('Non puoi attraversare durante un combattimento.');
     const target = warp.to === 'world' ? this.global : this.interior(warp.to), arrival = warpPosition(warp.arrival);
-    if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world)) throw new Error('Arrivo del passaggio bloccato.');
+    if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world, arrival)) throw new Error('Arrivo del passaggio bloccato.');
     if (!member.account.inventory || !this.warpKeys.canPass(warp, member.account.inventory, this.global.now)) throw new Error('Serve la chiave di questo passaggio.');
     sim.checkpoint(); this.store?.flush();
     sim.interactions.close(id); sim.fishing.close(id); sim.connections.get(id)!.inputs.length = 0;
@@ -493,10 +503,11 @@ export class RoomManager {
     for (const [id, member] of this.memberships) {
       if (!member.connected || this.spectators.has(id) || this.simulationFor(id).mode !== 'world') continue;
       const actor = this.simulationFor(id).players.get(id); if (!actor) continue;
-      const nearby = (this.project.warps ?? []).filter(w => w.from === this.mapId(id) && this.simulationFor(id).world.sameRoom(actor, warpPosition(w.entry)) && atWarp(actor, w));
-      if (this.warpRearm.has(id)) { if (!nearby.length) this.warpRearm.delete(id); continue; }
+      const nearby = (this.project.warps ?? []).filter(w => w.from === this.mapId(id) && this.simulationFor(id).world.sameRoom(actor, warpPosition(w.entry)) && this.simulationFor(id).world.sameLevel(actor, warpPosition(w.entry)) && atWarp(actor, w));
+      if (this.warpRearm.has(id)) { const input = this.simulationFor(id).connections.get(id)?.movementInput;
+        if (!nearby.length || (input && nearby.every(w => w.direction && !movingThroughWarp(w, input)))) this.warpRearm.delete(id); continue; }
       if (!this.warpRequests.has(id)) {
-        const warp = nearby.find(w => w.activation === 'walk');
+        const warp = nearby.find(w => w.activation === 'walk' && movingThroughWarp(w, this.simulationFor(id).connections.get(id)?.movementInput));
         if (warp && actor.hp > 0 && !this.simulationFor(id).fishing.busy(id)) {
           try { this.requestWarp(id, warp); } catch (e) { this.notices.set(id, (e as Error).message); this.warpRearm.add(id); }
         }
@@ -507,6 +518,7 @@ export class RoomManager {
       const member = this.memberships.get(id); if (!member?.connected) continue;
       const source = this.simulationFor(id), actor = source.players.get(id), { warp } = request;
       if (this.transfersStopped || member.epoch !== request.epoch || !actor || actor.hp <= 0 || !atWarp(actor, warp)
+        || !source.world.sameLevel(actor, warpPosition(warp.entry))
         || Math.max(source.connections.get(id)?.combatUntil ?? 0, actor.pvpUntil ?? 0) > source.now) {
         this.warpRearm.add(id); this.notices.set(id, 'Passaggio interrotto.');
         this.warpMessages.set(id, { type: 'warp-transition', phase: 'cancel' }); continue;
@@ -514,12 +526,12 @@ export class RoomManager {
       const target = warp.to === 'world' ? this.global : this.interior(warp.to), arrival = warpPosition(warp.arrival);
       const oldBody = structuredClone(actor), oldLocation = member.account.location;
       try {
-        if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world)) throw new Error('Arrivo bloccato.');
+        if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world, arrival)) throw new Error('Arrivo bloccato.');
         if (!member.account.inventory || !this.warpKeys.canPass(warp, member.account.inventory, this.global.now)) throw new Error('Serve la chiave di questo passaggio.');
         source.detachPlayer(id);
-        Object.assign(member.account.body!, arrival);
+        relocateBody(member.account.body!, arrival, target.world);
         if (warp.to === 'world') delete member.account.location;
-        else member.account.location = { mapId: warp.to, returnTo: oldLocation?.returnTo ?? { x: oldBody.x, y: oldBody.y } };
+        else member.account.location = { mapId: warp.to, returnTo: oldLocation?.returnTo ?? { x: oldBody.x, y: oldBody.y, ...source.world.surfaceState(oldBody) } };
         target.addPlayer(member.account, member.classId);
         this.warpKeys.open(warp, member.account.inventory!, this.global.now);
         member.roomId = warp.to === 'world' ? 'world' : `interior:${warp.to}`; member.epoch++;

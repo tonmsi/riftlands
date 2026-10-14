@@ -203,15 +203,15 @@ export class InteractionSystem {
     }
   }
   private spawnLoot(origin: Actor, stack: ItemStack, ownerId: string, now: number, index: number, delay = 0, radius = 12, avoid?: Actor): GroundItem {
-    let point = { x: origin.x, y: origin.y };
+    let point = { x: origin.x, y: origin.y, ...this.host.world.surfaceState(origin) };
     const direction = avoid ? Math.atan2(origin.y - avoid.y, origin.x - avoid.x) : origin.aim;
     // Search reachable rings away from the killer, rather than dropping straight under a melee player.
     for (let i = 0; i < (avoid ? 72 : 12); i++) {
       const angle = direction + (index + i % 12) * Math.PI / 6;
       const reach = avoid ? [radius, 40, 72, 24, 88, 104][Math.floor(i / 12)] : radius;
-      const candidate = { x: origin.x + Math.cos(angle) * reach, y: origin.y + Math.sin(angle) * reach };
+      const candidate = { x: origin.x + Math.cos(angle) * reach, y: origin.y + Math.sin(angle) * reach, ...this.host.world.surfaceState(origin) };
       if (avoid && distance(candidate, avoid) <= avoid.radius + 26) continue;
-      if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world) && hasLineOfSight(origin, candidate, this.host.world)) { point = candidate; break; }
+      if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world, candidate) && hasLineOfSight(origin, candidate, this.host.world)) { point = candidate; break; }
     }
     const drop: GroundItem = { id: randomUUID(), ...point, stack: { ...stack }, ownerId, availableAt: now + delay, expiresAt: now + LOOT_ITEM_TTL,
       ...(avoid && distance(point, avoid) <= avoid.radius + 10 ? { requireOwnerExit: true } : {}) };
@@ -233,10 +233,10 @@ export class InteractionSystem {
     const player = this.host.players.get(id), account = this.account(id), stack = account.inventory!.slots[slot];
     if (!this.host.connected(id) || !player || player.hp <= 0 || !stack || stack.itemId !== itemId || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > stack.quantity) throw new Error('Oggetto o quantità non disponibile.');
     if (this.drops.size >= 2048) throw new Error('Troppi oggetti a terra. Attendi qualche secondo.');
-    let point = { x: player.x, y: player.y };
+    let point = { x: player.x, y: player.y, ...this.host.world.surfaceState(player) };
     for (let i = 0; i < 12; i++) {
-      const angle = player.aim + i * Math.PI / 6, candidate = { x: player.x + Math.cos(angle) * 42, y: player.y + Math.sin(angle) * 42 };
-      if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world) && hasLineOfSight(player, candidate, this.host.world)) { point = candidate; break; }
+      const angle = player.aim + i * Math.PI / 6, candidate = { x: player.x + Math.cos(angle) * 42, y: player.y + Math.sin(angle) * 42, ...this.host.world.surfaceState(player) };
+      if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world, candidate) && hasLineOfSight(player, candidate, this.host.world)) { point = candidate; break; }
     }
     const drop: GroundItem = { id: randomUUID(), ...point, stack: { ...stack, itemId, quantity }, expiresAt: now + GROUND_ITEM_TTL, droppedBy: id, ownerPickupAt: now + 1000 };
     stack.quantity -= quantity; if (!stack.quantity) account.inventory!.slots[slot] = null;

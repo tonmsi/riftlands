@@ -5,12 +5,26 @@ import { newWorldDocument, type WorldDocument, type WorldInterior, type WorldWar
 
 export const WARP_RADIUS = TILE_SIZE * .65;
 export const WARP_FADE_MS = 280;
-export function warpPosition(p: Vec2): Vec2 { return { x: (p.x + .5) * TILE_SIZE, y: (p.y + .5) * TILE_SIZE }; }
+export function warpPosition(p: Vec2): Vec2 { return { ...p, x: (p.x + .5) * TILE_SIZE, y: (p.y + .5) * TILE_SIZE }; }
 export function atWarp(p: Vec2, warp: WorldWarp, extra = 0): boolean {
   const entry = warpPosition(warp.entry), size=warp.entrySize ?? {x:1,y:1};
   const dx=Math.max(entry.x-p.x,0,p.x-(entry.x+(size.x-1)*TILE_SIZE));
   const dy=Math.max(entry.y-p.y,0,p.y-(entry.y+(size.y-1)*TILE_SIZE));
   return Math.hypot(dx,dy)<=WARP_RADIUS+extra;
+}
+export function movingThroughWarp(warp: WorldWarp, input?: { dx: number; dy: number }): boolean {
+  if (!warp.direction) return true;
+  if (!input) return false;
+  const { dx, dy } = input;
+  switch (warp.direction) {
+    case 'up': return dy < 0 && -dy > Math.abs(dx);
+    case 'down': return dy > 0 && dy > Math.abs(dx);
+    case 'left': return dx < 0 && -dx > Math.abs(dy);
+    case 'right': return dx > 0 && dx > Math.abs(dy);
+  }
+}
+export function oppositeWarpDirection(direction: WorldWarp['direction']): WorldWarp['direction'] {
+  return direction && ({ up: 'down', down: 'up', left: 'right', right: 'left' } as const)[direction];
 }
 /** Authoring a door keeps its two directional runtime links in sync. */
 export function setWarpReturn(project: WorldDocument, warp: WorldWarp, enabled: boolean, newId: string): void {
@@ -26,6 +40,7 @@ export function setWarpReturn(project: WorldDocument, warp: WorldWarp, enabled: 
       entry: { ...warp.arrival }, arrival: { ...warp.entry }, activation: warp.activation, reverseId: warp.id };
     links.push(reverse); warp.reverseId = reverse.id;
   } else Object.assign(reverse, { from: warp.to, to: warp.from, entry: { ...warp.arrival }, arrival: { ...warp.entry }, activation: warp.activation });
+  if (warp.direction) reverse.direction = oppositeWarpDirection(warp.direction); else delete reverse.direction;
   if (warp.arrivalSize) reverse.entrySize = {...warp.arrivalSize}; else delete reverse.entrySize;
   if (warp.entrySize) reverse.arrivalSize = {...warp.entrySize}; else delete reverse.arrivalSize;
   if (warp.keyGate) reverse.keyGate = structuredClone(warp.keyGate); else delete reverse.keyGate;

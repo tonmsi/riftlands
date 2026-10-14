@@ -6,7 +6,7 @@ import type { Vec2 } from './types';
 /** Exact sweep against tile rectangles expanded by a circular radius, including rounded corners. */
 export function sweptWorldHit(start: Vec2, end: Vec2, radius: number, world: World): number | null {
   const room = world.roomAt(start.x, start.y);
-  let earliest = Infinity;
+  let earliest = world.stairBodyHit(start, end, radius) ?? Infinity;
   const rectHit = (left: number, top: number, right: number, bottom: number): number | null => {
     let enter = 0, leave = 1;
     for (const [origin, delta, min, max] of [[start.x, end.x - start.x, left, right], [start.y, end.y - start.y, top, bottom]]) {
@@ -21,7 +21,7 @@ export function sweptWorldHit(start: Vec2, end: Vec2, radius: number, world: Wor
   };
   for (let tx = Math.floor((Math.min(start.x, end.x) - radius) / TILE_SIZE); tx <= Math.floor((Math.max(start.x, end.x) + radius) / TILE_SIZE); tx++) {
     for (let ty = Math.floor((Math.min(start.y, end.y) - radius) / TILE_SIZE); ty <= Math.floor((Math.max(start.y, end.y) + radius) / TILE_SIZE); ty++) {
-      if (!world.isBlocked(tx, ty) && (world.roomTiles.get(`${tx},${ty}`) ?? '') === room) continue;
+      if (!world.blocksTerrainRay(tx, ty, start) && (world.roomTiles.get(`${tx},${ty}`) ?? '') === room) continue;
       const left = tx * TILE_SIZE, top = ty * TILE_SIZE, right = left + TILE_SIZE, bottom = top + TILE_SIZE;
       const hits = [rectHit(left - radius, top, right + radius, bottom), rectHit(left, top - radius, right, bottom + radius)];
       for (const x of [left, right]) for (const y of [top, bottom]) hits.push(segmentCircleHit(start, end, { x, y }, radius));

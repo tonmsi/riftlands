@@ -10,6 +10,9 @@ import { World, isSolid } from './world';
 import { collidesWorld } from './physics';
 import { WORLD_DOCUMENT } from './world-content';
 import { newWorldDocument, type AssetPlacement, type WorldAsset } from './world-schema';
+import { BASE_SURFACE, type SurfaceCell, type SurfaceLink, type SurfaceStair } from './world-surfaces';
+import { parseDungeonSurfaces } from './dungeon-surfaces';
+import { stairSpatialIssues } from './surface-stairs';
 
 export const TERRAIN_CATALOG: Record<TileKind, { name: string; color: string }> = {
   grass: { name: 'Erba', color: '#4d6846' }, path: { name: 'Pavimento', color: '#948465' },
@@ -33,6 +36,9 @@ export interface DungeonDraft {
   version: 1; id: string; name: string; width: number; height: number;
   encounters: DraftEncounter[]; origin: Vec2; tiles: TileKind[]; entities: DraftEntity[];
   assetPlacements?: AssetPlacement[];
+  surfaceCells?: SurfaceCell[];
+  surfaceLinks?: SurfaceLink[];
+  surfaceStairs?: SurfaceStair[];
 }
 export function compactDungeonDraft(draft: DungeonDraft) { const { tiles, ...rest } = draft; return { ...rest, tileRuns: packDraftTiles(tiles) }; }
 export const serializeDungeonDraft = (draft: DungeonDraft) => JSON.stringify(compactDungeonDraft(draft)) + "\n";
@@ -53,6 +59,7 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
   if (!value || value.version !== 1 || typeof value.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(value.id)
     || typeof value.name !== 'string' || !value.name.trim() || value.name.length > 80) fail();
   const draft = newDungeonDraft(value.width, value.height);
+  Object.assign(draft, parseDungeonSurfaces(value, { minTx: 0, minTy: 0, maxTx: value.width - 1, maxTy: value.height - 1 }));
   if (value.rooms !== undefined) {
     if (!validDungeonRooms(value.rooms, { minTx: 0, minTy: 0, maxTx: value.width - 1, maxTy: value.height - 1 })) fail();
     draft.rooms = structuredClone(value.rooms);
@@ -91,12 +98,15 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
       || (entity.kind === 'pickup' && !Object.hasOwn(PICKUP_CATALOG, entity.template))) fail();
     if (entity.settings !== undefined && (entity.kind !== 'npc' || !validNpcSettings(entity.settings))) fail();
     if (entity.inheritRadius !== undefined && typeof entity.inheritRadius !== "boolean") fail();
+    if (entity.surfaceId !== undefined && (typeof entity.surfaceId !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(entity.surfaceId))) fail();
+    if (entity.elevation !== undefined && (!Number.isInteger(entity.elevation) || entity.elevation < 0 || entity.elevation > 16)) fail();
     if (entity.encounterId !== undefined && !groupIds.has(entity.encounterId)) fail();
     if (entity.aggroRadius !== undefined && (entity.kind !== 'boss' || !Number.isFinite(entity.aggroRadius) || entity.aggroRadius <= 0 || entity.aggroRadius > 10000)) fail();
     if (entity.kind === 'flame' && ((!Number.isInteger(entity.span ?? 1) || (entity.span ?? 1) < 1 || (entity.span ?? 1) > 96)
       || (entity.vertical !== undefined && typeof entity.vertical !== 'boolean'))) fail();
     ids.add(entity.id);
     return { ...(entity.inheritRadius !== undefined ? { inheritRadius: entity.inheritRadius } : {}), ...(entity.aggroRadius !== undefined ? { aggroRadius: entity.aggroRadius } : {}), ...(entity.encounterId !== undefined ? { encounterId: entity.encounterId } : {}), ...(entity.kind === 'flame' ? { span: entity.span ?? 1, vertical: entity.vertical ?? false } : {}), id: entity.id, kind: entity.kind, template: entity.template, label: entity.label, x: entity.x, y: entity.y, level: entity.level,
+      ...(entity.surfaceId !== undefined ? { surfaceId: entity.surfaceId } : {}), ...(entity.elevation !== undefined ? { elevation: entity.elevation } : {}),
       ...(entity.settings ? { settings: { ...entity.settings } } : {}), radius: entity.kind === 'npc' ? NPC_DEFINITIONS[entity.template as NpcTemplateId].radius : entity.kind === 'pickup' ? 12 : entity.kind === 'party' ? 15 : entity.radius };
   });
   const placements = value.assetPlacements;
@@ -106,19 +116,27 @@ export function parseDungeonDraft(raw: string): DungeonDraft {
     for (const p of placements) {
       if (!p || typeof p.id !== 'string' || !/^[a-zA-Z0-9:-]{1,100}$/.test(p.id) || placementIds.has(p.id) || ids.has(p.id)
         || typeof p.assetId !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(p.assetId)
-        || !Number.isInteger(p.x) || !Number.isInteger(p.y) || p.x < 0 || p.y < 0 || p.x >= value.width || p.y >= value.height) fail();
+        || !Number.isInteger(p.x) || !Number.isInteger(p.y) || p.x < 0 || p.y < 0 || p.x >= value.width || p.y >= value.height
+        || (p.pivotY !== undefined && (!Number.isFinite(p.pivotY) || p.pivotY < 0 || p.pivotY > 1))) fail();
+      if (p.surfaceId !== undefined && (typeof p.surfaceId !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(p.surfaceId))) fail();
+      if (p.elevation !== undefined && (!Number.isInteger(p.elevation) || p.elevation < 0 || p.elevation > 16)) fail();
       placementIds.add(p.id);
     }
   }
   return { ...draft, id: value.id, name: value.name, origin: { x: value.origin.x, y: value.origin.y }, tiles: [...value.tiles], entities,
-    ...(placements !== undefined ? { assetPlacements: placements.map(p => ({ id: p.id, assetId: p.assetId, x: p.x, y: p.y })) } : {}) };
+    ...(placements !== undefined ? { assetPlacements: placements.map(p => ({ id: p.id, assetId: p.assetId, x: p.x, y: p.y, ...(p.pivotY !== undefined ? { pivotY: p.pivotY } : {}),
+      ...(p.surfaceId !== undefined ? { surfaceId: p.surfaceId } : {}), ...(p.elevation !== undefined ? { elevation: p.elevation } : {}) })) } : {}) };
 }
 
 export class DraftWorld extends World {
   constructor(readonly draft: DungeonDraft, assets: readonly WorldAsset[] = WORLD_DOCUMENT.assets) {
     const document = newWorldDocument();
+    document.interiorBounds = { width: draft.width, height: draft.height, id: draft.id, name: draft.name };
     document.assets = assets.map(a => ({ ...a, generation: { ...a.generation, enabled: false } }));
     document.placements = (draft.assetPlacements ?? []).filter(p => assets.some(a => a.id === p.assetId));
+    document.surfaceCells = draft.surfaceCells;
+    document.surfaceLinks = draft.surfaceLinks;
+    document.surfaceStairs = draft.surfaceStairs;
     super(document.seed, 16, 'world', document, []);
     for (const room of draft.rooms ?? []) { this.rooms.push(room); for (const tile of room.tiles) this.roomTiles.set(`${tile.x},${tile.y}`, room.id); }
   }
@@ -126,28 +144,34 @@ export class DraftWorld extends World {
     return tx < 0 || ty < 0 || tx >= this.draft.width || ty >= this.draft.height ? 'rock' : this.draft.tiles[ty * this.draft.width + tx];
   }
 }
-export function draftEntityPosition(entity: Vec2): Vec2 { return { x: (entity.x + .5) * TILE_SIZE, y: (entity.y + .5) * TILE_SIZE }; }
+export function draftEntityPosition(entity: Vec2): Vec2 { return { x: (entity.x + .5) * TILE_SIZE, y: (entity.y + .5) * TILE_SIZE,
+  ...(entity.surfaceId !== undefined ? { surfaceId: entity.surfaceId } : {}), ...(entity.elevation !== undefined ? { elevation: entity.elevation } : {}) }; }
 
 export function draftFlameTiles(entity: DraftEntity): Vec2[] {
-  return Array.from({ length: entity.span ?? 1 }, (_, i) => ({ x: entity.x + (entity.vertical ? 0 : i), y: entity.y + (entity.vertical ? i : 0) }));
+  return Array.from({ length: entity.span ?? 1 }, (_, i) => ({ x: entity.x + (entity.vertical ? 0 : i), y: entity.y + (entity.vertical ? i : 0),
+    ...(entity.surfaceId !== undefined ? { surfaceId: entity.surfaceId } : {}), ...(entity.elevation !== undefined ? { elevation: entity.elevation } : {}) }));
 }
 export function reachableDraftTiles(draft: DungeonDraft, from: Vec2, assets: readonly WorldAsset[] = WORLD_DOCUMENT.assets): Set<string> {
   const world = new DraftWorld(draft, assets), reached = new Set<string>(), visited = new Set<string>(), queue = [from];
   for (let i = 0; i < queue.length; i++) {
-    const point = queue[i], key = `${point.x},${point.y}`;
+    const point = queue[i], key = draftSurfaceKey(point);
     if (visited.has(key)) continue;
     visited.add(key);
     const center = draftEntityPosition(point);
     if (!world.sameRoom(draftEntityPosition(from), center)) continue;
-    if (collidesWorld(center.x, center.y, 15, world)) continue;
+    if (collidesWorld(center.x, center.y, 15, world, center)) continue;
     reached.add(key);
+    if ((point.surfaceId ?? BASE_SURFACE) === BASE_SURFACE) reached.add(`${point.x},${point.y}`);
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const x = point.x + dx, y = point.y + dy;
-      if (x >= 0 && y >= 0 && x < draft.width && y < draft.height && !visited.has(`${x},${y}`)) queue.push({ x, y });
+      if (x < 0 || y < 0 || x >= draft.width || y >= draft.height) continue;
+      const surface = world.canTraverse(center, (x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE);
+      if (surface && !visited.has(draftSurfaceKey({ x, y, surfaceId: surface.surfaceId }))) queue.push({ x, y, surfaceId: surface.surfaceId, elevation: surface.elevation });
     }
   }
   return reached;
 }
+export function draftSurfaceKey(point: Vec2): string { return `${point.x},${point.y}@${point.surfaceId ?? BASE_SURFACE}`; }
 /** Reachability is advisory: another entrance or warp may provide access. */
 export function encounterTiles(group: DraftEncounter): Vec2[] {
   return group.tiles ?? Array.from({length:group.width*group.height}, (_,i)=>({x:group.x+i%group.width,y:group.y+Math.floor(i/group.width)}));
@@ -194,18 +218,27 @@ export function validateDungeonDraft(draft: DungeonDraft, assets: readonly World
     else if (p.x + asset.columns > draft.width || p.y + asset.rows > draft.height) issues.push(`Asset ${asset.name}: ingombro fuori mappa.`);
   }
   const world = new DraftWorld(draft, assets);
+  for (const stair of draft.surfaceStairs ?? []) issues.push(...stairSpatialIssues(stair, (x, y, id) => world.surfaceAt(x, y, id)));
+  for (const c of draft.surfaceCells ?? []) if (c.kind === 'bridge') {
+    const ground = world.surfaceAt(c.x, c.y)!;
+    if (c.elevation <= ground.elevation && !(c.elevation === ground.elevation && ground.material === 'water'))
+      issues.push(`Ponte ${c.surfaceId}: il piano deve essere più alto del terreno sottostante (${c.x}, ${c.y}).`);
+  }
+  for (const l of draft.surfaceLinks ?? []) for (const p of [l.from, l.to]) if (world.surfaceAt(p.x, p.y, p.surfaceId)?.blocked !== false)
+    issues.push(`Collegamento ${l.id}: estremità su terreno solido o superficie assente (${p.x}, ${p.y}).`);
   for (const entity of draft.entities) {
     if (entity.kind === 'flame') {
       if (draftFlameTiles(entity).some(t => t.x === 0 || t.y === 0 || t.x === draft.width - 1 || t.y === draft.height - 1)) issues.push(`${entity.label}: fiamma sul bordo; spostala all’interno, il bordo si chiude con i massi.`);
-      for (const tile of draftFlameTiles(entity)) if (isSolid(world.getTile(tile.x, tile.y))) issues.push(`${entity.label}: fiamma su terreno solido o fuori mappa.`);
+      for (const tile of draftFlameTiles(entity)) if (world.surfaceAt(tile.x, tile.y, tile.surfaceId ?? BASE_SURFACE)?.blocked !== false) issues.push(`${entity.label}: fiamma su terreno solido o fuori mappa.`);
       continue;
     }
     const point = draftEntityPosition(entity);
     if (entity.kind !== 'activation' && (entity.x === 0 || entity.y === 0 || entity.x === draft.width - 1 || entity.y === draft.height - 1)) issues.push(`${entity.label}: sul bordo che verrà chiuso dai massi; sposta l’entità all’interno.`);
-    if (collidesWorld(point.x, point.y, entity.radius, world)) issues.push(`${entity.label}: ingombro su terreno solido o fuori mappa.`);
+    if (collidesWorld(point.x, point.y, entity.radius, world, point)) issues.push(`${entity.label}: ingombro su terreno solido o fuori mappa.`);
   }
   for (let i = 0; i < draft.entities.length; i++) for (let j = i + 1; j < draft.entities.length; j++) {
     const a = draft.entities[i], b = draft.entities[j];
+    if (!world.sameLevel(draftEntityPosition(a), draftEntityPosition(b))) continue;
     // Trigger markers have no physical body and may overlap other authored entities.
     if (a.kind === 'activation' || b.kind === 'activation') continue;
     if (a.kind === 'flame' || b.kind === 'flame') {
@@ -216,7 +249,7 @@ export function validateDungeonDraft(draft: DungeonDraft, assets: readonly World
     }
     if (Math.hypot(a.x - b.x, a.y - b.y) * TILE_SIZE < a.radius + b.radius) issues.push(`${a.label} e ${b.label}: posizioni sovrapposte.`);
   }
-  const start = party[0] ?? bosses[0];
+  const start = party[0] ?? bosses[0] ?? draft.entities.find(e => e.kind !== 'flame');
   if (start) {
     // Reachability uses player-sized clearance, including narrow corridors and diagonals.
     const world = new DraftWorld(draft, assets), reached = new Map<string, Set<string>>();
@@ -226,7 +259,7 @@ export function validateDungeonDraft(draft: DungeonDraft, assets: readonly World
         const anchor = draft.entities.find(e => e.kind === 'party' && world.sameRoom(draftEntityPosition(e), draftEntityPosition(entity))) ?? draft.entities.find(e => e.kind === 'boss' && world.sameRoom(draftEntityPosition(e), draftEntityPosition(entity))) ?? entity;
         reached.set(room, reachableDraftTiles(draft, anchor, assets));
       }
-      if (!reached.get(room)!.has(`${entity.x},${entity.y}`)) issues.push(`${entity.label}: non raggiungibile all’interno della sua stanza o dello spazio comune.`);
+      if (!reached.get(room)!.has(draftSurfaceKey(entity))) issues.push(`${entity.label}: non raggiungibile all’interno della sua stanza o dello spazio comune.`);
     }
   }
   return [...new Set(issues)];
@@ -237,10 +270,14 @@ export function draftFromDungeon(definition: DungeonDefinition, bossRadius = 36)
   const draft = newDungeonDraft(width, height);
   draft.id = definition.id; draft.name = definition.name; draft.origin = { x: b.minTx, y: b.minTy };
   draft.tiles = Array.from({ length: width * height }, (_, index) => dungeonTile(definition, b.minTx + index % width, b.minTy + Math.floor(index / width))!);
-  const position = (point: Vec2) => ({ x: Math.floor(point.x / TILE_SIZE) - b.minTx, y: Math.floor(point.y / TILE_SIZE) - b.minTy });
+  const position = (point: Vec2) => ({ x: Math.floor(point.x / TILE_SIZE) - b.minTx, y: Math.floor(point.y / TILE_SIZE) - b.minTy,
+    ...(point.surfaceId !== undefined ? { surfaceId: point.surfaceId } : {}), ...(point.elevation !== undefined ? { elevation: point.elevation } : {}) });
   draft.entities = [];
   if (definition.assetPlacements) draft.assetPlacements = definition.assetPlacements.map(p => ({ ...p, x: p.x - b.minTx, y: p.y - b.minTy }));
   if (definition.rooms) draft.rooms = definition.rooms.map(room => ({ ...room, tiles: room.tiles.map(p => ({ x: p.x - b.minTx, y: p.y - b.minTy })) }));
+  if (definition.surfaceCells) draft.surfaceCells = definition.surfaceCells.map(c => ({ ...c, x: c.x - b.minTx, y: c.y - b.minTy }));
+  if (definition.surfaceStairs) draft.surfaceStairs = definition.surfaceStairs.map(s => ({ ...s, from: { ...s.from, x: s.from.x - b.minTx, y: s.from.y - b.minTy }, to: { ...s.to, x: s.to.x - b.minTx, y: s.to.y - b.minTy } }));
+  if (definition.surfaceLinks) draft.surfaceLinks = definition.surfaceLinks.map(l => ({ ...l, from: { ...l.from, x: l.from.x - b.minTx, y: l.from.y - b.minTy }, to: { ...l.to, x: l.to.x - b.minTx, y: l.to.y - b.minTy } }));
   draft.encounters = [];
   for (const [index, encounter] of dungeonEncounters(definition).entries()) {
     const groupId = encounter.encounterGroupId ?? `encounter-${index}`;
@@ -259,7 +296,9 @@ export function draftFromDungeon(definition: DungeonDefinition, bossRadius = 36)
       draft.entities.push(...(encounter.encounter.activationPoints ?? []).map((p,i): DraftEntity=>({id:`activation-${index}-${i}`,kind:'activation',template:'',label:'Attivazione',level:1,radius:15,encounterId:groupId,...position(p)})));
       for (const passage of encounter.passages) if (passage.fightState === 'flame') {
         const first = {x:Math.min(...passage.tiles.map(t=>t.x)),y:Math.min(...passage.tiles.map(t=>t.y))};
-        draft.entities.push({id:`flame-${index}-${draft.entities.length}`,kind:'flame',template:'',label:passage.id,level:1,radius:15,encounterId:groupId,x:first.x-b.minTx,y:first.y-b.minTy,span:passage.tiles.length,vertical:Math.abs(Math.sin(passage.flame.angle)) > .5});
+        draft.entities.push({id:`flame-${index}-${draft.entities.length}`,kind:'flame',template:'',label:passage.id,level:1,radius:15,encounterId:groupId,x:first.x-b.minTx,y:first.y-b.minTy,
+          ...(passage.flame.surfaceId !== undefined ? { surfaceId: passage.flame.surfaceId } : {}), ...(passage.flame.elevation !== undefined ? { elevation: passage.flame.elevation } : {}),
+          span:passage.tiles.length,vertical:Math.abs(Math.sin(passage.flame.angle)) > .5});
       }
     }
     const aggro = encounter.encounter.regions.bossAggro;
@@ -276,7 +315,13 @@ export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldA
   const errors = issues.filter(issue => !isDungeonWarning(issue));
   if (errors.length) throw new Error(errors.join('\n'));
   const bosses = draft.entities.filter(e => e.kind === 'boss'), boss = bosses[0];
-  const position = (point: Vec2) => ({ x: (point.x + draft.origin.x + .5) * TILE_SIZE, y: (point.y + draft.origin.y + .5) * TILE_SIZE });
+  const draftWorld = new DraftWorld(draft, assets);
+  const position = (point: Vec2): Vec2 => {
+    const surface = draftWorld.surfaceAt(point.x, point.y, point.surfaceId ?? BASE_SURFACE);
+    return { x: (point.x + draft.origin.x + .5) * TILE_SIZE, y: (point.y + draft.origin.y + .5) * TILE_SIZE,
+      ...(point.surfaceId !== undefined ? { surfaceId: point.surfaceId } : {}),
+      ...((point.elevation !== undefined || surface?.elevation) ? { elevation: surface?.elevation ?? point.elevation } : {}) };
+  };
   const bounds = { minTx: draft.origin.x, maxTx: draft.origin.x + draft.width - 1, minTy: draft.origin.y, maxTy: draft.origin.y + draft.height - 1 };
   const left = bounds.minTx * TILE_SIZE, top = bounds.minTy * TILE_SIZE, right = (bounds.maxTx + 1) * TILE_SIZE, bottom = (bounds.maxTy + 1) * TILE_SIZE;
   const region: DungeonRegion = { kind: 'polygon', points: [{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }] };
@@ -289,7 +334,14 @@ export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldA
     passages: [], spawnPoints: { boss: position(boss ?? {x:1,y:1}), party: draft.entities.filter(e => e.kind === 'party').map(position) },
     npcSpawns: draft.entities.filter(e => e.kind === 'npc').map(e => ({ ...position(e), id: e.id, npcKind: e.template as NpcTemplateId, level: e.level, settings: { ...e.settings, name: e.label } })),
     pickupSpawns: draft.entities.filter(e => e.kind === 'pickup').map(e => ({ ...position(e), id: e.id, kind: e.template as PickupKind, radius: 12 })),
-    ...(draft.assetPlacements !== undefined ? { assetPlacements: draft.assetPlacements.map(p => ({ ...p, x: p.x + draft.origin.x, y: p.y + draft.origin.y })) } : {}),
+    ...(draft.assetPlacements !== undefined ? { assetPlacements: draft.assetPlacements.map(p => {
+      const surface = draftWorld.surfaceAt(p.x, p.y, p.surfaceId ?? BASE_SURFACE);
+      return { ...p, x: p.x + draft.origin.x, y: p.y + draft.origin.y,
+        ...((p.elevation !== undefined || surface?.elevation) ? { elevation: surface?.elevation ?? p.elevation } : {}) };
+    }) } : {}),
+    ...(draft.surfaceCells !== undefined ? { surfaceCells: draft.surfaceCells.map(c => ({ ...c, x: c.x + draft.origin.x, y: c.y + draft.origin.y })) } : {}),
+    ...(draft.surfaceStairs !== undefined ? { surfaceStairs: draft.surfaceStairs.map(s => ({ ...s, from: { ...s.from, x: s.from.x + draft.origin.x, y: s.from.y + draft.origin.y }, to: { ...s.to, x: s.to.x + draft.origin.x, y: s.to.y + draft.origin.y } })) } : {}),
+    ...(draft.surfaceLinks !== undefined ? { surfaceLinks: draft.surfaceLinks.map(l => ({ ...l, from: { ...l.from, x: l.from.x + draft.origin.x, y: l.from.y + draft.origin.y }, to: { ...l.to, x: l.to.x + draft.origin.x, y: l.to.y + draft.origin.y } })) } : {}),
     encounter: { preparationMs: 5000, regions: { trigger: region, admission: region, combat: region, ejectIntruders: region, bossAggro: region, bossLeash: region }, ejectTo: { x: left - 96, y: bottom + 96 } },
     spawnExclusionMargin: 96,
     approach: { from: { x: left - 480, y: bottom + 96 }, to: { x: left - 96, y: bottom + 96 }, halfWidth: 48, corridorHalfWidth: 96, waves: [], markers: [] },
@@ -305,7 +357,11 @@ export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldA
     const r = l + group.width * TILE_SIZE, b = t + group.height * TILE_SIZE;
     const region: DungeonRegion = { kind: 'polygon', points: [{x:l,y:t},{x:r,y:t},{x:r,y:b},{x:l,y:b}], ...(group.tiles ? {tiles:group.tiles.map(p=>({x:p.x+draft.origin.x,y:p.y+draft.origin.y}))} : {}) };
     const flames = draft.entities.filter(e => e.kind === 'flame' && (e.encounterId ?? draft.encounters[0].id) === group.id).map(e => {
-      const tiles = draftFlameTiles(e).map(p => ({ x: p.x + draft.origin.x, y: p.y + draft.origin.y }));
+      const tiles = draftFlameTiles(e).map(p => {
+        const surface = draftWorld.surfaceAt(p.x, p.y, p.surfaceId ?? BASE_SURFACE);
+        return { ...p, x: p.x + draft.origin.x, y: p.y + draft.origin.y,
+          ...((p.elevation !== undefined || surface?.elevation) ? { elevation: surface?.elevation ?? p.elevation } : {}) };
+      });
       return { id: e.id, position: position(e), tiles, fightState: 'flame' as const, flame: flameBarrierFromTiles(tiles, e.vertical) };
     });
     const passages = [...definition.passages.filter(p => !p.tiles.some(tile => flames.some(f => f.tiles.some(ft => ft.x === tile.x && ft.y === tile.y)))), ...flames];

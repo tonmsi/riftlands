@@ -7,7 +7,7 @@ export class GameDisplay {
   private fullscreenPending = false;
   private fullscreenWanted = false;
   private readonly fullscreenButton: HTMLButtonElement;
-  constructor(private root: HTMLElement, private interrupt: () => void, private requestExit: () => void, private notify: (message: string) => void) {
+  constructor(root: HTMLElement, private interrupt: () => void, private requestExit: () => void, private notify: (message: string) => void) {
     this.fullscreenButton = document.createElement('button');
     this.fullscreenButton.type = 'button'; this.fullscreenButton.className = 'glass hud-menu-button fullscreen-toggle';
     this.fullscreenButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg><span>Schermo intero</span>'; this.fullscreenButton.title = 'Schermo intero'; this.fullscreenButton.setAttribute('aria-label', 'Schermo intero');

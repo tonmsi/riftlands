@@ -7,7 +7,7 @@ interface Popup {
 /** One dismissal policy for mouse, touch, keyboard and native dialog backdrops. */
 export class PopupManager {
   private popups: Popup[] = [];
-  constructor(private root: HTMLElement) {
+  constructor(root: HTMLElement) {
     root.addEventListener('pointerdown', event => {
       const target = event.target as Element;
       const open = this.popups.filter(popup => popup.open());

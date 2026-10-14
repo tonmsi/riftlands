@@ -20,10 +20,12 @@ export function unpackDraftTiles(runs: unknown, count: number): TileKind[] {
 }
 
 /** Storage only: runtime and editors receive ordinary typed definitions. */
-export function unpackDungeonCatalog(value: unknown, catalog: ActorCatalog = ACTOR_CATALOG): DungeonBundle[] {
+export function unpackDungeonCatalog(value: unknown, catalog: ActorCatalog = ACTOR_CATALOG, includeDraft = true): DungeonBundle[] {
   if (!Array.isArray(value) || value.length > 1000) throw new Error('Catalogo dungeon non valido.');
   return value.map(raw => {
-    const entry = structuredClone(raw);
+    let source = raw;
+    if (!includeDraft) { const { draft: _draft, ...runtime } = raw; source = runtime; }
+    const entry = structuredClone(source);
     if (!entry?.definition?.layout || !Array.isArray(entry.bosses)) throw new Error('Dungeon non valido.');
     const layout = entry.definition.layout;
     if (layout.tileRuns !== undefined) {

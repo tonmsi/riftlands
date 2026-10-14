@@ -60,9 +60,9 @@ export interface BossLockState { bossId: string; locked: boolean; startedAt?: nu
 export interface BossPreparationState { bossId: string; name: string; startedAt: number; endsAt: number; entrants: number; team: boolean; }
 
 export const BOSS_DEFINITIONS: readonly BossDefinition[] =
-  unpackDungeonCatalog(customDungeons).flatMap(entry => entry.bosses).filter(boss => PERSISTENT_DUNGEON_BY_BOSS_ID.has(boss.id));
+  unpackDungeonCatalog(customDungeons, undefined, false).flatMap(entry => entry.bosses).filter(boss => PERSISTENT_DUNGEON_BY_BOSS_ID.has(boss.id));
 export const BOSS_BY_ID = new Map(BOSS_DEFINITIONS.map(definition => [definition.id, definition]));
-export const INSTALLED_BOSS_BY_ID = new Map(unpackDungeonCatalog(customDungeons).flatMap(entry => entry.bosses).map(b => [b.id, b]));
+export const INSTALLED_BOSS_BY_ID = new Map(unpackDungeonCatalog(customDungeons, undefined, false).flatMap(entry => entry.bosses).map(b => [b.id, b]));
 for (const definition of BOSS_DEFINITIONS) {
   const dungeon = DUNGEON_BY_BOSS_ID.get(definition.id) ?? PERSISTENT_DUNGEON_BY_BOSS_ID.get(definition.id);
   if (!dungeon || dungeon.id !== definition.dungeonId) throw new Error(`Boss ${definition.id}: dungeon ${definition.dungeonId} assente o non associato.`);

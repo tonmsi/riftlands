@@ -4,6 +4,7 @@ data/
 test-results/
 playwright-report/
 artifacts/
+/public/terrain-textures/faceted-v1.zip
 *.log
 *.bak
 *.tmp

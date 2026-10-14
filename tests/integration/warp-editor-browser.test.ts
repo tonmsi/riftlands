@@ -59,6 +59,8 @@ test('World Maker authors a separate interior, paints its own terrain and saves 
     const project = await page.evaluate(async () => (await (await fetch('/__world/project')).json()).document);
     assert.equal(project.interiors.length, 1); assert.equal(project.interiors[0].name, 'Locanda del viandante');
     assert.equal(project.interiors[0].pvp, true);
+    assert.equal(project.warps.find((w: any) => w.from === 'world').direction, 'up');
+    assert.equal(project.warps.find((w: any) => w.from === mapId).direction, 'down');
     assert.equal(project.warps.length, 2); assert.ok(project.warps.find((w: any) => w.from === 'world').name.includes('Locanda del viandante')); assert.deepEqual(project.warps.find((w: any) => w.from === mapId).arrival, { x: 0, y: 5 });
     assert.deepEqual(project.warps.find((w: any) => w.from === 'world').entry, { x: 0, y: 5 });
     assert.ok(project.warps.every((w: any) => w.reverseId));
@@ -174,8 +176,9 @@ test('opening another side shows the selected destination terrain and moving aff
     await expect(page.locator('#surface-map')).toHaveValue('painted'); await expect(page.locator('#warp-current-side')).toContainText('Primo piano arredato');
     await expect.poll(() => page.locator('#map').evaluate((canvas: HTMLCanvasElement) => {
       const r = canvas.getBoundingClientRect(), scale = canvas.width / r.width;
-      return Array.from(canvas.getContext('2d')!.getImageData(Math.round((r.width / 2 + 48) * scale), Math.round(r.height / 2 * scale), 1, 1).data);
-    })).toEqual([80, 125, 145, 255]);
+      const pixel = canvas.getContext('2d')!.getImageData(Math.round((r.width / 2 + 48) * scale), Math.round(r.height / 2 * scale), 1, 1).data;
+      return pixel[3] === 255 && pixel[1] > pixel[0] + 30 && pixel[2] > pixel[0] + 30;
+    })).toBe(true);
     await page.locator('#warp-move').click();
     const box = (await page.locator('#map').boundingBox())!;
     await page.mouse.click(box.x + box.width / 2 - 48, box.y + box.height / 2 - 24);
@@ -331,5 +334,49 @@ test('one-way A/B placement creates one active entrance and a draggable arrival'
     const saved = await page.evaluate(async () => (await (await fetch('/__world/project')).json()).document);
     assert.equal(saved.warps.length, 1); assert.equal(saved.warps[0].reverseId, undefined);
     assert.deepEqual(saved.warps[0].entry, { x: 0, y: 2 }); assert.deepEqual(saved.warps[0].arrival, { x: 0, y: 6 });
+  } finally { await browser?.close(); await studio.close(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('projected warp markers select the clicked plane, hide decks below, and retain support when dragged', { timeout: 60_000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'riftlands-warp-surface-'));
+  const project = newWorldDocument();
+  for (let y = -3; y <= 10; y++) for (let x = -3; x <= 10; x++) project.tiles.push({ x, y, terrain: 'path', suppressAssets: true });
+  project.surfaceCells = [2, 3, 4].map(x => ({ x, y: 2, elevation: 1, surfaceId: 'deck', material: 'wood' as const, wallMaterial: 'wood' as const, kind: 'bridge' as const }));
+  project.warps = [
+    { id: 'low', name: 'LOW-DOOR', from: 'world', to: 'world', entry: { x: 2, y: 2 }, arrival: { x: 4, y: 4 }, activation: 'walk' },
+    { id: 'high', name: 'HIGH-DOOR', from: 'world', to: 'world', entry: { x: 2, y: 2, surfaceId: 'deck', elevation: 1 }, arrival: { x: 4, y: 2, surfaceId: 'deck', elevation: 1 }, activation: 'walk' },
+  ];
+  await writeFile(join(dir, 'world.json'), JSON.stringify(project)); await writeFile(join(dir, 'dungeons.json'), '[]');
+  const studio = await startWorldStudio({ root: resolve('.'), documentPath: join(dir, 'world.json'), dungeonPath: join(dir, 'dungeons.json'), dataPath: join(dir, 'accounts.json'), port: 0 });
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  try {
+    browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } }), errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.addInitScript(`window.warpDraw = []; const warpFillText = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function(text, x, y, ...rest) {
+        if (this.canvas.id === 'map' && String(text).includes('-DOOR')) window.warpDraw.push({text:String(text), x, y, under:document.querySelector('#surface-show-under')?.checked});
+        return warpFillText.call(this, text, x, y, ...rest);
+      };`);
+    await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
+    await expect.poll(() => page.evaluate(() => (window as any).warpDraw.some((draw: any) => draw.text === 'HIGH-DOOR' && Math.abs(draw.y - 36) < 1e-6))).toBe(true);
+    const box = (await page.locator('#map').boundingBox())!;
+    const x = box.x + box.width / 2 + 2.5 * 24, y = box.y + box.height / 2 + 2.1 * 24;
+    await page.mouse.click(x, y); await expect(page.locator('#warp-name')).toHaveValue('HIGH-DOOR');
+    await page.evaluate(() => { (window as any).warpDraw = []; });
+    await page.locator('#surface-show-under').check();
+    await expect.poll(() => page.evaluate(() => (window as any).warpDraw.some((draw: any) => draw.under && draw.text.includes('LOW-DOOR')))).toBe(true);
+    assert.equal(await page.evaluate(() => (window as any).warpDraw.some((draw: any) => draw.under && draw.text.includes('HIGH-DOOR'))), false);
+    await page.mouse.click(x, y); await expect(page.locator('#warp-name')).toHaveValue('LOW-DOOR');
+    await page.locator('#surface-show-under').uncheck();
+    await page.mouse.click(x, y); await expect(page.locator('#warp-name')).toHaveValue('HIGH-DOOR');
+    await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + 24, y, { steps: 4 }); await page.mouse.up();
+    await expect(page.locator('#warp-x')).toHaveValue('3');
+    await page.locator('#warp-direction').selectOption('right');
+    await page.locator('#apply-world').click(); await expect(page.locator('#status')).toContainText('applicato');
+    const saved = await page.evaluate(async () => (await (await fetch('/__world/project')).json()).document);
+    assert.deepEqual(saved.warps.find((warp: any) => warp.id === 'high').entry, { x: 3, y: 2, surfaceId: 'deck', elevation: 1 });
+    assert.deepEqual(saved.warps.find((warp: any) => warp.id === 'low').entry, { x: 2, y: 2 });
+    assert.deepEqual(errors, []);
   } finally { await browser?.close(); await studio.close(); await rm(dir, { recursive: true, force: true }); }
 });

@@ -7,7 +7,7 @@ import './ui/interactions/interactions.css';
 import './fishing/fishing.css';
 import { FishingUI } from './fishing/fishing-ui';
 import { canTalkToNpc } from './core/npc-interaction';
-import { CLASSES, TICK_RATE, TILE_SIZE } from '../shared/config';
+import { TICK_RATE, TILE_SIZE } from '../shared/config';
 import { equippedAbility } from '../shared/progression';
 import type { Actor, GameEvent, InputCommand, PublicAccount, Snapshot } from '../shared/types';
 import type { NarrativeProgress } from '../shared/narrative';
@@ -27,6 +27,7 @@ import { prepareLobbyArt } from './ui/lobby/lobby-assets';
 import { CAMERA_STORAGE_KEY, parseCameraSettings } from './controls/camera-settings';
 import { CameraOptions } from './controls/camera-options';
 import { DeviceOptions } from './controls/device-options';
+import { MobileFrameRate } from './controls/mobile-performance';
 import { matchResultText } from './ui/transition-overlay';
 import { WarpUI } from './ui/warp-ui';
 import { WORLD_DOCUMENT } from '../shared/world-content';
@@ -59,7 +60,7 @@ const warpUI = new WarpUI(warpId => { connection.send({ type: 'interaction', com
 
 const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   releaseControls,
-  joinCredentials: (mode, name, password, classId) => {
+  joinCredentials: (mode, name, password, _classId) => {
     const generation = ++joinGeneration;
     ui.setConnection('connecting', 'Accesso all’accampamento…');
     void (async () => {
@@ -192,7 +193,7 @@ const connection = new GameConnection({
       const result = message.betting?.spectating ? { actor: message.self, pending: [] } : reconcile(message.self, message.ack, pending, renderer.world, message.time);
       pending = result.pending;
       predicted = result.actor;
-      localMovement.correct(old, predicted);
+      localMovement.correct(old, predicted, renderer.world);
       snapshotBuffer.push(message, performance.now());
       localCombat.receive(message, connection.serverTime());
       for (const event of message.events) {
@@ -285,7 +286,7 @@ ui.canvas.addEventListener('pointerdown', event => {
   }
   const position = renderer.screenToWorld(event.clientX, event.clientY);
   if (latest?.fishing) { fishingUI.aim(position); return; }
-  const target = renderedActors.find(actor => actor.id !== predicted?.id && Math.hypot(actor.x - position.x, actor.y - position.y) < actor.radius + 14);
+  const target = renderedActors.find(actor => actor.id !== predicted?.id && (!predicted || renderer.world.sameLevel(predicted, actor)) && Math.hypot(actor.x - position.x, actor.y - position.y) < actor.radius + 14);
   if (target) { selectedId = target.id; ui.setSelected(target); }
   else if (selectedId) { selectedId = null; ui.setSelected(null); }
   if (target && canTalkToNpc(predicted, target, renderer.world)) {
@@ -313,7 +314,7 @@ function inputTick(): void {
   if (!playing || !connection.connected || !predicted || document.hidden || latest?.betting?.spectating || warpUI.blocked) return;
   // Do not fill the reconciliation queue while the arena simulation is paused.
   if ((latest?.betting?.startsAt ?? 0) > connection.serverTime()) { releaseControls(); return; }
-  localMovement.advance(predicted, predicted);
+  localMovement.advance(predicted, predicted, renderer.world);
   if (pending.length > 120) { releaseControls(); return; }
   const { dx, dy, aim, cast, autoAim } = isTyping() || ui.inputBlocked || bettingUI.visible || predicted.hp <= 0
     ? (releaseControls(), { dx: 0, dy: 0, aim: predicted.aim, cast: undefined, autoAim: false })
@@ -321,12 +322,12 @@ function inputTick(): void {
   const castTime = connection.serverTime(), castLead = Math.min(150, connection.ping / 2);
   if (cast) ui.dismissLevelUp();
   const readyCast = latest?.fishing || cast === 'basic' && !localCombat.basicReady(predicted, castTime + castLead) ? undefined : cast;
-  const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, analogMovement: matchMedia('(pointer: coarse)').matches || controls.settings.movement !== 'keyboard', ...(readyCast ? { cast: readyCast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
+  const input: InputCommand = { seq: ++seq, dx, dy, aim, autoAim, analogMovement: touchDevice.matches || controls.settings.movement !== 'keyboard', ...(readyCast ? { cast: readyCast } : {}), ...(autoAim && selectedId ? { targetId: selectedId } : {}) };
   if (connection.send({ type: 'input', input })) {
     pending.push(input);
     localCombat.predict(input, predicted, latest, renderer.world, castTime, castLead);
     const next = predictMovement(predicted, input, renderer.world, connection.serverTime());
-    localMovement.advance(predicted, next);
+    localMovement.advance(predicted, next, renderer.world);
     predicted = next;
     controls.consumeCast();
   } else seq--;
@@ -351,14 +352,21 @@ mobileControls = new MobileControls(document.querySelector<HTMLElement>('.rift-a
 
 let lastFrame = performance.now();
 const frameBudget = new FrameBudget();
+const mobileFrameRate = new MobileFrameRate();
+const touchDevice = matchMedia('(pointer: coarse)');
 function frame(now: number): void {
   requestAnimationFrame(frame);
-  if (document.hidden) { frameBudget.reset(); lastFrame = now; return; }
-  if (!frameBudget.ready(now, playing ? 60 : 30)) return;
-  const delta = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  if (document.hidden) { frameBudget.reset(); mobileFrameRate.reset(); lastFrame = now; return; }
+  if (!playing) mobileFrameRate.reset();
+  const fps = !playing ? 30 : !touchDevice.matches ? 60
+    : deviceOptions.mobileFrameRate === 'auto' ? mobileFrameRate.fps : deviceOptions.mobileFrameRate;
+  if (!frameBudget.ready(now, fps)) return;
+  const interval = now - lastFrame;
+  const delta = Math.min(0.1, interval / 1000); lastFrame = now;
+  if (playing && touchDevice.matches && deviceOptions.mobileFrameRate === 'auto') mobileFrameRate.observe(interval);
   advanceInputs(now);
   const time = connection.serverTime();
-  const remoteFrame = snapshotBuffer.sample(performance.now());
+  const remoteFrame = snapshotBuffer.sample(performance.now(), renderer.world);
   const actors = remoteFrame?.actors ?? [];
   renderedActors = actors;
   const immediateSelf = predicted ? localMovement.sample(predicted, inputAccumulator / (1000 / TICK_RATE), delta) : latest?.self ?? null;
@@ -378,7 +386,8 @@ function frame(now: number): void {
   }
   const frameEvents = combat.events;
   if (audible && self) audio.update(self, actors, frameEvents, latest?.bossWindups ?? [], time);
-  renderer.render({
+  // The lobby hides the world canvas. Do not allocate terrain/GPU buffers behind it.
+  if (playing) renderer.render({
     ambientSpeechBlocked: !connection.connected || document.hidden || ui.inputBlocked || !!latest?.dialogue || !!latest?.fishing || bettingUI.visible,
     spectating: !!latest?.betting?.spectating,
     fishing: latest?.fishing,

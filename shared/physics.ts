@@ -1,15 +1,28 @@
 import { TILE_SIZE } from './config';
 import type { Actor, Vec2 } from './types';
 import { World } from './world';
+import { stairGeometry } from './surface-stairs';
+import { walkingStepDistance } from './stair-walking';
 
 /** Circle vs solid terrain AABBs, also correct across negative chunk coordinates. */
-export function collidesWorld(x: number, y: number, radius: number, world: World): boolean {
+export function collidesWorld(x: number, y: number, radius: number, world: World, support?: Vec2): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius) || radius < 0) return true;
   const minX = Math.floor((x - radius) / TILE_SIZE), maxX = Math.floor((x + radius) / TILE_SIZE);
   const minY = Math.floor((y - radius) / TILE_SIZE), maxY = Math.floor((y + radius) / TILE_SIZE);
   const room = world.roomAt(x, y);
+  const point = { x, y, ...(support?.surfaceId !== undefined ? { surfaceId: support.surfaceId } : {}) };
+  if (world.collidesStairBody({ ...point, ...(support?.elevation !== undefined ? { elevation: support.elevation } : {}) }, radius)) return true;
+  const stair = world.surfaceIndex.stairFor({ ...point, ...(support?.elevation !== undefined ? { elevation: support.elevation } : {}) });
+  if (stair) {
+    const g = stairGeometry(stair), t = g.progressAt(point);
+    if ((support?.surfaceId?.startsWith('stair:') || t > g.landing / g.run && t < 1 - g.landing / g.run)
+      && t >= 0 && t <= 1 && !g.contains(point, radius)) return true;
+  }
   for (let ty = minY; ty <= maxY; ty++) for (let tx = minX; tx <= maxX; tx++) {
-    if (!world.isBlocked(tx, ty) && (world.roomTiles.get(`${tx},${ty}`) ?? '') === room) continue;
+    const open = world.surfaceIndex.hasSurfaces || support?.surfaceId && support.surfaceId !== 'ground'
+      ? world.canTraverse(point, (tx + .5) * TILE_SIZE, (ty + .5) * TILE_SIZE, false) !== undefined
+      : !world.isBlocked(tx, ty);
+    if (open && (world.roomTiles.get(`${tx},${ty}`) ?? '') === room) continue;
     const nearestX = Math.max(tx * TILE_SIZE, Math.min(x, (tx + 1) * TILE_SIZE));
     const nearestY = Math.max(ty * TILE_SIZE, Math.min(y, (ty + 1) * TILE_SIZE));
     if ((x - nearestX) ** 2 + (y - nearestY) ** 2 < radius ** 2 + 1e-8) return true;
@@ -17,9 +30,18 @@ export function collidesWorld(x: number, y: number, radius: number, world: World
   return false;
 }
 
-/** Both peers run this exact fixed-step movement; small substeps prevent tunnelling. */
-/** Movimento a step discreti con scivolamento tangenziale a velocità conservata */
+/** Exact world-space displacement for collision probes, pushes and charges. */
 export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number, dy: number, distance: number, world: World): Vec2 {
+  return integrateMovement(actor, dx, dy, distance, world, false);
+}
+
+/** Both peers spend the same walking-time budget, including the projected stair profile. */
+export function moveWalkingWithCollisions(actor: Vec2 & { radius: number }, dx: number, dy: number, distance: number, world: World): Vec2 {
+  return integrateMovement(actor, dx, dy, distance, world, true);
+}
+
+/** Small physical substeps prevent tunnelling; walking strides can only shorten them. */
+function integrateMovement(actor: Vec2 & { radius: number }, dx: number, dy: number, distance: number, world: World, walking: boolean): Vec2 {
   const magnitude = Math.hypot(dx, dy);
   if (!Number.isFinite(magnitude) || !Number.isFinite(distance) || magnitude === 0 || distance <= 0) return { x: actor.x, y: actor.y };
   
@@ -32,35 +54,51 @@ export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number,
   const dirY = dy / magnitude;
   
   let x = actor.x, y = actor.y;
-  const blocked = (tx: number, ty: number) => !world.sameRoom(actor, { x: tx, y: ty }) || collidesWorld(tx, ty, actor.radius, world);
+  const layered = world.surfaceIndex.hasSurfaces || actor.surfaceId !== undefined && actor.surfaceId !== 'ground';
+  let surfaceId = actor.surfaceId ?? 'ground', elevation = world.surfaceFor(actor)?.elevation ?? 0;
+  const blocked = (tx: number, ty: number) => {
+    if (!layered) return !world.sameRoom(actor, { x: tx, y: ty }) || collidesWorld(tx, ty, actor.radius, world);
+    const surface = world.canTraverse({ x, y, surfaceId }, tx, ty);
+    return !surface || collidesWorld(tx, ty, actor.radius, world, { x: tx, y: ty, surfaceId: surface.surfaceId });
+  };
+  const advance = (tx: number, ty: number) => {
+    if (!layered) { x = tx; y = ty; return; }
+    const surface = world.canTraverse({ x, y, surfaceId }, tx, ty)!;
+    x = tx; y = ty; surfaceId = surface.surfaceId; elevation = surface.elevation;
+  };
+  const stride = (ux: number, uy: number, budget = stepDist) => walking
+    ? walkingStepDistance({ x, y, surfaceId, elevation }, ux, uy, budget, world) : budget;
   for (let i = 0; i < steps; i++) {
-    const targetX = x + dirX * stepDist;
-    const targetY = y + dirY * stepDist;
+    const directDist = stride(dirX, dirY);
+    const targetX = x + dirX * directDist;
+    const targetY = y + dirY * directDist;
     
     // Prova il movimento diagonale diretto
     if (!blocked(targetX, targetY)) {
-      x = targetX;
-      y = targetY;
+      advance(targetX, targetY);
       continue;
     }
 
     // Se sbatte, prova a scivolare mantenendo l'intera velocità lungo l'asse libero
-    const canMoveX = !blocked(x + Math.sign(dirX) * stepDist, y);
-    const canMoveY = !blocked(x, y + Math.sign(dirY) * stepDist);
+    const axisX = stride(Math.sign(dirX), 0), axisY = stride(0, Math.sign(dirY));
+    const canMoveX = !blocked(x + Math.sign(dirX) * axisX, y);
+    const canMoveY = !blocked(x, y + Math.sign(dirY) * axisY);
 
     if (canMoveX && !canMoveY) {
       // Parete orizzontale: scivola orizzontalmente a piena velocità
-      x += Math.sign(dirX) * stepDist;
+      advance(x + Math.sign(dirX) * axisX, y);
     } else if (canMoveY && !canMoveX) {
       // Parete verticale: scivola verticalmente a piena velocità
-      y += Math.sign(dirY) * stepDist;
+      advance(x, y + Math.sign(dirY) * axisY);
     } else {
       // Tentativo standard a componenti ridotte se entrambi o nessuno sono completamente liberi
-      if (!blocked(x + dirX * stepDist, y)) x += dirX * stepDist;
-      if (!blocked(x, y + dirY * stepDist)) y += dirY * stepDist;
+      const componentX = walking ? Math.sign(dirX) * stride(Math.sign(dirX), 0, stepDist * Math.abs(dirX)) : dirX * stepDist;
+      if (!blocked(x + componentX, y)) advance(x + componentX, y);
+      const componentY = walking ? Math.sign(dirY) * stride(0, Math.sign(dirY), stepDist * Math.abs(dirY)) : dirY * stepDist;
+      if (!blocked(x, y + componentY)) advance(x, y + componentY);
     }
   }
-  return { x, y };
+  return { x, y, ...(world.surfaceIndex.hasSurfaces || actor.surfaceId !== undefined || actor.elevation !== undefined ? { surfaceId, elevation } : {}) };
 }
 export function movementSpeed(actor: Actor, time: number): number {
   if (actor.hp <= 0 || actor.deadUntil > time) return 0;
@@ -74,14 +112,15 @@ export function movementSpeed(actor: Actor, time: number): number {
 }
 
 export function terrainSpeed(actor: Vec2, world: World): number {
-  return world.getTile(Math.floor(actor.x / TILE_SIZE), Math.floor(actor.y / TILE_SIZE)) === 'mud' ? 0.65 : 1;
+  return world.surfaceFor(actor)?.material === 'mud' ? 0.65 : 1;
 }
 
 /** Grid traversal checks every crossed tile, including diagonal corner cracks. */
 export function hasLineOfSight(a: Vec2, b: Vec2, world: World): boolean {
-  if (!world.sameRoom(a, b)) return false;
+  if (!world.sameRoom(a, b) || !world.sameLevel(a, b)) return false;
+  if (world.stairBodyHit(a, b) !== null) return false;
   const room = world.roomAt(a.x, a.y);
-  const blocked = (tx: number, ty: number) => world.isBlocked(tx, ty) || (world.roomTiles.get(`${tx},${ty}`) ?? '') !== room;
+  const blocked = (tx: number, ty: number) => world.blocksTerrainRay(tx, ty, a) || (world.roomTiles.get(`${tx},${ty}`) ?? '') !== room;
   const dx = b.x - a.x, dy = b.y - a.y;
   // Grid DDA checks every crossed tile, including the two corner-adjacent cells.
   let tx = Math.floor(a.x / TILE_SIZE), ty = Math.floor(a.y / TILE_SIZE);
@@ -124,7 +163,7 @@ export function resolveActorCollisions(actors: Actor[], world: World): void {
     for (const a of living) {
       const bx = Math.floor(a.x / 80), by = Math.floor(a.y / 80);
       for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) for (const b of buckets.get(`${bx + ox},${by + oy}`) ?? []) {
-        if (!world.sameRoom(a, b)) continue;
+        if (!world.sameRoom(a, b) || !world.sameLevel(a, b)) continue;
         const dx = a.x - b.x, dy = a.y - b.y, dist = Math.hypot(dx, dy), minimum = a.radius + b.radius;
         if (dist >= minimum) continue;
         const nx = dist > 0.0001 ? dx / dist : 1, ny = dist > 0.0001 ? dy / dist : 0;

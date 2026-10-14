@@ -1,6 +1,8 @@
 import type { Vec2 } from './types';
-import { DEFAULT_CELL, type WorldDocument, type WorldAsset, type AssetPlacement } from './world-schema';
+import { DEFAULT_CELL, worldAssetLayer, type WorldDocument, type WorldAsset, type AssetPlacement } from './world-schema';
 import { placementBounds, overlaps, SpatialIndex } from './world-authoring';
+import { planElevationAsset, stampElevationAsset, stampFloorSupport } from './world-asset-surfaces';
+import { surfaceKey } from './world-surfaces';
 import type { TileOverride } from './world-schema';
 import { EDIT_CHUNK_SIZE, decodeTileChunk, encodeTileChunk, tileCode, tileFromCode, tileChunkKey, worldTileMetrics, setWorldTileMetrics, type WorldTileChunk } from './world-tiles';
 
@@ -23,21 +25,28 @@ export function brushTiles(center: Vec2, radius: number): Vec2[] {
 }
 /** Asset image and behavior mask share the same top-left origin. Pivot only controls painter ordering. */
 export function canStampAsset(document: WorldDocument, asset: WorldAsset, point: Vec2, ignoreId?: string): boolean {
+  if (asset.category === 'elevation') return !!planElevationAsset(document, asset, point);
   const bounds = placementBounds({ id: '', assetId: asset.id, ...point }, asset);
   return !document.placements.some(p => {
     if (p.id === ignoreId) return false;
+    if ((p.surfaceId ?? 'ground') !== (point.surfaceId ?? 'ground') || (p.elevation ?? 0) !== (point.elevation ?? 0)) return false;
     const other = document.assets.find(a => a.id === p.assetId)!;
-    if (other.layer === 'ground' || asset.layer === 'ground') return p.assetId === asset.id && p.x === point.x && p.y === point.y;
+    if (worldAssetLayer(other) === 'ground' || worldAssetLayer(asset) === 'ground') return p.assetId === asset.id && p.x === point.x && p.y === point.y;
     const gap = asset.generation.spacing;
     return overlaps({ left: bounds.left - gap, top: bounds.top - gap, right: bounds.right + gap, bottom: bounds.bottom + gap }, placementBounds(p, other));
   });
 }
 export function stampAsset(document: WorldDocument, asset: WorldAsset, point: Vec2, id: string): AssetPlacement | undefined {
+  if (asset.category === 'elevation') {
+    if (!stampElevationAsset(document, asset, point, id)) return;
+    return document.placements.find(p => p.assetId === asset.id && p.x === point.x && p.y === point.y && (p.surfaceId ?? 'ground') === 'ground');
+  }
   if (!canStampAsset(document, asset, point)) return;
-  const p = { id, assetId: asset.id, ...point }; document.placements.push(p); return p;
+  const p = { id, assetId: asset.id, ...point }; document.placements.push(p); stampFloorSupport(document, asset, point); return p;
 }
 export function paintAssetCell(asset: WorldAsset, column: number, row: number, mode: 'background' | 'wall' | 'hide' | 'fade' | 'hide-fade'): void {
   if (column < 0 || row < 0 || column >= asset.columns || row >= asset.rows) return;
+  if (asset.category === 'floor') { asset.cells[row * asset.columns + column] = { ...DEFAULT_CELL }; return; }
   asset.cells[row * asset.columns + column] = mode === 'background' ? { ...DEFAULT_CELL }
     : mode === 'wall' ? { blocked: true, visibility: 'normal' } : { blocked: false, visibility: mode };
 }
@@ -55,6 +64,7 @@ export class WorldBrush {
   private npcIndices: Map<string, number>;
   private placements: SpatialIndex<AssetPlacement>;
   private npcTiles: Map<string, string[]>;
+  private surfaceIndices: Map<string, number>;
   constructor(private document: WorldDocument, tilesOnly = false) {
     for (const [i, c] of (document.tileChunks ?? []).entries()) this.chunkIndices.set(tileChunkKey(c[0], c[1]), i);
     this.assets = new Map(tilesOnly ? [] : document.assets.map(a => [a.id, a]));
@@ -62,6 +72,7 @@ export class WorldBrush {
     this.placementIndices = new Map(tilesOnly ? [] : document.placements.map((p, i) => [p.id, i]));
     this.npcIndices = new Map(tilesOnly ? [] : document.npcs.map((n, i) => [n.id, i]));
     this.npcTiles = new Map(); for (const n of tilesOnly ? [] : document.npcs) { const key = `${n.x},${n.y}`, ids = this.npcTiles.get(key) ?? []; ids.push(n.id); this.npcTiles.set(key, ids); }
+    this.surfaceIndices = new Map((tilesOnly ? [] : document.surfaceCells ?? []).map((cell, i) => [surfaceKey(cell.x, cell.y, cell.surfaceId), i]));
     this.placements = new SpatialIndex(p => placementBounds(p, this.assets.get(p.assetId)!));
     for (const p of tilesOnly ? [] : document.placements) this.placements.add(p);
   }
@@ -93,22 +104,32 @@ export class WorldBrush {
       : current !== undefined ? this.document.tiles[current].terrain : undefined;
     this.tile(point, { suppressAssets: true, ...(terrain ? { terrain } : {}) });
     for (const p of this.placements.query({ left: point.x, top: point.y, right: point.x + 1, bottom: point.y + 1 })) {
+      if (point.surfaceId !== undefined && (p.surfaceId ?? 'ground') !== point.surfaceId) continue;
       const index = this.placementIndices.get(p.id); if (index === undefined) continue;
       const last = this.document.placements.pop()!; this.placementIndices.delete(p.id);
       if (index < this.document.placements.length) { this.document.placements[index] = last; this.placementIndices.set(last.id, index); }
     }
     for (const id of this.npcTiles.get(`${point.x},${point.y}`) ?? []) {
       const index = this.npcIndices.get(id); if (index === undefined) continue;
+      if (point.surfaceId !== undefined && (this.document.npcs[index].surfaceId ?? 'ground') !== point.surfaceId) continue;
       const last = this.document.npcs.pop()!; this.npcIndices.delete(id);
       if (index < this.document.npcs.length) { this.document.npcs[index] = last; this.npcIndices.set(last.id, index); }
     }
   }
   stamp(a: WorldAsset, point: Vec2, id: string): boolean {
+    if (a.category === 'elevation') {
+      const before = this.document.placements.length;
+      const changed = stampElevationAsset(this.document, a, point, id, this.surfaceIndices);
+      for (let i = before; i < this.document.placements.length; i++) {
+        const p = this.document.placements[i]; this.placementIndices.set(p.id, i); this.placements.add(p);
+      }
+      return changed;
+    }
     const bounds = placementBounds({ id, assetId: a.id, ...point }, a), gap = a.generation.spacing;
     const candidates = this.placements.query({ left: bounds.left - gap, top: bounds.top - gap, right: bounds.right + gap, bottom: bounds.bottom + gap })
       .filter(p => this.placementIndices.has(p.id));
     if (!canStampAsset({ ...this.document, placements: candidates }, a, point)) return false;
-    const p = { id, assetId: a.id, ...point }; this.placementIndices.set(id, this.document.placements.length); this.document.placements.push(p); this.placements.add(p); return true;
+    const p = { id, assetId: a.id, ...point }; this.placementIndices.set(id, this.document.placements.length); this.document.placements.push(p); this.placements.add(p); stampFloorSupport(this.document, a, point, this.surfaceIndices); return true;
   }
   private chunk(point: Vec2) {
     const x = Math.floor(point.x / EDIT_CHUNK_SIZE), y = Math.floor(point.y / EDIT_CHUNK_SIZE), key = tileChunkKey(x, y);

@@ -11,11 +11,13 @@ import { ARENA_GATE } from '../../shared/arena';
 import { WorldAssetArt } from './world-asset-art';
 import { drawItemArt } from '../ui/interactions/item-art';
 import { canCollectItem } from '../../shared/items';
-import { shapeBounds } from '../../shared/world-authoring';
+import { shapeBounds, type TileBounds } from '../../shared/world-authoring';
 import { activeAssetFades } from './asset-visibility';
+import { worldAssetImageBounds, worldAssetLayer } from '../../shared/world-schema';
+import type { AssetPlacement } from '../../shared/world-schema';
 import { clipAssetCells } from './asset-cell-regions';
 import type { ArenaGateState } from '../../shared/types';
-import { DUNGEON_BY_BOSS_ID, INSTALLED_DUNGEON_DEFINITIONS as DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonFlames, inwardFlameAngle } from '../../shared/dungeons';
+import { INSTALLED_DUNGEON_DEFINITIONS as DUNGEON_DEFINITIONS, dungeonEncounters, dungeonApproachNormal, dungeonApproachPoint, dungeonFlames, inwardFlameAngle } from '../../shared/dungeons';
 import type { DungeonDefinition } from '../../shared/dungeons';
 import { DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossLockState } from '../../shared/bosses';
 import { renderDpr } from '../core/frame-budget';
@@ -23,6 +25,8 @@ import { TERRAIN } from './terrain-style';
 import { arenaViewSign, cameraZoom, parseCameraSettings, viewVector, type CameraSettings } from '../controls/camera-settings';
 
 import { TerrainRenderer } from './terrain-renderer';
+import { ELEVATION_STEP, MAX_ELEVATION } from '../../shared/world-surfaces';
+import { surfacePresentationAt, type SurfacePresentation } from '../../shared/surface-presentation';
 import { drawFishingWorld } from '../fishing/world-art';
 import { ActorRenderer } from './actor-renderer';
 import { AmbientSpeech } from '../core/ambient-speech';
@@ -60,7 +64,10 @@ export class Renderer {
   private lastTime = 0;
   private wasPlaying = false;
   private hasCamera = false;
+  private pointerElevation = 0;
   private bounds = { left: 0, top: 0, right: 0, bottom: 0 };
+  private framePresentations?: WeakMap<Vec2, SurfacePresentation>;
+  private assetView?: { world: World; revision: string; bounds: TileBounds; placements: AssetPlacement[] };
 
   private readonly worldAssetArt = new WorldAssetArt();
 
@@ -75,7 +82,7 @@ export class Renderer {
     if (!ctx) throw new Error('Canvas 2D non disponibile in questo browser.');
     this.ctx = ctx;
     canvas.addEventListener('contextrestored', this.restoreContext);
-    this.terrain = new TerrainRenderer(ctx, localDungeons);
+    this.terrain = new TerrainRenderer(ctx, localDungeons, true);
     this.characters = new ActorRenderer(ctx, this.touchQuery);
     this.spritesReady = Promise.all([this.terrain.spritesReady, this.characters.spritesReady]).then(() => {});
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -87,6 +94,7 @@ export class Renderer {
     const document = mapDocument(WORLD_DOCUMENT, mapId);
     this.world = new World(seed, 160, mode, document, worldDungeons(document, DUNGEON_DEFINITIONS));
     this.terrain.invalidate();
+    this.assetView = undefined;
     this.hasCamera = false;
     this.viewSign = 1;
     this.characters.reset();
@@ -100,19 +108,50 @@ export class Renderer {
       y: (clientY - rect.top - this.height / 2) / this.zoom }, this.viewSign);
     return {
       x: offset.x + this.camera.x,
-      y: offset.y + this.camera.y,
+      y: offset.y + this.camera.y + this.pointerElevation * ELEVATION_STEP,
     };
+  }
+  /** Project a logical point onto the screen; input reverses on the controlled player's plane. */
+  worldToScreen(point: Vec2): Vec2 {
+    const rect = this.canvas.getBoundingClientRect();
+    return { x: rect.left + this.width / 2 + (point.x - this.camera.x) * this.zoom,
+      y: rect.top + this.height / 2 + (point.y - this.visualElevation(point) * ELEVATION_STEP - this.camera.y) * this.zoom * this.viewSign };
+  }
+  private elevation(point: Vec2): number {
+    return point.elevation ?? this.world.surfaceIndex.at(Math.floor(point.x / TILE_SIZE), Math.floor(point.y / TILE_SIZE), point.surfaceId)?.elevation ?? 0;
+  }
+  private visualElevation(point: Vec2): number {
+    return 'kind' in point && (point.kind === 'player' || point.kind === 'npc') ? this.presentation(point).elevation : this.elevation(point);
+  }
+  private presentation(point: Vec2): SurfacePresentation {
+    const cached = this.framePresentations?.get(point); if (cached) return cached;
+    const value = surfacePresentationAt(point, this.world); this.framePresentations?.set(point, value); return value;
+  }
+  private actorPlane(actor: Actor): number { return this.presentation(actor).drawPlane; }
+  private onSurface(point: Vec2, draw: () => void): void {
+    this.ctx.save(); this.ctx.translate(0, -this.visualElevation(point) * ELEVATION_STEP); draw(); this.ctx.restore();
   }
 
   destroy(): void {
     this.resizeObserver.disconnect();
     this.canvas.removeEventListener('contextrestored', this.restoreContext);
     this.terrain.invalidate();
+    this.assetView = undefined;
+  }
+
+  private assetsForView(bounds: TileBounds): AssetPlacement[] {
+    const revision = `${this.world.authoringRevision}:${this.world.authoring.assetQueryRevision}:${this.world.lockRevision}`;
+    const cached = this.assetView;
+    if (cached?.world === this.world && cached.revision === revision && bounds.left >= cached.bounds.left
+      && bounds.top >= cached.bounds.top && bounds.right <= cached.bounds.right && bounds.bottom <= cached.bounds.bottom) return cached.placements;
+    const expanded = { left: bounds.left - 3, top: bounds.top - 3, right: bounds.right + 3, bottom: bounds.bottom + 3 };
+    const placements = this.world.assetsIn(expanded);
+    this.assetView = { world: this.world, revision, bounds: expanded, placements }; return placements;
   }
 
   private resize(): void {
     const rect = this.canvas.getBoundingClientRect();
-    const dpr = renderDpr(window.devicePixelRatio, Math.max(1, rect.width), Math.max(1, rect.height));
+    const dpr = renderDpr(window.devicePixelRatio, Math.max(1, rect.width), Math.max(1, rect.height), this.touchQuery.matches);
     const unchanged = this.width === Math.max(1, rect.width) && this.height === Math.max(1, rect.height) && this.dpr === dpr;
     this.width = Math.max(1, rect.width);
     this.height = Math.max(1, rect.height);
@@ -127,23 +166,26 @@ export class Renderer {
   }
 
   render(frame: RenderFrame): void {
+    this.framePresentations = new WeakMap();
     const ctx = this.ctx;
     const now = performance.now();
     const delta = this.lastTime ? Math.max(0, Math.min(80, now - this.lastTime)) : 16;
     this.lastTime = now;
-    if (this.dpr !== renderDpr(window.devicePixelRatio, this.width, this.height)) this.resize();
+    if (this.dpr !== renderDpr(window.devicePixelRatio, this.width, this.height, this.touchQuery.matches)) this.resize();
     const fishingTargetZoom = !this.reducedMotion.matches && frame.fishing?.phase === 'fight' ? 1.12 : 1;
     this.fishingZoom += (fishingTargetZoom - this.fishingZoom) * (1 - Math.exp(-delta / 240));
+    if (Math.abs(fishingTargetZoom - this.fishingZoom) < .0001) this.fishingZoom = fishingTargetZoom;
     this.zoom = this.baseZoom * this.fishingZoom;
     if (frame.spectating) this.zoom = Math.min(this.zoom, this.width / 1000, this.height / 850);
 
     this.viewSign = arenaViewSign(this.world.mode, frame.playing && !frame.spectating ? frame.self?.teamId : null);
-    const target = frame.spectating ? { x: 0, y: 0 } : frame.self && frame.playing
-        ? frame.self
+    this.pointerElevation = frame.playing && frame.self ? this.visualElevation(frame.self) : 0;
+    const target = frame.cameraTarget ?? (frame.spectating ? { x: 0, y: 0 } : frame.self && frame.playing
+        ? { x: frame.self.x, y: frame.self.y - this.pointerElevation * ELEVATION_STEP }
         : {
             x: this.world.authoring.document.spawn.x * TILE_SIZE + 25 + Math.sin(frame.time * 0.000025) * 18,
             y: this.world.authoring.document.spawn.y * TILE_SIZE + 12 + Math.cos(frame.time * 0.000019) * 12,
-          };
+          });
 
     if (!this.hasCamera || (frame.playing && !this.wasPlaying)) {
       this.camera.x = target.x;
@@ -174,7 +216,7 @@ export class Renderer {
     ctx.scale(this.zoom, this.zoom * this.viewSign);
     ctx.translate(-this.camera.x, -this.camera.y);
 
-    this.terrain.drawCachedTerrain(this.world, { camera: this.camera, width: this.width, height: this.height, dpr: this.dpr, zoom: this.zoom }, frame.time);
+    this.terrain.drawCachedTerrain(this.world, { camera: this.camera, width: this.width, height: this.height, dpr: this.dpr, zoom: this.zoom }, frame.time, frame.spectating ? this.zoom : this.baseZoom, this.touchQuery.matches);
     this.drawDungeonEntry(frame, false);
 
     if (this.world.mode === 'world') {
@@ -183,38 +225,61 @@ export class Renderer {
       }
       this.drawDungeons();
     }
-    const worldAssets = this.world.assetsIn({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
-      right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE });
-    const assetOrder = (p: typeof worldAssets[number], q: typeof worldAssets[number]) => { const a=this.world.authoring.assets.get(p.assetId)!,b=this.world.authoring.assets.get(q.assetId)!;return p.y+a.height*(p.pivotY??a.pivot.y)-q.y-b.height*(q.pivotY??b.pivot.y)||p.id.localeCompare(q.id); };
-    const groundAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'ground').sort(assetOrder);
-    const objectAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'object')
-      .sort((a, b) => (a.y + this.world.authoring.assets.get(a.assetId)!.height * (a.pivotY ?? this.world.authoring.assets.get(a.assetId)!.pivot.y))
-        - (b.y + this.world.authoring.assets.get(b.assetId)!.height * (b.pivotY ?? this.world.authoring.assets.get(b.assetId)!.pivot.y)) || a.id.localeCompare(b.id));
+    const artBounds = { left: this.camera.x - this.width / (2 * this.zoom) - 24,
+      right: this.camera.x + this.width / (2 * this.zoom) + 24,
+      top: this.camera.y - this.height / (2 * this.zoom) - 24,
+      bottom: this.camera.y + this.height / (2 * this.zoom) + 24 };
+    const assetElevations = new Map<AssetPlacement, number>();
+    const assetElevation = (p: AssetPlacement): number => {
+      const cached = assetElevations.get(p); if (cached !== undefined) return cached;
+      const value = this.elevation({ ...p, x: p.x * TILE_SIZE, y: p.y * TILE_SIZE }); assetElevations.set(p, value); return value;
+    };
+    const worldAssets = this.assetsForView({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
+      right: this.bounds.right / TILE_SIZE, bottom: (this.bounds.bottom + ELEVATION_STEP * MAX_ELEVATION) / TILE_SIZE }).filter(p => {
+        const a = this.world.authoring.assets.get(p.assetId)!, image = worldAssetImageBounds(a);
+        const lift = assetElevation(p) * ELEVATION_STEP;
+        return (p.x + image.x + image.width) * TILE_SIZE >= artBounds.left
+          && (p.x + image.x) * TILE_SIZE <= artBounds.right
+          && (p.y + image.y + image.height) * TILE_SIZE - lift >= artBounds.top
+          && (p.y + image.y) * TILE_SIZE - lift <= artBounds.bottom;
+      });
+    const assetOrder = (p: typeof worldAssets[number], q: typeof worldAssets[number]) => { const a=this.world.authoring.assets.get(p.assetId)!,b=this.world.authoring.assets.get(q.assetId)!;return assetElevation(p)-assetElevation(q)||p.y+a.height*(p.pivotY??a.pivot.y)-q.y-b.height*(q.pivotY??b.pivot.y)||p.id.localeCompare(q.id); };
+    const groundAssets = worldAssets.filter(p => worldAssetLayer(this.world.authoring.assets.get(p.assetId)!) === 'ground').sort(assetOrder);
+    const objectAssets = worldAssets.filter(p => worldAssetLayer(this.world.authoring.assets.get(p.assetId)!) === 'object')
+      .sort(assetOrder);
     const publicPlayers = [...frame.actors.filter(actor => actor.id !== frame.self?.id), ...(frame.self ? [frame.self] : [])]
       .filter(actor => actor.kind === 'player' && actor.hp > 0 && this.world.pvpAt(actor.x, actor.y));
     const assetFades = new Map(worldAssets.map(p => {
       const a = this.world.authoring.assets.get(p.assetId)!;
-      const active = activeAssetFades(this.world, p, frame.self, publicPlayers);
+      // Normal artwork does not need actor support/visibility queries or fade history.
+      const annotated = a.cells.some(cell => cell.visibility !== 'normal');
+      const reactive = annotated && a.cells.some(cell => cell.visibility === 'fade' || cell.visibility === 'hide-fade');
+      const active = reactive ? activeAssetFades(this.world, p, frame.self, publicPlayers) : null;
       return [p.id, {
-        traversable: this.worldAssetArt.fadeAmount(a, p, active.traversable, frame.time, 'traversable'),
-        hiding: this.worldAssetArt.fadeAmount(a, p, active.hiding, frame.time, 'hiding'),
-        annotated: a.cells.some(cell => cell.visibility !== 'normal'),
+        traversable: active ? this.worldAssetArt.fadeAmount(a, p, active.traversable, frame.time, 'traversable') : 0,
+        hiding: active ? this.worldAssetArt.fadeAmount(a, p, active.hiding, frame.time, 'hiding') : 0,
+        annotated,
       }] as const;
     }));
     const paintObject = (p: typeof objectAssets[number], overhead = false) => {
       const a = this.world.authoring.assets.get(p.assetId)!, fade = assetFades.get(p.id)!;
       if (overhead && !fade.annotated) return;
       ctx.save();
+      ctx.translate(0, -assetElevation(p) * ELEVATION_STEP);
       if (fade.annotated) {
         clipAssetCells(ctx, a, p, TILE_SIZE, cell => (cell.visibility !== 'normal') === overhead);
       }
       this.worldAssetArt.draw(ctx, a, p, 1, TILE_SIZE, frame.time, fade.traversable, fade.hiding);
       ctx.restore();
     };
-    for (const p of groundAssets) paintObject(p);
-    let objectIndex = 0;
+    const groundDetails = new Map<number, (() => void)[]>();
+    const queueGround = (point: Vec2, draw: () => void) => {
+      const elevation = this.elevation(point), details = groundDetails.get(elevation) ?? [];
+      details.push(() => this.onSurface(point, draw)); groundDetails.set(elevation, details);
+    };
 
     for (const w of frame.bossWindups ?? []) {
+      queueGround(w, () => {
       const progress = Math.max(0, Math.min(1, (frame.time - w.startedAt) / Math.max(1, w.resolvesAt - w.startedAt)));
       ctx.save();
       ctx.fillStyle = 'rgba(216,72,45,0.2)';
@@ -252,10 +317,12 @@ export class Renderer {
         ctx.stroke();
       }
       ctx.restore();
+      });
     }
 
     for (const gold of frame.goldDrops ?? []) {
       if (this.visible(gold)) {
+        queueGround(gold, () => {
         ctx.save();
         ctx.translate(gold.x, gold.y);
         ctx.fillStyle = 'rgba(241,197,85,0.15)';
@@ -274,6 +341,7 @@ export class Renderer {
         ctx.fillStyle = '#fff0c5';
         ctx.fillText(`${gold.amount} gold`, 0, -23);
         ctx.restore();
+        });
       }
     }
 
@@ -281,9 +349,11 @@ export class Renderer {
     const previewAbility = frame.self && frame.aimPreview ? equippedAbility(frame.self, frame.aimPreview.slot) : undefined;
     if (frame.self && frame.self.hp > 0 && frame.aimPreview != null && previewAbility) {
       const ability = previewAbility;
+      const self = frame.self, aim = frame.aimPreview;
+      queueGround(self, () => {
       ctx.save();
-      ctx.translate(frame.self.x, frame.self.y);
-      ctx.rotate(frame.aimPreview.angle);
+      ctx.translate(self.x, self.y);
+      ctx.rotate(aim.angle);
       ctx.strokeStyle = '#fff1c470';
       ctx.fillStyle = '#fff1c40c';
       ctx.lineWidth = 1 / this.zoom;
@@ -311,30 +381,35 @@ export class Renderer {
         ctx.stroke();
       }
       ctx.restore();
+      });
     }
 
-    for (const event of events) this.drawGroundEvent(event, frame.time);
+    for (const event of events) queueGround(event, () => this.drawGroundEvent(event, frame.time));
 
     const pickups = frame.playing ? frame.pickups : [
       ...this.world.getChunk(0, 0).pickups,
       ...this.world.getChunk(-1, 0).pickups,
     ];
-    for (const pickup of pickups) if (this.visible(pickup)) this.drawPickup(pickup, frame.time);
+    for (const pickup of pickups) if (this.visible(pickup)) queueGround(pickup, () => this.drawPickup(pickup, frame.time));
     for (const item of frame.groundItems ?? []) if (this.visible(item) && item.expiresAt > frame.time) {
+      queueGround(item, () => {
       ctx.save(); ctx.translate(item.x - 11, item.y - 11 + Math.sin(frame.time * .003 + item.x) * 1.5);
       ctx.globalAlpha = frame.inventory && !canCollectItem(frame.inventory, item.stack.itemId, item.stack.quantity) ? .32 : 1;
       drawItemArt(ctx, item.stack.itemId, 22, frame.time);
       if (item.stack.quantity > 1) { ctx.font = 'bold 9px system-ui'; ctx.fillStyle = '#f5e7b3'; ctx.fillText(String(item.stack.quantity), 15, 24); }
       ctx.restore();
+      });
     }
 
     for (const key of frame.warpKeys ?? []) if (this.visible(key)) {
+      queueGround(key, () => {
       ctx.save(); ctx.translate(key.x, key.y + Math.sin(frame.time * .003) * 2);
       ctx.strokeStyle = '#ffe18a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(-5, 0, 5, 0, Math.PI * 2); ctx.moveTo(0, 0); ctx.lineTo(13, 0); ctx.lineTo(13, 5); ctx.moveTo(8, 0); ctx.lineTo(8, 4); ctx.stroke(); ctx.restore();
+      });
     }
 
     if (frame.traps) {
-      for (const trap of frame.traps) if (this.visible(trap)) this.drawTrap(trap, frame.time);
+      for (const trap of frame.traps) if (this.visible(trap)) queueGround(trap, () => this.drawTrap(trap, frame.time));
     }
 
     const actors = frame.playing ? frame.actors.filter(actor => this.visible(actor)) : this.previewActors(frame.previewClass, frame.time);
@@ -349,23 +424,28 @@ export class Renderer {
     const hitTargets = new Set<string>();
     for (const event of events) if (event.kind === 'hit' && event.targetId && frame.time - event.at < 130) hitTargets.add(event.targetId);
 
-    actors.sort((a, b) => (a.y - b.y) * this.viewSign);
-    for (const actor of actors) {
-      if (!this.visible(actor)) continue;
-      while (objectIndex < objectAssets.length) {
-        const p = objectAssets[objectIndex], a = this.world.authoring.assets.get(p.assetId)!;
-        if ((p.y + a.height * (p.pivotY ?? a.pivot.y)) * TILE_SIZE > actor.y) break;
-        paintObject(p); objectIndex++;
-      }
+    actors.sort((a, b) => this.actorPlane(a) - this.actorPlane(b) || (a.y - b.y) * this.viewSign);
+    const byPlane = <T>(items: T[], plane: (item: T) => number): Map<number, T[]> => {
+      const result = new Map<number, T[]>();
+      for (const item of items) { const key = plane(item), group = result.get(key) ?? []; group.push(item); result.set(key, group); }
+      return result;
+    };
+    const actorsByPlane = byPlane(actors, actor => this.actorPlane(actor));
+    const groundByPlane = byPlane(groundAssets, assetElevation), objectsByPlane = byPlane(objectAssets, assetElevation);
+    const surfaceLevels = this.terrain.surfaceLevels(this.world, this.bounds);
+    const surfaceViewers = [...(frame.self ? [frame.self] : []), ...publicPlayers];
+    const elevations = [...new Set([0, ...surfaceLevels.map(level => level.elevation), ...groundDetails.keys(),
+      ...actors.map(actor => this.actorPlane(actor)), ...worldAssets.map(assetElevation),
+      ...frame.projectiles.map(projectile => this.elevation(projectile)), ...events.map(event => this.elevation(event))])].sort((a, b) => a - b);
+    const drawActor = (actor: Actor) => {
       const self = !frame.spectating && (actor.id === frame.self?.id || (!frame.playing && actor.id === 'preview'));
       const allied = !frame.spectating && !!frame.self?.teamId && actor.teamId === frame.self.teamId;
 
-      // TROVA IL WINDUP (ATTACCO IN CORSO)
       const activeWindup = actor.npcKind === 'boss'
         ? frame.bossWindups?.find(w => w.bossId === actor.id)
         : undefined;
 
-      this.characters.drawActor(
+      this.onSurface(actor, () => this.characters.drawActor(
         actor,
         frame.time,
         self,
@@ -376,17 +456,34 @@ export class Renderer {
         activeWindup,
         actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss',
         this.viewSign
-      );
+      ));
+    };
+    // Each walkable plane completes its depth passes before a higher deck covers the plane below.
+    for (const elevation of elevations) {
+      for (const level of surfaceLevels) if (level.elevation === elevation) this.terrain.drawSurfaceLevel(this.world, level, frame.time, ctx, surfaceViewers);
+      const groundOnLevel = groundByPlane.get(elevation) ?? [];
+      const objectsOnLevel = objectsByPlane.get(elevation) ?? [];
+      for (const p of groundOnLevel) paintObject(p);
+      for (const detail of groundDetails.get(elevation) ?? []) detail();
+      let objectIndex = 0;
+      for (const actor of actorsByPlane.get(elevation) ?? []) {
+        if (!this.visible(actor)) continue;
+        while (objectIndex < objectsOnLevel.length) {
+          const p = objectsOnLevel[objectIndex], a = this.world.authoring.assets.get(p.assetId)!;
+          if ((p.y + a.height * (p.pivotY ?? a.pivot.y)) * TILE_SIZE > actor.y) break;
+          paintObject(p); objectIndex++;
+        }
+        drawActor(actor);
+      }
+      while (objectIndex < objectsOnLevel.length) paintObject(objectsOnLevel[objectIndex++]);
+      for (const level of surfaceLevels) if (level.elevation === elevation)
+        this.terrain.drawSurfaceForeground(this.world, level, frame.time, ctx, surfaceViewers);
+      for (const p of [...groundOnLevel, ...objectsOnLevel]) if (assetFades.get(p.id)!.annotated) paintObject(p, true);
+      for (const projectile of frame.projectiles) if (this.elevation(projectile) === elevation && this.visible(projectile)) this.onSurface(projectile, () => this.drawProjectile(projectile, frame.time));
+      for (const event of events) if (this.elevation(event) === elevation) this.onSurface(event, () => this.drawFloatingEvent(event, frame.time));
+      if (frame.self && frame.fishing && this.actorPlane(frame.self) === elevation) this.onSurface(frame.self, () => drawFishingWorld(ctx, frame.self!, frame.fishing!, frame.fishingTarget, frame.time, this.reducedMotion.matches));
     }
-    while (objectIndex < objectAssets.length) paintObject(objectAssets[objectIndex++]);
-    // Explicitly annotated cells cover actors on both layers; unannotated cells keep their original depth.
-    for (const p of [...groundAssets,...objectAssets]) if (assetFades.get(p.id)!.annotated) paintObject(p, true);
-
-    for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);
-
-    for (const event of events) this.drawFloatingEvent(event, frame.time);
-    if (frame.self && frame.fishing) drawFishingWorld(ctx, frame.self, frame.fishing, frame.fishingTarget, frame.time, this.reducedMotion.matches);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     if (frame.time - this.lastWeatherCheck > 1000) {
@@ -403,7 +500,6 @@ export class Renderer {
       this.drawRain(frame.time);
     }
 
-   // this.drawVignette();
     this.drawTeamIndicators(frame);
     const speechNow = Date.now();
     const bubble = this.ambientSpeech.update(frame.self, frame.actors, speechNow,
@@ -412,7 +508,7 @@ export class Renderer {
     if (bubble) {
       const actor = frame.actors.find(a => a.id === bubble.actorId)!;
       const x = this.width / 2 + (actor.x - this.camera.x) * this.zoom;
-      const headY = this.height / 2 + (actor.y - this.camera.y) * this.zoom * this.viewSign - 46 * this.zoom;
+      const headY = this.height / 2 + (actor.y - this.visualElevation(actor) * ELEVATION_STEP - this.camera.y) * this.zoom * this.viewSign - 46 * this.zoom;
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       drawSpeechBubble(ctx, bubble.text, x, headY, this.width, this.height,
         Math.min(1, (speechNow - bubble.startedAt) / 180, (bubble.endsAt - speechNow) / 300));
@@ -438,6 +534,7 @@ export class Renderer {
         drawTransitionOverlay(ctx, this.width, this.height, { ...matchResultText(this.matchResult.result), opacity, veil: opacity * .82, position: .42 });
       }
     }
+    this.framePresentations = undefined;
   }
 
   private drawDungeonEntry(frame: RenderFrame, overlay: boolean): void {
@@ -525,7 +622,9 @@ export class Renderer {
   }
 
   private visible(point: Vec2): boolean {
-    return point.x >= this.bounds.left && point.x <= this.bounds.right && point.y >= this.bounds.top && point.y <= this.bounds.bottom;
+    if (point.x < this.bounds.left || point.x > this.bounds.right) return false;
+    const y = point.y - this.visualElevation(point) * ELEVATION_STEP;
+    return y >= this.bounds.top && y <= this.bounds.bottom;
   }
 
   private drawTeamIndicators(frame: RenderFrame): void {
@@ -536,7 +635,7 @@ export class Renderer {
     for (const teammate of frame.actors) {
       if (teammate.id === frame.self.id || teammate.teamId !== frame.self.teamId || this.visible(teammate)) continue;
       const dx = (teammate.x - this.camera.x) * this.zoom;
-      const dy = (teammate.y - this.camera.y) * this.zoom * this.viewSign;
+      const dy = (teammate.y - this.visualElevation(teammate) * ELEVATION_STEP - this.camera.y) * this.zoom * this.viewSign;
       if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) continue;
       const scale = Math.min((this.width / 2 - edge) / Math.abs(dx || 1), (this.height / 2 - edge) / Math.abs(dy || 1));
       const x = centerX + dx * Math.min(1, scale);
@@ -697,22 +796,6 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawVignette(): void {
-    const { ctx, width, height } = this;
-    ctx.save();
-    const maxDim = Math.max(width, height);
-    const vignette = ctx.createRadialGradient(
-      width / 2, height / 2, maxDim * 0.15,
-      width / 2, height / 2, maxDim * 0.58
-    );
-    vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    vignette.addColorStop(0.75, 'rgba(0, 0, 0, 0.45)');
-    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.75)');
-
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-  }
 
   private drawDungeonFlames(time: number, locks: BossLockState[] = []): void {
     const { ctx } = this;

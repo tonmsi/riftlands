@@ -1,10 +1,14 @@
 import { installDungeonPanels } from './dungeon-panels';
 import { installDungeonRooms } from './dungeon-rooms-editor';
+import { installDungeonSurfaces } from './dungeon-surfaces-editor';
+import { newSurfaceDemoDungeon } from '../../../shared/dungeon-surface-demo';
+import { newRockCliffDemoDungeon } from '../../../shared/rock-cliff-demo';
+import { newTerrainReferenceDemoDungeon } from '../../../shared/terrain-reference-demo';
 import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../npc-properties';
 import { setupDungeonLibrary } from './dungeon-library';
 import './dungeon-maker.css';
 import { WORLD_DOCUMENT } from '../../../shared/world-content';
-import { newWorldDocument, parseWorldDocument, worldAssetVisual, type WorldAsset } from '../../../shared/world-schema';
+import { newWorldDocument, parseWorldDocument, worldAssetVisual, worldAssetLayer, type WorldAsset } from '../../../shared/world-schema';
 import { loadWorldCheckpoint } from '../world/world-editor-storage';
 import { WorldAssetCatalog } from '../world/world-asset-catalog';
 import { WorldAssetArt } from '../../render/world-asset-art';
@@ -16,7 +20,9 @@ import { NPC_DEFINITIONS, type NpcTemplateId } from '../../../shared/npcs';
 import { CLASSES } from '../../../shared/config';
 import { createDungeonPlaytest, type DungeonPlaytest } from './dungeon-playtest';
 import { Renderer } from '../../render/render';
-import { serializeDungeonDraft, compactDungeonDraft, DEFAULT_BOSS_AGGRO_RADIUS, PICKUP_CATALOG, compileDungeonDraft, draftFlameTiles, draftFromDungeon, newDungeonDraft, parseDungeonDraft, TERRAIN_CATALOG, encounterTiles, encounterContains, isDungeonWarning, validateDungeonDraft, type DraftEntity, type DungeonDraft } from '../../../shared/dungeon-draft';
+import { TerrainRenderer } from '../../render/terrain-renderer';
+import { BASE_SURFACE, ELEVATION_STEP } from '../../../shared/world-surfaces';
+import { DraftWorld, serializeDungeonDraft, compactDungeonDraft, DEFAULT_BOSS_AGGRO_RADIUS, PICKUP_CATALOG, compileDungeonDraft, draftFlameTiles, draftFromDungeon, newDungeonDraft, parseDungeonDraft, TERRAIN_CATALOG, encounterTiles, encounterContains, isDungeonWarning, validateDungeonDraft, type DraftEntity, type DungeonDraft } from '../../../shared/dungeon-draft';
 import type { AbilitySlot, ClassId, PickupKind, TileKind, Vec2 } from '../../../shared/types';
 const root = document.querySelector<HTMLDivElement>('#maker')!;
 const field = (id: string, label: string, type = 'text') => `<label>${label}<input id="${id}" type="${type}"></label>`;
@@ -55,14 +61,15 @@ for (const id of ['entity-x', 'radius-label', 'inherit-radius-label', 'aggro-lab
     const node = id === 'entity-x' ? el(id).closest('.two-fields')! : el(id); advancedEntity.append(node);
 }
 el('entity-properties').insertBefore(advancedEntity, el('delete'));
+el('entity-properties').querySelector('summary')!.insertAdjacentHTML('afterend', '<p id="dungeon-entity-surface" class="hint"></p>');
 el('asset-placement-properties').insertAdjacentHTML('beforeend', '<p id="asset-selection-description" class="hint"></p><a id="asset-selection-edit" target="riftlands-world-maker">Dimensioni, collisioni e visibilità nel World Maker ↗</a>');
 button('update-npc-properties', () => change(() => {
     const entity = draft.entities.find(e => e.id === selected); if (!entity || entity.kind !== 'npc') return;
     const properties = readNpcProperties(root, 'selected-npc'); entity.template = properties.kind; entity.settings = properties.settings; entity.label = properties.settings.name || NPC_DEFINITIONS[properties.kind].name;
 }));
 const encounterNumbers = el('encounter-x').closest('.two-fields')!;
-const encounterAdvanced = document.createElement('details'); encounterAdvanced.innerHTML='<summary>Avanzate � regione rettangolare originale</summary>'; encounterNumbers.before(encounterAdvanced); encounterAdvanced.append(encounterNumbers);
-el('encounter').closest('label')!.insertAdjacentHTML('afterend', '<div class="tool-grid"><button data-tool="encounter-add">Pennello</button><button data-tool="encounter-rectangle">Rettangolo</button><button data-tool="encounter-cut">Ritaglia</button></div><label>Dimensione pennello<select id="encounter-brush"><option value="0">1 casella</option><option value="1">3 � 3</option><option value="2">5 � 5</option></select></label><p class="hint">Disegna la zona dello scontro. Rettangolo aggiunge un�area piena; Ritaglia elimina caselle. Mantieni una forma continua e includi i boss e gli spawn assegnati.</p>');
+const encounterAdvanced = document.createElement('details'); encounterAdvanced.innerHTML='<summary>Avanzate · regione rettangolare originale</summary>'; encounterNumbers.before(encounterAdvanced); encounterAdvanced.append(encounterNumbers);
+el('encounter').closest('label')!.insertAdjacentHTML('afterend', '<div class="tool-grid"><button data-tool="encounter-add">Pennello</button><button data-tool="encounter-rectangle">Rettangolo</button><button data-tool="encounter-cut">Ritaglia</button></div><label>Dimensione pennello<select id="encounter-brush"><option value="0">1 casella</option><option value="1">3 × 3</option><option value="2">5 × 5</option></select></label><p class="hint">Disegna la zona dello scontro. Rettangolo aggiunge un’area piena; Ritaglia elimina caselle. Mantieni una forma continua e includi i boss e gli spawn assegnati.</p>');
 el('dungeon-section-passaggi').insertAdjacentHTML('beforeend', '<p class="hint">Collega questo dungeon al mondo o ad altre stanze. Usa A ↔ B oppure A → B, trascina gli ingressi e attiva Richiede chiave sul passaggio selezionato.</p><button id="open-passages">Modifica passaggi sulla mappa</button>');
 root.querySelector('.canvas-toolbar')!.insertAdjacentHTML('afterend', '<details id="dungeon-validation-alert" class="dungeon-validation-alert" hidden><summary id="dungeon-validation-summary" role="status" aria-live="polite"></summary><ul id="dungeon-validation-details"></ul></details>');
 root.insertAdjacentHTML('beforeend', '<dialog id="dungeon-passages-dialog" class="dungeon-passages-dialog"><div class="playtest-toolbar"><strong>Passaggi del dungeon</strong><button id="close-passages">Torna a terreno e boss</button></div><p class="hint">Questa vista condivide la bozza del World Maker. I passaggi si salvano nel progetto mondo; per renderli attivi premi Applica al gioco. Il dungeon deve essere installato nel catalogo per creare la sua mappa.</p><iframe id="dungeon-passages-frame" title="Mappa e passaggi del dungeon"></iframe></dialog>');
@@ -97,6 +104,8 @@ let aim = 0, attacking = false, highlighted: Vec2[] = [], queuedCast: AbilitySlo
 const keys = new Set<string>();
 let view = { x: 0, y: 0, scale: 26 };
 const canvas = el<HTMLCanvasElement>('map'), ctx = canvas.getContext('2d')!;
+const terrainPreview = new TerrainRenderer(ctx);
+terrainPreview.spritesReady.then(() => draw());
 let sharedAssets: readonly WorldAsset[] = WORLD_DOCUMENT.assets;
 let roomPassages: { id: string; entry: Vec2; entrySize?: Vec2; arrivalSize?: Vec2; arrival?: Vec2; bidirectional: boolean; name: string; arrivalOnly?: boolean }[] = [];
 let installedRoomSignature = '';
@@ -135,6 +144,7 @@ function palette(container: string, label: string, tool: string, color: string):
     el(container).append(b);
 }
 const roomEditor = installDungeonRooms(root, { draft: () => draft, change, tool: () => tool, setTool, refresh, status, connect: () => el('open-passages').click() });
+const surfaceEditor = installDungeonSurfaces(root, { draft: () => draft, change, tool: () => tool, setTool, refresh, draw, status });
 for (const [id, item] of Object.entries(TERRAIN_CATALOG))
     palette('terrain', item.name, `tile:${id}`, item.color);
 for (const [id, item] of Object.entries(NPC_DEFINITIONS))
@@ -150,6 +160,9 @@ for (const boss of BOSS_DEFINITIONS) {
 refreshBossPalette();
 for (const dungeon of DUNGEON_DEFINITIONS)
     el<HTMLSelectElement>('example').add(new Option(dungeon.name, dungeon.id));
+el<HTMLSelectElement>('example').add(new Option('Prova · alture, mattoni e ponte', 'surface-demo'));
+el<HTMLSelectElement>('example').add(new Option('Prova · pareti rocciose e gradoni', 'rock-cliff-demo'));
+el<HTMLSelectElement>('example').add(new Option('Prova · terrazze, scale e ponte', 'terrain-reference-demo'));
 function save(): void { try {
     localStorage.setItem(KEY, serializeDungeonDraft(draft));
     status('Bozza salvata su questo dispositivo');
@@ -172,10 +185,11 @@ catch (error) {
     status(error instanceof Error ? error.message : String(error));
 } }
 function setTool(next: string): void { stopPreview(); tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.tool === tool)); if (b.dataset.tool === tool)
-    el('tool-name').textContent = b.textContent; }); if (tool.startsWith('asset:')) el('tool-name').textContent = `Asset · ${sharedAssets.find(a => a.id === tool.slice(6))?.name ?? tool.slice(6)}`; }
+    el('tool-name').textContent = b.textContent; }); if (tool.startsWith('asset:')) el('tool-name').textContent = `Asset · ${sharedAssets.find(a => a.id === tool.slice(6))?.name ?? tool.slice(6)}`; surfaceEditor.refresh(); draw(); }
 root.addEventListener("click", event => { const b = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tool]"); if(b) setTool(b.dataset.tool!); });
 function refresh(): void {
     roomEditor.refresh();
+    surfaceEditor.refresh();
     const animated = new Set(sharedAssets.filter(a => worldAssetVisual(a).kind === 'fire').map(a => a.id));
     animatedAssets = (draft.assetPlacements ?? []).some(p => animated.has(p.assetId));
     if (!draft.encounters.some(g => g.id === activeEncounter))
@@ -189,8 +203,10 @@ function refresh(): void {
     for(const f of ['x','y','width','height']) input(`encounter-${f}`).disabled=!group || group.tiles!==undefined;
     for (const f of ['name', 'x', 'y', 'width', 'height'] as const)
         input(`encounter-${f}`).value = String(group?.[f] ?? '');
-    input('name').value = draft.name;
-    input('map-id').value = draft.id;
+    // Asset/catalog refreshes may complete while an author is typing. Preserve the
+    // focused edit until its normal change event commits it to the draft.
+    if (document.activeElement !== input('name')) input('name').value = draft.name;
+    if (document.activeElement !== input('map-id')) input('map-id').value = draft.id;
     el<HTMLButtonElement>('undo').disabled = !past.length;
     el<HTMLButtonElement>('redo').disabled = !future.length;
     el('map-info').textContent = `${draft.width} × ${draft.height} caselle · ${draft.entities.length} entità · 48 unità / casella`;
@@ -200,7 +216,7 @@ function refresh(): void {
     if (placement) {
         const asset = sharedAssets.find(a => a.id === placement.assetId);
         el('asset-placement-name').textContent = asset?.name ?? placement.assetId;
-        el('asset-selection-description').textContent = asset ? `${asset.columns} × ${asset.rows} caselle · ${asset.layer === 'ground' ? 'Sfondo' : 'Oggetto'} · ${asset.cells.filter(cell => cell.blocked).length} celle bloccanti. Le proprietà del catalogo valgono per tutte le istanze.` : '';
+        el('asset-selection-description').textContent = asset ? `${asset.columns} × ${asset.rows} caselle · ${worldAssetLayer(asset) === 'ground' ? 'Sfondo' : 'Oggetto'} · ${asset.cells.filter(cell => cell.blocked).length} celle bloccanti. Le proprietà del catalogo valgono per tutte le istanze.` : '';
         el<HTMLAnchorElement>('asset-selection-edit').href = `/world-maker.html?asset=${encodeURIComponent(placement.assetId)}`;
         input('asset-placement-x').value = String(placement.x); input('asset-placement-y').value = String(placement.y);
     }
@@ -209,6 +225,7 @@ function refresh(): void {
     el('dungeon-npc-properties').hidden = e?.kind !== 'npc';
     if (e?.kind === 'npc') fillNpcProperties(root, 'selected-npc', e.template as NpcTemplateId, { ...e.settings, name: e.label });
     if (e) {
+        el('dungeon-entity-surface').textContent = `${(e.surfaceId ?? BASE_SURFACE) === BASE_SURFACE ? 'Terreno' : 'Ponte'} · quota ${surfaceEditor.elevation(e)}. Trascina l’entità sul piano visibile; usa Mostra sotto per il terreno coperto.`;
         el('entity-label').closest('label')!.hidden = e.kind === 'npc';
         el('entity-properties').querySelector('summary')!.textContent = e.kind === 'npc' ? (NPC_DEFINITIONS[e.template as NpcTemplateId].disposition === 'neutral' ? 'NPC selezionato' : 'Mob selezionato') : e.kind === 'boss' ? 'Boss selezionato' : e.kind === 'party' ? 'Spawn selezionato' : 'Entità selezionata';
         for (const f of ['label', 'x', 'y', 'level', 'radius', 'template'] as const)
@@ -270,27 +287,42 @@ function draw(): void {
     ctx.fillStyle = '#111b1e';
     ctx.fillRect(0, 0, r.width, r.height);
     ctx.translate(view.x, view.y);
+    const previewWorld = new DraftWorld(draft, sharedAssets);
+    ctx.save(); ctx.scale(s / 48, s / 48);
+    terrainPreview.drawEditorTerrain(previewWorld, performance.now(), ctx, { left: 0, top: -16 * ELEVATION_STEP, right: draft.width * 48, bottom: draft.height * 48 }, { groundOnly: surfaceEditor.showUnder(), foreground: false });
+    ctx.restore();
     for (let y = 0; y < draft.height; y++)
         for (let x = 0; x < draft.width; x++) {
-            ctx.fillStyle = TERRAIN_CATALOG[draft.tiles[y * draft.width + x]].color;
-            ctx.fillRect(x * s, y * s, s, s);
             if (s > 12) {
                 ctx.strokeStyle = '#00000020';
                 ctx.lineWidth = 1;
-                ctx.strokeRect(x * s, y * s, s, s);
+                const cell = previewWorld.surfaceAt(x, y, surfaceEditor.activeId());
+                ctx.strokeRect(x * s, (y - (cell?.elevation ?? 0) * ELEVATION_STEP / 48) * s, s, s);
             }
         }
     const placements = [...(draft.assetPlacements ?? [])].sort((p, q) => {
         const a = sharedAssets.find(a => a.id === p.assetId), b = sharedAssets.find(a => a.id === q.assetId);
-        return (a?.layer === 'ground' ? -1 : 1) - (b?.layer === 'ground' ? -1 : 1) || p.y + (a?.height ?? 1) * (a?.pivot.y ?? 1) - q.y - (b?.height ?? 1) * (b?.pivot.y ?? 1);
+        return (a && worldAssetLayer(a) === 'ground' ? -1 : 1) - (b && worldAssetLayer(b) === 'ground' ? -1 : 1) || p.y + (a?.height ?? 1) * (a?.pivot.y ?? 1) - q.y - (b?.height ?? 1) * (b?.pivot.y ?? 1);
     });
+    const clipBridgeCovers = (point: Vec2) => {
+        if (surfaceEditor.showUnder()) return;
+        const elevation = surfaceEditor.elevation(point), id = point.surfaceId ?? BASE_SURFACE;
+        const covers = (draft.surfaceCells ?? []).filter(c => c.kind === 'bridge' && c.surfaceId !== id && c.elevation >= elevation);
+        if (!covers.length) return;
+        ctx.beginPath(); ctx.rect(-10000, -10000, 20000, 20000);
+        for (const c of covers) ctx.rect(c.x * s, (c.y - c.elevation * ELEVATION_STEP / 48) * s, s, s + 3 * s / 48);
+        ctx.clip('evenodd');
+    };
     for (const p of placements) {
+        if (surfaceEditor.showUnder() && (p.surfaceId ?? BASE_SURFACE) !== BASE_SURFACE) continue;
+        ctx.save(); clipBridgeCovers(p);
         const a = sharedAssets.find(a => a.id === p.assetId);
-        if (a) assetArt.draw(ctx, a, p, 1, s, performance.now());
+        if (a) assetArt.draw(ctx, a, { ...p, y: p.y - surfaceEditor.elevation(p) * ELEVATION_STEP / 48 }, 1, s, performance.now());
         if (!a || p.id === selected) {
             ctx.strokeStyle = a ? '#fff' : '#ed997e'; ctx.lineWidth = 2;
-            ctx.strokeRect(p.x * s, p.y * s, (a?.width ?? 1) * s, (a?.height ?? 1) * s);
+            ctx.strokeRect(p.x * s, (p.y - surfaceEditor.elevation(p) * ELEVATION_STEP / 48) * s, (a?.width ?? 1) * s, (a?.height ?? 1) * s);
         }
+        ctx.restore();
     }
     for (const g of draft.encounters) {
         ctx.fillStyle = g.id === activeEncounter ? 'rgba(45,145,255,0.22)' : 'rgba(45,145,255,0.10)';
@@ -311,6 +343,7 @@ function draw(): void {
         ctx.fillText(g.name, g.x * s + 4, g.y * s + 4);
     }
     roomEditor.draw(ctx, s);
+    surfaceEditor.draw(ctx, s);
     for (const passage of roomPassages) {
         ctx.strokeStyle = '#bfe7f5'; ctx.lineWidth = 1.5; ctx.setLineDash([4,4]);
         const x = (passage.entry.x + .5) * s, y = (passage.entry.y + .5) * s;
@@ -325,22 +358,25 @@ function draw(): void {
         ctx.fillStyle = passage.arrivalOnly ? '#76deff' : '#c1a0ff'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
     }
     for (const e of draft.entities) {
+        if (surfaceEditor.showUnder() && (e.surfaceId ?? BASE_SURFACE) !== BASE_SURFACE) continue;
+        ctx.save(); clipBridgeCovers(e);
         ctx.strokeStyle = e.id === selected ? '#fff' : '#111b1e';
         ctx.lineWidth = e.id === selected ? 3 : 1.5;
         if (e.kind === 'flame') {
             const angle = inwardFlameAngle(flameBarrierFromTiles(draftFlameTiles(e), e.vertical),
                 { minTx: 0, minTy: 0, maxTx: draft.width - 1, maxTy: draft.height - 1 });
             for (const t of draftFlameTiles(e)) {
+                const ty = t.y - surfaceEditor.elevation(t) * ELEVATION_STEP / 48;
                 ctx.fillStyle = '#ff743acc';
-                ctx.fillRect(t.x * s + 2, t.y * s + 2, s - 4, s - 4);
-                ctx.strokeRect(t.x * s + 2, t.y * s + 2, s - 4, s - 4);
-                ctx.save(); ctx.translate((t.x + .5) * s, (t.y + .5) * s); ctx.rotate(angle);
+                ctx.fillRect(t.x * s + 2, ty * s + 2, s - 4, s - 4);
+                ctx.strokeRect(t.x * s + 2, ty * s + 2, s - 4, s - 4);
+                ctx.save(); ctx.translate((t.x + .5) * s, (ty + .5) * s); ctx.rotate(angle);
                 ctx.fillStyle = '#32170c'; ctx.beginPath(); ctx.moveTo(-s * .2, -s * .16);
                 ctx.lineTo(s * .2, -s * .16); ctx.lineTo(0, s * .28); ctx.closePath(); ctx.fill(); ctx.restore();
             }
-            continue;
+            ctx.restore(); continue;
         }
-        const x = (e.x + .5) * s, y = (e.y + .5) * s;
+        const x = (e.x + .5) * s, y = (e.y + .5 - surfaceEditor.elevation(e) * ELEVATION_STEP / 48) * s;
         if (e.kind === 'boss' && e.id === selected) {
             const g = draft.encounters.find(g => g.id === (e.encounterId ?? draft.encounters[0]?.id ?? ''))!;
             ctx.save(); ctx.beginPath(); ctx.rect(g.x*s,g.y*s,g.width*s,g.height*s); ctx.clip();
@@ -357,11 +393,25 @@ function draw(): void {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(e.kind === 'boss' ? 'B' : e.kind === 'party' ? 'P' : e.kind === 'activation' ? 'A' : e.kind === 'pickup' ? (e.template === 'weakness' ? '−' : '+') : e.template[0].toUpperCase(), x, y);
+        ctx.restore();
+    }
+    if (!surfaceEditor.showUnder()) {
+        const levels = terrainPreview.surfaceLevels(previewWorld, { left: 0, top: -16 * ELEVATION_STEP, right: draft.width * 48, bottom: draft.height * 48 });
+        for (const level of levels) {
+            ctx.save(); ctx.scale(s / 48, s / 48);
+            for (const higher of levels) if (higher.elevation > level.elevation) {
+                const covers = higher.cells.filter(c => c.kind === 'bridge'); if (!covers.length) continue;
+                ctx.beginPath(); ctx.rect(-10000, -10000, 20000, 20000);
+                for (const cell of covers) ctx.rect(cell.x * 48, cell.y * 48 - cell.elevation * ELEVATION_STEP, 48, 48);
+                ctx.clip('evenodd');
+            }
+            terrainPreview.drawSurfaceForeground(previewWorld, level, performance.now(), ctx); ctx.restore();
+        }
     }
     ctx.strokeStyle = '#ffdf7e'; ctx.lineWidth = 3;
     for (const p of highlighted) ctx.strokeRect(p.x * s + 1, p.y * s + 1, s - 2, s - 2);
 }
-function tileAt(event: PointerEvent): Vec2 { const r = canvas.getBoundingClientRect(); return { x: Math.floor((event.clientX - r.left - view.x) / view.scale), y: Math.floor((event.clientY - r.top - view.y) / view.scale) }; }
+function tileAt(event: PointerEvent): Vec2 { const r = canvas.getBoundingClientRect(); return surfaceEditor.tileAt((event.clientX - r.left - view.x) / view.scale, (event.clientY - r.top - view.y) / view.scale); }
 function paint(p: Vec2): void {
     if ((!draft.encounters.length) && (tool.startsWith('encounter-') || tool.startsWith('boss') || ['party','activation','flame','visitors','visitors-erase'].includes(tool))) { status('Crea prima un incontro.'); return; }
     if (tool.startsWith('encounter-')) {
@@ -387,9 +437,12 @@ function paint(p: Vec2): void {
     }
     if (p.x < 0 || p.y < 0 || p.x >= draft.width || p.y >= draft.height)
         return;
+    surfaceEditor.select(p);
     if (roomEditor.paint(p, lastTile)) { lastTile = p; draw(); return; }
-    const existing = draft.entities.find(e => e.kind === 'flame' ? draftFlameTiles(e).some(t => t.x === p.x && t.y === p.y) : e.x === p.x && e.y === p.y);
+    if (surfaceEditor.paint(p, lastTile)) { lastTile = p; draw(); return; }
+    const existing = draft.entities.find(e => (e.surfaceId ?? BASE_SURFACE) === surfaceEditor.activeId() && (e.kind === 'flame' ? draftFlameTiles(e).some(t => t.x === p.x && t.y === p.y) : e.x === p.x && e.y === p.y));
     const existingAsset = [...(draft.assetPlacements ?? [])].reverse().find(item => {
+        if ((item.surfaceId ?? BASE_SURFACE) !== surfaceEditor.activeId()) return false;
         const a = sharedAssets.find(a => a.id === item.assetId);
         return p.x >= item.x && p.y >= item.y && p.x < item.x + (a?.columns ?? 1) && p.y < item.y + (a?.rows ?? 1);
     });
@@ -408,7 +461,7 @@ function paint(p: Vec2): void {
         const from = lastTile ?? p, n = Math.max(Math.abs(p.x - from.x), Math.abs(p.y - from.y));
         for (let i = 0; i <= n; i++) {
             const t = n ? i / n : 1;
-            draft.tiles[Math.round(from.y + (p.y - from.y) * t) * draft.width + Math.round(from.x + (p.x - from.x) * t)] = tool.slice(5) as TileKind;
+            surfaceEditor.paintMaterial({ x: Math.round(from.x + (p.x - from.x) * t), y: Math.round(from.y + (p.y - from.y) * t) }, tool.slice(5) as TileKind);
         }
     }
     else if (tool === 'erase') {
@@ -419,11 +472,14 @@ function paint(p: Vec2): void {
     else if (tool === 'select') {
         const e = draft.entities.find(e => e.id === selected);
         const asset = draft.assetPlacements?.find(a => a.id === selected);
-        if (e && lastTile)
-            Object.assign(e, p);
+        if (e && lastTile) {
+            delete e.surfaceId; delete e.elevation; Object.assign(e, surfaceEditor.ref(p));
+        }
         else if (asset && lastTile) {
             const a = sharedAssets.find(a => a.id === asset.assetId), x = p.x - (assetDragOffset?.x ?? 0), y = p.y - (assetDragOffset?.y ?? 0);
-            if (x >= 0 && y >= 0 && x + (a?.columns ?? 1) <= draft.width && y + (a?.rows ?? 1) <= draft.height) Object.assign(asset, { x, y });
+            if (x >= 0 && y >= 0 && x + (a?.columns ?? 1) <= draft.width && y + (a?.rows ?? 1) <= draft.height) {
+                delete asset.surfaceId; delete asset.elevation; Object.assign(asset, surfaceEditor.ref({ x, y }));
+            }
         }
         else if (!lastTile) {
             selected = existing?.id ?? existingAsset?.id ?? null;
@@ -434,7 +490,7 @@ function paint(p: Vec2): void {
         const asset = sharedAssets.find(a => a.id === tool.slice(6));
         if (!lastTile && asset && (draft.assetPlacements?.length ?? 0) < 4096) {
             if (p.x + asset.columns > draft.width || p.y + asset.rows > draft.height) { status('L’asset deve restare dentro la mappa.'); return; }
-            const placement = { id: crypto.randomUUID(), assetId: asset.id, ...p };
+            const placement = { id: crypto.randomUUID(), assetId: asset.id, ...surfaceEditor.ref(p) };
             (draft.assetPlacements ??= []).push(placement); selected = placement.id;
         }
     }
@@ -443,7 +499,7 @@ function paint(p: Vec2): void {
         for(let i=0;i<=n && draft.entities.length<500;i++) {
             const t=n ? i/n : 1, x=Math.round(from.x+(p.x-from.x)*t), y=Math.round(from.y+(p.y-from.y)*t);
             if (draft.entities.some(e=>e.kind==='activation' && e.x===x && e.y===y)) continue;
-            const e: DraftEntity = {id:crypto.randomUUID(),kind:'activation',template:'',label:'Punto di attivazione',x,y,level:1,radius:15,encounterId:activeEncounter};
+            const e: DraftEntity = {id:crypto.randomUUID(),kind:'activation',template:'',label:'Punto di attivazione',...surfaceEditor.ref({x,y}),level:1,radius:15,encounterId:activeEncounter};
             draft.entities.push(e); selected=e.id;
         }
     }
@@ -454,7 +510,7 @@ function paint(p: Vec2): void {
         if (kind === 'flame' && (p.x === 0 || p.y === 0 || p.x === draft.width - 1 || p.y === draft.height - 1)) { status('Il bordo si chiude con i massi: posiziona le fiamme all’interno.'); return; }
         const template = kind === 'pickup' ? tool.slice(7) : kind === 'npc' ? tool.slice(4) : tool.startsWith('boss:') ? tool.slice(5) : '';
         const npc = kind === 'npc' ? NPC_DEFINITIONS[template as NpcTemplateId] : undefined, boss = BOSS_DEFINITIONS.find(b => b.id === template);
-        const e: DraftEntity = { id: crypto.randomUUID(), kind, template, label: npc?.name ?? boss?.name ?? (kind === 'boss' ? 'Boss da creare' : kind === 'flame' ? 'Fiamme' : kind === 'activation' ? 'Punto di attivazione' : 'Spawn gruppo'), ...p, level: 1, radius: npc?.radius ?? boss?.radius ?? (kind === 'boss' ? 36 : 15), ...(kind !== 'npc' ? { encounterId: activeEncounter } : {}), ...(kind === 'boss' ? { inheritRadius: true, aggroRadius: DEFAULT_BOSS_AGGRO_RADIUS } : {}), ...(kind === 'flame' ? { span: 1, vertical: false } : {}) };
+        const e: DraftEntity = { id: crypto.randomUUID(), kind, template, label: npc?.name ?? boss?.name ?? (kind === 'boss' ? 'Boss da creare' : kind === 'flame' ? 'Fiamme' : kind === 'activation' ? 'Punto di attivazione' : 'Spawn gruppo'), ...surfaceEditor.ref(p), level: 1, radius: npc?.radius ?? boss?.radius ?? (kind === 'boss' ? 36 : 15), ...(kind !== 'npc' ? { encounterId: activeEncounter } : {}), ...(kind === 'boss' ? { inheritRadius: true, aggroRadius: DEFAULT_BOSS_AGGRO_RADIUS } : {}), ...(kind === 'flame' ? { span: 1, vertical: false } : {}) };
         draft.entities.push(e);
         if (kind === 'pickup') { e.label = PICKUP_CATALOG[template as PickupKind].name; e.radius = 12; delete e.encounterId; }
         selected = e.id;
@@ -470,8 +526,10 @@ else {
     lastTile = null;
     paint(tileAt(e));
 } });
-canvas.addEventListener('pointermove', e => { if (e.pointerId !== pointer)
-    return; if (pan) {
+canvas.addEventListener('pointermove', e => { if (e.pointerId !== pointer) {
+    if (pointer === null && !preview && surfaceEditor.hover(tileAt(e))) draw();
+    return;
+} if (pan) {
     view.x += e.clientX - pan.x;
     view.y += e.clientY - pan.y;
     pan = { x: e.clientX, y: e.clientY };
@@ -480,12 +538,13 @@ canvas.addEventListener('pointermove', e => { if (e.pointerId !== pointer)
 else if (stroke)
     paint(tileAt(e)); });
 function finishStroke(cancelled = false): void { encounterStart=null; roomEditor.finish(); if (stroke) {
+    surfaceEditor.finish(cancelled);
     if (cancelled)
         draft = stroke;
     else
         commit(stroke);
 } stroke = null; lastTile = null; pointer = null; pan = null; refresh(); }
-canvas.addEventListener('pointerup', () => finishStroke());
+canvas.addEventListener('pointerup', e => { if (stroke) surfaceEditor.hover(tileAt(e)); finishStroke(); });
 canvas.addEventListener('pointercancel', () => finishStroke(true));
 canvas.addEventListener('lostpointercapture', () => { if (pointer !== null)
     finishStroke(true); });
@@ -495,7 +554,7 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); const r = canvas.get
 button('fit', fit);
 button('zoom-in', () => zoom(1.2));
 button('zoom-out', () => zoom(1 / 1.2));
-function history(undo: boolean): void { stopPreview(); const source = undo ? past : future, target = undo ? future : past, next = source.pop(); if (!next)
+function history(undo: boolean): void { stopPreview(); surfaceEditor.cancel(); const source = undo ? past : future, target = undo ? future : past, next = source.pop(); if (!next)
     return; target.push(draft); draft = next; selected = null; refresh(); save(); }
 button('undo', () => history(true));
 button('redo', () => history(false));
@@ -529,7 +588,13 @@ for (const f of ['label', 'x', 'y', 'level', 'radius', 'template', 'encounter', 
 const remove = () => change(() => { draft.entities = draft.entities.filter(e => e.id !== selected); if (draft.assetPlacements) draft.assetPlacements = draft.assetPlacements.filter(p => p.id !== selected); selected = null; });
 button('delete', remove);
 button('new', () => { change(() => { draft = newDungeonDraft(Number(value('width')), Number(value('height'))); selected = null; }); fit(); });
-el('example').addEventListener('change', () => { const d = DUNGEON_DEFINITIONS.find(d => d.id === value('example')); if (!d)
+el('example').addEventListener('change', () => { if (value('example') === 'terrain-reference-demo') {
+    change(() => { draft = newTerrainReferenceDemoDungeon(); selected = null; }); fit(); input('example').value = ''; status('Terrazze, scale e ponte pronti. Esplora i due percorsi con Prova gioco locale.'); return;
+} if (value('example') === 'rock-cliff-demo') {
+    change(() => { draft = newRockCliffDemoDungeon(); selected = null; }); fit(); input('example').value = ''; status('Pareti rocciose pronte: angoli, rientranze, terrazze e gradoni nelle quattro direzioni. Premi Prova gioco locale.'); return;
+} if (value('example') === 'surface-demo') {
+    change(() => { draft = newSurfaceDemoDungeon(); selected = null; }); fit(); input('example').value = ''; status('Prova pronta: scala a sinistra, rampa a destra; bonus indipendenti sopra e sotto il ponte. Premi Prova gioco locale.'); return;
+} const d = DUNGEON_DEFINITIONS.find(d => d.id === value('example')); if (!d)
     return; change(() => { draft = draftFromDungeon(d, BOSS_DEFINITIONS.find(b => b.id === d.bossId)?.radius); selected = null; }); fit(); status('Geometria copiata: verifica regioni e ingressi prima di esportare.'); input('example').value = ''; });
 function download(data: unknown, name: string): void { const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 button('download', () => download(compactDungeonDraft(draft), `${draft.id}.draft.json`));
@@ -593,8 +658,8 @@ button('random-flame', () => change(() => {
     const e = candidates[Math.floor(Math.random() * candidates.length)]; draft.entities.push(e); selected = e.id;
 }));
 window.addEventListener('keydown', e => { if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement)
-    return; if (e.key === 'Escape')
-    stopPreview(); if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
+    return; if (e.key === 'Escape') {
+    stopPreview(); surfaceEditor.cancel(); } if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
     e.preventDefault();
     history(!e.shiftKey);
 } if (e.code === 'Delete' && selected && !preview)

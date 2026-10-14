@@ -18,7 +18,7 @@ export const DEVELOPER_LEVEL = MAX_LEVEL;
 export const DEVELOPER_XP = xpForLevel(MAX_LEVEL - 1);
 export function unlockTier(level: number): number { return level >= 10 ? 3 : level >= 6 ? 2 : level >= 3 ? 1 : 0; }
 export function availableSpells(level: number): SpellId[] { return level >= 10 ? ['q', 'e', 'r'] : level >= 6 ? ['q', 'e'] : level >= 3 ? ['q'] : []; }
-export function normalizeLoadout(value: Loadout | undefined, level: number, classId: ClassId): Loadout {
+export function normalizeLoadout(value: Loadout | undefined, level: number, _classId: ClassId): Loadout {
   const available = availableSpells(level);
   const q = level < 3 ? null : value?.q && available.includes(value.q) ? value.q : 'q';
   const e = level < 6 ? null : value?.e && value.e !== q && available.includes(value.e) ? value.e : available.find(id => id !== q)!;
@@ -28,7 +28,7 @@ export function newCharacter(classId: ClassId): CharacterProgress {
   const xp = classId === 'hunter' ? DEVELOPER_XP : 0;
   return { xp, loadout: normalizeLoadout(undefined, levelFromXp(xp), classId), configuredTier: 0, inventory: newInventory(), narrative: newNarrativeProgress() };
 }
-export function validLoadout(value: unknown, level: number, classId: ClassId): value is Loadout {
+export function validLoadout(value: unknown, level: number, _classId: ClassId): value is Loadout {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const v = value as Loadout;
   return (level < 3 ? v.q === null : !!v.q && availableSpells(level).includes(v.q)) && (level < 6 ? v.e === null : !!v.e && v.e !== v.q && availableSpells(level).includes(v.e));

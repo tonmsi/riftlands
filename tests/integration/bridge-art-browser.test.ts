@@ -1,0 +1,64 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
+import { chromium } from '@playwright/test';
+import { createServer } from 'vite';
+
+test('bridge parts share access gaps, actor layering and upper-plane opacity', { timeout: 60_000 }, async () => {
+  const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' });
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  try {
+    await server.listen(); browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const page = await browser.newPage({ viewport: { width: 1000, height: 700 } }), errors: string[] = [];
+    await page.addInitScript('window.__name = (value) => value');
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/bridge-review', route => route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#26382f"><canvas width="1000" height="700"></canvas></body>' }));
+    await page.goto(`${server.resolvedUrls!.local[0]}bridge-review`);
+    const result = await page.evaluate(async () => {
+      const { BridgeArt } = await import('/client/render/bridge-art.ts' as string);
+      const { TerrainMaterials } = await import('/client/render/terrain-materials.ts' as string);
+      const { newWorldDocument } = await import('/shared/world-schema.ts' as string);
+      const { World } = await import('/shared/world.ts' as string);
+      const canvas = document.querySelector('canvas')!, ctx = canvas.getContext('2d')!;
+      const materials = new TerrainMaterials(); await materials.ready;
+      const draft = newWorldDocument();
+      draft.interiorBounds = { width: 16, height: 12, name: 'Ponte modulare', pvp: false };
+      for (let y = 0; y < 12; y++) for (let x = 0; x < 16; x++) draft.tiles.push({ x, y, terrain: 'grass' });
+      draft.surfaceCells = [];
+      for (let y = 3; y <= 5; y++) for (let x = 3; x <= 6; x++) draft.surfaceCells.push({ x, y, surfaceId: 'deck', elevation: 3, material: 'wood', wallMaterial: 'wood', kind: 'bridge' });
+      draft.surfaceCells.push({ x: 4, y: 6, surfaceId: 'ground', elevation: 3, material: 'grass', wallMaterial: 'rock', kind: 'ground' });
+      draft.surfaceLinks = [{ id: 'entry-south', kind: 'bridge-entry', from: { x: 4, y: 5, surfaceId: 'deck' }, to: { x: 4, y: 6, surfaceId: 'ground' } }];
+      const world = new World(42, 16, 'world', draft, []), painter = new BridgeArt(materials);
+      const level = { elevation: 3, cells: draft.surfaceCells.filter((cell: any) => cell.kind === 'bridge') };
+      const red = (x: number, y: number) => { ctx.fillStyle = '#ff0000'; ctx.fillRect(x - 4, y - 5, 8, 10); };
+      painter.drawBase(ctx, world, level, 1000);
+      red(264, 236); red(216, 236); red(264, 85);
+      painter.drawForeground(ctx, world, level, 1000);
+      const pixel = (x: number, y: number) => [...ctx.getImageData(x, y, 1, 1).data];
+      const nearestClosed = pixel(264, 236), entrance = pixel(216, 236), behindActor = pixel(264, 85);
+      const above = { x: 264, y: 216, surfaceId: 'deck', elevation: 3 }, below = { ...above, surfaceId: 'ground', elevation: 0 };
+      ctx.clearRect(0, 0, canvas.width, canvas.height); painter.drawBase(ctx, world, level, 2000, [above]);
+      const opaque = pixel(264, 150)[3];
+      ctx.clearRect(0, 0, canvas.width, canvas.height); painter.drawBase(ctx, world, level, 2100, [below]);
+      ctx.clearRect(0, 0, canvas.width, canvas.height); painter.drawBase(ctx, world, level, 2500, [below]); painter.drawForeground(ctx, world, level, 2500, [below]);
+      const fadedDeck = pixel(264, 150)[3], fadedRail = pixel(264, 228)[3];
+      ctx.clearRect(0, 0, canvas.width, canvas.height); painter.drawBase(ctx, world, level, 2600, [above]);
+      ctx.clearRect(0, 0, canvas.width, canvas.height); painter.drawBase(ctx, world, level, 3000, [above]); painter.drawForeground(ctx, world, level, 3000, [above]);
+      const recovered = pixel(264, 150)[3];
+      ctx.clearRect(0, 0, canvas.width, canvas.height); painter.drawBase(ctx, world, level, 3400, [above, below]);
+      const remoteWindow = pixel(264, 184)[3], distantDeck = pixel(160, 150)[3];
+      ctx.fillStyle = '#e6e2c8'; ctx.font = '20px sans-serif'; ctx.fillText('Ponte largo · accesso sud · parapetti davanti/dietro', 80, 360);
+      return { nearestClosed, entrance, behindActor, opaque, fadedDeck, fadedRail, recovered, remoteWindow, distantDeck };
+    });
+    assert.notDeepEqual(result.nearestClosed, [255, 0, 0, 255], 'the front rail covers feet rendered on the deck');
+    assert.deepEqual(result.entrance, [255, 0, 0, 255], 'the physical entrance leaves the foreground rail open');
+    assert.deepEqual(result.behindActor, [255, 0, 0, 255], 'the rear rail stays behind the actor');
+    assert.equal(result.opaque, 255); assert.equal(result.recovered, 255);
+    assert.equal(result.distantDeck, 255, 'a remote player below does not fade the whole deck for the player above');
+    assert.ok(result.remoteWindow > 30 && result.remoteWindow < 130, 'the remote player remains visible through a local window');
+    assert.ok(result.fadedDeck > 30 && result.fadedDeck < 130, 'the deck fades for the controlled actor underneath');
+    assert.ok(result.fadedRail > 30 && result.fadedRail < 210, 'foreground parts use the same fade transition');
+    assert.deepEqual(errors, []);
+    mkdirSync('artifacts', { recursive: true }); await page.screenshot({ path: 'artifacts/bridge-kit-review.png' });
+  } finally { await browser?.close(); await server.close(); }
+});

@@ -1,8 +1,8 @@
 import { CHUNK_TILES } from './config';
 import { coordinateHash } from './coordinate-random';
 import type { TileKind } from './types';
-import type { AssetCell, AssetPlacement, TileOverride, WorldAsset, WorldDocument, WorldZone, ZoneShape } from './world-schema';
-import { worldAssetImageBounds } from './world-schema';
+import type { AssetCell, AssetPlacement, WorldAsset, WorldDocument, WorldZone, ZoneShape } from './world-schema';
+import { DEFAULT_CELL, worldAssetImageBounds } from './world-schema';
 import { WorldTiles } from './world-tiles';
 
 export interface TileBounds { left: number; top: number; right: number; bottom: number; }
@@ -63,6 +63,8 @@ export class WorldAuthoring {
   private proposals = new Map<string, Proposal | null>();
   private generated = new Map<string, AssetPlacement | null>();
   private zoneCache = new Map<string, WorldZone[]>();
+  private queryRevision = 0;
+  get assetQueryRevision(): number { return this.queryRevision; }
   constructor(public document: WorldDocument) {
     this.assets = new Map(document.assets.map(a => [a.id, a]));
     this.tiles = new WorldTiles(document);
@@ -71,7 +73,7 @@ export class WorldAuthoring {
     for (const p of document.placements) this.addPlacement(p);
     for (const z of document.zones) this.zones.add(z);
     const bands = new Map<number, GenerationBand>();
-    for (const a of document.assets.filter(a => a.generation.enabled && a.generation.density > 0).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
+    for (const a of document.assets.filter(a => a.category !== 'elevation' && a.generation.enabled && a.generation.density > 0).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
       const stride = 2 ** Math.ceil(Math.log2(Math.max(a.columns, a.rows) + 2 * a.generation.spacing));
       const band = bands.get(stride) ?? { stride, assets: [], density: 0, maxSpacing: 0, overhang: 0 };
       const b = placementVisualBounds({ x: 0, y: 0, id: '', assetId: a.id }, a);
@@ -81,8 +83,13 @@ export class WorldAuthoring {
     // Size bands keep small vegetation dense when a large asset is added to the catalog.
     this.bands = [...bands.values()].sort((a, b) => a.stride - b.stride);
   }
-  addPlacement(p: AssetPlacement): void { this.placements.add(p); this.visiblePlacements.add(p); }
+  addPlacement(p: AssetPlacement): void { this.placements.add(p); this.visiblePlacements.add(p); this.queryRevision++; }
   visibleAssetsIn(bounds: TileBounds): AssetPlacement[] { return this.visiblePlacements.query(bounds); }
+  /** Manual and dungeon floors only; the world query also includes procedurally generated floors. */
+  hasFloorAt(x: number, y: number, surfaceId = 'ground'): boolean {
+    return this.placements.query({ left: x, top: y, right: x + 1, bottom: y + 1 }).some(p =>
+      (p.surfaceId ?? 'ground') === surfaceId && this.assets.get(p.assetId)?.category === 'floor');
+  }
   zonesAt(x: number, y: number): WorldZone[] {
     const key = `${x},${y}`, cached = this.zoneCache.get(key);
     if (cached) return cached;
@@ -98,7 +105,7 @@ export class WorldAuthoring {
   cell(p: AssetPlacement, x: number, y: number): AssetCell | undefined {
     const a = this.assets.get(p.assetId)!;
     const col = Math.floor(x) - p.x, row = Math.floor(y) - p.y;
-    return col >= 0 && col < a.columns && row >= 0 && row < a.rows ? a.cells[row * a.columns + col] : undefined;
+    return col >= 0 && col < a.columns && row >= 0 && row < a.rows ? a.category === 'floor' || a.category === 'elevation' ? DEFAULT_CELL : a.cells[row * a.columns + col] : undefined;
   }
   private proposal(band: GenerationBand, sx: number, sy: number, env: GenerationEnvironment, seed: number): Proposal | null {
     const key = `${band.stride}:${sx},${sy}`, cached = this.proposals.get(key);
@@ -164,5 +171,5 @@ export class WorldAuthoring {
     return result;
   }
   get generationCacheSize(): number { return this.generated.size; }
-  invalidateTileGeneration(): void { this.proposals.clear(); this.generated.clear(); }
+  invalidateTileGeneration(): void { this.proposals.clear(); this.generated.clear(); this.queryRevision++; }
 }

@@ -98,6 +98,11 @@ test('mobile device settings move both controls, persist volumes and survive rel
     assert.ok(moveAfter.x > moveBefore.x + 60); assert.ok(moveAfter.y < moveBefore.y - 20);
     assert.ok(attackAfter.x < attackBefore.x - 40); assert.ok(attackAfter.y < attackBefore.y - 10);
     await setRange('effects', 25); await setRange('music', 60);
+    await page.locator('.settings-actions .mobile-performance-options summary').click();
+    await page.locator('.settings-actions [data-device="fps"]').selectOption('30');
+    assert.equal(await page.evaluate(() => localStorage.getItem('riftlands.mobile.frame-rate')), '30');
+    const blur = await page.locator('.game-hud .glass').evaluateAll(elements => elements.map(e => getComputedStyle(e).backdropFilter));
+    assert.ok(blur.every(value => value === 'none'), 'touch panels do not blur the moving world');
     await page.locator('.settings-actions [data-device-mute]').click();
     await expect(page.locator('.settings-actions [data-device-mute]')).toHaveText('Riattiva audio');
     await page.locator('.settings-actions [data-device-mute]').click();
@@ -117,6 +122,7 @@ test('mobile device settings move both controls, persist volumes and survive rel
     await expect(page.locator('.settings-actions [data-device="moveX"]')).toHaveValue('10');
     await expect(page.locator('.settings-actions [data-device="effects"]')).toHaveValue('25');
     await expect(page.locator('.settings-actions [data-device="music"]')).toHaveValue('60');
+    await expect(page.locator('.settings-actions [data-device="fps"]')).toHaveValue('30');
     await page.locator('.settings-actions [data-device-reset]').click();
     await expect(page.locator('.settings-actions [data-device="moveX"]')).toHaveValue('0');
     assert.deepEqual(errors, []);

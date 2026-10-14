@@ -2,6 +2,8 @@ import type { TileKind, Vec2 } from './types';
 import { validNpcSettings, type NpcSettings } from './npc-settings';
 import { NPC_DEFINITIONS, type NpcKind, type NpcTemplateId } from './npcs';
 import { WORLD_TILE_TERRAINS, type WorldTileChunk } from './world-tiles';
+import { MAX_ELEVATION, SURFACE_MATERIALS, WALL_MATERIALS, validSurfacePoint, validateSurfaceData, type SurfaceCell, type SurfaceLink, type SurfaceMaterial, type SurfaceStair, type WallMaterial } from './world-surfaces';
+import { isWallSpriteKitId } from './wall-sprite-kits';
 
 /** Coordinates in authored documents are tiles, including fractional visual dimensions.
  * Gameplay positions remain world units. The format contains data only, never scripts. */
@@ -12,10 +14,17 @@ export interface AssetGeneration {
   enabled: boolean; category: string; terrains: TileKind[];
   temperature: [number, number]; moisture: [number, number]; density: number; spacing: number;
 }
+export type WorldAssetCategory = 'floor' | 'object' | 'elevation';
+export interface AssetElevation { height: number; material: SurfaceMaterial; wallMaterial: WallMaterial; wallSkin?: string; }
+export const DEFAULT_ASSET_ELEVATION: AssetElevation = { height: 3, material: 'rock', wallMaterial: 'rock' };
 export interface WorldAsset {
   id: string; name: string; image: string; width: number; height: number;
   columns: number; rows: number; cells: AssetCell[];
   layer: 'ground' | 'object'; pivot: Vec2; generation: AssetGeneration;
+  /** Explicit authoring semantics. Absent on older projects, whose annotations remain unchanged. */
+  category?: WorldAssetCategory;
+  /** Absolute ground level used when stamping an explicitly categorized elevation asset. */
+  elevation?: AssetElevation;
   /** Built-in animated artwork is data-selected, never tied to an asset ID or world position. */
   visual?: { kind: 'image' } | { kind: 'fire'; style: 'brazier' | 'campfire' };
   fade?: { opacity: number; feather: number; durationMs: number };
@@ -23,6 +32,22 @@ export interface WorldAsset {
   group?: string;
   /** Artwork moves and scales independently of the annotated tile grid. */
   imageTransform?: { x: number; y: number; scale: number };
+}
+/** Legacy classification is a catalog view, never an automatic conversion of saved terrain. */
+export function worldAssetCategory(asset: WorldAsset): WorldAssetCategory {
+  if (asset.category) return asset.category;
+  if (worldAssetVisual(asset).kind === 'fire' || asset.image === '/world-assets/waystone.svg') return 'object';
+  return asset.category ?? (asset.layer === 'object' ? 'object' : asset.cells.some(cell => cell.blocked) ? 'elevation' : 'floor');
+}
+export function worldAssetLayer(asset: WorldAsset): WorldAsset['layer'] {
+  return asset.category === undefined ? asset.layer : asset.category === 'object' ? 'object' : 'ground';
+}
+/** Category changes are deliberate. Floors cannot inherit hidden collision or concealment masks. */
+export function setWorldAssetCategory(asset: WorldAsset, category: WorldAssetCategory): void {
+  asset.category = category;
+  asset.layer = category === 'object' ? 'object' : 'ground';
+  if (category === 'floor') asset.cells = asset.cells.map(() => ({ ...DEFAULT_CELL }));
+  if (category === 'elevation') asset.elevation ??= { ...DEFAULT_ASSET_ELEVATION };
 }
 export function worldAssetImageBounds(asset: WorldAsset) {
   const { x = 0, y = 0, scale = 1 } = asset.imageTransform ?? {};
@@ -50,6 +75,7 @@ export interface WorldInterior { id: string; name: string; width: number; height
 export interface WorldWarp {
   id: string; name: string; from: string; to: string; entry: Vec2; arrival: Vec2; entrySize?: Vec2; arrivalSize?: Vec2;
   activation: 'walk' | 'interact';
+  direction?: 'up' | 'down' | 'left' | 'right';
   reverseId?: string;
   keyGate?: { id: string; mapId: string; position: Vec2 };
 }
@@ -60,6 +86,9 @@ export interface WorldDocument {
   tileChunks?: WorldTileChunk[];
   interiors?: WorldInterior[];
   warps?: WorldWarp[];
+  surfaceCells?: SurfaceCell[];
+  surfaceLinks?: SurfaceLink[];
+  surfaceStairs?: SurfaceStair[];
   /** Runtime surface metadata, never accepted from exported project fields. */
   interiorBounds?: { width: number; height: number; name: string; id: string; pvp?: boolean };
 }
@@ -109,7 +138,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   const object = (v: any) => !!v && typeof v === 'object' && !Array.isArray(v);
   const finite = (v: any, min: number, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
   const integer = (v: any, min: number, max: number) => Number.isSafeInteger(v) && finite(v, min, max);
-  const point = (v: any) => object(v) && integer(v.x, -10_000_000, 10_000_000) && integer(v.y, -10_000_000, 10_000_000);
+  const point = (v: any) => object(v) && integer(v.x, -10_000_000, 10_000_000) && integer(v.y, -10_000_000, 10_000_000) && validSurfacePoint(v);
   const id = (v: any) => typeof v === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(v);
   const name = (v: any) => typeof v === 'string' && v.trim().length > 0 && v.length <= 160;
   const list = (v: any, max: number, label: string) => { if (!Array.isArray(v) || v.length > max) fail(label); };
@@ -119,12 +148,18 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   if (!object(d) || ![1, 2].includes(d.version) || d.generatorVersion !== 1 || !integer(d.seed, -2147483648, 2147483647) || !point(d.spawn)) fail('versione, seed o spawn');
   list(d.assets, 4096, 'catalogo asset'); list(d.placements, 100_000, 'piazzamenti'); list(d.tiles, 500_000, 'terreno');
   list(d.zones, 10_000, 'zone'); list(d.npcs, 100_000, 'NPC'); list(d.dungeons, 4096, 'dungeon');
+  validateSurfaceData(d.surfaceCells, d.surfaceLinks, d.surfaceStairs);
   if (d.version === 2 && (!Array.isArray(d.tileChunks) || d.tiles.length)) fail('versione 2: terreno in chunk');
   for (const a of d.assets) {
     if (!object(a) || !id(a.id) || !name(a.name) || !validWorldAssetImage(a.image)
       || !finite(a.width, .25, 32) || !finite(a.height, .25, 32) || a.columns !== Math.ceil(a.width) || a.rows !== Math.ceil(a.height)
       || !['ground', 'object'].includes(a.layer) || !object(a.pivot) || !finite(a.pivot.x, 0, 1) || !finite(a.pivot.y, 0, 1)) fail('definizione asset');
     list(a.cells, 1024, 'celle asset');
+    if (a.category !== undefined && !['floor', 'object', 'elevation'].includes(a.category)) fail(`categoria di ${a.id}`);
+    if (a.elevation !== undefined && (!object(a.elevation) || !integer(a.elevation.height, 1, MAX_ELEVATION)
+      || !SURFACE_MATERIALS.includes(a.elevation.material) || a.elevation.material === 'water'
+      || !WALL_MATERIALS.includes(a.elevation.wallMaterial)
+      || a.elevation.wallSkin !== undefined && !isWallSpriteKitId(a.elevation.wallSkin))) fail(`rialzo di ${a.id}`);
     if (a.group !== undefined && (!name(a.group) || a.group.length > 80)) fail(`gruppo di ${a.id}`);
     if (a.imageTransform !== undefined && (!object(a.imageTransform) || !finite(a.imageTransform.x, -32, 32)
       || !finite(a.imageTransform.y, -32, 32) || !finite(a.imageTransform.scale, .1, 8))) fail(`trasformazione immagine di ${a.id}`);
@@ -197,16 +232,20 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     for (const w of d.warps) if (!object(w) || !id(w.id) || !name(w.name) || !maps.has(w.from) || !maps.has(w.to)
       || [w.entrySize,w.arrivalSize].some(size => size !== undefined && (!point(size) || !['1,1','2,1','1,2','1,3','3,1'].includes(`${size.x},${size.y}`)))
       || !point(w.entry) || !point(w.arrival) || !['walk', 'interact'].includes(w.activation)
+      || (w.direction !== undefined && !['up', 'down', 'left', 'right'].includes(w.direction))
       || (w.reverseId !== undefined && (!id(w.reverseId) || w.reverseId === w.id))
       || (w.keyGate !== undefined && (!object(w.keyGate) || !id(w.keyGate.id) || !maps.has(w.keyGate.mapId) || !point(w.keyGate.position)))) fail('collegamento warp');
   }
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
   const result: WorldDocument = structuredClone({ version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
     placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons, ...(d.tileChunks !== undefined ? { tileChunks: d.tileChunks } : {}),
+    ...(d.surfaceStairs !== undefined ? { surfaceStairs: d.surfaceStairs } : {}),
+    ...(d.surfaceCells !== undefined ? { surfaceCells: d.surfaceCells } : {}), ...(d.surfaceLinks !== undefined ? { surfaceLinks: d.surfaceLinks } : {}),
     ...(d.interiors !== undefined ? { interiors: d.interiors.map((m: WorldInterior) => ({ id: m.id, name: m.name, width: m.width, height: m.height,
       ...(m.pvp !== undefined ? { pvp: m.pvp } : {}), ...(m.kind !== undefined ? { kind: m.kind } : {}),
       document: { ...parseWorldDocument({ ...m.document, assets: d.assets, seed: d.seed }), assets: [] } })) } : {}),
     ...(d.warps !== undefined ? { warps: d.warps.map((w: WorldWarp) => ({ id: w.id, name: w.name, from: w.from, to: w.to, entry: w.entry, arrival: w.arrival, activation: w.activation,
+      ...(w.direction ? { direction: w.direction } : {}),
       ...(w.entrySize ? {entrySize:w.entrySize} : {}), ...(w.arrivalSize ? {arrivalSize:w.arrivalSize} : {}),
       ...(w.reverseId !== undefined ? { reverseId: w.reverseId } : {}), ...(w.keyGate ? { keyGate: w.keyGate } : {}) })) } : {}) });
   // Persist recovered animation before an export can rename the image again.

@@ -1,15 +1,18 @@
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE } from './config';
 import { arenaTileIsWall } from './arena';
 import { DUNGEON_DEFINITIONS, configuredDungeonTile, dungeonEncounters, dungeonStoneTiles, inDungeonApproachCorridor, insideDungeon, onDungeonApproach, type DungeonDefinition } from './dungeons';
-import type { Biome, Pickup, TileKind, RoomMode } from './types';
+import type { Biome, Pickup, TileKind, RoomMode, Vec2 } from './types';
 import { WORLD_DOCUMENT } from './world-content';
 import { WorldAuthoring, type TileBounds, type GenerationEnvironment } from './world-authoring';
 import type { AssetPlacement, WorldDocument } from './world-schema';
 import { coordinateHash } from './coordinate-random';
 import { EDIT_CHUNK_SIZE, type WorldTileChunk } from './world-tiles';
+import { BASE_SURFACE, SurfaceIndex, type ResolvedSurface } from './world-surfaces';
+import { stairGeometry, stairSurfaceId } from './surface-stairs';
+import { StairVolumeIndex, type StairVolume } from './stair-volume';
 export { coordinateHash } from './coordinate-random';
 
-export interface NpcSpawn { id: string; x: number; y: number; npcKind: import('./npcs').NpcTemplateId; level: number; settings?: import('./npc-settings').NpcSettings; }
+export interface NpcSpawn extends Vec2 { id: string; npcKind: import('./npcs').NpcTemplateId; level: number; settings?: import('./npc-settings').NpcSettings; }
 export interface Chunk { key: string; cx: number; cy: number; tiles: TileKind[]; npcs: NpcSpawn[]; pickups: Pickup[]; }
 export const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 export const chunkCoords = (x: number, y: number): { cx: number; cy: number } => ({ cx: Math.floor(x / CHUNK_SIZE), cy: Math.floor(y / CHUNK_SIZE) });
@@ -30,16 +33,26 @@ export class World {
   roomAt(x: number, y: number): string { return this.roomTiles.size ? this.roomTiles.get(`${Math.floor(x / TILE_SIZE)},${Math.floor(y / TILE_SIZE)}`) ?? '' : ''; }
   sameRoom(a: { x: number; y: number }, b: { x: number; y: number }): boolean { return this.roomAt(a.x, a.y) === this.roomAt(b.x, b.y); }
   private cache = new Map<string, Chunk>();
+  private readonly tileAssetCache = new Map<string, readonly AssetPlacement[]>();
+  private tileAssetRevision = '';
   private readonly lockedBosses = new Set<string>();
   lockRevision = 0;
   authoringRevision = 0;
   readonly authoring: WorldAuthoring;
+  readonly surfaceIndex: SurfaceIndex;
+  readonly stairVolumes: StairVolumeIndex;
   private readonly manualNpcs = new Map<string, NpcSpawn[]>();
   private readonly lockedTiles = new Map<string, ReadonlySet<string>>();
   private readonly generationEnvironment: GenerationEnvironment;
   constructor(public readonly seed = WORLD_DOCUMENT.seed, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world',
     document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS) {
     this.authoring = new WorldAuthoring(document);
+    this.surfaceIndex = new SurfaceIndex([...document.surfaceCells ?? [], ...dungeons.flatMap(d => d.surfaceCells ?? [])],
+      [...document.surfaceLinks ?? [], ...dungeons.flatMap(d => d.surfaceLinks ?? [])],
+      [...document.surfaceStairs ?? [], ...dungeons.flatMap(d => d.surfaceStairs ?? [])]);
+    this.stairVolumes = new StairVolumeIndex([...document.surfaceStairs ?? [], ...dungeons.flatMap(d => d.surfaceStairs ?? [])],
+      [...document.surfaceLinks ?? [], ...dungeons.flatMap(d => d.surfaceLinks ?? [])], p => this.surfaceIndex.at(p.x, p.y, p.surfaceId)
+        ?? (p.surfaceId === BASE_SURFACE ? { ...p, elevation: 0, kind: 'ground', material: 'grass', wallMaterial: 'earth' } : undefined));
     for (const dungeon of dungeons) for (const room of dungeon.rooms ?? []) {
       const id = `${dungeon.id}:${room.id}`; this.rooms.push({ ...room, id });
       for (const tile of room.tiles) this.roomTiles.set(`${tile.x},${tile.y}`, id);
@@ -54,12 +67,23 @@ export class World {
     for (const d of dungeons.flatMap(dungeonEncounters)) this.lockedTiles.set(d.bossId, new Set(dungeonStoneTiles(d).map(t => `${t.x},${t.y}`)));
     this.generationEnvironment = { tile: (x, y) => this.generateTile(x, y), temperature: (x, y) => this.getTemperature(x, y),
       moisture: (x, y) => this.getMoisture((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE),
-      reserved: (x, y) => !!document.interiorBounds || configuredDungeonTile(x, y, this.dungeons) !== undefined
+      reserved: (x, y) => !!document.interiorBounds || this.surfaceIndex.atColumn(x, y).length > 0 || configuredDungeonTile(x, y, this.dungeons) !== undefined
         || this.dungeons.some(d => onDungeonApproach(d, { x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE }))
         || this.arenaAt((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE) !== undefined };
   }
   /** Rendering includes image overflow; movement and concealment query only the tile grid. */
   assetsIn(bounds: TileBounds, includeArtwork = true): AssetPlacement[] { return this.mode === 'world' ? this.authoring.assetsIn(bounds, this.generationEnvironment, this.seed, includeArtwork) : []; }
+  /** Collision and concealment share a bounded cell query; public area queries stay independent. */
+  private assetsAt(tx: number, ty: number): readonly AssetPlacement[] {
+    const revision = `${this.authoringRevision}:${this.authoring.assetQueryRevision}:${this.lockRevision}`;
+    if (revision !== this.tileAssetRevision) { this.tileAssetCache.clear(); this.tileAssetRevision = revision; }
+    const key = `${tx},${ty}`, cached = this.tileAssetCache.get(key);
+    if (cached) { this.tileAssetCache.delete(key); this.tileAssetCache.set(key, cached); return cached; }
+    const result = this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false);
+    this.tileAssetCache.set(key, result);
+    if (this.tileAssetCache.size > 2048) this.tileAssetCache.delete(this.tileAssetCache.keys().next().value!);
+    return result;
+  }
   updateAuthoredTiles(document: WorldDocument, chunks: readonly WorldTileChunk[]): void {
     this.authoring.document = document;
     this.authoring.tiles.update(chunks); this.authoring.invalidateTileGeneration(); this.authoringRevision++;
@@ -67,12 +91,131 @@ export class World {
       this.cache.delete(chunkKey(c[0] * EDIT_CHUNK_SIZE / CHUNK_TILES + x, c[1] * EDIT_CHUNK_SIZE / CHUNK_TILES + y));
   }
   locationAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE)[0]?.name ?? this.authoring.document.interiorBounds?.name : undefined; }
-  isBlocked(tx: number, ty: number): boolean {
-    return isSolid(this.getTile(tx, ty)) || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false).some(p => this.authoring.cell(p, tx, ty)?.blocked);
+  surfaceAt(tx: number, ty: number, surfaceId = BASE_SURFACE): ResolvedSurface | undefined {
+    const authored = this.surfaceIndex.at(tx, ty, surfaceId);
+    if (!authored && surfaceId !== BASE_SURFACE) return undefined;
+    const tile = this.getTile(tx, ty);
+    const surface: ResolvedSurface = authored ? { ...authored, blocked: authored.blocked ?? authored.material === 'water' }
+      : { x: tx, y: ty, surfaceId, elevation: 0, material: tile, wallMaterial: tile === 'rock' ? 'rock' : 'earth', kind: 'ground', blocked: isSolid(tile) };
+    const placements = this.assetsAt(tx, ty);
+    // Explicit floors make their support walkable; objects and boss barriers still apply afterward.
+    if (placements.some(p => (p.surfaceId ?? BASE_SURFACE) === surfaceId && this.authoring.assets.get(p.assetId)?.category === 'floor')) surface.blocked = false;
+    // Boss barriers remain authoritative even over authored surfaces.
+    for (const id of this.lockedBosses) if (this.lockedTiles.get(id)?.has(`${tx},${ty}`)) { surface.blocked = true; break; }
+    surface.blocked ||= placements.some(p =>
+      (p.surfaceId ?? BASE_SURFACE) === surfaceId && this.authoring.cell(p, tx, ty)?.blocked);
+    return surface;
   }
-  isHiding(x: number, y: number): boolean {
+  surfacesAt(tx: number, ty: number): ResolvedSurface[] {
+    return [this.surfaceAt(tx, ty)!, ...this.surfaceIndex.atColumn(tx, ty).filter(c => c.surfaceId !== BASE_SURFACE)
+      .map(c => this.surfaceAt(tx, ty, c.surfaceId)!)].sort((a, b) => a.elevation - b.elevation || a.surfaceId.localeCompare(b.surfaceId));
+  }
+  surfaceFor(point: import('./types').Vec2): ResolvedSurface | undefined {
+    return this.surfaceAt(Math.floor(point.x / TILE_SIZE), Math.floor(point.y / TILE_SIZE), point.surfaceId ?? BASE_SURFACE);
+  }
+  elevationAt(point: import('./types').Vec2): number { return point.elevation ?? this.surfaceFor(point)?.elevation ?? 0; }
+  surfaceState(point: import('./types').Vec2): Pick<import('./types').Vec2, 'surfaceId' | 'elevation'> {
+    const surface = this.surfaceFor(point);
+    return this.surfaceIndex.hasSurfaces || point.surfaceId !== undefined || point.elevation !== undefined
+      ? { surfaceId: surface?.surfaceId ?? BASE_SURFACE, elevation: surface?.elevation ?? 0 } : {};
+  }
+  sameLevel(a: import('./types').Vec2, b: import('./types').Vec2): boolean { return this.elevationAt(a) === this.elevationAt(b); }
+  /** Ground/deck identity changes only at authored connectors; cliffs never teleport actors uphill. */
+  canTraverse(from: import('./types').Vec2, toX: number, toY: number, checkStairBodies = true): ResolvedSurface | undefined {
+    const source = this.surfaceFor(from); if (!source || source.blocked) return undefined;
+    const tx = Math.floor(toX / TILE_SIZE), ty = Math.floor(toY / TILE_SIZE);
+    if (this.roomAt(from.x, from.y) !== this.roomAt(toX, toY)) return undefined;
+    const dx = tx - source.x, dy = ty - source.y;
+    const ownBodies = this.stairVolumes.at(from, TILE_SIZE / 2).filter(body => body.followsSupport(from, source));
+    const accept = (target: ResolvedSurface): ResolvedSurface | undefined => checkStairBodies
+      && this.stairVolumes.collides({ x: toX, y: toY }, target.elevation, 0, body => ownBodies.includes(body)) ? undefined : target;
+    const stair = this.surfaceIndex.stairFor(from);
+    if (stair) {
+      const g = stairGeometry(stair), t = g.progressAt(from), target = { x: toX, y: toY };
+      // The flight has solid sides; the flat half of each landing remains free to approach.
+      if (source.kind === 'stairs' || t > g.landing / g.run && t < 1 - g.landing / g.run) {
+        const progress = g.progressAt(target);
+        if (progress >= 0 && progress <= 1 && !g.contains(target)) return undefined;
+        if (source.kind === 'stairs' && (progress < 0 || progress > 1)) return undefined;
+      }
+    }
+    for (const body of ownBodies) if (body.legacy) {
+      const t = body.progressAt(from), target = { x: toX, y: toY }, targetT = body.progressAt(target);
+      if (t > 0 && t < 1 && targetT >= 0 && targetT <= 1 && !body.contains(target)) return undefined;
+    }
+    if (!dx && !dy) return accept(source);
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return undefined;
+    if (dx && dy) {
+      const horizontal = this.canTraverse(from, (source.x + dx + .5) * TILE_SIZE, (source.y + .5) * TILE_SIZE, checkStairBodies);
+      const vertical = this.canTraverse(from, (source.x + .5) * TILE_SIZE, (source.y + dy + .5) * TILE_SIZE, checkStairBodies);
+      if (!horizontal || !vertical) return undefined;
+      const a = this.canTraverse({ x: (horizontal.x + .5) * TILE_SIZE, y: (horizontal.y + .5) * TILE_SIZE, surfaceId: horizontal.surfaceId }, toX, toY, checkStairBodies);
+      const b = this.canTraverse({ x: (vertical.x + .5) * TILE_SIZE, y: (vertical.y + .5) * TILE_SIZE, surfaceId: vertical.surfaceId }, toX, toY, checkStairBodies);
+      return a && b && a.surfaceId === b.surfaceId && a.elevation === b.elevation ? accept(a) : undefined;
+    }
+    for (const endpoint of this.surfaceIndex.exits(source.x, source.y, source.surfaceId)) {
+      if (endpoint.x !== tx || endpoint.y !== ty) continue;
+      const target = this.surfaceAt(tx, ty, endpoint.surfaceId);
+      if (target && !target.blocked) {
+        const connector = this.surfaceIndex.stairForEdge(source, target);
+        if (connector && !stairGeometry(connector).contains({ x: toX, y: toY })) continue;
+        const accepted = accept(target); if (accepted) return accepted;
+      }
+    }
+    const continuation = this.surfaceAt(tx, ty, source.surfaceId);
+    if (continuation && !continuation.blocked && continuation.elevation === source.elevation) return accept(continuation);
+    return undefined;
+  }
+  isBlocked(tx: number, ty: number, point?: import('./types').Vec2): boolean {
+    const surface = this.surfaceAt(tx, ty, point?.surfaceId ?? BASE_SURFACE);
+    if (!surface || surface.blocked || point?.elevation !== undefined && surface.elevation !== point.elevation) return true;
+    const position = point && Math.floor(point.x / TILE_SIZE) === tx && Math.floor(point.y / TILE_SIZE) === ty
+      ? point : { x: (tx + .5) * TILE_SIZE, y: (ty + .5) * TILE_SIZE };
+    return this.collidesStairBody({ ...position, surfaceId: surface.surfaceId, elevation: surface.elevation });
+  }
+  /** Circle clearance against the real footprint; the stair's own walking profile is exempt. */
+  collidesStairBody(point: Vec2, radius = 0): boolean {
+    if (!this.stairVolumes.at(point, radius).length) return false;
+    const source = this.surfaceFor(point);
+    return this.stairVolumes.collides(point, this.elevationAt(point), radius, body => body.followsSupport(point, source));
+  }
+  /** Swept horizontal rays test the body slice at their height rather than complete tile cells. */
+  private stairRayExemption(start: Vec2): (body: StairVolume) => boolean {
+    let source: ResolvedSurface | undefined, resolved = false;
+    return (body: StairVolume): boolean => {
+      if (!resolved) { source = this.surfaceFor(start); resolved = true; }
+      if (!body.followsSupport(start, source)) return false;
+      if (body.stair && (start.surfaceId ?? BASE_SURFACE) === stairSurfaceId(body.stair)) return true;
+      const t = body.progressAt(start);
+      const geometry = body.stair ? stairGeometry(body.stair) : undefined;
+      const landing = geometry ? geometry.landing / geometry.run : 0;
+      return t > landing && t < 1 - landing && body.contains(start);
+    };
+  }
+  stairBodyHit(start: Vec2, end: Vec2, radius = 0): number | null {
+    if (!this.stairVolumes.volumes.length) return null;
+    return this.stairVolumes.hit(start, end, this.elevationAt(start), radius, this.stairRayExemption(start));
+  }
+  /** A horizontal ray may cross empty air above low terrain, but hits higher ground and same-height walls. */
+  blocksRay(tx: number, ty: number, point: import('./types').Vec2, sample: Pick<Vec2, 'x' | 'y'> = { x: (tx + .5) * TILE_SIZE, y: (ty + .5) * TILE_SIZE }): boolean {
+    return this.blocksTerrainRay(tx, ty, point) || this.stairVolumes.collides(sample, this.elevationAt(point), 0, this.stairRayExemption(point));
+  }
+  /** Grid broad phase excludes stair bodies, which receive an exact geometric narrow phase. */
+  blocksTerrainRay(tx: number, ty: number, point: import('./types').Vec2): boolean {
+    if (!this.surfaceIndex.hasSurfaces) return this.isBlocked(tx, ty);
+    const height = this.elevationAt(point), ground = this.surfaceAt(tx, ty)!;
+    if (ground.elevation > height) return true;
+    const surfaces = this.surfacesAt(tx, ty);
+    const waterDeck = surfaces.some(surface => surface.kind === 'bridge' && surface.elevation === height && !surface.blocked);
+    return surfaces.some(surface => surface.elevation === height && surface.blocked
+      && !(waterDeck && surface.kind === 'ground' && surface.material === 'water'));
+  }
+  isHiding(x: number, y: number, point?: import('./types').Vec2): boolean {
     const tx = Math.floor(x / TILE_SIZE), ty = Math.floor(y / TILE_SIZE);
-    return this.getTile(tx, ty) === 'bush' || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false).some(p => ['hide', 'hide-fade'].includes(this.authoring.cell(p, tx, ty)?.visibility ?? ''));
+    const surfaceId = point?.surfaceId ?? BASE_SURFACE;
+    const material = this.surfaceIndex.at(tx, ty, surfaceId)?.material ?? (surfaceId === BASE_SURFACE ? this.getTile(tx, ty) : undefined);
+    return material === 'bush' || this.assetsAt(tx, ty).some(p =>
+      (p.surfaceId ?? BASE_SURFACE) === surfaceId && ['hide', 'hide-fade'].includes(this.authoring.cell(p, tx, ty)?.visibility ?? ''));
   }
   pvpAt(x: number, y: number): boolean {
     if (this.mode !== 'world') return true;
@@ -109,7 +252,7 @@ export class World {
   }
 
   getTile(tx: number, ty: number): TileKind {
-    if (this.mode === 'world' && [...this.lockedBosses].some(id => this.lockedTiles.get(id)?.has(`${tx},${ty}`))) return 'rock';
+    if (this.mode === 'world') for (const id of this.lockedBosses) if (this.lockedTiles.get(id)?.has(`${tx},${ty}`)) return 'rock';
     const cx = Math.floor(tx / CHUNK_TILES), cy = Math.floor(ty / CHUNK_TILES);
     const cached = this.cache.get(chunkKey(cx, cy));
     if (cached) return cached.tiles[(ty - cy * CHUNK_TILES) * CHUNK_TILES + tx - cx * CHUNK_TILES];
@@ -194,7 +337,7 @@ export class World {
     }
     if (this.mode === 'world' && !this.authoring.document.interiorBounds && cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
     if (this.mode === 'world' && !this.authoring.document.interiorBounds && cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
-    if (this.mode === 'world') for (const n of this.manualNpcs.get(key) ?? []) if (!this.isBlocked(Math.floor(n.x / TILE_SIZE), Math.floor(n.y / TILE_SIZE))) chunk.npcs.push({ ...n });
+    if (this.mode === 'world') for (const n of this.manualNpcs.get(key) ?? []) if (!this.isBlocked(Math.floor(n.x / TILE_SIZE), Math.floor(n.y / TILE_SIZE), n)) chunk.npcs.push({ ...n });
     if (this.mode === 'world') for (const dungeon of this.dungeons) for (const npc of dungeon.npcSpawns ?? []) {
       const position = chunkCoords(npc.x, npc.y);
       if (position.cx === cx && position.cy === cy) chunk.npcs.push({ ...npc, id: `dungeon:${dungeon.id}:${npc.id}` });

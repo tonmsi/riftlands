@@ -7,6 +7,7 @@ import { collidesWorld } from './physics';
 import type { WorldDocument } from './world-schema';
 import { QUEST_DEFINITIONS } from './narrative';
 import { atWarp, mapDocument, warpPosition } from './warps';
+import { stairSpatialIssues } from './surface-stairs';
 
 export function worldDungeons(document: WorldDocument, catalog: readonly DungeonDefinition[]): DungeonDefinition[] {
   const indoor = new Set((document.interiors ?? []).flatMap(m => m.document.dungeons.filter(p => p.enabled !== false).map(p => p.dungeonId)));
@@ -42,15 +43,16 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
   }
   for (const d of dungeons) {
     for (const e of [d, ...(d.additionalEncounters ?? [])]) for (const p of [e.spawnPoints.boss, ...e.spawnPoints.party]) {
-      if (collidesWorld(p.x, p.y, PLAYER_RADIUS, world)) issues.push(`${d.name}: spawn su un ostacolo del catalogo condiviso.`);
+      if (collidesWorld(p.x, p.y, PLAYER_RADIUS, world, p)) issues.push(`${d.name}: spawn su un ostacolo del catalogo condiviso.`);
     }
   }
-  const spawn = { x: (document.spawn.x + (bounds ? .5 : 0)) * TILE_SIZE, y: (document.spawn.y + (bounds ? .5 : 0)) * TILE_SIZE };
-  if (collidesWorld(spawn.x, spawn.y, PLAYER_RADIUS + 2, world)) issues.push('Spawn del giocatore bloccato: libera anche le celle vicine.');
+  const offset = bounds || document.spawn.surfaceId !== undefined || document.spawn.elevation !== undefined ? .5 : 0;
+  const spawn = { ...document.spawn, x: (document.spawn.x + offset) * TILE_SIZE, y: (document.spawn.y + offset) * TILE_SIZE };
+  if (collidesWorld(spawn.x, spawn.y, PLAYER_RADIUS + 2, world, spawn)) issues.push('Spawn del giocatore bloccato: libera anche le celle vicine.');
   if (!bounds && configuredDungeonTile(Math.floor(spawn.x / TILE_SIZE), Math.floor(spawn.y / TILE_SIZE), dungeons) !== undefined) issues.push('Spawn globale dentro un dungeon: scegli una posizione nel mondo.');
   if (world.arenaAt(spawn.x, spawn.y)) issues.push('Lo spawn del giocatore si trova dentro un ingresso arena.');
   for (const n of document.npcs) {
-    if (collidesWorld((n.x + .5) * TILE_SIZE, (n.y + .5) * TILE_SIZE, 19, world)) issues.push(`NPC ${n.id} su un ostacolo.`);
+    if (collidesWorld((n.x + .5) * TILE_SIZE, (n.y + .5) * TILE_SIZE, 19, world, n)) issues.push(`NPC ${n.id} su un ostacolo.`);
     if (configuredDungeonTile(n.x, n.y, dungeons) !== undefined) issues.push(`NPC ${n.id} dentro un dungeon: usa il Dungeon Maker.`);
   }
   for (const p of document.placements) {
@@ -58,6 +60,21 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
     for (let y = 0; y < a.rows; y++) for (let x = 0; x < a.columns; x++) if (configuredDungeonTile(p.x + x, p.y + y, dungeons) !== undefined) {
       issues.push(`Asset ${a.name} dentro un dungeon: modifica il dungeon nel Dungeon Maker.`); y = a.rows; break;
     }
+  }
+  for (const c of document.surfaceCells ?? []) {
+    if (bounds && (c.x < 0 || c.y < 0 || c.x >= bounds.width || c.y >= bounds.height)) issues.push('Superficie oltre i limiti dell’interno.');
+    const ground = world.surfaceAt(c.x, c.y)!;
+    if (c.kind === 'bridge' && c.elevation <= ground.elevation && !(c.elevation === ground.elevation && ground.material === 'water'))
+      issues.push(`Ponte ${c.surfaceId}: quota superiore al terreno richiesta alla casella ${c.x}, ${c.y}.`);
+  }
+  for (const link of document.surfaceLinks ?? []) {
+    const a = world.surfaceAt(link.from.x, link.from.y, link.from.surfaceId), b = world.surfaceAt(link.to.x, link.to.y, link.to.surfaceId);
+    if (!a || !b || a.blocked || b.blocked) issues.push(`Collegamento ${link.id}: accesso assente o bloccato.`);
+    if (a && b && link.kind === 'bridge-entry' && a.elevation !== b.elevation) issues.push(`Collegamento ${link.id}: accesso al ponte a quote diverse; usa scala o rampa.`);
+  }
+  for (const stair of document.surfaceStairs ?? []) issues.push(...stairSpatialIssues(stair, (x, y, id) => world.surfaceAt(x, y, id)));
+  for (const p of [...document.placements, ...document.npcs, document.spawn]) {
+    if (p.surfaceId && !world.surfaceAt(p.x, p.y, p.surfaceId)) issues.push(`Superficie ${p.surfaceId} assente alla casella ${p.x}, ${p.y}.`);
   }
   for (const z of document.zones) if (z.arenaId && z.arenaId !== 'arena-1') issues.push(`${z.name}: arena ${z.arenaId} non implementata. Usa arena-1; ogni ingresso ha una coda separata.`);
   if (!document.interiorBounds) {
@@ -80,17 +97,17 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
         const size=(label==='ingresso' ? w.entrySize : w.arrivalSize) ?? {x:1,y:1};
         const anchor=warpPosition(p);
         for(let y=0;y<size.y;y++)for(let x=0;x<size.x;x++){
-          const cell=warpPosition({x:p.x+x,y:p.y+y});
-          if(collidesWorld(cell.x,cell.y,PLAYER_RADIUS+2,map)) issues.push(`${w.name}: ${label} su un ostacolo alla casella ${p.x+x}, ${p.y+y}.`);
+          const cell=warpPosition({...p,x:p.x+x,y:p.y+y});
+          if(collidesWorld(cell.x,cell.y,PLAYER_RADIUS+2,map,cell)) issues.push(`${w.name}: ${label} su un ostacolo alla casella ${p.x+x}, ${p.y+y}.`);
           if(!map.sameRoom(anchor,cell)) issues.push(`${w.name}: ${label} attraversa il confine di una stanza.`);
         }
         const pos = warpPosition(p);
-        if (collidesWorld(pos.x, pos.y, PLAYER_RADIUS + 2, map)) issues.push(`${w.name}: ${label} su un ostacolo.`);
+        if (collidesWorld(pos.x, pos.y, PLAYER_RADIUS + 2, map, pos)) issues.push(`${w.name}: ${label} su un ostacolo.`);
         if (map.arenaAt(pos.x, pos.y)) issues.push(`${w.name}: ${label} sovrapposto a un ingresso arena.`);
       }
       if (w.keyGate) {
         const keyMap = maps.get(w.keyGate.mapId), point = warpPosition(w.keyGate.position);
-        if (!keyMap || collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, keyMap)) issues.push(`${w.name}: chiave su un ostacolo.`);
+        if (!keyMap || collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, keyMap, point)) issues.push(`${w.name}: chiave su un ostacolo.`);
         if ((document.warps ?? []).some(other => other.id !== w.id && other.id !== w.reverseId && other.keyGate?.id === w.keyGate!.id)) issues.push(`${w.name}: chiave assegnata a un altro passaggio.`);
       }
       if (w.reverseId) {

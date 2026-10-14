@@ -48,13 +48,15 @@ export class WarpUI {
       .sort((a, b) => Math.hypot(a.x - self.x, a.y - self.y) - Math.hypot(b.x - self.x, b.y - self.y))[0] : undefined;
     this.warp = available && self && self.hp > 0 ? warps.find(w => w.from === mapId && (w.activation === 'interact' || !!w.keyGate) && world.sameRoom(self, warpPosition(w.entry)) && atWarp(self, w)) : undefined;
     this.button.hidden = (!this.warp && !this.key) || this.blocked;
-    if (this.key) this.button.textContent = `Raccogli ${this.key.name} · F`;
+    let label = '';
+    if (this.key) label = `Raccogli ${this.key.name} · F`;
     else if (this.warp) {
       const gate = this.warp.keyGate, until = gates.find(state => state.id === gate?.id)?.openedUntil ?? 0;
       const seconds = Math.max(0, Math.ceil((until - now) / 1000));
       const status = !gate ? '' : seconds ? ` · Aperta ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
         : owned.some(key => key.id === gate.id) ? ' · Apri con chiave' : ' · Richiede chiave';
-      this.button.textContent = `${this.warp.name}${status} · F`;
-    } else this.button.textContent = '';
+      label = `${this.warp.name}${status} · F`;
+    }
+    if (this.button.textContent !== label) this.button.textContent = label;
   }
 }

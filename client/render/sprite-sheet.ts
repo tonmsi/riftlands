@@ -21,15 +21,6 @@ export async function loadImage(url: string): Promise<HTMLImageElement> {
 // Aggiungi parametri per colonne e righe, con default a 4x4
 export async function rasterizeSpriteSheet(url: string, frameSize: number, drawSize: number, columns = 4, rows = 4): Promise<RasterSpriteSheet> {
   const image = await loadImage(url);
-  const atlas = document.createElement('canvas');
-  atlas.width = image.naturalWidth;
-  atlas.height = image.naturalHeight;
-  const atlasContext = atlas.getContext('2d');
-  if (!atlasContext) throw new Error('Canvas 2D non disponibile per la cache delle sprite.');
-  atlasContext.imageSmoothingEnabled = true;
-  atlasContext.imageSmoothingQuality = 'high';
-  atlasContext.drawImage(image, 0, 0);
-
   const cachedSize = Math.ceil(drawSize * SPRITE_RASTER_DPR);
   const frames: HTMLCanvasElement[] = [];
   for (let row = 0; row < rows; row++) {
@@ -41,7 +32,7 @@ export async function rasterizeSpriteSheet(url: string, frameSize: number, drawS
       if (!frameContext) throw new Error('Canvas 2D non disponibile per un frame della sprite.');
       frameContext.imageSmoothingEnabled = true;
       frameContext.imageSmoothingQuality = 'high';
-      frameContext.drawImage(atlas, column * frameSize, row * frameSize, frameSize, frameSize, 0, 0, cachedSize, cachedSize);
+      frameContext.drawImage(image, column * frameSize, row * frameSize, frameSize, frameSize, 0, 0, cachedSize, cachedSize);
       frames.push(frame);
     }
   }

@@ -1,7 +1,8 @@
 import { createHmac, randomBytes, randomUUID, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import type { Actor, ClassId, PublicAccount } from '../shared/types';
+import type { Actor, ClassId, PublicAccount, Vec2 } from '../shared/types';
+import { validSurfacePoint } from '../shared/world-surfaces';
 import { CLASSES, levelFromXp } from '../shared/config';
 import { newCharacter, normalizeLoadout, unlockTier, validLoadout, type CharacterProgress } from '../shared/progression';
 import { activateCharacter, characterFor } from './character-progress';
@@ -30,7 +31,7 @@ export interface Account {
   requests: string[];
   lastSeen: number;
   body?: Actor;
-  location?: { mapId: string; returnTo: { x: number; y: number } };
+  location?: { mapId: string; returnTo: Vec2 };
 }
 
 export function publicAccount(account: Account): PublicAccount {
@@ -49,6 +50,8 @@ export function cleanName(name: string): string {
 function validBody(body: unknown): boolean {
   if (!body || typeof body !== 'object') return false;
   const actor = body as Actor;
+  if (actor.surfaceId !== undefined && (typeof actor.surfaceId !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(actor.surfaceId))) return false;
+  if (actor.elevation !== undefined && (!Number.isInteger(actor.elevation) || actor.elevation < 0 || actor.elevation > 16)) return false;
   if (actor.pvpUntil !== undefined && (!Number.isFinite(actor.pvpUntil) || actor.pvpUntil < 0)) return false;
   if (actor.kind !== 'player' || typeof actor.id !== 'string' || typeof actor.name !== 'string' || !Object.hasOwn(CLASSES, actor.classId ?? '')) return false;
   if (![actor.x, actor.y, actor.radius, actor.hp, actor.maxHp, actor.resource, actor.maxResource, actor.aim, actor.speed, actor.level, actor.xp, actor.kills, actor.deaths, actor.revealedUntil, actor.deadUntil, actor.spawnProtectedUntil].every(Number.isFinite)) return false;
@@ -125,7 +128,7 @@ export class AccountStore implements GameplayPersistence {
 
         const account = entry as Account;
         if (account.location && (typeof account.location.mapId !== 'string' || account.location.mapId.length > 128 || !account.location.returnTo
-          || ![account.location.returnTo.x, account.location.returnTo.y].every(Number.isFinite))) throw new Error('Posizione interna non valida.');
+          || ![account.location.returnTo.x, account.location.returnTo.y].every(Number.isFinite) || !validSurfacePoint(account.location.returnTo))) throw new Error('Posizione interna non valida.');
         if (account.gold !== undefined && (!Number.isSafeInteger(account.gold) || account.gold < 0)) throw new Error('Saldo gold non valido.');
         account.gold ??= 0;
         if (account.arenaBets !== undefined && (!Array.isArray(account.arenaBets) || account.arenaBets.some(b => !b || typeof b.id !== 'string' || typeof b.matchId !== 'string' || typeof b.playerId !== 'string' || typeof b.playerName !== 'string' || !Number.isSafeInteger(b.stake) || b.stake < 1 || b.stake > 10000 || !Number.isFinite(b.odds) || b.odds < 1 || b.odds > 10 || !Number.isSafeInteger(b.payout) || b.payout < 0 || !Number.isFinite(b.placedAt) || !['active', 'won', 'lost', 'refunded'].includes(b.status)))) throw new Error('Scommesse non valide.');

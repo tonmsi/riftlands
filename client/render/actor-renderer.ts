@@ -21,13 +21,14 @@ const TAU = Math.PI * 2;
 export class ActorRenderer {
   private readonly classSprites = new Map<ClassId, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
-  private readonly actorSprites = new CatalogSpriteRenderer();
+  private readonly actorSprites: CatalogSpriteRenderer;
   private playerSizes?: Partial<Record<ClassId, number>>;
   /** Preview overrides; gameplay reads the saved shared catalog. */
   setPlayerDrawSizes(sizes: Partial<Record<ClassId, number>>): void { this.playerSizes = { ...sizes }; }
   playerDrawSize(classId: ClassId): number { return this.playerSizes?.[classId] ?? this.actorSprites.playerDrawSize(classId); }
   readonly spritesReady: Promise<void>;
   constructor(private readonly ctx: CanvasRenderingContext2D, private readonly touchQuery: MediaQueryList) {
+    this.actorSprites = new CatalogSpriteRenderer(touchQuery.matches ? 192 : Infinity);
     this.spritesReady = this.prepareSprites();
   }
   reset(): void { this.classMotion.clear(); }

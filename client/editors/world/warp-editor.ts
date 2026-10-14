@@ -3,6 +3,8 @@ import { mapDocument, newInterior, newDungeonInterior, setWarpReturn } from '../
 import type { DungeonDefinition } from '../../../shared/dungeons';
 import type { Vec2 } from '../../../shared/types';
 import type { WorldDocument, WorldWarp } from '../../../shared/world-schema';
+import { BASE_SURFACE, ELEVATION_STEP } from '../../../shared/world-surfaces';
+import { TILE_SIZE } from '../../../shared/config';
 
 interface WarpEditorHost {
   rooms?(mapId: string): { id: string; name: string; tiles: Vec2[] }[];
@@ -10,6 +12,9 @@ interface WarpEditorHost {
   change(action: () => void): void; tool(): string; selectTool(tool: string): void; center(p: Vec2): void;
   inspect(): void;
   catalog(): readonly DungeonDefinition[];
+  elevation?(point: Vec2): number;
+  showUnder?(): boolean;
+  resolvePoint?(point: Vec2): Vec2;
 }
 export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   const section = document.createElement('section');
@@ -46,7 +51,8 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   inspector.innerHTML = `<h2>Collegamento warp</h2><div class="fields"><label>Nome<input id="warp-name" maxlength="160"></label>
     <label>Mappa del primo lato<select id="warp-from"></select></label><div class="pair"><label>Porta X<input id="warp-x" type="number"></label><label>Porta Y<input id="warp-y" type="number"></label></div>
     <label>Destinazione<select id="warp-to"></select></label><div class="pair"><label>Arrivo X<input id="warp-arrival-x" type="number"></label><label>Arrivo Y<input id="warp-arrival-y" type="number"></label></div>
-    <div class="pair"><label>Dimensione A<select id="warp-entry-size"><option value="1,1">1 ◊ 1</option><option value="2,1">2 ◊ 1</option><option value="1,2">1 ◊ 2</option><option value="1,3">1 ◊ 3</option><option value="3,1">3 ◊ 1</option></select></label><label>Dimensione B<select id="warp-arrival-size"><option value="1,1">1 ◊ 1</option><option value="2,1">2 ◊ 1</option><option value="1,2">1 ◊ 2</option><option value="1,3">1 ◊ 3</option><option value="3,1">3 ◊ 1</option></select></label></div><p class="hint">La casella posizionata Ë líangolo in alto a sinistra. Líingresso si estende a destra o verso il basso; il punto di arrivo resta su quella casella.</p>
+    <div class="pair"><label>Dimensione A<select id="warp-entry-size"><option value="1,1">1 ÔøΩ 1</option><option value="2,1">2 ÔøΩ 1</option><option value="1,2">1 ÔøΩ 2</option><option value="1,3">1 ÔøΩ 3</option><option value="3,1">3 ÔøΩ 1</option></select></label><label>Dimensione B<select id="warp-arrival-size"><option value="1,1">1 ÔøΩ 1</option><option value="2,1">2 ÔøΩ 1</option><option value="1,2">1 ÔøΩ 2</option><option value="1,3">1 ÔøΩ 3</option><option value="3,1">3 ÔøΩ 1</option></select></label></div><p class="hint">La casella posizionata ÔøΩ lÔøΩangolo in alto a sinistra. LÔøΩingresso si estende a destra o verso il basso; il punto di arrivo resta su quella casella.</p>
+    <label>Direzione richiesta<select id="warp-direction"><option value="">Qualsiasi ¬∑ automatico</option><option value="up">‚Üë Su</option><option value="down">‚Üì Gi√π</option><option value="left">‚Üê Sinistra</option><option value="right">‚Üí Destra</option></select></label>
     <label>Attivazione<select id="warp-activation"><option value="walk">Attraversamento automatico</option><option value="interact">Interazione ¬∑ F / pulsante</option></select></label>
     <label><input id="warp-one-way" type="checkbox"> Solo andata (nessun ritorno da questa porta)</label></div>
     <label class="check"><input id="warp-requires-key" type="checkbox">Richiede chiave</label><div id="warp-key-settings" hidden><p class="hint">Chiave unica per questo passaggio. Si raccoglie al passaggio o con F, si consuma all‚Äôapertura e ricompare qui dopo 5 minuti. La porta resta aperta per tutti durante il timer.</p><button id="warp-key-place" class="wide">Posiziona chiave sulla mappa</button></div><p class="hint" id="warp-current-side"></p><button id="warp-update" class="wide">Aggiorna passaggio</button>
@@ -130,7 +136,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     el('warp-cancel').hidden = host.tool() !== 'warp' && !pickingKey;
     if (w) {
       for (const [id, v] of Object.entries({ 'warp-name': displayName(w), 'warp-from': w.from, 'warp-to': w.to, 'warp-x': w.entry.x,
-        'warp-y': w.entry.y, 'warp-arrival-x': w.arrival.x, 'warp-arrival-y': w.arrival.y, 'warp-entry-size': `${w.entrySize?.x ?? 1},${w.entrySize?.y ?? 1}`, 'warp-arrival-size': `${w.arrivalSize?.x ?? 1},${w.arrivalSize?.y ?? 1}`, 'warp-activation': w.activation })) el(id).value = String(v);
+        'warp-y': w.entry.y, 'warp-arrival-x': w.arrival.x, 'warp-arrival-y': w.arrival.y, 'warp-entry-size': `${w.entrySize?.x ?? 1},${w.entrySize?.y ?? 1}`, 'warp-arrival-size': `${w.arrivalSize?.x ?? 1},${w.arrivalSize?.y ?? 1}`, 'warp-direction': w.direction ?? '', 'warp-activation': w.activation })) el(id).value = String(v);
       el('warp-one-way').checked = !w.reverseId;
       el('warp-requires-key').checked = !!w.keyGate; el('warp-key-settings').hidden = !w.keyGate;
       document.getElementById('warp-current-side')!.textContent = `Lato visualizzato: ${options.find(([id]) => id === host.mapId())?.[1] ?? host.mapId()}`;
@@ -220,18 +226,21 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   function saveSelected(): void {
     const w = warp(); if (!w) return;
     const size=(id:string)=>{const [x,y]=value(id).split(',').map(Number);return {x,y};};
-    const next = { entrySize:size('warp-entry-size'), arrivalSize:size('warp-arrival-size'), name: displayName({ ...w, name: value('warp-name') }).slice(0, 160), from: value('warp-from'), to: value('warp-to'), entry: { x: num('warp-x'), y: num('warp-y') },
-      arrival: { x: num('warp-arrival-x'), y: num('warp-arrival-y') }, activation: value('warp-activation') as WorldWarp['activation'],
+    const next = { entrySize:size('warp-entry-size'), arrivalSize:size('warp-arrival-size'), name: displayName({ ...w, name: value('warp-name') }).slice(0, 160), from: value('warp-from'), to: value('warp-to'), entry: { ...(value('warp-from') === w.from ? w.entry : {}), x: num('warp-x'), y: num('warp-y') },
+      arrival: { ...(value('warp-to') === w.to ? w.arrival : {}), x: num('warp-arrival-x'), y: num('warp-arrival-y') }, activation: value('warp-activation') as WorldWarp['activation'], direction: (value('warp-direction') || undefined) as WorldWarp['direction'],
       keyGate: el('warp-requires-key').checked ? w.keyGate ?? { id: `key-${crypto.randomUUID()}`, mapId: w.from, position: { ...w.entry } } : undefined };
     // Changing maps must not reuse a coordinate belonging to the previous destination.
     if (next.to !== w.to && next.arrival.x === w.arrival.x && next.arrival.y === w.arrival.y) next.arrival = { ...mapDocument(host.project(), next.to).spawn };
     if (next.from !== w.from && next.entry.x === w.entry.x && next.entry.y === w.entry.y) next.entry = { ...mapDocument(host.project(), next.from).spawn };
+    if (next.from === host.mapId()) next.entry = host.resolvePoint?.({ ...next.entry, surfaceId: next.entry.surfaceId ?? BASE_SURFACE }) ?? next.entry;
+    if (next.to === host.mapId()) next.arrival = host.resolvePoint?.({ ...next.arrival, surfaceId: next.arrival.surfaceId ?? BASE_SURFACE }) ?? next.arrival;
     const returnEnabled = !el('warp-one-way').checked;
     if (Object.entries(next).every(([key, v]) => JSON.stringify(w[key as keyof WorldWarp]) === JSON.stringify(v)) && !!w.reverseId === returnEnabled) return;
     host.change(() => { const current = warp(); if (!current) return; Object.assign(current, next);
       setWarpReturn(host.project(), current, returnEnabled, `warp-${crypto.randomUUID()}`); });
   }
   click('warp-update', saveSelected);
+  el('warp-direction').onchange = saveSelected;
   el('warp-entry-size').onchange = saveSelected;
   el('warp-arrival-size').onchange = saveSelected;
   el('warp-one-way').onchange = saveSelected;
@@ -255,32 +264,38 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     host.switchMap(destination); host.center(point); host.selectTool('select'); host.inspect(); refresh();
   });
   click('warp-delete', () => host.change(() => { const reverseId = warp()?.reverseId; host.project().warps = host.project().warps?.filter(w => w.id !== selected && w.id !== reverseId); selected = ''; }));
+  function containsPoint(point: Vec2, endpoint: Vec2, size?: Vec2): boolean {
+    return (point.surfaceId ?? BASE_SURFACE) === (endpoint.surfaceId ?? BASE_SURFACE)
+      && point.x >= endpoint.x && point.y >= endpoint.y && point.x < endpoint.x + (size?.x ?? 1) && point.y < endpoint.y + (size?.y ?? 1);
+  }
   function dragTarget(p: Vec2): { id: string; side: 'entry' | 'arrival'; x: number; y: number } | undefined {
     const w = warp(); if (!w) return;
-    if (w.from === host.mapId() && p.x>=w.entry.x && p.y>=w.entry.y && p.x<w.entry.x+(w.entrySize?.x??1) && p.y<w.entry.y+(w.entrySize?.y??1)) return { id: w.id, side: 'entry', ...w.entry };
-    if (w.to === host.mapId() && p.x>=w.arrival.x && p.y>=w.arrival.y && p.x<w.arrival.x+(w.arrivalSize?.x??1) && p.y<w.arrival.y+(w.arrivalSize?.y??1)) return { id: w.id, side: 'arrival', ...w.arrival };
+    if (w.from === host.mapId() && containsPoint(p, w.entry, w.entrySize)) return { id: w.id, side: 'entry', ...w.entry };
+    if (w.to === host.mapId() && containsPoint(p, w.arrival, w.arrivalSize)) return { id: w.id, side: 'arrival', ...w.arrival };
   }
   function moveEndpoint(endpoint: { id: string; side: 'entry' | 'arrival' }, p: Vec2): void {
     const w = host.project().warps?.find(item => item.id === endpoint.id); if (!w) return;
     const bounds = mapDocument(host.project(), host.mapId()).interiorBounds;
-    const point = { x: Math.max(bounds ? 0 : -10_000_000, Math.min(bounds ? bounds.width - 1 : 10_000_000, p.x)),
+    const point = { ...w[endpoint.side], ...p, x: Math.max(bounds ? 0 : -10_000_000, Math.min(bounds ? bounds.width - 1 : 10_000_000, p.x)),
       y: Math.max(bounds ? 0 : -10_000_000, Math.min(bounds ? bounds.height - 1 : 10_000_000, p.y)) };
-    w[endpoint.side] = point;
+    try { w[endpoint.side] = host.resolvePoint?.({ ...point, surfaceId: point.surfaceId ?? BASE_SURFACE }) ?? point; }
+    catch (error) { el('status').textContent = error instanceof Error ? error.message : 'Scegli un punto sulla superficie del passaggio.'; return; }
     if (w.reverseId) setWarpReturn(host.project(), w, true, `warp-${crypto.randomUUID()}`);
   }
   function place(p: Vec2): boolean {
+    if (host.tool() === 'warp' || host.tool() === 'warp-key') p = host.resolvePoint?.(p) ?? p;
     if (pickingKey && host.tool() === 'warp-key') {
       host.change(() => { for (const w of host.project().warps ?? []) if (w.keyGate?.id === pickingKey) w.keyGate = { ...w.keyGate, mapId: host.mapId(), position: { ...p } }; });
       pickingKey = ''; host.selectTool('select'); host.inspect(); refresh(); return true;
     }
     if (host.tool() === 'erase') {
-      const w = host.project().warps?.find(w => (w.from === host.mapId() && p.x>=w.entry.x && p.y>=w.entry.y && p.x<w.entry.x+(w.entrySize?.x??1) && p.y<w.entry.y+(w.entrySize?.y??1)) || (w.to === host.mapId() && p.x>=w.arrival.x && p.y>=w.arrival.y && p.x<w.arrival.x+(w.arrivalSize?.x??1) && p.y<w.arrival.y+(w.arrivalSize?.y??1)));
+      const w = host.project().warps?.find(w => (w.from === host.mapId() && containsPoint(p, w.entry, w.entrySize)) || (w.to === host.mapId() && containsPoint(p, w.arrival, w.arrivalSize)));
       if (w) { host.change(() => { host.project().warps = host.project().warps?.filter(item => item.id !== w.id && item.id !== w.reverseId); selected = ''; }); host.inspect(); return true; }
     }
     if (host.tool() !== 'warp') {
       if (host.tool() === 'select') {
-        const w = host.project().warps?.find(w => w.from === host.mapId() && p.x>=w.entry.x && p.y>=w.entry.y && p.x<w.entry.x+(w.entrySize?.x??1) && p.y<w.entry.y+(w.entrySize?.y??1))
-          ?? host.project().warps?.find(w => w.to === host.mapId() && p.x>=w.arrival.x && p.y>=w.arrival.y && p.x<w.arrival.x+(w.arrivalSize?.x??1) && p.y<w.arrival.y+(w.arrivalSize?.y??1));
+        const w = host.project().warps?.find(w => w.from === host.mapId() && containsPoint(p, w.entry, w.entrySize))
+          ?? host.project().warps?.find(w => w.to === host.mapId() && containsPoint(p, w.arrival, w.arrivalSize));
         if (w) { editingNew = false; ownerId = host.mapId() !== 'world' ? host.mapId() : w.to !== 'world' ? w.to : w.from; if (owner()) el('area-kind').value = owner()?.kind ?? 'building'; selected = w.id; host.inspect(); refresh(); return true; }
       }
       selected = ''; inspector.hidden = true;
@@ -304,7 +319,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     selected = `warp-${crypto.randomUUID()}`;
     host.change(() => {
       (host.project().warps ??= []).push({ id: selected, name: `${host.project().interiors?.find(m => m.id === connection.owner)?.name ?? 'Mondo'} ¬∑ Passaggio ${(host.project().warps ?? []).filter(w => w.from === connection.owner).length + 1}`.slice(0, 160), from: connection.from, to: connection.to,
-        entry: connection.entry, arrival: { ...p }, activation: 'walk' });
+        entry: connection.entry, arrival: { ...p }, activation: 'walk', direction: connection.from === 'world' ? 'up' : connection.to === 'world' ? 'down' : undefined });
       if (connection.bidirectional) setWarpReturn(host.project(), warp()!, true, `warp-${crypto.randomUUID()}`);
       const roomAt = (id: string, point: Vec2) => host.rooms?.(id).find(room => room.tiles.some(tile => tile.x === point.x && tile.y === point.y));
       if (connection.from === connection.to && (roomAt(connection.from, connection.entry) || roomAt(connection.to, p))) {
@@ -317,38 +332,49 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
 
   function draw(canvas: HTMLCanvasElement, view: { x: number; y: number; scale: number }) {
     const ctx = canvas.getContext('2d')!, dpr = canvas.width / Math.max(1, canvas.getBoundingClientRect().width), s = view.scale;
+    const py = (point: Vec2) => (point.y - (host.elevation?.(point) ?? point.elevation ?? 0) * ELEVATION_STEP / TILE_SIZE) * s;
+    const visible = (point: Vec2) => !host.showUnder?.() || (point.surfaceId ?? BASE_SURFACE) === BASE_SURFACE;
     ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, view.x * dpr, view.y * dpr);
     for (const w of host.project().warps ?? []) {
-      if (w.from === host.mapId()) {
+      if (w.from === host.mapId() && visible(w.entry)) {
+        const entryY = py(w.entry);
         ctx.fillStyle = w.id === selected ? '#a770d799' : '#82bce777'; ctx.strokeStyle = w.id === selected ? '#c592f0' : '#a5d8fa'; ctx.lineWidth = 2;
-        ctx.fillRect(w.entry.x * s, w.entry.y * s, s*(w.entrySize?.x??1), s*(w.entrySize?.y??1)); ctx.strokeRect(w.entry.x * s, w.entry.y * s, s*(w.entrySize?.x??1), s*(w.entrySize?.y??1));
-        ctx.fillStyle = '#fff'; ctx.font = '12px system-ui'; ctx.fillText(`${w.id === selected ? 'Partenza ¬∑ ' : ''}${displayName(w)}`, w.entry.x * s, w.entry.y * s - 4);
+        ctx.fillRect(w.entry.x * s, entryY, s*(w.entrySize?.x??1), s*(w.entrySize?.y??1)); ctx.strokeRect(w.entry.x * s, entryY, s*(w.entrySize?.x??1), s*(w.entrySize?.y??1));
+        if (w.direction && w.activation === 'walk') {
+          ctx.save(); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#203042'; ctx.lineWidth = 3;
+          ctx.font = 'bold ' + Math.max(14, s * .7) + 'px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          const arrow = { up: '‚Üë', down: '‚Üì', left: '‚Üê', right: '‚Üí' }[w.direction];
+          const x = (w.entry.x + (w.entrySize?.x ?? 1) / 2) * s, y = entryY + (w.entrySize?.y ?? 1) / 2 * s;
+          ctx.strokeText(arrow, x, y); ctx.fillText(arrow, x, y); ctx.restore();
+        }
+        ctx.fillStyle = '#fff'; ctx.font = '12px system-ui'; ctx.fillText(`${w.id === selected ? 'Partenza ¬∑ ' : ''}${displayName(w)}`, w.entry.x * s, entryY - 4);
       }
-      if (w.to === host.mapId() && !w.reverseId) { ctx.strokeStyle = '#e8cf80'; ctx.lineWidth = w.id === selected ? 3 : 2; ctx.beginPath(); ctx.arc((w.arrival.x + .5) * s, (w.arrival.y + .5) * s, Math.max(3, s * .2), 0, Math.PI * 2); ctx.stroke();
-        ctx.fillStyle = '#e8cf80'; ctx.font = '12px system-ui'; ctx.fillText(`Arrivo ¬∑ ${displayName(w)}`, w.arrival.x * s, w.arrival.y * s - 4); }
+      if (w.to === host.mapId() && !w.reverseId && visible(w.arrival)) { ctx.strokeStyle = '#e8cf80'; ctx.lineWidth = w.id === selected ? 3 : 2; ctx.beginPath(); ctx.arc((w.arrival.x + .5) * s, py(w.arrival) + .5 * s, Math.max(3, s * .2), 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = '#e8cf80'; ctx.font = '12px system-ui'; ctx.fillText(`Arrivo ¬∑ ${displayName(w)}`, w.arrival.x * s, py(w.arrival) - 4); }
     }
-    if (pending?.from === host.mapId()) {
+    if (pending?.from === host.mapId() && visible(pending.entry)) {
       ctx.strokeStyle = '#c592f0'; ctx.fillStyle = '#a770d755'; ctx.lineWidth = 3;
-      ctx.fillRect(pending.entry.x * s, pending.entry.y * s, s, s); ctx.strokeRect(pending.entry.x * s, pending.entry.y * s, s, s);
-      ctx.fillStyle = '#e7c9ff'; ctx.font = '12px system-ui'; ctx.fillText('A ¬∑ in attesa di B', pending.entry.x * s, pending.entry.y * s - 5);
+      ctx.fillRect(pending.entry.x * s, py(pending.entry), s, s); ctx.strokeRect(pending.entry.x * s, py(pending.entry), s, s);
+      ctx.fillStyle = '#e7c9ff'; ctx.font = '12px system-ui'; ctx.fillText('A ¬∑ in attesa di B', pending.entry.x * s, py(pending.entry) - 5);
     }
     const seenKeys = new Set<string>();
     for (const w of host.project().warps ?? []) if (w.keyGate && w.keyGate.mapId === host.mapId() && !seenKeys.has(w.keyGate.id)) {
-      seenKeys.add(w.keyGate.id); const p = w.keyGate.position;
-      ctx.strokeStyle = '#ffd96b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc((p.x + .3) * s, (p.y + .4) * s, Math.max(3, s * .14), 0, Math.PI * 2); ctx.moveTo((p.x + .45) * s, (p.y + .4) * s); ctx.lineTo((p.x + .85) * s, (p.y + .4) * s); ctx.lineTo((p.x + .85) * s, (p.y + .6) * s); ctx.stroke();
-      ctx.fillStyle = '#ffd96b'; ctx.font = '12px system-ui'; ctx.fillText(`Chiave ¬∑ ${displayName(w)}`, p.x * s, (p.y + 1) * s + 14);
+      seenKeys.add(w.keyGate.id); const p = w.keyGate.position; if (!visible(p)) continue;
+      const keyY = py(p);
+      ctx.strokeStyle = '#ffd96b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc((p.x + .3) * s, keyY + .4 * s, Math.max(3, s * .14), 0, Math.PI * 2); ctx.moveTo((p.x + .45) * s, keyY + .4 * s); ctx.lineTo((p.x + .85) * s, keyY + .4 * s); ctx.lineTo((p.x + .85) * s, keyY + .6 * s); ctx.stroke();
+      ctx.fillStyle = '#ffd96b'; ctx.font = '12px system-ui'; ctx.fillText(`Chiave ¬∑ ${displayName(w)}`, p.x * s, keyY + s + 14);
     }
     const current = warp();
-    if (current?.to === host.mapId()) {
+    if (current?.to === host.mapId() && visible(current.arrival)) {
       ctx.strokeStyle = '#77ddf5'; ctx.lineWidth = 3;
-      ctx.strokeRect(current.arrival.x * s, current.arrival.y * s, s, s);
+      ctx.strokeRect(current.arrival.x * s, py(current.arrival), s, s);
       ctx.fillStyle = '#77ddf5'; ctx.font = '12px system-ui';
-      ctx.fillText('Arrivo / ritorno', current.arrival.x * s, (current.arrival.y + 1) * s + 14);
+      ctx.fillText('Arrivo / ritorno', current.arrival.x * s, py(current.arrival) + s + 14);
     }
-    if (current?.from === host.mapId() && current.to === host.mapId()) {
+    if (current?.from === host.mapId() && current.to === host.mapId() && visible(current.entry) && visible(current.arrival)) {
       ctx.strokeStyle = '#c592f0'; ctx.setLineDash([5, 5]); ctx.beginPath();
-      ctx.moveTo((current.entry.x + .5) * s, (current.entry.y + .5) * s);
-      ctx.lineTo((current.arrival.x + .5) * s, (current.arrival.y + .5) * s); ctx.stroke();
+      ctx.moveTo((current.entry.x + .5) * s, py(current.entry) + .5 * s);
+      ctx.lineTo((current.arrival.x + .5) * s, py(current.arrival) + .5 * s); ctx.stroke();
     }
     ctx.restore();
   }

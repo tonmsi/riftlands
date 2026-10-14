@@ -1,10 +1,11 @@
 import type { ClassDef, ClassId } from './types';
 import { WORLD_DOCUMENT } from './world-content';
-export const PROTOCOL_VERSION = 16;
+import { TILE_SIZE } from './tile-size';
+export { TILE_SIZE } from './tile-size';
+export const PROTOCOL_VERSION = 17;
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
 export const SNAPSHOT_RATE = 15;
-export const TILE_SIZE = 48;
 export const CHUNK_TILES = 16;
 export const CHUNK_SIZE = TILE_SIZE * CHUNK_TILES;
 export const INTEREST_RADIUS = 1250;

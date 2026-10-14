@@ -47,7 +47,12 @@ export async function prepareLobbyArt(
       background: localImage(data?.classes?.[id]?.background),
     };
   } catch { /* Built-in art remains available without a custom manifest. */ }
-  const urls = [...new Set([...builtInPortraits, ...imageKeys.map(key => art[key]), ...Object.values(art.classes).flatMap(value => [value?.portrait, value?.background])].filter((url): url is string => Boolean(url)))];
+  const touch = matchMedia('(pointer: coarse)').matches;
+  // On phones, selection/class backgrounds load when those screens are opened.
+  const artUrls = touch ? [art.logo, art.loginBackground]
+    : [...imageKeys.map(key => art[key]), ...Object.values(art.classes).flatMap(value => [value?.portrait, value?.background])];
+  const urls = [...new Set([...builtInPortraits, ...artUrls].filter((url): url is string => Boolean(url)))];
+  const attempted = new Set(urls);
   let done = 0, failed = 0;
   const total = urls.length + 1;
   progress(done, total, failed);
@@ -64,10 +69,10 @@ export async function prepareLobbyArt(
       }
     }),
   ]);
-  for (const key of imageKeys) if (art[key] && !images.has(art[key]!)) delete art[key];
+  for (const key of imageKeys) if (art[key] && attempted.has(art[key]!) && !images.has(art[key]!)) delete art[key];
   for (const value of Object.values(art.classes)) {
-    if (value?.portrait && !images.has(value.portrait)) delete value.portrait;
-    if (value?.background && !images.has(value.background)) delete value.background;
+    if (value?.portrait && attempted.has(value.portrait) && !images.has(value.portrait)) delete value.portrait;
+    if (value?.background && attempted.has(value.background) && !images.has(value.background)) delete value.background;
   }
   return art;
 }

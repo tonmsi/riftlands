@@ -80,6 +80,9 @@ export class WorldAssetArt {
     } else image = this.image(a);
     if (image && (fade > 0 || hidingFade > 0)) image = this.faded(a, image, fade, visual.kind === 'fire', hidingFade);
     ctx.save(); ctx.globalAlpha *= opacity;
+    if (a.category === 'elevation') {
+      ctx.beginPath(); ctx.rect(p.x * unit, p.y * unit, a.width * unit, a.height * unit); ctx.clip();
+    }
     if (image) ctx.drawImage(image, (p.x + b.x) * unit, (p.y + b.y) * unit, b.width * unit, b.height * unit);
     else { ctx.fillStyle = '#86ab8544'; ctx.fillRect((p.x + b.x) * unit, (p.y + b.y) * unit, b.width * unit, b.height * unit); }
     ctx.restore();

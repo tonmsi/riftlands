@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "style": "Roccia sfaccettata grigio-blu, erba oliva, luce dall'alto a sinistra",
+  "front": {
+    "image": "/terrain-textures/rock-cliffs-v1/cliff-front-source.png",
+    "body": {
+      "x": 102,
+      "y": 522,
+      "width": 1290,
+      "height": 188
+    },
+    "cap": {
+      "x": 102,
+      "y": 474,
+      "width": 1290,
+      "height": 66
+    },
+    "toe": {
+      "x": 102,
+      "y": 680,
+      "width": 1290,
+      "height": 55
+    },
+    "worldWidth": 288,
+    "worldHeight": 42
+  },
+  "weathered": {
+    "image": "/terrain-textures/rock-cliffs-v1/cliff-weathered-source.png",
+    "body": {
+      "x": 60,
+      "y": 562,
+      "width": 1100,
+      "height": 173
+    },
+    "cap": {
+      "x": 60,
+      "y": 475,
+      "width": 1100,
+      "height": 90
+    },
+    "toe": {
+      "x": 60,
+      "y": 732,
+      "width": 1100,
+      "height": 45
+    },
+    "worldWidth": 288,
+    "worldHeight": 45
+  },
+  "conformations": [
+    "front",
+    "west-bevel",
+    "east-bevel",
+    "rear-rim",
+    "convex-corner",
+    "concave-corner",
+    "terrace",
+    "isolated-pillar",
+    "rock-stairs-north",
+    "rock-stairs-east",
+    "rock-stairs-west",
+    "rock-stairs-south"
+  ],
+  "steps": {
+    "image": "/terrain-textures/rock-cliffs-v1/rock-steps-slab-atlas.png",
+    "tread": {
+      "x": 63,
+      "y": 244,
+      "width": 516,
+      "height": 89
+    },
+    "riser": {
+      "x": 787,
+      "y": 279,
+      "width": 318,
+      "height": 77
+    },
+    "border": {
+      "x": 280,
+      "y": 574,
+      "width": 82,
+      "height": 81
+    },
+    "landing": {
+      "x": 639,
+      "y": 619,
+      "width": 425,
+      "height": 346
+    }
+  }
+}

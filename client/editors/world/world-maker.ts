@@ -1,5 +1,5 @@
 import { syncWorldAssetFiles } from './world-asset-sync';
-import { organizeWorldPanels } from './world-panels';
+import { organizeWorldPanels, setWorldBuildMode, type WorldBuildMode } from './world-panels';
 import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../npc-properties';
 import { newDungeonInterior } from '../../../shared/warps';
 import './world-maker.css';
@@ -16,7 +16,7 @@ import { NPC_DEFINITIONS } from '../../../shared/npcs';
 import { INSTALLED_DUNGEON_DEFINITIONS as DUNGEON_DEFINITIONS, type DungeonDefinition } from '../../../shared/dungeons';
 import { worldDungeons, validateWorld } from '../../../shared/world-validation';
 import { shapeBounds, insideShape, placementVisualBounds, overlaps } from '../../../shared/world-authoring';
-import { newWorldAsset, parseWorldDocument, resizeWorldAsset, worldAssetVisual, worldAssetImageBounds, DEFAULT_ASSET_FADE, WORLD_TERRAINS, type WorldDocument, type WorldAsset, type WorldZone, type AssetCell, type AssetPlacement } from '../../../shared/world-schema';
+import { parseWorldDocument, resizeWorldAsset, worldAssetVisual, worldAssetImageBounds, worldAssetCategory, setWorldAssetCategory, DEFAULT_ASSET_ELEVATION, DEFAULT_ASSET_FADE, WORLD_TERRAINS, type WorldAssetCategory, type WorldDocument, type WorldAsset, type WorldZone, type AssetCell, type AssetPlacement } from '../../../shared/world-schema';
 import { brushTiles, strokeTiles, WorldBrush, forkWorldDocument } from '../../../shared/world-editing';
 import { compactWorldTiles, worldTileMetrics, worldDocumentsEqual } from '../../../shared/world-tiles';
 import { WorldAssetArt } from '../../render/world-asset-art';
@@ -26,6 +26,11 @@ import { AssetGridCamera } from '../../render/world-asset-view';
 import { loadWorldCheckpoint, saveWorldCheckpoint } from './world-editor-storage';
 import { mapDocument } from '../../../shared/warps';
 import { installWarpEditor } from './warp-editor';
+import { WorldElevationEditor, SurfaceStroke, elevationTools, type SurfacePaintSettings } from './elevation-editor';
+import { BASE_SURFACE, type SurfaceMaterial, type WallMaterial } from '../../../shared/world-surfaces';
+import { syncGroundWarpElevations } from '../surface-authoring';
+import { ensureMakerObjectAsset } from '../../../shared/maker-object-presets';
+import { installWallSpriteKitControl } from '../wall-sprite-kit-control';
 const root = document.getElementById('world-maker')!;
 root.innerHTML = worldMakerLayout;
 organizeWorldPanels(root);
@@ -58,11 +63,15 @@ const assetCanvas = el<HTMLCanvasElement>('asset-grid');
 const assetCamera = new AssetGridCamera();
 let cameraAsset = '';
 const assetCatalog = new WorldAssetCatalog(el('asset-list'), id => {
-    void settleGesture().then(() => { activeAsset = id; selected = null; selectTool('asset'); refresh(); }).catch(report);
+    void settleGesture().then(() => { activeAsset = id; selected = null; setWorldBuildMode(root, worldAssetCategory(active()!)); selectTool('asset'); refresh(); }).catch(report);
 });
+el('asset-elevation-settings').insertAdjacentHTML('beforeend', '<label>Kit PNG delle pareti<select id="asset-elevation-wall-skin"><option value="">Predefinito</option></select></label>');
+const assetWallKits = installWallSpriteKitControl(el<HTMLSelectElement>('asset-elevation-wall-skin'), el<HTMLSelectElement>('asset-elevation-wall'));
+void assetWallKits.ready.then(() => { if (active()) refreshAsset(active()!); });
 const art = new WorldAssetArt(() => schedule());
 let view = { x: 0, y: 0, scale: 24 }, pointerTile: Vec2 | null = null;
 let activeMap = 'world';
+const elevationEditor = new WorldElevationEditor(root, change, surface, () => world, () => schedule());
 function surface(): WorldDocument {
     if (activeMap === 'world') return draft;
     const m = draft.interiors?.find(m => m.id === activeMap);
@@ -76,10 +85,13 @@ const warpEditor = installWarpEditor(root, {
     project: () => draft, mapId: () => activeMap, tool: () => tool, selectTool,
     change, center: p => centerAt(p.x + .5, p.y + .5),
     inspect: () => { selected = null; selectedGenerated = undefined; refresh(); schedule(); },
+    elevation: p => world.surfaceAt(p.x, p.y, p.surfaceId ?? BASE_SURFACE)?.elevation ?? p.elevation ?? 0,
+    showUnder: () => elevationEditor.showUnder(),
+    resolvePoint: p => elevationEditor.placement(p),
     switchMap: id => {
         finishGesture(); if (gesture) throw new Error('Attendi la fine della modifica prima di cambiare mappa.');
         mapDocument(draft, id);
-        activeMap = id; selected = null; selectedGenerated = undefined;
+        activeMap = id; selected = null; selectedGenerated = undefined; elevationEditor.cancel();
         worldDirty = true;
         refresh(); schedule(true); centerAt(surface().spawn.x, surface().spawn.y);
     },
@@ -98,14 +110,17 @@ let gesture: {
     tool: string;
     mass: boolean;
     brush?: WorldBrush;
+    surfaceBrush?: SurfaceStroke;
+    materialBrush?: SurfaceStroke;
+    pickingWorld?: World;
     pending?: Vec2[];
     cursor?: number;
     ending?: boolean;
-    settings?: { radius: number; density: number; terrain: TileKind; asset?: WorldAsset };
+    settings?: { radius: number; density: number; terrain: SurfaceMaterial; asset?: WorldAsset; surface?: SurfacePaintSettings };
 } | null = null;
 const keys = new Set<string>();
 let selectedGenerated: AssetPlacement | undefined;
-set('brush-radius', 1);
+set('brush-radius', 0);
 set('brush-density', 100);
 function ensureWorld(): void {
   const updated = gesture?.brush?.flushTiles() ?? [];
@@ -189,7 +204,18 @@ function change(action: () => void): void {
         report(e);
     }
 }
-function selectTool(next: string): void { tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === next))); el('tool-label').textContent = tools.find(t => t[0] === next)?.[2] ?? (next === 'warp' ? 'Passaggio' : next === 'warp-key' ? 'Chiave' : next); schedule(); }
+function selectTool(next: string): void {
+    if (tool !== next) elevationEditor.cancel(); tool = next;
+    if (next === 'terrain') setWorldBuildMode(root, 'floor');
+    else if (next === 'asset' && active()) setWorldBuildMode(root, worldAssetCategory(active()!));
+    else if (['height', 'raise-height', 'lower-height', 'clear-height'].includes(next)) setWorldBuildMode(root, 'elevation');
+    else if (['bridge', 'surface-link', 'clear-link', 'clear-bridge'].includes(next)) setWorldBuildMode(root, 'object');
+    if (next === 'height' || next === 'clear-height') el<HTMLDetailsElement>('elevation-advanced-controls').open = true;
+    if (next === 'surface-link') el<HTMLDetailsElement>('structure-controls').open = true;
+    root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === next)));
+    el('tool-label').textContent = [...tools, ...elevationTools].find(t => t[0] === next)?.[2] ?? (next === 'warp' ? 'Passaggio' : next === 'warp-key' ? 'Chiave' : next);
+    schedule();
+}
 root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.onclick = () => { warpEditor.clearSelection(); selectTool(b.dataset.tool!); refresh(); });
 function active(): WorldAsset | undefined { return draft.assets.find(a => a.id === activeAsset); }
 function palette(): void {
@@ -209,15 +235,15 @@ function refresh(): void {
     if (validationActive && validatedDraft !== draft) showValidation();
     if (activeMap !== 'world' && !draft.interiors?.some(m => m.id === activeMap)) activeMap = 'world';
     warpEditor.refresh();
-    if (!active())
-        activeAsset = draft.assets[0]?.id ?? '';
+    elevationEditor.refresh();
+    if (!active()) activeAsset = draft.assets.find(a => worldAssetCategory(a) === el('build-controls').dataset.buildMode)?.id ?? '';
     palette();
     set('seed', draft.seed);
     el<HTMLButtonElement>('undo').disabled = !history.canUndo;
     el<HTMLButtonElement>('redo').disabled = !history.canRedo;
     el<HTMLButtonElement>('apply-world').disabled = !token || !ready;
     const cells = worldTileMetrics(surface()).cells;
-    el('map-info').textContent = `${cells.toLocaleString('it-IT')} celle · ${surface().placements.length} asset · ${surface().zones.length} zone`;
+    el('map-info').textContent = `${cells.toLocaleString('it-IT')} celle · ${surface().placements.length} asset · ${surface().zones.length} zone · ${surface().surfaceCells?.length ?? 0} quote · ${surface().surfaceLinks?.length ?? 0} accessi`;
     const dungeonSelect = el<HTMLSelectElement>('dungeon'), previous = dungeonSelect.value;
     dungeonSelect.replaceChildren(...catalog.map(d => new Option(d.name, d.id)));
     dungeonSelect.value = catalog.some(d => d.id === previous) ? previous : catalog[0]?.id ?? '';
@@ -235,6 +261,7 @@ function refresh(): void {
     el('zone-list').replaceChildren(...surface().zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
 }
 function refreshAsset(a: WorldAsset): void {
+    if (tool === 'asset') setWorldBuildMode(root, worldAssetCategory(a));
     const visual = worldAssetVisual(a);
     set('asset-visual', visual.kind === 'fire' ? visual.style : 'image');
     const fade = a.fade ?? DEFAULT_ASSET_FADE;
@@ -250,6 +277,15 @@ function refreshAsset(a: WorldAsset): void {
     set('asset-image-x', Math.round((a.imageTransform?.x ?? 0) * 10000) / 10000); set('asset-image-y', Math.round((a.imageTransform?.y ?? 0) * 10000) / 10000);
     set('asset-image-scale', (a.imageTransform?.scale ?? 1) * 100);
     set('asset-layer', a.layer);
+    set('asset-category', a.category ?? 'auto');
+    const elevation = a.elevation ?? DEFAULT_ASSET_ELEVATION;
+    set('asset-elevation-height', elevation.height);
+    set('asset-elevation-material', elevation.material);
+    set('asset-elevation-wall', elevation.wallMaterial);
+    const skinSelect = el<HTMLSelectElement>('asset-elevation-wall-skin');
+    if (elevation.wallSkin && ![...skinSelect.options].some(o => o.value === elevation.wallSkin)) skinSelect.add(new Option(elevation.wallSkin, elevation.wallSkin));
+    set('asset-elevation-wall-skin', elevation.wallSkin);
+    refreshCategoryControls();
     set('asset-pivot', a.pivot.y);
     input('gen-enabled').checked = a.generation.enabled;
     set('gen-category', a.generation.category);
@@ -260,6 +296,19 @@ function refreshAsset(a: WorldAsset): void {
     set('gen-density', a.generation.density * 100);
     set('gen-spacing', a.generation.spacing);
     el('gen-terrains').replaceChildren(...WORLD_TERRAINS.map(t => { const l = document.createElement('label'); l.className = 'check'; const c = document.createElement('input'); c.type = 'checkbox'; c.value = t; c.checked = a.generation.terrains.includes(t); l.append(c, terrains[t].name); return l; }));
+}
+function refreshCategoryControls(): void {
+    const category = val('asset-category');
+    const fixed = category === 'floor' || category === 'elevation';
+    el('asset-elevation-settings').hidden = category !== 'elevation';
+    el<HTMLSelectElement>('asset-layer').disabled = category !== 'auto';
+    for (const id of ['cell-blocked', 'cell-visibility']) el<HTMLSelectElement>(id).disabled = fixed;
+    el<HTMLButtonElement>('fill-cells').disabled = fixed;
+    el('asset-category-hint').textContent = category === 'floor' ? 'Pavimento piatto e calpestabile sul piano cliccato. Mantiene quota e oggetti.'
+        : category === 'elevation' ? 'Il PNG riveste la sommità; quota e kit pareti costruiscono il rialzo. Gli oggetti restano appoggiati sopra.'
+        : category === 'object' ? 'Oggetto appoggiato al piano cliccato. La sua maschera decide collisioni e nascondigli.'
+        : 'Compatibilità con il catalogo precedente. Scegli una categoria per assegnare un comportamento esplicito.';
+    if (tool === 'asset' && active()) el('tool-label').textContent = ({ floor: 'Dipingi pavimento PNG', object: 'Posiziona oggetto', elevation: 'Dipingi rialzo PNG' })[category === 'auto' ? worldAssetCategory(active()!) : category as WorldAssetCategory];
 }
 let musicSources: string[] = [];
 function refreshMusicOptions(src?: string): void {
@@ -326,14 +375,22 @@ function refreshSelection(): void {
         b.onclick = () => { activeAsset = e.assetId; selected = null; refresh(); schedule(); };
         el('selection-fields').append(b);
     }
+    if (selected?.kind === 'placement' || selected?.kind === 'npc') {
+        const ids = [...new Set([BASE_SURFACE, e.surfaceId ?? BASE_SURFACE, ...(surface().surfaceCells ?? []).map(c => c.surfaceId)])];
+        const label = document.createElement('label'); label.textContent = 'Superficie di questa istanza';
+        const select = document.createElement('select'); select.id = 'entity-surface';
+        select.replaceChildren(...ids.map((id, i) => new Option(id === BASE_SURFACE ? 'Terreno' : `Ponte ${i}`, id))); select.value = e.surfaceId ?? BASE_SURFACE; label.append(select);
+        el('selection-fields').append(label);
+    }
 }
 function draw(): void {
     ensureWorld();
     const animated = drawWorldEditorMap(canvas, world, mapDocument(draft, activeMap), view, art, { grid: input('show-grid').checked, cells: input('show-cells').checked,
-        zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, gesture, pointerTile, tool, activeAsset: active() });
+        zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, gesture, pointerTile, tool, activeAsset: active(), surfaceId: pointerTile?.surfaceId ?? elevationEditor.activeSurface(), showUnder: elevationEditor.showUnder(), onTerrainReady: () => schedule() });
     if ((animated || (!el('asset-inspector').hidden && active() && worldAssetVisual(active()!).kind === 'fire')) && animationTimer === undefined)
         animationTimer = setTimeout(() => { animationTimer = undefined; schedule(); }, 33);
     warpEditor.draw(canvas, view);
+    elevationEditor.draw(canvas, view);
     el('zoom-label').textContent = Math.round(view.scale / 24 * 100) + '%';
 }
 function drawAssetGrid(): void {
@@ -352,13 +409,19 @@ function zoomAsset(factor: number, x?: number, y?: number): void {
     assetCamera.zoomAt(factor, x ?? r.width / 2, y ?? r.height / 2, r.width, r.height, v.a.columns, v.a.rows, worldAssetImageBounds(v.a));
     schedule();
 }
-function position(event: PointerEvent): Vec2 { const r = canvas.getBoundingClientRect(); return { x: Math.floor((event.clientX - r.left - view.x) / view.scale), y: Math.floor((event.clientY - r.top - view.y) / view.scale) }; }
+function position(event: PointerEvent): Vec2 {
+    ensureWorld();
+    const r = canvas.getBoundingClientRect();
+    return elevationEditor.pick((event.clientX - r.left - view.x) / view.scale, (event.clientY - r.top - view.y) / view.scale, gesture?.move || gesture?.spawnMove ? 'select' : tool, gesture?.pickingWorld ?? world);
+}
 function centerAt(x: number, y: number): void { const r = canvas.getBoundingClientRect(); view.x = r.width / 2 - x * view.scale; view.y = r.height / 2 - y * view.scale; schedule(); }
 function zoom(factor: number, x?: number, y?: number): void { const r = canvas.getBoundingClientRect(); x ??= r.width / 2; y ??= r.height / 2; const next = Math.max(.75, Math.min(96, view.scale * factor)); view.x = x - (x - view.x) * next / view.scale; view.y = y - (y - view.y) * next / view.scale; view.scale = next; schedule(); }
 function selectAt(p: Vec2): void {
     ensureWorld();
-    const n = surface().npcs.find(n => n.x === p.x && n.y === p.y);
-    const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 });
+    elevationEditor.select(p);
+    const layer = elevationEditor.activeSurface();
+    const n = surface().npcs.find(n => n.x === p.x && n.y === p.y && (n.surfaceId ?? BASE_SURFACE) === layer);
+    const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 }).filter(p => (p.surfaceId ?? BASE_SURFACE) === layer);
     const asset = placements.filter(p => surface().placements.some(a => a.id === p.id)).at(-1), dungeon = world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
     const zone = world.authoring.zonesAt(p.x + .5, p.y + .5)[0];
     selectedGenerated = placements.filter(a => a.id.startsWith('generated:')).at(-1);
@@ -376,6 +439,7 @@ function materializeSelection(): void {
 }
 function selectionContains(p: Vec2): boolean {
     const entity = selectionEntity(); if (!selected || !entity) return false;
+    if ((selected.kind === 'npc' || selected.kind === 'placement') && (entity.surfaceId ?? BASE_SURFACE) !== (p.surfaceId ?? BASE_SURFACE)) return false;
     if (selected.kind === 'zone') return insideShape(entity.shape, p.x + .5, p.y + .5);
     if (selected.kind === 'npc') return entity.x === p.x && entity.y === p.y;
     if (selected.kind === 'placement') return overlaps(placementVisualBounds(entity, world.authoring.assets.get(entity.assetId)!),
@@ -397,18 +461,25 @@ function paint(p: Vec2): void {
         if (gesture.tool === 'asset' && coordinateHash(q.x, q.y, draft.seed + gesture.before.placements.length + 2001) >= (gesture.settings?.density ?? 1))
             continue;
         const dungeon = world.dungeons.some(d => q.x >= d.layout.bounds.minTx && q.x <= d.layout.bounds.maxTx && q.y >= d.layout.bounds.minTy && q.y <= d.layout.bounds.maxTy);
-        if (dungeon && ['terrain', 'restore', 'asset', 'erase'].includes(gesture.tool))
+        if (dungeon && ['terrain', 'restore', 'asset', 'erase', ...elevationTools.map(t => t[0])].includes(gesture.tool))
             continue;
-        if (gesture.tool === 'terrain')
-            gesture.brush!.tile(q, { terrain: gesture.settings!.terrain, suppressAssets: true });
+        if (gesture.surfaceBrush && gesture.settings?.surface)
+            gesture.surfaceBrush.paint({ ...q, surfaceId: p.surfaceId }, gesture.tool, gesture.settings.surface);
+        else if (gesture.tool === 'terrain') {
+            if ((p.surfaceId ?? BASE_SURFACE) === BASE_SURFACE) gesture.brush!.tile(q, {
+                terrain: WORLD_TERRAINS.includes(gesture.settings!.terrain as TileKind) ? gesture.settings!.terrain as TileKind : 'path', suppressAssets: true });
+            gesture.materialBrush?.paintMaterial({ ...q, surfaceId: p.surfaceId }, gesture.settings!.terrain, gesture.settings!.terrain === 'water');
+        }
         else if (gesture.tool === 'restore')
             gesture.brush!.tile(q);
         else if (gesture.tool === 'erase')
-            gesture.brush!.erase(q);
-        else if (gesture.tool === 'asset' && asset)
-            gesture.brush!.stamp(asset, q, uid('asset'));
+            gesture.brush!.erase({ ...q, surfaceId: elevationEditor.activeSurface() });
+        else if (gesture.tool === 'asset' && asset) {
+            try { gesture.brush!.stamp(asset, elevationEditor.placement(q), uid('asset')); }
+            catch (e) { report(e); }
+        }
     }
-    schedule(gesture.tool === 'asset' || gesture.tool === 'erase');
+    schedule(!!gesture.surfaceBrush || !!gesture.materialBrush || gesture.tool === 'asset' || gesture.tool === 'erase');
 }
 canvas.addEventListener('pointerdown', event => {
     if (!ready || gesture)
@@ -416,6 +487,15 @@ canvas.addEventListener('pointerdown', event => {
     canvas.focus();
     const p = position(event);
     ensureWorld();
+    elevationEditor.select(p);
+    if (event.button === 0 && tool === 'bridge' && !keys.has('Space')) {
+        try { elevationEditor.beginBridge(p); canvas.setPointerCapture(event.pointerId); } catch (e) { report(e); }
+        event.preventDefault(); return;
+    }
+    if (event.button === 0 && tool === 'surface-link' && !keys.has('Space')) {
+        try { elevationEditor.click(p); } catch (e) { report(e); }
+        event.preventDefault(); return;
+    }
     if (event.button === 0 && !keys.has('Space')) {
         try { if (warpEditor.place(p)) {
             const endpoint = tool === 'select' ? warpEditor.dragTarget(p) : undefined;
@@ -430,10 +510,10 @@ canvas.addEventListener('pointerdown', event => {
     }
     if (event.button === 0 && tool === 'select' && !keys.has('Space')) {
         const spawn = surface().spawn, rect = canvas.getBoundingClientRect();
-        const offset = mapDocument(draft, activeMap).interiorBounds ? .5 : 0;
+        const offset = mapDocument(draft, activeMap).interiorBounds || spawn.surfaceId !== undefined || spawn.elevation !== undefined ? .5 : 0;
         const x = rect.left + view.x + (spawn.x + offset) * view.scale;
-        const y = rect.top + view.y + (spawn.y + offset) * view.scale;
-        if (Math.hypot(event.clientX - x, event.clientY - y) <= Math.max(10, view.scale * .35)) {
+        const y = rect.top + view.y + (spawn.y + offset - (world.surfaceAt(spawn.x, spawn.y, spawn.surfaceId ?? BASE_SURFACE)?.elevation ?? 0) / 3) * view.scale;
+        if ((spawn.surfaceId ?? BASE_SURFACE) === (p.surfaceId ?? BASE_SURFACE) && Math.hypot(event.clientX - x, event.clientY - y) <= Math.max(10, view.scale * .35)) {
             const before = draft; draft = forkWorldDocument(draft);
             warpEditor.clearSelection(); selected = null; selectedGenerated = undefined;
             gesture = { pointer: event.pointerId, before, start: p, last: p, tool: 'move-spawn', mass: false, spawnMove: { ...spawn } };
@@ -469,35 +549,47 @@ canvas.addEventListener('pointerdown', event => {
         return;
     }
     const before = draft;
+    let surfaceSettings: SurfacePaintSettings | undefined, authoredPoint = p;
+    try {
+        if (elevationTools.some(t => t[0] === tool)) {
+            surfaceSettings = elevationEditor.settings();
+        }
+        if (tool === 'npc' || tool === 'spawn') authoredPoint = elevationEditor.placement(p);
+    } catch (e) { report(e); return; }
     const tilesOnly = tool === 'terrain' || tool === 'restore';
     draft = forkWorldDocument(draft, tilesOnly && activeMap === 'world');
+    if (tool === 'terrain') surface().surfaceCells = (surface().surfaceCells ?? []).map(c => ({ ...c }));
     gesture = { pointer: event.pointerId, before, start: p, last: p, tool, mass: event.ctrlKey || input('mass').checked, brush: new WorldBrush(surface(), tilesOnly) };
-    gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, asset: active() };
+    if (['height', 'raise-height', 'lower-height', 'clear-height', 'terrain'].includes(tool)) gesture.pickingWorld = world;
+    gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as SurfaceMaterial, asset: active(), surface: surfaceSettings };
+    if (surfaceSettings) gesture.surfaceBrush = new SurfaceStroke(surface(), point => world.surfaceAt(point.x, point.y, point.surfaceId ?? BASE_SURFACE));
+    if (tool === 'terrain') gesture.materialBrush = new SurfaceStroke(surface(), point => world.surfaceAt(point.x, point.y, point.surfaceId ?? BASE_SURFACE));
     canvas.setPointerCapture(event.pointerId);
     if (tool === 'npc') {
-        if (!surface().npcs.some(n => n.x === p.x && n.y === p.y))
-            surface().npcs.push({ ...p, id: uid('npc'), npcKind: val('npc') as import('../../../shared/npcs').NpcTemplateId, level: 1 });
+        if (!surface().npcs.some(n => n.x === p.x && n.y === p.y && (n.surfaceId ?? BASE_SURFACE) === (authoredPoint.surfaceId ?? BASE_SURFACE)))
+            surface().npcs.push({ ...authoredPoint, id: uid('npc'), npcKind: val('npc') as import('../../../shared/npcs').NpcTemplateId, level: 1 });
     }
     else if (tool === 'dungeon') {
         const dungeonId = val('dungeon');
         if (dungeonId) {
             const existing = surface().dungeons.find(d => d.dungeonId === dungeonId);
             if (existing)
-            Object.assign(existing, p, { enabled: true });
+            Object.assign(existing, { x: p.x, y: p.y, enabled: true });
             else
-                surface().dungeons.push({ ...p, dungeonId });
+                surface().dungeons.push({ x: p.x, y: p.y, dungeonId });
             selected = { kind: 'dungeon', id: dungeonId };
         }
     }
     else if (tool === 'spawn')
-        surface().spawn = p;
+        surface().spawn = authoredPoint;
     else if (tool !== 'zone')
         paint(p);
     schedule(true);
 });
 canvas.addEventListener('pointermove', event => {
     pointerTile = position(event);
-    el('coordinates').textContent = `X ${pointerTile.x} · Y ${pointerTile.y}`;
+    elevationEditor.hover(pointerTile);
+    el('coordinates').textContent = `X ${pointerTile.x} · Y ${pointerTile.y} · livello ${pointerTile.elevation ?? 0}`;
     if (!gesture) {
         schedule();
         return;
@@ -514,10 +606,15 @@ canvas.addEventListener('pointermove', event => {
     }
     if (gesture.spawnMove) {
         const bounds = mapDocument(draft, activeMap).interiorBounds;
-        surface().spawn = {
+        const moved = {
+            ...surface().spawn,
             x: Math.max(bounds ? 0 : -10_000_000, Math.min(bounds ? bounds.width - 1 : 10_000_000, gesture.spawnMove.x + pointerTile.x - gesture.start.x)),
             y: Math.max(bounds ? 0 : -10_000_000, Math.min(bounds ? bounds.height - 1 : 10_000_000, gesture.spawnMove.y + pointerTile.y - gesture.start.y)),
         };
+        const support = world.surfaceAt(moved.x, moved.y, moved.surfaceId ?? BASE_SURFACE);
+        if (!support) { status('Lo spawn deve rimanere sulla sua superficie.'); return; }
+        if (support.elevation) moved.elevation = support.elevation; else delete moved.elevation;
+        surface().spawn = moved;
         refresh(); schedule(true); return;
     }
     if (gesture.warpMove) {
@@ -529,8 +626,13 @@ canvas.addEventListener('pointermove', event => {
         const move = gesture.move;
         selected = { kind: move.kind, id: move.id };
         const entity = selectionEntity(), position = move.kind === 'zone' ? entity.shape : entity;
-        position.x = move.x + pointerTile.x - gesture.start.x;
-        position.y = move.y + pointerTile.y - gesture.start.y;
+        const x = move.x + pointerTile.x - gesture.start.x, y = move.y + pointerTile.y - gesture.start.y;
+        if (move.kind === 'placement' || move.kind === 'npc') {
+            const support = world.surfaceAt(x, y, entity.surfaceId ?? BASE_SURFACE);
+            if (!support) { status('L’istanza deve rimanere sulla sua superficie.'); return; }
+            if (support.elevation) entity.elevation = support.elevation; else delete entity.elevation;
+        }
+        position.x = x; position.y = y;
         refresh(); schedule(true);
         return;
     }
@@ -570,6 +672,10 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
         surface().zones.push(z);
         selected = { kind: 'zone', id: z.id };
     }
+    if (g.surfaceBrush && ['height', 'raise-height', 'lower-height', 'clear-height'].includes(g.tool)) {
+        worldDirty = true; ensureWorld();
+        syncGroundWarpElevations(draft, activeMap, p => world.surfaceAt(p.x, p.y, BASE_SURFACE));
+    }
     gesture = null;
     if (!g.pan)
         commit(g.before, !!surface().tileChunks && (g.tool === 'terrain' || g.tool === 'restore'));
@@ -580,16 +686,19 @@ async function settleGesture(): Promise<void> {
     if (gesture) finishGesture();
     while (gesture?.ending) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 }
-canvas.addEventListener('pointerup', event => finishGesture(event));
-canvas.addEventListener('pointercancel', event => finishGesture(event, true));
+canvas.addEventListener('pointerup', event => {
+    if (tool === 'bridge' && event.button === 0 && !gesture) { try { elevationEditor.finishBridge(position(event)); } catch (e) { report(e); } }
+    finishGesture(event);
+});
+canvas.addEventListener('pointercancel', event => { elevationEditor.cancel(); finishGesture(event, true); });
 canvas.addEventListener('lostpointercapture', event => { if (gesture && !gesture.cell && gesture.pointer === event.pointerId)
     { if (!gesture.ending) finishGesture(event, true); } });
-canvas.addEventListener('pointerleave', () => { pointerTile = null; schedule(); });
+canvas.addEventListener('pointerleave', () => { pointerTile = null; elevationEditor.hover(); schedule(); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('wheel', event => { event.preventDefault(); if (gesture && !gesture.pan) return; const r = canvas.getBoundingClientRect(); zoom(Math.exp(-event.deltaY * .0015), event.clientX - r.left, event.clientY - r.top); }, { passive: false });
 function paintCell(event: PointerEvent): void { const v = assetView(); if (!v || !gesture?.cell || gesture.pan || gesture.image || gesture.pointer !== event.pointerId)
     return; const r = assetCanvas.getBoundingClientRect(), col = Math.floor((event.clientX - r.left - v.x) / v.s), row = Math.floor((event.clientY - r.top - v.y) / v.s); if (col < 0 || row < 0 || col >= v.a.columns || row >= v.a.rows)
-    return; v.a.cells[row * v.a.columns + col] = { blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as AssetCell['visibility'] }; schedule(true); }
+    return; if (v.a.category === 'floor' || v.a.category === 'elevation') return; v.a.cells[row * v.a.columns + col] = { blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as AssetCell['visibility'] }; schedule(true); }
 assetCanvas.addEventListener('pointerdown', e => {
     if (!ready || gesture) return;
     assetCanvas.focus();
@@ -641,7 +750,32 @@ on('asset-expand', () => {
 on('asset-preview-close', () => previewDialog.close());
 previewDialog.addEventListener('cancel', () => finishGesture(undefined, true));
 previewDialog.addEventListener('close', () => { finishGesture(undefined, true); el('asset-preview-home').append(el('asset-preview')); el('asset-expand').textContent = 'Ingrandisci'; schedule(); });
-on('asset-update', () => change(() => { const a = active()!; resizeWorldAsset(a, num('asset-width'), num('asset-height')); a.name = val('asset-name').trim();  assetCatalog.reveal(a); a.layer = val('asset-layer') as 'ground' | 'object'; a.pivot.y = num('asset-pivot'); a.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') }; a.visual = val('asset-visual') === 'image' ? { kind: 'image' } : { kind: 'fire', style: val('asset-visual') as 'brazier' | 'campfire' }; }));
+on('asset-update', () => change(() => {
+    const a = active()!; resizeWorldAsset(a, num('asset-width'), num('asset-height')); a.name = val('asset-name').trim();
+    if (val('asset-category') === 'auto') { delete a.category; a.layer = val('asset-layer') as 'ground' | 'object'; }
+    else setWorldAssetCategory(a, val('asset-category') as WorldAssetCategory);
+    if (a.category === 'elevation') a.elevation = { height: num('asset-elevation-height'), material: val('asset-elevation-material') as SurfaceMaterial,
+        wallMaterial: val('asset-elevation-wall') as WallMaterial, ...(assetWallKits.skin() ? { wallSkin: assetWallKits.skin() } : {}) };
+    assetCatalog.reveal(a); a.pivot.y = num('asset-pivot'); a.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') };
+    a.visual = val('asset-visual') === 'image' ? { kind: 'image' } : { kind: 'fire', style: val('asset-visual') as 'brazier' | 'campfire' };
+}));
+el('asset-category').addEventListener('change', refreshCategoryControls);
+el('asset-category-filter').addEventListener('change', () => assetCatalog.setCategory(val('asset-category-filter')));
+root.querySelectorAll<HTMLButtonElement>('button[data-build-mode]').forEach(button => button.addEventListener('click', () => {
+    void settleGesture().then(() => {
+        const mode = button.dataset.buildMode as WorldBuildMode;
+        setWorldBuildMode(root, mode); assetCatalog.setCategory(mode); selected = null;
+        if (!active() || worldAssetCategory(active()!) !== mode) activeAsset = draft.assets.find(a => worldAssetCategory(a) === mode)?.id ?? '';
+        selectTool(mode === 'floor' ? 'terrain' : mode === 'object' ? 'asset' : 'raise-height'); setWorldBuildMode(root, mode); refresh();
+    }).catch(report);
+}));
+root.querySelectorAll<HTMLButtonElement>('[data-terrain-object]').forEach(button => button.addEventListener('click', () => {
+    void settleGesture().then(() => {
+        let id = '';
+        change(() => { id = ensureMakerObjectAsset(draft, button.dataset.terrainObject as 'rock' | 'bush').id; });
+        activeAsset = id; selected = null; setWorldBuildMode(root, 'object'); assetCatalog.reveal(active()!); selectTool('asset'); refresh();
+    }).catch(report);
+}));
 input('asset-width').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
     set('asset-height', Math.round(num('asset-width') * a.height / a.width * 1000) / 1000); });
 input('asset-height').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
@@ -692,7 +826,14 @@ input('zone-music-file').addEventListener('change', () => { void (async () => {
 on('selection-update', () => change(() => { materializeSelection(); const e = selectionEntity(); if (!e)
     return; if (selected?.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id))
     surface().dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'placement') { if (val('entity-pivot').trim()==='') delete e.pivotY; else {const pivot=num('entity-pivot');if(!Number.isFinite(pivot)||pivot<0||pivot>1)throw new Error('La base deve essere fra 0 e 1.');e.pivotY=pivot;} } if (selected?.kind === 'npc')
-    { e.level = num('entity-level'); const properties = readNpcProperties(root, 'selected-npc'); e.npcKind = properties.kind; e.settings = properties.settings; } if (selected?.kind === 'dungeon') { if (val('entity-pvp') === '') delete e.pvp; else e.pvp = val('entity-pvp') === 'true'; } }));
+    { e.level = num('entity-level'); const properties = readNpcProperties(root, 'selected-npc'); e.npcKind = properties.kind; e.settings = properties.settings; }
+    if (selected?.kind === 'placement' || selected?.kind === 'npc') {
+        const surfaceId = val('entity-surface'), support = world.surfaceAt(e.x, e.y, surfaceId);
+        if (!support) throw new Error('La superficie scelta non esiste alla posizione dell’istanza.');
+        if (surfaceId === BASE_SURFACE) delete e.surfaceId; else e.surfaceId = surfaceId;
+        if (support.elevation) e.elevation = support.elevation; else delete e.elevation;
+    }
+    if (selected?.kind === 'dungeon') { if (val('entity-pvp') === '') delete e.pvp; else e.pvp = val('entity-pvp') === 'true'; } }));
 on('selection-delete', () => change(() => { materializeSelection(); if (selected?.kind === 'placement')
     surface().placements = surface().placements.filter(p => p.id !== selected!.id); if (selected?.kind === 'npc')
     surface().npcs = surface().npcs.filter(n => n.id !== selected!.id); if (selected?.kind === 'dungeon') {
@@ -702,8 +843,8 @@ on('selection-delete', () => change(() => { materializeSelection(); if (selected
     status('Dungeon tolto dal mondo. Puoi riposizionarlo dal catalogo.');
 } selected = null; }));
 on('seed-update', () => change(() => { draft.seed = num('seed'); }));
-on('undo', () => { draft = history.undo(draft); dirty = true; checkpoint(); selected = null; refresh(); schedule(true); });
-on('redo', () => { draft = history.redo(draft); dirty = true; checkpoint(); selected = null; refresh(); schedule(true); });
+on('undo', () => { elevationEditor.cancel(); draft = history.undo(draft); dirty = true; checkpoint(); selected = null; refresh(); schedule(true); });
+on('redo', () => { elevationEditor.cancel(); draft = history.redo(draft); dirty = true; checkpoint(); selected = null; refresh(); schedule(true); });
 on('zoom-in', () => zoom(1.3));
 on('zoom-out', () => zoom(1 / 1.3));
 on('home', () => centerAt(surface().spawn.x, surface().spawn.y));
@@ -714,6 +855,7 @@ on('goto-confirm', () => { const x = num('goto-x'), y = num('goto-y'); if (!Numb
 on('properties-toggle', () => { root.querySelector('.inspector')!.classList.toggle('collapsed'); schedule(); });
 for (const id of ['show-grid', 'show-zones', 'show-cells', 'show-npcs'])
     input(id).addEventListener('change', () => schedule());
+el('placement-surface').addEventListener('change', () => { selected = null; selectedGenerated = undefined; refresh(); schedule(); });
 input('preview-fade').addEventListener('change', () => schedule());
 input('asset-search').addEventListener('input', palette);
 on('assets-expand', () => assetCatalog.expandAll(true));
@@ -722,6 +864,7 @@ on('validate', () => { validationActive = true; const issues = showValidation();
 document.addEventListener('keydown', e => { if ((e.target as HTMLElement).matches('input,select,textarea'))
     return; keys.add(e.code); if (e.code === 'Space')
     e.preventDefault(); if (e.code === 'Escape') {
+    elevationEditor.cancel();
     finishGesture(undefined, true);
     selected = null;
     refresh();

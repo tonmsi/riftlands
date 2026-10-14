@@ -74,10 +74,8 @@ export function bushColor(variation: number): string {
 }
 
 export function mapTerrainColor(tile: TileKind, moisture: number, variation: number, temperature = 1): string {
-  if (tile === 'grass') return groundColor(moisture);
+  if (tile === 'grass') return groundColor(moisture, temperature);
   if (tile === 'bush') return bushColor(variation);
   if (tile === 'path') return pathColor(temperature);
   return TERRAIN[tile];
 }
-
-// In terrain-style.ts, aggiungi questa funzione sotto groundColor:

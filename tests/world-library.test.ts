@@ -71,7 +71,7 @@ test('moving a dungeon clears only its saved boss states and retains all unrelat
     assert.deepEqual(JSON.parse(await readFile(join(root, 'dungeon.json'), 'utf8')).bosses, { untouched: { marker: true } });
     d.dungeons[0].enabled = true;
     assert.equal(worldDungeons(d, [bundle.definition])[0].bossId, bundle.definition.bossId);
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); }
 });
 
 test('format-only migration preserves every cell and accepts the old revision only until a semantic edit', async () => {

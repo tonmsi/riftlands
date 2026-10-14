@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromium, expect, type Page } from '@playwright/test';
@@ -10,7 +10,8 @@ import { studioDraft } from '../fixtures/studio-draft';
 
 test('one Studio shares assets, installs unplaced dungeons, preserves world edits across tabs and moves every selection with left drag after selection', { timeout: 120_000 }, async () => {
     const directory = await mkdtemp(join(tmpdir(), 'riftlands-unified-studio-'));
-    const options = { root: resolve('.'), port: 0, documentPath: join(directory, 'world.json'), dungeonPath: join(directory, 'dungeons.json'), dataPath: join(directory, 'accounts.json') };
+    const source = resolve('.');
+    const options = { root: directory, port: 0, documentPath: join(directory, 'world.json'), dungeonPath: join(directory, 'dungeons.json'), dataPath: join(directory, 'accounts.json') };
     const document = newWorldDocument(), asset = newWorldAsset('shared-fixture', 'Asset condiviso di prova', '/world-assets/bush.svg');
     asset.group = 'Test condivisi'; resizeWorldAsset(asset, 2, 2); asset.cells[0].blocked = true;
     const generatedAsset = newWorldAsset('generated-fixture', 'Asset procedurale di prova', '/world-assets/bush.svg');
@@ -24,6 +25,11 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
     for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) document.tiles.push({ x, y, terrain: 'grass' });
     for (let y = 90; y <= 112; y++) for (let x = 90; x <= 112; x++) document.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
     await writeFile(options.documentPath, JSON.stringify(document)); await writeFile(options.dungeonPath, '[]');
+    await Promise.all([cp(join(source, 'client'), join(directory, 'client'), { recursive: true }), cp(join(source, 'shared'), join(directory, 'shared'), { recursive: true }), cp(join(source, 'server'), join(directory, 'server'), { recursive: true }),
+        cp(join(source, 'world-maker.html'), join(directory, 'world-maker.html')), cp(join(source, 'dungeon-maker.html'), join(directory, 'dungeon-maker.html')),
+        cp(join(source, 'public/terrain-textures'), join(directory, 'public/terrain-textures'), { recursive: true }),
+        mkdir(join(directory, 'public/world-assets'), { recursive: true })]);
+    await writeFile(join(directory, 'public/world-assets/bush.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="15" fill="#66894e"/></svg>');
     const studio = await startWorldStudio(options);
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
     try {
@@ -31,6 +37,8 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
         const context = await browser.newContext({ viewport: { width: 1640, height: 1100 } }), world = await context.newPage(), errors: string[] = [];
         context.on('page', page => page.on('pageerror', e => errors.push(e.message))); world.on('pageerror', e => errors.push(e.message));
         await world.goto(studio.url); await expect(world.locator('#status')).toContainText('World Studio pronto');
+        await world.locator('#area-kind').selectOption('dungeon');
+        await world.locator('#dungeon-resources > summary').click();
         const popup = world.waitForEvent('popup'); await world.locator('#open-dungeon-maker').click(); const dungeon = await popup;
         dungeon.on('dialog', dialog => dialog.accept());
         await expect(dungeon.locator('#dungeon-library')).toBeVisible();
@@ -68,7 +76,7 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
         await world.mouse.click(panStart.x, panStart.y); await expect(world.locator('#entity-x')).toHaveValue('100');
         await world.mouse.move(panStart.x, panStart.y); await world.mouse.down({ button: 'right' }); await world.mouse.move(panEnd.x, panEnd.y); await world.mouse.up({ button: 'right' });
         await expect(world.locator('#entity-x')).toHaveValue('100'); await expect(world.locator('#entity-y')).toHaveValue('100');
-        await world.mouse.move(panEnd.x, panEnd.y); await expect(world.locator('#coordinates')).toHaveText('X 100 · Y 100');
+        await world.mouse.move(panEnd.x, panEnd.y); await expect(world.locator('#coordinates')).toHaveText('X 100 · Y 100 · livello 0');
         await go(100, 100);
         const drag = async (page: Page, from: { x: number; y: number }, to: { x: number; y: number }) => {
             await page.mouse.click(from.x, from.y); await page.mouse.move(from.x, from.y); await page.mouse.down({ button: 'left' }); await page.mouse.move(to.x, to.y, { steps: 3 }); await page.mouse.up({ button: 'left' });
@@ -91,14 +99,17 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
         await world.locator('#edit-dungeon').click(); await dungeon.waitForURL('**/dungeon-maker.html?dungeon=studio-test');
         await expect(dungeon.locator('#status')).toContainText('Dungeon aperto dal catalogo');
         await dungeon.locator('#name').fill('Dungeon aggiornato dal World Studio'); await dungeon.locator('#name').press('Tab');
+        await expect(dungeon.locator('#name')).toHaveValue('Dungeon aggiornato dal World Studio');
         await dungeon.locator('[data-action="update"]').click(); await expect(dungeon.locator('#status')).toContainText('Dungeon aggiornato');
         const catalog = JSON.parse(await readFile(options.dungeonPath, 'utf8'));
+        assert.equal(catalog[0].definition.name, 'Dungeon aggiornato dal World Studio');
         assert.equal(catalog[0].definition.layout.bounds.minTx, 500); assert.equal(catalog[0].definition.assetPlacements[0].x, 506);
         await world.bringToFront(); await expect(world.locator('#dungeon')).toContainText('Dungeon aggiornato dal World Studio');
         await dungeon.evaluate('window.__name = (func) => func;');
         const entry = await dungeon.evaluate(async () => {
             const { Renderer } = await import('/client/render/render.ts' as string), { createDungeonPlaytest } = await import('/client/editors/dungeon/dungeon-playtest.ts' as string);
-            const draft = JSON.parse(localStorage.getItem('riftlands.dungeon-draft.v2')!);
+            const { parseDungeonDraft } = await import('/shared/dungeon-draft.ts' as string);
+            const draft = parseDungeonDraft(localStorage.getItem('riftlands.dungeon-draft.v2')!);
             const { WORLD_DOCUMENT } = await import('/shared/world-content.ts' as string);
             const assets = WORLD_DOCUMENT.assets;
             // This visual probe does not need the authored decoration to exercise entry UI.

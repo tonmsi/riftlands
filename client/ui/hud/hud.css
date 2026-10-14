@@ -9,6 +9,8 @@
   background:var(--hud-fill); border:1px solid var(--hud-border); border-radius:16px;
   box-shadow:0 5px 20px #020b1730,inset 0 1px #ffffff08; backdrop-filter:blur(10px);
 }
+.rift-app.touch-layout .game-hud { --hud-fill:linear-gradient(145deg,#152738ed,#091421e6) }
+.rift-app.touch-layout .game-hud .glass { backdrop-filter:none; -webkit-backdrop-filter:none }
 .rift-app .game-hud button { color:#edf5ff; cursor:pointer; font-family:inherit }
 .rift-app .game-hud button:focus-visible { outline:2px solid #ffdc73; outline-offset:3px }
 .rift-app .game-hud button:disabled { cursor:default; opacity:.5 }
@@ -251,8 +253,8 @@
 .device-options summary { padding:12px; cursor:pointer; color:#e8eadc; font-size:13px; }
 .device-options button { padding:8px; border:1px solid #8da39855; border-radius:6px; background:#1c2928; color:#e8eadc; }
 .device-options input[type=range] { min-height:28px; }
-.mobile-layout-options { display:none; }
-.touch-layout .mobile-layout-options { display:block; }
+.mobile-layout-options,.mobile-performance-options { display:none; }
+.touch-layout .mobile-layout-options,.touch-layout .mobile-performance-options { display:block; }
 .match-result-status { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 
 /* XP lives with the vitals; the short level celebration never captures input. */

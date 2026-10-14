@@ -1,4 +1,4 @@
-import { CLASSES, INTEREST_RADIUS } from '../../shared/config';
+import { INTEREST_RADIUS } from '../../shared/config';
 import { equippedAbility } from '../../shared/progression';
 import { hasLineOfSight } from '../../shared/physics';
 import { sweptWorldHit } from '../../shared/projectiles';

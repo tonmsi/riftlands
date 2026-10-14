@@ -3,14 +3,17 @@ import type { Vec2 } from '../../../shared/types';
 import type { World } from '../../../shared/world';
 import { shapeBounds } from '../../../shared/world-authoring';
 import type { WorldDocument, WorldAsset, WorldZone } from '../../../shared/world-schema';
-import { worldAssetVisual, worldAssetImageBounds } from '../../../shared/world-schema';
+import { worldAssetVisual, worldAssetImageBounds, worldAssetLayer } from '../../../shared/world-schema';
 import { NPC_DEFINITIONS } from '../../../shared/npcs';
 import { canStampAsset } from '../../../shared/world-editing';
 import { WorldAssetArt } from '../../render/world-asset-art';
 import { AssetGridCamera } from '../../render/world-asset-view';
 import { terrains } from './world-maker-layout';
 import type { AssetPlacement } from '../../../shared/world-schema';
+import { TerrainRenderer } from '../../render/terrain-renderer';
+import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION } from '../../../shared/world-surfaces';
 const terrainViews = new WeakMap<HTMLCanvasElement, { key: string; world: World; canvas: HTMLCanvasElement; placements: AssetPlacement[] }>();
+const terrainRenderers = new WeakMap<HTMLCanvasElement, TerrainRenderer>();
 export interface EditorView {
     x: number;
     y: number;
@@ -35,6 +38,9 @@ export interface MapOptions {
     pointerTile: Vec2 | null;
     tool: string;
     activeAsset?: WorldAsset;
+    surfaceId?: string;
+    showUnder?: boolean;
+    onTerrainReady?: () => void;
 }
 function sizeCanvas(c: HTMLCanvasElement): {
     width: number;
@@ -55,44 +61,77 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
     const ctx = canvas.getContext('2d')!, selected = options.selected, gesture = options.gesture, pointerTile = options.pointerTile;
     const bounds = () => { const r = canvas.getBoundingClientRect(); return { left: -view.x / view.scale, top: -view.y / view.scale, right: (r.width - view.x) / view.scale, bottom: (r.height - view.y) / view.scale }; };
     const { width, height, dpr } = sizeCanvas(canvas), b = bounds(), s = view.scale;
+    let terrainRenderer = terrainRenderers.get(canvas);
+    if (!terrainRenderer) {
+        terrainRenderer = new TerrainRenderer(ctx); terrainRenderers.set(canvas, terrainRenderer);
+        void terrainRenderer.spritesReady.then(() => { terrainViews.delete(canvas); options.onTerrainReady?.(); });
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#131d16';
     ctx.fillRect(0, 0, width, height);
     ctx.translate(view.x, view.y);
     // At distant zoom, bounded sampling shows landforms rather than generating millions of tiles.
     const step = Math.max(1, Math.ceil(Math.sqrt((b.right - b.left) * (b.bottom - b.top) / 16000)));
-    const key = `${world.authoringRevision}:${world.lockRevision}:${view.x}:${view.y}:${s}:${width}:${height}:${dpr}`;
+    // The editor displays 100% at 24 pixels per tile; detailed terrain starts at 70%.
+    const detailedTerrain = s >= 24 * .7;
+    const key = `${world.authoringRevision}:${world.lockRevision}:${view.x}:${view.y}:${s}:${width}:${height}:${dpr}:${options.showUnder}`;
     let cached = terrainViews.get(canvas);
     if (!cached || cached.world !== world || cached.key !== key) {
         const bitmap = document.createElement('canvas'); bitmap.width = canvas.width; bitmap.height = canvas.height;
         const paint = bitmap.getContext('2d')!; paint.setTransform(dpr, 0, 0, dpr, view.x * dpr, view.y * dpr);
-        for (let y = Math.floor(b.top / step) * step; y < b.bottom; y += step)
+        if (detailedTerrain) {
+            paint.save(); paint.scale(s / TILE_SIZE, s / TILE_SIZE);
+            terrainRenderer.drawEditorTerrain(world, time, paint, { left: b.left * TILE_SIZE, top: b.top * TILE_SIZE, right: b.right * TILE_SIZE, bottom: b.bottom * TILE_SIZE }, { groundOnly: options.showUnder, foreground: false });
+            paint.restore();
+        } else {
+          for (let y = Math.floor(b.top / step) * step; y < b.bottom; y += step)
             for (let x = Math.floor(b.left / step) * step; x < b.right; x += step) {
-                paint.fillStyle = terrains[world.getTile(x, y)].color;
+                const top = world.surfaceAt(x, y, BASE_SURFACE);
+                paint.fillStyle = top && ['stone', 'brick', 'sand', 'wood'].includes(top.material) ? ({ stone: '#8e9390', brick: '#a47459', sand: '#cbb980', wood: '#9b7951' } as Record<string, string>)[top.material] : terrains[world.getTile(x, y)].color;
                 paint.fillRect(x * s, y * s, step * s + .5, step * s + .5);
             }
-        const placements = step === 1 ? world.assetsIn(b) : world.authoring.visibleAssetsIn(b);
-        placements.sort((p, q) => { const a = world.authoring.assets.get(p.assetId)!, c = world.authoring.assets.get(q.assetId)!; return (a.layer === 'ground' ? -1 : 1) - (c.layer === 'ground' ? -1 : 1) || p.y + a.height * (p.pivotY ?? a.pivot.y) - q.y - c.height * (q.pivotY ?? c.pivot.y) || p.id.localeCompare(q.id); });
+          paint.save(); paint.scale(s / TILE_SIZE, s / TILE_SIZE);
+          terrainRenderer.drawEditorSurfaces(world, time, paint, { left: b.left * TILE_SIZE, top: b.top * TILE_SIZE, right: b.right * TILE_SIZE, bottom: b.bottom * TILE_SIZE }, { groundOnly: options.showUnder, foreground: false });
+          paint.restore();
+        }
+        const assetBounds = { ...b, bottom: b.bottom + MAX_ELEVATION * ELEVATION_STEP / TILE_SIZE };
+        const placements = step === 1 ? world.assetsIn(assetBounds) : world.authoring.visibleAssetsIn(assetBounds);
+        placements.sort((p, q) => { const a = world.authoring.assets.get(p.assetId)!, c = world.authoring.assets.get(q.assetId)!; return (worldAssetLayer(a) === 'ground' ? -1 : 1) - (worldAssetLayer(c) === 'ground' ? -1 : 1) || p.y + a.height * (p.pivotY ?? a.pivot.y) - q.y - c.height * (q.pivotY ?? c.pivot.y) || p.id.localeCompare(q.id); });
         cached = { key, world, canvas: bitmap, placements }; terrainViews.set(canvas, cached);
     }
     ctx.drawImage(cached.canvas, -view.x, -view.y, width, height);
+    const bridgeLevels = options.showUnder ? [] : terrainRenderer.surfaceLevels(world, { left: b.left * TILE_SIZE, top: b.top * TILE_SIZE, right: b.right * TILE_SIZE, bottom: b.bottom * TILE_SIZE })
+        .map(level => ({ ...level, cells: level.cells.filter(c => c.kind === 'bridge') })).filter(level => level.cells.length);
+    const lift = (p: Vec2) => (world.surfaceAt(p.x, p.y, p.surfaceId ?? BASE_SURFACE)?.elevation ?? p.elevation ?? 0) * ELEVATION_STEP / TILE_SIZE;
+    // Each height is clipped separately: overlapping decks never expose lower objects.
+    const clipBelowBridges = (p: Vec2) => {
+        const elevation = world.surfaceAt(p.x, p.y, p.surfaceId ?? BASE_SURFACE)?.elevation ?? p.elevation ?? 0;
+        for (const level of bridgeLevels) if (level.elevation > elevation) {
+            ctx.beginPath(); ctx.rect(b.left * s, b.top * s, (b.right - b.left) * s, (b.bottom - b.top) * s);
+            for (const c of level.cells) ctx.rect(c.x * s, (c.y - c.elevation * ELEVATION_STEP / TILE_SIZE) * s, s, s);
+            ctx.clip('evenodd');
+        }
+    };
     const placements = cached.placements;
     for (const p of placements) {
+        if (options.showUnder && (p.surfaceId ?? BASE_SURFACE) !== BASE_SURFACE) continue;
         const a = world.authoring.assets.get(p.assetId)!;
-        art.draw(ctx, a, p, 1, s, time);
+        ctx.save(); clipBelowBridges(p);
+        art.draw(ctx, a, { ...p, y: p.y - lift(p) }, 1, s, time);
         animated ||= worldAssetVisual(a).kind === 'fire';
         if (selected?.kind === 'placement' && selected.id === p.id) {
             ctx.strokeStyle = '#f0df9d';
             ctx.lineWidth = 2;
-            ctx.strokeRect(p.x * s, p.y * s, a.columns * s, a.rows * s);
+            ctx.strokeRect(p.x * s, (p.y - lift(p)) * s, a.columns * s, a.rows * s);
         }
         if (options.cells && s >= 5)
             for (let y = 0; y < a.rows; y++)
                 for (let x = 0; x < a.columns; x++) {
                     const c = a.cells[y * a.columns + x];
                     ctx.fillStyle = c.blocked ? '#db806a88' : c.visibility === 'hide-fade' ? '#c3a9e877' : c.visibility === 'hide' ? '#b0d77977' : c.visibility === 'fade' ? '#79ccdd77' : '#ffffff08';
-                    ctx.fillRect((p.x + x) * s, (p.y + y) * s, s, s);
+                    ctx.fillRect((p.x + x) * s, (p.y + y - lift(p)) * s, s, s);
                 }
+        ctx.restore();
     }
     if (options.grid && s >= 10) {
         ctx.beginPath();
@@ -107,6 +146,10 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
             ctx.lineTo(b.right * s, y * s);
         }
         ctx.stroke();
+        // Follow the visible tops rather than drawing only the flat base grid.
+        ctx.strokeStyle = '#192d2460';
+        for (const c of draft.surfaceCells ?? []) if (c.elevation && (!options.showUnder || c.kind === 'ground'))
+            ctx.strokeRect(c.x * s, (c.y - c.elevation * ELEVATION_STEP / TILE_SIZE) * s, s, s);
     }
     for (const d of world.dungeons) {
         const t = d.layout.bounds;
@@ -130,22 +173,28 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
                     if (!n.id.startsWith('authored:'))
                         npcs.push({ ...n, x: n.x / TILE_SIZE - .5, y: n.y / TILE_SIZE - .5, manual: false });
     for (const n of npcs) {
-        if (n.x < b.left || n.x > b.right || n.y < b.top || n.y > b.bottom)
+        if (options.showUnder && (n.surfaceId ?? BASE_SURFACE) !== BASE_SURFACE) continue;
+        if (n.x < b.left || n.x > b.right || n.y - lift(n) < b.top - 1 || n.y - lift(n) > b.bottom)
             continue;
-        ctx.fillStyle = NPC_DEFINITIONS[n.npcKind].color;
+        ctx.save(); clipBelowBridges(n); ctx.fillStyle = NPC_DEFINITIONS[n.npcKind].color;
         ctx.beginPath();
-        ctx.arc((n.x + .5) * s, (n.y + .5) * s, Math.max(2, s * .24), 0, Math.PI * 2);
+        ctx.arc((n.x + .5) * s, (n.y + .5 - lift(n)) * s, Math.max(2, s * .24), 0, Math.PI * 2);
         ctx.fill();
         if (n.manual) {
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 1;
             ctx.stroke();
         }
+        ctx.restore();
     }
     ctx.strokeStyle = '#fff1b4';
     ctx.lineWidth = 2;
-    const spawnX = (draft.spawn.x + (draft.interiorBounds ? .5 : 0)) * s;
-    const spawnY = (draft.spawn.y + (draft.interiorBounds ? .5 : 0)) * s;
+    const spawnOffset = draft.interiorBounds || draft.spawn.surfaceId !== undefined || draft.spawn.elevation !== undefined ? .5 : 0;
+    const spawnX = (draft.spawn.x + spawnOffset) * s;
+    const spawnY = (draft.spawn.y + spawnOffset - lift(draft.spawn)) * s;
+    ctx.save();
+    if (options.showUnder && (draft.spawn.surfaceId ?? BASE_SURFACE) !== BASE_SURFACE) ctx.globalAlpha = 0;
+    clipBelowBridges(draft.spawn);
     ctx.beginPath();
     ctx.arc(spawnX, spawnY, Math.max(4, s * .35), 0, Math.PI * 2);
     ctx.stroke();
@@ -155,6 +204,16 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
     ctx.moveTo(spawnX, spawnY - 8);
     ctx.lineTo(spawnX, spawnY + 8);
     ctx.stroke();
+    ctx.restore();
+    for (const level of bridgeLevels) {
+        ctx.save(); ctx.scale(s / TILE_SIZE, s / TILE_SIZE);
+        for (const higher of bridgeLevels) if (higher.elevation > level.elevation) {
+            ctx.beginPath(); ctx.rect(b.left * TILE_SIZE, b.top * TILE_SIZE, (b.right - b.left) * TILE_SIZE, (b.bottom - b.top) * TILE_SIZE);
+            for (const cell of higher.cells) ctx.rect(cell.x * TILE_SIZE, cell.y * TILE_SIZE - cell.elevation * ELEVATION_STEP, TILE_SIZE, TILE_SIZE);
+            ctx.clip('evenodd');
+        }
+        terrainRenderer.drawSurfaceForeground(world, level, time, ctx); ctx.restore();
+    }
     if (gesture?.tool === 'zone' && !gesture.pan) {
         ctx.fillStyle = '#d5e99a20';
         ctx.strokeStyle = '#d5e99a';
@@ -166,12 +225,16 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         const a = options.activeAsset!;
         const gap = a.generation.spacing;
         const local = world.authoring.placements.query({ left: pointerTile.x - gap, top: pointerTile.y - gap, right: pointerTile.x + a.columns + gap, bottom: pointerTile.y + a.rows + gap });
-        ctx.strokeStyle = canStampAsset({ ...draft, placements: local }, a, pointerTile) ? '#d3eaa9' : '#ef9a7e';
+        const layer = options.surfaceId ?? BASE_SURFACE;
+        const support = world.surfaceAt(pointerTile.x, pointerTile.y, layer);
+        const previewPoint = { ...pointerTile, ...(layer !== BASE_SURFACE ? { surfaceId: layer } : {}), ...(support?.elevation ? { elevation: support.elevation } : {}) };
+        const previewLift = a.category === 'elevation' ? (a.elevation?.height ?? 3) * ELEVATION_STEP / TILE_SIZE : lift(previewPoint);
+        ctx.strokeStyle = support && canStampAsset({ ...draft, placements: local }, a, previewPoint) ? '#d3eaa9' : '#ef9a7e';
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 4]);
-        ctx.strokeRect(pointerTile.x * s, pointerTile.y * s, a.columns * s, a.rows * s);
+        ctx.strokeRect(pointerTile.x * s, (pointerTile.y - previewLift) * s, a.columns * s, a.rows * s);
         ctx.setLineDash([]);
-        art.draw(ctx, a, { ...pointerTile, id: 'preview', assetId: a.id }, .45, s, time);
+        art.draw(ctx, a, { ...previewPoint, y: previewPoint.y - previewLift, id: 'preview', assetId: a.id }, .45, s, time);
         animated ||= worldAssetVisual(a).kind === 'fire';
     }
     for (const room of world.rooms) {

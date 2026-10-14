@@ -1,0 +1,8 @@
+{
+  "name": "Roccia · griglia 3×3",
+  "material": "rock",
+  "tileSize": 395,
+  "levelHeight": 131.66666666666666,
+  "pixelated": false,
+  "layout": "grid-3x3"
+}

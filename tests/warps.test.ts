@@ -290,3 +290,37 @@ test('rectangular warp sizes roundtrip, activate across every cell and swap on r
   assert.equal(atWarp(warpPosition({x:20,y:21}),b),true);
   assert.throws(()=>parseWorldDocument(JSON.stringify({...project,warps:[{...warp,entrySize:{x:2,y:2}}]})));
 });
+
+test('directional doors wait for movement toward the threshold, including after arriving on the exit', () => {
+  const p = warpProject();
+  const door = p.warps![0]; door.direction = 'up';
+  door.arrival = { ...p.warps![2].entry }; p.warps![2].direction = 'down';
+  const m = new RoomManager(undefined, p.seed, 1_000_000, p), a = account('directional');
+  m.connect(a, 'warrior'); advance(m, .1);
+  Object.assign(m.global.players.get(a.id)!, warpPosition(door.entry));
+  advance(m); assert.equal(m.takeWarpTransition(a.id), undefined);
+  let seq = 0;
+  const press = (dx: number, dy: number) => {
+    const state = m.stateFor(a.id);
+    assert.equal(m.enqueueInput(a.id, { seq: ++seq, dx, dy, aim: 0 }, state.id, state.epoch), true);
+    m.step(.05);
+  };
+  press(1, 0); assert.equal(m.takeWarpTransition(a.id), undefined);
+  press(0, 1); assert.equal(m.takeWarpTransition(a.id), undefined);
+  press(0, -1); assert.equal(m.takeWarpTransition(a.id)?.phase, 'start');
+  advance(m); assert.equal(m.stateFor(a.id).mapId, 'house');
+  assert.equal(m.takeWarpTransition(a.id), undefined);
+  seq = 0; press(0, 0); advance(m);
+  assert.equal(m.stateFor(a.id).mapId, 'house');
+  press(0, -1); assert.equal(m.takeWarpTransition(a.id), undefined);
+  press(0, 1); assert.equal(m.takeWarpTransition(a.id)?.phase, 'start');
+  advance(m); assert.equal(m.stateFor(a.id).id, 'world');
+});
+
+test('directional warp authoring preserves direction and reverses it on the paired door', () => {
+  const p = warpProject(), door = p.warps![0]; door.direction = 'up';
+  setWarpReturn(p, door, true, 'direction-return');
+  assert.equal(p.warps!.find(w => w.id === door.reverseId)!.direction, 'down');
+  assert.deepEqual(parseWorldDocument(p).warps, p.warps);
+  (door as any).direction = 'invalid'; assert.throws(() => parseWorldDocument(p), /warp/);
+});

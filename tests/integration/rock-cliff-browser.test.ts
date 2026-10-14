@@ -1,0 +1,67 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { chromium, expect } from '@playwright/test';
+import { createServer } from 'vite';
+
+test('rock artwork fills real cliff conformations, opens the wall for stairs, and runs in the local lab', { timeout: 90_000 }, async () => {
+  const before = readFileSync('shared/custom-world.json', 'utf8');
+  const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' });
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  try {
+    await server.listen(); browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const page = await browser.newPage({ viewport: { width: 1420, height: 1140 } }), errors: string[] = [];
+    await page.addInitScript('window.__name = value => value'); page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/rock-review', route => route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#18221e"><canvas width="1420" height="1140" style="width:1420px;height:1140px"></canvas></body>' }));
+    await page.goto(`${server.resolvedUrls!.local[0]}rock-review`);
+    const result = await page.evaluate(async () => {
+      const { TerrainRenderer } = await import('/client/render/terrain-renderer.ts' as string);
+      const { SurfaceTerrain } = await import('/client/render/surface-terrain.ts' as string);
+      const { TerrainMaterials } = await import('/client/render/terrain-materials.ts' as string);
+      const { EnvironmentArt } = await import('/client/render/environment-art.ts' as string);
+      const { newRockCliffDemoWorld } = await import('/shared/rock-cliff-demo.ts' as string);
+      const { newWorldDocument } = await import('/shared/world-schema.ts' as string);
+      const { World } = await import('/shared/world.ts' as string);
+      const canvas = document.querySelector('canvas')!, ctx = canvas.getContext('2d')!, terrain = new TerrainRenderer(ctx);
+      await terrain.spritesReady;
+      const example = newRockCliffDemoWorld(), world = new World(example.seed, 16, 'world', example, []);
+      ctx.fillStyle = '#1c2922'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.translate(84, 102); terrain.drawEditorTerrain(world, 1000, ctx, { left: 0, top: 0, right: 1248, bottom: 960 });
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#e3e9d0'; ctx.font = 'bold 24px Segoe UI';
+      ctx.fillText('Pareti rocciose e gradoni', 84, 42); ctx.font = '14px Segoe UI';
+      ctx.fillText('Parete lunga · anello e rientranze · terrazze · angoli L/T · pilastro · scale frontali e laterali', 84, 70);
+      const mini = window.document.createElement('canvas'); mini.width = 500; mini.height = 400;
+      const paint = mini.getContext('2d')!, materials = new TerrainMaterials(), art = new EnvironmentArt(), surfaces = new SurfaceTerrain(materials, art);
+      await Promise.all([materials.ready, art.ready, surfaces.rockArt.ready]);
+      const doc = newWorldDocument(); doc.surfaceCells = [];
+      for (let y = 3; y <= 5; y++) for (let x = 2; x <= 6; x++) doc.surfaceCells.push({ x, y, elevation: 3, surfaceId: 'ground', kind: 'ground', material: 'grass', wallMaterial: 'rock' });
+      doc.surfaceLinks = [{ id: 'front-stair', kind: 'stairs', from: { x: 4, y: 6, surfaceId: 'ground' }, to: { x: 4, y: 5, surfaceId: 'ground' } }];
+      const probe = new World(12, 16, 'world', doc, []);
+      paint.fillStyle = '#789855'; paint.fillRect(0, 0, 500, 400);
+      for (const level of surfaces.levels(probe, { left: 0, top: 0, right: 500, bottom: 400 })) surfaces.drawLevel(paint, probe, level, 1000);
+      const aperture = [...paint.getImageData(216, 256, 1, 1).data], adjacent = [...paint.getImageData(187, 256, 1, 1).data];
+      surfaces.drawLinks(paint, probe);
+      const tread = [...paint.getImageData(216, 256, 1, 1).data];
+      const colors = new Set<string>(); const face = paint.getImageData(290, 245, 25, 32).data;
+      for (let i = 0; i < face.length; i += 4) colors.add(`${face[i]},${face[i+1]},${face[i+2]}`);
+      return { loaded: surfaces.rockArt.loaded, aperture, adjacent, tread, colors: colors.size };
+    });
+    assert.equal(result.loaded, true, 'all selected PNG assets are present');
+    assert.deepEqual(result.aperture, [120, 152, 85, 255], 'front staircase carves the rock wall instead of floating on its texture');
+    assert.notDeepEqual(result.adjacent, result.aperture); assert.notDeepEqual(result.tread, result.aperture);
+    assert.ok(result.colors > 30, 'rock face retains detail from the provided bitmap artwork');
+    mkdirSync('artifacts', { recursive: true }); await page.screenshot({ path: 'artifacts/rock-cliff-kit-review.png' });
+    await page.goto(`${server.resolvedUrls!.local[0]}surface-lab.html`);
+    await page.locator('#lab-scene').selectOption('rock'); await expect(page.locator('#lab-under')).toBeDisabled();
+    await page.locator('#lab-zoom').selectOption('1.35'); await page.locator('#lab-canvas').click(); await page.keyboard.down('d');
+    await expect(page.locator('#lab-canvas')).toHaveAttribute('data-elevation', '2'); await page.keyboard.up('d');
+    await page.screenshot({ path: 'artifacts/rock-stairs-playtest.png' });
+    const download = page.waitForEvent('download'); await page.locator('#lab-download').click(); const file = await download;
+    assert.equal(file.suggestedFilename(), 'riftlands-pareti-rocciose.json');
+    const sample = JSON.parse(readFileSync((await file.path())!, 'utf8')); assert.ok(sample.surfaceLinks.length >= 6);
+    await page.goto(`${server.resolvedUrls!.local[0]}dungeon-maker.html`);
+    await page.locator('#example').selectOption('rock-cliff-demo'); await expect(page.locator('#name')).toHaveValue('Prova · pareti rocciose e gradoni');
+    await expect(page.locator('#issues')).toHaveText('Terreno e posizioni validi.');
+    assert.deepEqual(errors, []); assert.equal(readFileSync('shared/custom-world.json', 'utf8'), before);
+  } finally { await browser?.close(); await server.close(); }
+});

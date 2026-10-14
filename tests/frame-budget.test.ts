@@ -33,3 +33,9 @@ test('pixel budget is identical across devices and bounded on large displays', (
   const dpr = renderDpr(2, 3840, 2160);
   assert.ok(3840 * 2160 * dpr * dpr <= 3_000_001);
 });
+
+test('touch canvas uses fewer pixels without changing logical input size', () => {
+  assert.equal(renderDpr(3, 844, 390, true), 1.25);
+  assert.equal(renderDpr(1, 844, 390, true), 1);
+  assert.ok(renderDpr(3, 3840, 2160, true) ** 2 * 3840 * 2160 <= 3_000_001);
+});

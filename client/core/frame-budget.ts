@@ -1,6 +1,6 @@
 /** Shared by every device; CSS size and input coordinates stay unchanged. */
-export function renderDpr(deviceDpr: number, width: number, height: number): number {
-  return Math.min(deviceDpr || 1, 1.5, Math.sqrt(3_000_000 / Math.max(1, width * height)));
+export function renderDpr(deviceDpr: number, width: number, height: number, touch = false): number {
+  return Math.min(deviceDpr || 1, touch ? 1.25 : 1.5, Math.sqrt(3_000_000 / Math.max(1, width * height)));
 }
 
 /** Deadline-based pacing preserves the average rate on 90/120/144 Hz screens. */

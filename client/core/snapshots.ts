@@ -1,6 +1,7 @@
 import type { Actor, Projectile, Snapshot } from '../../shared/types';
 import { SNAPSHOT_RATE } from '../../shared/config';
 import { interpolateActor } from './prediction';
+import type { World } from '../../shared/world';
 
 const RESET_GAP_MS = 1000;
 const MAX_SNAPSHOTS = 32;
@@ -46,7 +47,7 @@ export class SnapshotBuffer {
     }
   }
 
-  sample(now: number): BufferedFrame | null {
+  sample(now: number, world?: World): BufferedFrame | null {
     const latest = this.snapshots.at(-1);
     if (!latest || this.playhead === null) return null;
     const delay = Math.min(this.intervalMs * 3 + 50, this.intervalMs * 1.5 + this.jitter * 2);
@@ -80,7 +81,7 @@ export class SnapshotBuffer {
     const previous = this.indexes.get(before)!;
     const actors: Actor[] = [];
     for (const actor of after.actors) {
-      if (live.actors.has(actor.id)) actors.push(interpolateActor(previous.actors.get(actor.id), actor, alpha));
+      if (live.actors.has(actor.id)) actors.push(interpolateActor(previous.actors.get(actor.id), actor, alpha, world));
     }
     const liveProjectiles = live.projectiles;
     const oldProjectiles = previous.projectiles;
@@ -96,7 +97,7 @@ export class SnapshotBuffer {
         y: old.y + (projectile.y - old.y) * alpha,
       } : { ...projectile });
     }
-    const self = interpolateActor(before.self, after.self, alpha);
+    const self = interpolateActor(before.self, after.self, alpha, world);
     return { self, actors, projectiles, time: this.playhead };
   }
 }

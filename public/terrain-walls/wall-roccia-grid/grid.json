@@ -1,0 +1,100 @@
+{
+  "source": "cliff-grid-source.png",
+  "width": 1186,
+  "height": 1183,
+  "columns": [
+    0,
+    395,
+    791,
+    1186
+  ],
+  "rows": [
+    0,
+    394,
+    789,
+    1183
+  ],
+  "parts": [
+    {
+      "part": "back-left",
+      "row": 0,
+      "column": 0,
+      "x": 0,
+      "y": 0,
+      "width": 395,
+      "height": 394
+    },
+    {
+      "part": "back",
+      "row": 0,
+      "column": 1,
+      "x": 395,
+      "y": 0,
+      "width": 396,
+      "height": 394
+    },
+    {
+      "part": "back-right",
+      "row": 0,
+      "column": 2,
+      "x": 791,
+      "y": 0,
+      "width": 395,
+      "height": 394
+    },
+    {
+      "part": "side-left",
+      "row": 1,
+      "column": 0,
+      "x": 0,
+      "y": 394,
+      "width": 395,
+      "height": 395
+    },
+    {
+      "part": "center",
+      "row": 1,
+      "column": 1,
+      "x": 395,
+      "y": 394,
+      "width": 396,
+      "height": 395
+    },
+    {
+      "part": "side-right",
+      "row": 1,
+      "column": 2,
+      "x": 791,
+      "y": 394,
+      "width": 395,
+      "height": 395
+    },
+    {
+      "part": "corner-left",
+      "row": 2,
+      "column": 0,
+      "x": 0,
+      "y": 789,
+      "width": 395,
+      "height": 394
+    },
+    {
+      "part": "front",
+      "row": 2,
+      "column": 1,
+      "x": 395,
+      "y": 789,
+      "width": 396,
+      "height": 394
+    },
+    {
+      "part": "corner-right",
+      "row": 2,
+      "column": 2,
+      "x": 791,
+      "y": 789,
+      "width": 395,
+      "height": 394
+    }
+  ]
+}
