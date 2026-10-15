@@ -46,17 +46,16 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   inspector.innerHTML = `<h2>Collegamento warp</h2><div class="fields"><label>Nome<input id="warp-name" maxlength="160"></label>
     <label>Mappa del primo lato<select id="warp-from"></select></label><div class="pair"><label>Porta X<input id="warp-x" type="number"></label><label>Porta Y<input id="warp-y" type="number"></label></div>
     <label>Destinazione<select id="warp-to"></select></label><div class="pair"><label>Arrivo X<input id="warp-arrival-x" type="number"></label><label>Arrivo Y<input id="warp-arrival-y" type="number"></label></div>
-    <div class="pair"><label>Dimensione A<select id="warp-entry-size"><option value="1,1">1 × 1</option><option value="2,1">2 × 1</option><option value="1,2">1 × 2</option><option value="1,3">1 × 3</option><option value="3,1">3 × 1</option></select></label><label>Dimensione B<select id="warp-arrival-size"><option value="1,1">1 × 1</option><option value="2,1">2 × 1</option><option value="1,2">1 × 2</option><option value="1,3">1 × 3</option><option value="3,1">3 × 1</option></select></label></div><p class="hint">La casella posizionata è l’angolo in alto a sinistra. L’ingresso si estende a destra o verso il basso; il punto di arrivo resta su quella casella.</p>
+    <div class="pair"><label>Dimensione A<select id="warp-entry-size"><option value="1,1">1 Ã— 1</option><option value="2,1">2 Ã— 1</option><option value="1,2">1 Ã— 2</option><option value="1,3">1 Ã— 3</option><option value="3,1">3 Ã— 1</option></select></label><label>Dimensione B<select id="warp-arrival-size"><option value="1,1">1 Ã— 1</option><option value="2,1">2 Ã— 1</option><option value="1,2">1 Ã— 2</option><option value="1,3">1 Ã— 3</option><option value="3,1">3 Ã— 1</option></select></label></div><p class="hint">La casella posizionata Ã— lï¿½angolo in alto a sinistra. Lâ€™ingresso si estende a destra o verso il basso; il punto di arrivo resta su quella casella.</p>
     <label>Attivazione<select id="warp-activation"><option value="walk">Attraversamento automatico</option><option value="interact">Interazione Â· F / pulsante</option></select></label>
     <label><input id="warp-one-way" type="checkbox"> Solo andata (nessun ritorno da questa porta)</label></div>
-    <label class="check"><input id="warp-requires-key" type="checkbox">Richiede chiave</label><div id="warp-key-settings" hidden><p class="hint">Chiave unica per questo passaggio. Si raccoglie al passaggio o con F, si consuma allâ€™apertura e ricompare qui dopo 5 minuti. La porta resta aperta per tutti durante il timer.</p><button id="warp-key-place" class="wide">Posiziona chiave sulla mappa</button></div><p class="hint" id="warp-current-side"></p><button id="warp-update" class="wide">Aggiorna passaggio</button>
+    <p class="hint" id="warp-current-side"></p><button id="warp-update" class="wide">Aggiorna passaggio</button>
     <button id="warp-return" class="wide">Apri altro lato</button><button id="warp-move" class="wide">Sposta passaggio</button><button id="warp-delete" class="wide danger">Elimina passaggio</button>
     <p class="hint">Il passaggio collega due porte e funziona in entrambe le direzioni, salvo Solo andata. Arrivi sulla porta; per attraversarla di nuovo devi allontanarti e rientrare. La croce indica lo spawn generale, separato dagli arrivi dei passaggi.</p>`;
   root.querySelector('.inspector')!.prepend(inspector);
   const el = (id: string) => document.getElementById(id) as HTMLInputElement;
   const value = (id: string) => el(id).value, num = (id: string) => Number(value(id));
   let selected = '', pickingArrival = false, pickingEntry = false;
-  let pickingKey = '';
   let newWarpDirection: 'both' | 'one-way' = 'both';
   let pending: { from: string; to: string; entry: Vec2; owner: string; bidirectional: boolean } | undefined;
   let ownerId = '', editingNew = false, preferredDestination = '';
@@ -121,18 +120,17 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     if (interior) { el('interior-name').value = interior.name; el('interior-width').value = String(interior.width); el('interior-height').value = String(interior.height);
       el('interior-kind').value = interior.kind ?? 'building'; el('interior-pvp').value = String(interior.pvp ?? false); }
     const w = warp(); inspector.hidden = !w;
-    const instruction = pickingKey ? 'Chiave Â· Apri la mappa desiderata e clicca il punto dove deve ricomparire.' : pending ? 'B Â· Clicca il punto B. Puoi cambiare mappa prima di posizionarlo.'
+    const instruction = pending ? 'B Â· Clicca il punto B. Puoi cambiare mappa prima di posizionarlo.'
       : pickingArrival || pickingEntry ? 'Clicca la nuova posizione del lato visualizzato.'
       : host.tool() === 'warp' ? 'A Â· Clicca il punto A sulla mappa visualizzata.'
       : 'A â†” B: andata e ritorno. A â†’ B: solo andata. Scegli un pulsante e clicca A.';
     document.getElementById('warp-action-hint')!.textContent = instruction;
-    prompt.textContent = instruction; prompt.hidden = host.tool() !== 'warp' && !pickingKey;
-    el('warp-cancel').hidden = host.tool() !== 'warp' && !pickingKey;
+    prompt.textContent = instruction; prompt.hidden = host.tool() !== 'warp';
+    el('warp-cancel').hidden = host.tool() !== 'warp';
     if (w) {
       for (const [id, v] of Object.entries({ 'warp-name': displayName(w), 'warp-from': w.from, 'warp-to': w.to, 'warp-x': w.entry.x,
         'warp-y': w.entry.y, 'warp-arrival-x': w.arrival.x, 'warp-arrival-y': w.arrival.y, 'warp-entry-size': `${w.entrySize?.x ?? 1},${w.entrySize?.y ?? 1}`, 'warp-arrival-size': `${w.arrivalSize?.x ?? 1},${w.arrivalSize?.y ?? 1}`, 'warp-activation': w.activation })) el(id).value = String(v);
       el('warp-one-way').checked = !w.reverseId;
-      el('warp-requires-key').checked = !!w.keyGate; el('warp-key-settings').hidden = !w.keyGate;
       document.getElementById('warp-current-side')!.textContent = `Lato visualizzato: ${options.find(([id]) => id === host.mapId())?.[1] ?? host.mapId()}`;
     }
     const seen = new Set<string>();
@@ -161,7 +159,6 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     root.querySelector('.map-note')!.textContent = visibleInterior ? `${visibleInterior.name} Â· ${visibleInterior.width} Ã— ${visibleInterior.height} Â· ${visibleInterior.pvp ? 'PvP' : 'Senza PvP'}` : 'MONDO PROCEDURALE';
   }
   function openMap(id: string): void {
-    if (pickingKey) { host.switchMap(id); host.selectTool('warp-key'); refresh(); return; }
     if (pending) {
       pending.to = id; host.switchMap(id); host.selectTool('warp'); refresh(); return;
     }
@@ -213,16 +210,15 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
       host.project().warps = host.project().warps?.filter(w => w.from !== id && w.to !== id); selected = ''; });
     host.switchMap('world');
   });
-  function startConnection(direction: 'both' | 'one-way'): void { pickingKey = '';  newWarpDirection = direction; pending = undefined; selected = ''; pickingArrival = pickingEntry = false; host.selectTool('warp'); host.inspect(); refresh(); }
+  function startConnection(direction: 'both' | 'one-way'): void { newWarpDirection = direction; pending = undefined; selected = ''; pickingArrival = pickingEntry = false; host.selectTool('warp'); host.inspect(); refresh(); }
   click('warp-tool', () => startConnection('both'));
   click('warp-oneway-tool', () => startConnection('one-way'));
-  click('warp-cancel', () => { const from = pending?.from; pending = undefined; pickingKey = ''; pickingArrival = pickingEntry = false; host.selectTool('select'); if (from) host.switchMap(from); host.inspect(); refresh(); });
+  click('warp-cancel', () => { const from = pending?.from; pending = undefined; pickingArrival = pickingEntry = false; host.selectTool('select'); if (from) host.switchMap(from); host.inspect(); refresh(); });
   function saveSelected(): void {
     const w = warp(); if (!w) return;
     const size=(id:string)=>{const [x,y]=value(id).split(',').map(Number);return {x,y};};
     const next = { entrySize:size('warp-entry-size'), arrivalSize:size('warp-arrival-size'), name: displayName({ ...w, name: value('warp-name') }).slice(0, 160), from: value('warp-from'), to: value('warp-to'), entry: { x: num('warp-x'), y: num('warp-y') },
-      arrival: { x: num('warp-arrival-x'), y: num('warp-arrival-y') }, activation: value('warp-activation') as WorldWarp['activation'],
-      keyGate: el('warp-requires-key').checked ? w.keyGate ?? { id: `key-${crypto.randomUUID()}`, mapId: w.from, position: { ...w.entry } } : undefined };
+      arrival: { x: num('warp-arrival-x'), y: num('warp-arrival-y') }, activation: value('warp-activation') as WorldWarp['activation'] };
     // Changing maps must not reuse a coordinate belonging to the previous destination.
     if (next.to !== w.to && next.arrival.x === w.arrival.x && next.arrival.y === w.arrival.y) next.arrival = { ...mapDocument(host.project(), next.to).spawn };
     if (next.from !== w.from && next.entry.x === w.entry.x && next.entry.y === w.entry.y) next.entry = { ...mapDocument(host.project(), next.from).spawn };
@@ -235,8 +231,6 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   el('warp-entry-size').onchange = saveSelected;
   el('warp-arrival-size').onchange = saveSelected;
   el('warp-one-way').onchange = saveSelected;
-  el('warp-requires-key').onchange = saveSelected;
-  click('warp-key-place', () => { saveSelected(); const w = warp(); if (!w?.keyGate) return; pickingKey = w.keyGate.id; host.switchMap(w.keyGate.mapId); host.center(w.keyGate.position); host.selectTool('warp-key'); refresh(); });
   el('warp-to').onchange = saveSelected;
   el('warp-from').onchange = saveSelected;
   click('warp-move', () => {
@@ -269,10 +263,6 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     if (w.reverseId) setWarpReturn(host.project(), w, true, `warp-${crypto.randomUUID()}`);
   }
   function place(p: Vec2): boolean {
-    if (pickingKey && host.tool() === 'warp-key') {
-      host.change(() => { for (const w of host.project().warps ?? []) if (w.keyGate?.id === pickingKey) w.keyGate = { ...w.keyGate, mapId: host.mapId(), position: { ...p } }; });
-      pickingKey = ''; host.selectTool('select'); host.inspect(); refresh(); return true;
-    }
     if (host.tool() === 'erase') {
       const w = host.project().warps?.find(w => (w.from === host.mapId() && p.x>=w.entry.x && p.y>=w.entry.y && p.x<w.entry.x+(w.entrySize?.x??1) && p.y<w.entry.y+(w.entrySize?.y??1)) || (w.to === host.mapId() && p.x>=w.arrival.x && p.y>=w.arrival.y && p.x<w.arrival.x+(w.arrivalSize?.x??1) && p.y<w.arrival.y+(w.arrivalSize?.y??1)));
       if (w) { host.change(() => { host.project().warps = host.project().warps?.filter(item => item.id !== w.id && item.id !== w.reverseId); selected = ''; }); host.inspect(); return true; }
@@ -332,12 +322,6 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
       ctx.fillRect(pending.entry.x * s, pending.entry.y * s, s, s); ctx.strokeRect(pending.entry.x * s, pending.entry.y * s, s, s);
       ctx.fillStyle = '#e7c9ff'; ctx.font = '12px system-ui'; ctx.fillText('A Â· in attesa di B', pending.entry.x * s, pending.entry.y * s - 5);
     }
-    const seenKeys = new Set<string>();
-    for (const w of host.project().warps ?? []) if (w.keyGate && w.keyGate.mapId === host.mapId() && !seenKeys.has(w.keyGate.id)) {
-      seenKeys.add(w.keyGate.id); const p = w.keyGate.position;
-      ctx.strokeStyle = '#ffd96b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc((p.x + .3) * s, (p.y + .4) * s, Math.max(3, s * .14), 0, Math.PI * 2); ctx.moveTo((p.x + .45) * s, (p.y + .4) * s); ctx.lineTo((p.x + .85) * s, (p.y + .4) * s); ctx.lineTo((p.x + .85) * s, (p.y + .6) * s); ctx.stroke();
-      ctx.fillStyle = '#ffd96b'; ctx.font = '12px system-ui'; ctx.fillText(`Chiave Â· ${displayName(w)}`, p.x * s, (p.y + 1) * s + 14);
-    }
     const current = warp();
     if (current?.to === host.mapId()) {
       ctx.strokeStyle = '#77ddf5'; ctx.lineWidth = 3;
@@ -352,5 +336,5 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     }
     ctx.restore();
   }
-  return { refresh, place, draw, dragTarget, moveEndpoint, hasSelection: () => !!warp(), clearSelection: () => { pending = undefined; pickingKey = ''; selected = ''; pickingArrival = pickingEntry = false; inspector.hidden = true; } };
+  return { refresh, place, draw, dragTarget, moveEndpoint, hasSelection: () => !!warp(), clearSelection: () => { pending = undefined; selected = ''; pickingArrival = pickingEntry = false; inspector.hidden = true; } };
 }

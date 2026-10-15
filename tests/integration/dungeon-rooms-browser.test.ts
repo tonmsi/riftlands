@@ -11,7 +11,7 @@ import { newDungeonDraft, compileDungeonDraft, compactDungeonDraft, parseDungeon
 import { buildDungeonBundle } from '../../shared/dungeon-install';
 import { BOSS_TEMPLATES } from '../../shared/boss-templates';
 
-test('room brushes reshape masks without overlap and room passage authoring retains key and direction controls', { timeout: 60_000 }, async () => {
+test('room brushes reshape masks without overlap and room passage authoring retains multi-tile sizes and direction controls', { timeout: 60_000 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'riftlands-room-editor-'));
   const options = { root: resolve('.'), documentPath: join(dir, 'world.json'), dungeonPath: join(dir, 'dungeons.json'), dataPath: join(dir, 'accounts.json'), port: 0 };
   const draft = newDungeonDraft(); draft.id = 'room-test'; draft.origin = { x: 0, y: 0 };
@@ -54,7 +54,7 @@ test('room brushes reshape masks without overlap and room passage authoring reta
     await frame.locator('#warp-arrival-size').selectOption('1,2');
     await expect(frame.locator('#warp-entry-size')).toHaveValue('3,1');
     await expect(frame.locator('#warp-arrival-size')).toHaveValue('1,2');
-    await frame.locator('#warp-requires-key').check(); await expect(frame.locator('#warp-key-place')).toBeVisible();
+    await expect(frame.locator('#warp-requires-key')).toHaveCount(0);
     await frame.locator('#warp-one-way').check(); await frame.locator('#warp-update').click();
     await expect(frame.locator('#warp-one-way')).toBeChecked();
     await page.locator('#close-passages').click();

@@ -16,6 +16,7 @@ import { serializeWorldDocument, compactWorldTiles } from '../shared/world-tiles
 import { WorldBrush, forkWorldDocument } from '../shared/world-editing';
 import { WorldEditorHistory } from '../client/editors/world/world-editor-history';
 import type { GameplayPersistence } from '../server/gameplay-persistence';
+import { validInteractionCommand } from '../shared/interactions';
 
 function warpProject() {
   const p = newWorldDocument(734291); p.spawn = { x: 10, y: 10 };
@@ -289,4 +290,37 @@ test('rectangular warp sizes roundtrip, activate across every cell and swap on r
   assert.equal(atWarp(warpPosition({x:0,y:1}),a),false);
   assert.equal(atWarp(warpPosition({x:20,y:21}),b),true);
   assert.throws(()=>parseWorldDocument(JSON.stringify({...project,warps:[{...warp,entrySize:{x:2,y:2}}]})));
+});
+
+test('multi-tile entrances use the existing transfer and rearm flow for walking and interaction', () => {
+  for (const activation of ['walk', 'interact'] as const) for (const size of [{ x: 3, y: 1 }, { x: 1, y: 3 }]) {
+    const project = warpProject(), warp = project.warps![0];
+    warp.activation = activation; warp.entrySize = size; warp.arrivalSize = { x: 1, y: 2 };
+    setWarpReturn(project, warp, true, 'wide-return');
+    const manager = new RoomManager(undefined, project.seed, 1_000_000, project), user = account(`wide-${activation}-${size.x}`);
+    manager.connect(user, 'warrior'); advance(manager, .1);
+    Object.assign(manager.global.players.get(user.id)!, warpPosition({ x: warp.entry.x + size.x - 1, y: warp.entry.y + size.y - 1 }));
+    if (activation === 'interact') {
+      const state = manager.stateFor(user.id);
+      manager.interact(user.id, { kind: 'warp', warpId: warp.id }, state.id, state.epoch);
+    }
+    advance(manager);
+    assert.equal(manager.stateFor(user.id).mapId, 'house');
+    const actor = manager.simulationFor(user.id).players.get(user.id)!;
+    assert.deepEqual({ x: actor.x, y: actor.y }, warpPosition(warp.arrival));
+    advance(manager, 1);
+    assert.equal(manager.stateFor(user.id).mapId, 'house');
+  }
+});
+
+test('old keyed passages import as free passages and key collection commands are rejected', () => {
+  const project = warpProject();
+  const legacy = { ...project, warps: project.warps!.map(warp => ({ ...warp,
+    keyGate: { id: 'old-key', mapId: 'world', position: { x: 12, y: 12 } } })) };
+  const parsed = parseWorldDocument(legacy);
+  assert.ok(parsed.warps!.every(warp => !Object.hasOwn(warp, 'keyGate')));
+  assert.equal(validInteractionCommand({ kind: 'collect-warp-key', keyId: 'old-key' }), false);
+  const manager = new RoomManager(undefined, parsed.seed, 1_000_000, parsed), user = account('free-passage');
+  manager.connect(user, 'warrior'); advance(manager, .1); enter(manager, user.id, 'door-a');
+  assert.equal(manager.stateFor(user.id).mapId, 'house');
 });

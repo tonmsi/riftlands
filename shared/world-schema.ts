@@ -51,7 +51,6 @@ export interface WorldWarp {
   id: string; name: string; from: string; to: string; entry: Vec2; arrival: Vec2; entrySize?: Vec2; arrivalSize?: Vec2;
   activation: 'walk' | 'interact';
   reverseId?: string;
-  keyGate?: { id: string; mapId: string; position: Vec2 };
 }
 export interface WorldDocument {
   version: 1 | 2; generatorVersion: 1; seed: number; spawn: Vec2;
@@ -197,8 +196,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     for (const w of d.warps) if (!object(w) || !id(w.id) || !name(w.name) || !maps.has(w.from) || !maps.has(w.to)
       || [w.entrySize,w.arrivalSize].some(size => size !== undefined && (!point(size) || !['1,1','2,1','1,2','1,3','3,1'].includes(`${size.x},${size.y}`)))
       || !point(w.entry) || !point(w.arrival) || !['walk', 'interact'].includes(w.activation)
-      || (w.reverseId !== undefined && (!id(w.reverseId) || w.reverseId === w.id))
-      || (w.keyGate !== undefined && (!object(w.keyGate) || !id(w.keyGate.id) || !maps.has(w.keyGate.mapId) || !point(w.keyGate.position)))) fail('collegamento warp');
+      || (w.reverseId !== undefined && (!id(w.reverseId) || w.reverseId === w.id))) fail('collegamento warp');
   }
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
   const result: WorldDocument = structuredClone({ version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
@@ -208,7 +206,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       document: { ...parseWorldDocument({ ...m.document, assets: d.assets, seed: d.seed }), assets: [] } })) } : {}),
     ...(d.warps !== undefined ? { warps: d.warps.map((w: WorldWarp) => ({ id: w.id, name: w.name, from: w.from, to: w.to, entry: w.entry, arrival: w.arrival, activation: w.activation,
       ...(w.entrySize ? {entrySize:w.entrySize} : {}), ...(w.arrivalSize ? {arrivalSize:w.arrivalSize} : {}),
-      ...(w.reverseId !== undefined ? { reverseId: w.reverseId } : {}), ...(w.keyGate ? { keyGate: w.keyGate } : {}) })) } : {}) });
+      ...(w.reverseId !== undefined ? { reverseId: w.reverseId } : {}) })) } : {}) });
   // Persist recovered animation before an export can rename the image again.
   for (const asset of result.assets) if (!asset.visual && worldAssetVisual(asset).kind === 'fire') asset.visual = worldAssetVisual(asset);
   return result;

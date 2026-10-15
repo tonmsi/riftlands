@@ -68,7 +68,7 @@ export class Renderer {
 
   private readonly restoreContext = (): void => { this.terrain.invalidate(); };
 
-  weather: 'clear' | 'rain' | 'snow' = 'rain';
+  weather: 'clear' | 'rain' | 'snow' = 'clear';
   private lastWeatherCheck = 0;
   constructor(private readonly canvas: HTMLCanvasElement, private readonly localDungeons?: readonly DungeonDefinition[]) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -328,11 +328,6 @@ export class Renderer {
       ctx.restore();
     }
 
-    for (const key of frame.warpKeys ?? []) if (this.visible(key)) {
-      ctx.save(); ctx.translate(key.x, key.y + Math.sin(frame.time * .003) * 2);
-      ctx.strokeStyle = '#ffe18a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(-5, 0, 5, 0, Math.PI * 2); ctx.moveTo(0, 0); ctx.lineTo(13, 0); ctx.lineTo(13, 5); ctx.moveTo(8, 0); ctx.lineTo(8, 4); ctx.stroke(); ctx.restore();
-    }
-
     if (frame.traps) {
       for (const trap of frame.traps) if (this.visible(trap)) this.drawTrap(trap, frame.time);
     }
@@ -389,7 +384,12 @@ export class Renderer {
     if (frame.self && frame.fishing) drawFishingWorld(ctx, frame.self, frame.fishing, frame.fishingTarget, frame.time, this.reducedMotion.matches);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-    if (frame.time - this.lastWeatherCheck > 1000) {
+    const outdoorWeather = this.world.mode === 'world' && !this.world.authoring.document.interiorBounds && !frame.warpTransition;
+    if (!outdoorWeather) {
+      this.weather = 'clear';
+      // Recalculate immediately when returning outdoors, including within the same weather tick.
+      this.lastWeatherCheck = -Infinity;
+    } else if (frame.time - this.lastWeatherCheck > 1000) {
       this.lastWeatherCheck = frame.time;
       const px = frame.self?.x ?? this.camera.x, py = frame.self?.y ?? this.camera.y;
       const isStorm = this.world.mode === 'world' && (frame.time % 600_000) < 180_000;

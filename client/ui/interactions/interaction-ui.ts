@@ -28,7 +28,7 @@ export class InteractionUI {
   constructor(parent: HTMLElement, private send: (command: InteractionCommand) => void, private notify: (message: string) => void, focusWorld: () => void, popups: PopupManager) {
     window.addEventListener('fishing-art-ready', () => this.slots?.querySelectorAll<HTMLButtonElement>('[data-item-slot]').forEach(button => { delete button.dataset.stack; }));
     this.root.className = 'interaction-ui'; this.root.hidden = true;
-    this.root.innerHTML = '<aside class="inventory-panel" aria-label="Inventario"><button type="button" class="backpack-toggle" aria-label="Apri zaino" aria-expanded="false"><canvas width="56" height="56"></canvas><b>1</b></button><div class="inventory-slots" hidden></div><div class="warp-key-inventory" hidden></div><div class="drop-item-panel" role="group" aria-label="Oggetto e quantità da gettare" hidden><strong data-item-name></strong><p data-item-description></p><div class="quantity-stepper"><button type="button" data-quantity-minus aria-label="Diminuisci quantità">−</button><output aria-label="Quantità da gettare" aria-live="polite">0</output><button type="button" data-quantity-plus aria-label="Aumenta quantità">+</button></div><div class="drop-item-actions"><button type="button" data-drop-confirm>Getta</button></div></div></aside><section class="npc-dialogue" role="dialog" aria-label="Conversazione" hidden><div class="npc-portrait" aria-hidden="true"><span>◉</span></div><div class="dialogue-content"><header><strong data-speaker></strong><button type="button" data-dialogue-close aria-label="Chiudi conversazione">×</button></header><div class="dialogue-scroll" tabindex="0"><p data-dialogue-text></p><small class="dialogue-request" hidden></small><div class="dialogue-rewards" hidden></div><div class="vendor-offers" hidden></div></div><div class="dialogue-choices"></div></div></section>';
+    this.root.innerHTML = '<aside class="inventory-panel" aria-label="Inventario"><button type="button" class="backpack-toggle" aria-label="Apri zaino" aria-expanded="false"><canvas width="56" height="56"></canvas><b>1</b></button><div class="inventory-slots" hidden></div><div class="drop-item-panel" role="group" aria-label="Oggetto e quantità da gettare" hidden><strong data-item-name></strong><p data-item-description></p><div class="quantity-stepper"><button type="button" data-quantity-minus aria-label="Diminuisci quantità">−</button><output aria-label="Quantità da gettare" aria-live="polite">0</output><button type="button" data-quantity-plus aria-label="Aumenta quantità">+</button></div><div class="drop-item-actions"><button type="button" data-drop-confirm>Getta</button></div></div></aside><section class="npc-dialogue" role="dialog" aria-label="Conversazione" hidden><div class="npc-portrait" aria-hidden="true"><span>◉</span></div><div class="dialogue-content"><header><strong data-speaker></strong><button type="button" data-dialogue-close aria-label="Chiudi conversazione">×</button></header><div class="dialogue-scroll" tabindex="0"><p data-dialogue-text></p><small class="dialogue-request" hidden></small><div class="dialogue-rewards" hidden></div><div class="vendor-offers" hidden></div></div><div class="dialogue-choices"></div></div></section>';
     parent.append(this.root); this.slots = this.root.querySelector('.inventory-slots')!; this.panel = this.root.querySelector('.npc-dialogue')!;
     this.dropPanel = this.root.querySelector('.drop-item-panel')!; this.quantity = new QuantityStepper(this.dropPanel);
     this.backpack = this.root.querySelector('.backpack-toggle')!;
@@ -109,7 +109,7 @@ export class InteractionUI {
   reset(): void { this.cancelHold(); this.feedback.reset(); this.dialogue = null; this.dismissedSession = undefined; this.panel.hidden = true; this.choiceSignature = ''; this.setBagOpen(false); }
   private setBagOpen(open: boolean): void {
     open = open && this.alive;
-    this.bagOpen = open; this.slots.hidden = !open; (this.root.querySelector('.warp-key-inventory') as HTMLElement).hidden = !open;
+    this.bagOpen = open; this.slots.hidden = !open;
     this.backpack.setAttribute('aria-expanded', String(open)); this.backpack.setAttribute('aria-label', `${open ? 'Chiudi' : 'Apri'} zaino, ${this.inventory.capacity} slot`);
     if (!open) { this.cancelHold(); this.closeDrop(); }
   }
@@ -162,11 +162,6 @@ export class InteractionUI {
       button.classList.toggle('is-unavailable', stack?.itemId === 'fishing-rod' && !this.fishingAvailable);
     });
     if (this.dropping) { const stack = this.inventory.slots[this.dropping.slot]; if (!stack || stack.itemId !== this.dropping.itemId || snapshot.self.hp <= 0) this.closeDrop(); else this.quantity.set(this.quantity.quantity, stack.quantity); }
-    const keys = this.root.querySelector('.warp-key-inventory') as HTMLElement;
-    const keySignature = JSON.stringify(this.inventory.warpKeys ?? []);
-    if (keys.dataset.keys !== keySignature) {
-      keys.dataset.keys = keySignature; keys.replaceChildren(...(this.inventory.warpKeys ?? []).map(key => { const chip = document.createElement('span'); chip.textContent = `⚿ ${key.name}`; chip.title = 'Si consuma aprendo il suo passaggio per 5 minuti.'; return chip; }));
-    }
     this.feedback.update(`${snapshot.self.id}:${snapshot.self.classId}`, snapshot.inventoryActions ?? []);
     // Ignore a snapshot already in flight when the player dismissed the conversation.
     const dialogue = snapshot.dialogue?.sessionId === this.dismissedSession ? null : snapshot.dialogue ?? null;

@@ -50,13 +50,9 @@ test('Dungeon Maker groups tools, shows errors above the map and shares passage 
     const box = (await frame.locator('#map').boundingBox())!;
     await page.mouse.click(box.x + box.width / 2 + 12, box.y + box.height / 2 + 12);
     await page.mouse.click(box.x + box.width / 2 + 12, box.y + box.height / 2 + 36);
-    await expect(frame.locator('#warp-requires-key')).toBeVisible();
-    await frame.locator('#warp-requires-key').check();
-    await expect(frame.locator('#warp-key-place')).toBeVisible();
-    await frame.locator('#warp-key-place').click();
-    await expect(frame.locator('#tool-label')).toHaveText('Chiave');
-    await page.mouse.click(box.x + box.width / 2 + 12, box.y + box.height / 2 + 60);
-    await expect(frame.locator('#tool-label')).toHaveText('Seleziona');
+    await expect(frame.locator('#warp-requires-key')).toHaveCount(0);
+    await expect(frame.locator('#warp-entry-size')).toBeVisible();
+    await expect(frame.locator('#warp-arrival-size')).toBeVisible();
     await page.locator('#close-passages').click(); await expect(page.locator('#dungeon-passages-dialog')).not.toBeVisible();
     const worldPage = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
     await worldPage.goto(studio.url); await expect(worldPage.locator('#status')).not.toContainText('Caricamento');

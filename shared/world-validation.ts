@@ -88,18 +88,12 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
         if (collidesWorld(pos.x, pos.y, PLAYER_RADIUS + 2, map)) issues.push(`${w.name}: ${label} su un ostacolo.`);
         if (map.arenaAt(pos.x, pos.y)) issues.push(`${w.name}: ${label} sovrapposto a un ingresso arena.`);
       }
-      if (w.keyGate) {
-        const keyMap = maps.get(w.keyGate.mapId), point = warpPosition(w.keyGate.position);
-        if (!keyMap || collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, keyMap)) issues.push(`${w.name}: chiave su un ostacolo.`);
-        if ((document.warps ?? []).some(other => other.id !== w.id && other.id !== w.reverseId && other.keyGate?.id === w.keyGate!.id)) issues.push(`${w.name}: chiave assegnata a un altro passaggio.`);
-      }
       if (w.reverseId) {
         const reverse = document.warps?.find(other => other.id === w.reverseId);
         if (!reverse || reverse.reverseId !== w.id || reverse.from !== w.to || reverse.to !== w.from
           || reverse.entry.x !== w.arrival.x || reverse.entry.y !== w.arrival.y || reverse.arrival.x !== w.entry.x || reverse.arrival.y !== w.entry.y
           || JSON.stringify(reverse.entrySize ?? {x:1,y:1}) !== JSON.stringify(w.arrivalSize ?? {x:1,y:1})
-          || JSON.stringify(reverse.arrivalSize ?? {x:1,y:1}) !== JSON.stringify(w.entrySize ?? {x:1,y:1})
-          || JSON.stringify(reverse.keyGate) !== JSON.stringify(w.keyGate))
+          || JSON.stringify(reverse.arrivalSize ?? {x:1,y:1}) !== JSON.stringify(w.entrySize ?? {x:1,y:1}))
           issues.push(`${w.name}: passaggio di ritorno non coerente.`);
       }
     }

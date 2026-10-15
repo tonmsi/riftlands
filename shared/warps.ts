@@ -28,7 +28,6 @@ export function setWarpReturn(project: WorldDocument, warp: WorldWarp, enabled: 
   } else Object.assign(reverse, { from: warp.to, to: warp.from, entry: { ...warp.arrival }, arrival: { ...warp.entry }, activation: warp.activation });
   if (warp.arrivalSize) reverse.entrySize = {...warp.arrivalSize}; else delete reverse.entrySize;
   if (warp.entrySize) reverse.arrivalSize = {...warp.entrySize}; else delete reverse.arrivalSize;
-  if (warp.keyGate) reverse.keyGate = structuredClone(warp.keyGate); else delete reverse.keyGate;
 }
 export function mapDocument(project: WorldDocument, id = 'world'): WorldDocument {
   if (id === 'world') return project;

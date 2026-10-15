@@ -512,5 +512,10 @@
     "wounded-scout": "npc-wounded-scout",
     "platos": "npc-platos",
     "fallen-soldier": "npc-fallen-soldier"
+  },
+  "playerDrawSizes": {
+    "mage": 62,
+    "warrior": 75,
+    "paladin": 70
   }
 }

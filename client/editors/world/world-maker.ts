@@ -189,7 +189,7 @@ function change(action: () => void): void {
         report(e);
     }
 }
-function selectTool(next: string): void { tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === next))); el('tool-label').textContent = tools.find(t => t[0] === next)?.[2] ?? (next === 'warp' ? 'Passaggio' : next === 'warp-key' ? 'Chiave' : next); schedule(); }
+function selectTool(next: string): void { tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === next))); el('tool-label').textContent = tools.find(t => t[0] === next)?.[2] ?? (next === 'warp' ? 'Passaggio' : next); schedule(); }
 root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.onclick = () => { warpEditor.clearSelection(); selectTool(b.dataset.tool!); refresh(); });
 function active(): WorldAsset | undefined { return draft.assets.find(a => a.id === activeAsset); }
 function palette(): void {
