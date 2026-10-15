@@ -10,6 +10,8 @@ Il [World Maker locale](docs/world-maker.md) si avvia con `npm run world:studio`
 
 Il [terreno ibrido con alture e ponti](docs/terrain-surfaces.md) aggiunge texture illustrate, quote, materiali di parete e superfici sovrapposte. `/surface-lab.html?scene=reference` apre una scena locale separata con terrazze, sei scale, un ponte a L/T e percorsi sopra/sotto; il Dungeon Maker include la stessa bozza modificabile. Entrambi gli editor costruiscono scale su più celle e ponti larghi con svolte e prolungamenti.
 
+Il World Maker costruisce anche [rialzi con fasce fisiche da un tile e scale incassate](docs/terraced-terrain.md): ogni quota arretra la sommità di una cella, pareti e scale condividono la griglia, mentre le mappe precedenti conservano il layout salvato.
+
 Le alture accettano [kit PNG con nomi convenzionali](docs/wall-sprite-kits.md) in `public/terrain-walls`: corpo, sommità, piede, fianchi e angoli vengono scelti automaticamente. **Kit PNG delle pareti** cambia il disegno delle superfici negli editor; **Kit parete** permette il confronto nel laboratorio.
 
 ## Avvio

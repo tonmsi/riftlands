@@ -2,6 +2,7 @@ import type { TileKind, Vec2 } from './types';
 import { TILE_SIZE } from './tile-size';
 import { stairFootprint, stairGeometry, stairLinks, stairSurfaceId, validateSurfaceStairs } from './surface-stairs';
 import { isWallSpriteKitId } from './wall-sprite-kits';
+import { deriveTerracedTerrain } from './terraced-terrain';
 
 export const BASE_SURFACE = 'ground';
 export const ELEVATION_STEP = 16;
@@ -15,9 +16,11 @@ export interface SurfaceCell {
   material: SurfaceMaterial; wallMaterial: WallMaterial; kind: 'ground' | 'bridge' | 'stairs'; blocked?: boolean;
   /** Optional PNG wall kit; geometry and collision remain independent from its artwork. */
   wallSkin?: string;
+  /** New terrain reserves an inner tile band for every logical height step. */
+  layout?: 'terraced';
 }
 export interface SurfaceEndpoint { x: number; y: number; surfaceId: string; }
-export type StairProfile = 'landings' | 'incline';
+export type StairProfile = 'landings' | 'incline' | 'terraced';
 export interface SurfaceStair {
   id: string; kind: 'stairs' | 'ramp';
   from: SurfaceEndpoint & { elevation: number }; to: SurfaceEndpoint & { elevation: number };
@@ -31,7 +34,11 @@ export interface SurfaceStair {
 export interface SurfaceLink {
   id: string; kind: 'stairs' | 'ramp' | 'bridge-entry'; from: SurfaceEndpoint; to: SurfaceEndpoint;
 }
-export interface ResolvedSurface extends SurfaceCell { blocked: boolean; }
+export interface TerrainSurfaceCell extends SurfaceCell {
+  /** Derived geometry is never stored in the map's logical height field. */
+  terrainRole?: 'wall'; wallMask?: number; logicalElevation?: number;
+}
+export interface ResolvedSurface extends TerrainSurfaceCell { blocked: boolean; }
 export const surfaceKey = (x: number, y: number, surfaceId = BASE_SURFACE): string => `${x},${y}@${surfaceId}`;
 export function validSurfaceId(value: unknown): value is string {
   return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(value);
@@ -57,6 +64,7 @@ export function validateSurfaceData(cells: unknown = [], links: unknown = [], st
     if (!point(c) || !validSurfacePoint(c) || c.elevation === undefined
       || !SURFACE_MATERIALS.includes(c.material) || !WALL_MATERIALS.includes(c.wallMaterial)
       || c.wallSkin !== undefined && !isWallSpriteKitId(c.wallSkin)
+      || c.layout !== undefined && (c.layout !== 'terraced' || c.kind !== 'ground')
       || !['ground', 'bridge', 'stairs'].includes(c.kind) || (c.kind === 'ground') !== (c.surfaceId === BASE_SURFACE)
       || c.blocked !== undefined && typeof c.blocked !== 'boolean') fail('cella, quota o materiale');
     const key = surfaceKey(c.x, c.y, c.surfaceId);
@@ -75,8 +83,9 @@ export function validateSurfaceData(cells: unknown = [], links: unknown = [], st
 }
 /** Constant-time cell and connector queries; bridge layers are allocated only where authored. */
 export class SurfaceIndex {
-  private readonly cells = new Map<string, SurfaceCell>();
-  private readonly columns = new Map<string, SurfaceCell[]>();
+  private readonly cells = new Map<string, TerrainSurfaceCell>();
+  private readonly authored = new Map<string, SurfaceCell>();
+  private readonly columns = new Map<string, TerrainSurfaceCell[]>();
   private readonly links = new Map<string, SurfaceEndpoint[]>();
   private readonly stairColumns = new Map<string, SurfaceStair[]>();
   private readonly stairEdges = new Map<string, SurfaceStair>();
@@ -85,7 +94,10 @@ export class SurfaceIndex {
   constructor(cells: readonly SurfaceCell[] = [], links: readonly SurfaceLink[] = [], stairs: readonly SurfaceStair[] = []) {
     this.stairs = stairs;
     this.hasSurfaces = cells.length > 0 || stairs.length > 0;
-    for (const c of cells) this.cells.set(surfaceKey(c.x, c.y, c.surfaceId), c);
+    for (const c of cells) this.authored.set(surfaceKey(c.x, c.y, c.surfaceId), c);
+    const terraces = deriveTerracedTerrain([...this.authored.values()]);
+    for (const c of this.authored.values()) this.cells.set(surfaceKey(c.x, c.y, c.surfaceId),
+      c.kind === 'ground' ? terraces.get(`${c.x},${c.y}`) ?? c : c);
     for (const c of this.cells.values()) { const key = `${c.x},${c.y}`; const bucket = this.columns.get(key) ?? []; bucket.push(c); this.columns.set(key, bucket); }
     for (const l of links) for (const [a, b] of [[l.from, l.to], [l.to, l.from]]) {
       const key = surfaceKey(a.x, a.y, a.surfaceId), bucket = this.links.get(key) ?? []; bucket.push(b); this.links.set(key, bucket);
@@ -96,8 +108,9 @@ export class SurfaceIndex {
     for (const stair of stairs) for (const link of stairLinks(stair))
       this.stairEdges.set(this.edgeKey(link.from, link.to), stair);
   }
-  at(x: number, y: number, surfaceId = BASE_SURFACE): SurfaceCell | undefined { return this.cells.get(surfaceKey(x, y, surfaceId)); }
-  atColumn(x: number, y: number): readonly SurfaceCell[] { return this.columns.get(`${x},${y}`) ?? []; }
+  at(x: number, y: number, surfaceId = BASE_SURFACE): TerrainSurfaceCell | undefined { return this.cells.get(surfaceKey(x, y, surfaceId)); }
+  authoredAt(x: number, y: number, surfaceId = BASE_SURFACE): SurfaceCell | undefined { return this.authored.get(surfaceKey(x, y, surfaceId)); }
+  atColumn(x: number, y: number): readonly TerrainSurfaceCell[] { return this.columns.get(`${x},${y}`) ?? []; }
   exits(x: number, y: number, surfaceId = BASE_SURFACE): readonly SurfaceEndpoint[] { return this.links.get(surfaceKey(x, y, surfaceId)) ?? []; }
   stairsAtColumn(x: number, y: number): readonly SurfaceStair[] { return this.stairColumns.get(`${x},${y}`) ?? []; }
   private edgeKey(a: SurfaceEndpoint, b: SurfaceEndpoint): string {

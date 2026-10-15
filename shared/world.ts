@@ -9,7 +9,7 @@ import { coordinateHash } from './coordinate-random';
 import { EDIT_CHUNK_SIZE, type WorldTileChunk } from './world-tiles';
 import { BASE_SURFACE, SurfaceIndex, type ResolvedSurface } from './world-surfaces';
 import { stairGeometry, stairSurfaceId } from './surface-stairs';
-import { StairVolumeIndex, type StairVolume } from './stair-volume';
+import { StairVolumeIndex, type StairVolume, type StairBodyBounds } from './stair-volume';
 export { coordinateHash } from './coordinate-random';
 
 export interface NpcSpawn extends Vec2 { id: string; npcKind: import('./npcs').NpcTemplateId; level: number; settings?: import('./npc-settings').NpcSettings; }
@@ -100,6 +100,8 @@ export class World {
     const placements = this.assetsAt(tx, ty);
     // Explicit floors make their support walkable; objects and boss barriers still apply afterward.
     if (placements.some(p => (p.surfaceId ?? BASE_SURFACE) === surfaceId && this.authoring.assets.get(p.assetId)?.category === 'floor')) surface.blocked = false;
+    // A painted floor decorates terrain, but cannot turn a structural wall into a walkable top.
+    if (surface.terrainRole === 'wall') surface.blocked = true;
     // Boss barriers remain authoritative even over authored surfaces.
     for (const id of this.lockedBosses) if (this.lockedTiles.get(id)?.has(`${tx},${ty}`)) { surface.blocked = true; break; }
     surface.blocked ||= placements.some(p =>
@@ -198,17 +200,51 @@ export class World {
   }
   /** A horizontal ray may cross empty air above low terrain, but hits higher ground and same-height walls. */
   blocksRay(tx: number, ty: number, point: import('./types').Vec2, sample: Pick<Vec2, 'x' | 'y'> = { x: (tx + .5) * TILE_SIZE, y: (ty + .5) * TILE_SIZE }): boolean {
-    return this.blocksTerrainRay(tx, ty, point) || this.stairVolumes.collides(sample, this.elevationAt(point), 0, this.stairRayExemption(point));
+    return this.terrainRayBounds(tx, ty, point).some(bounds => sample.x >= bounds.left && sample.x <= bounds.right
+      && sample.y >= bounds.top && sample.y <= bounds.bottom)
+      || this.stairVolumes.collides(sample, this.elevationAt(point), 0, this.stairRayExemption(point));
   }
   /** Grid broad phase excludes stair bodies, which receive an exact geometric narrow phase. */
   blocksTerrainRay(tx: number, ty: number, point: import('./types').Vec2): boolean {
-    if (!this.surfaceIndex.hasSurfaces) return this.isBlocked(tx, ty);
+    return this.terrainRayBounds(tx, ty, point).length > 0;
+  }
+  /** Grid broad phase keeps the rock beside a stair solid, including partially occupied outer lanes. */
+  terrainRayBounds(tx: number, ty: number, point: Vec2): readonly StairBodyBounds[] {
+    const full = { left: tx * TILE_SIZE, top: ty * TILE_SIZE, right: (tx + 1) * TILE_SIZE, bottom: (ty + 1) * TILE_SIZE };
+    if (!this.surfaceIndex.hasSurfaces) return this.isBlocked(tx, ty) ? [full] : [];
     const height = this.elevationAt(point), ground = this.surfaceAt(tx, ty)!;
-    if (ground.elevation > height) return true;
     const surfaces = this.surfacesAt(tx, ty);
     const waterDeck = surfaces.some(surface => surface.kind === 'bridge' && surface.elevation === height && !surface.blocked);
-    return surfaces.some(surface => surface.elevation === height && surface.blocked
+    const sameHeightBlocks = surfaces.some(surface => surface.elevation === height && surface.blocked
       && !(waterDeck && surface.kind === 'ground' && surface.material === 'water'));
+    if (ground.elevation <= height && !sameHeightBlocks) return [];
+    if (ground.terrainRole !== 'wall') return [full];
+    // Authored obstacles and locked barriers retain precedence over a terrain opening.
+    if (this.surfaceIndex.authoredAt(tx, ty)?.blocked
+      || [...this.lockedBosses].some(id => this.lockedTiles.get(id)?.has(`${tx},${ty}`))
+      || this.assetsAt(tx, ty).some(p => (p.surfaceId ?? BASE_SURFACE) === BASE_SURFACE && this.authoring.cell(p, tx, ty)?.blocked)
+      || surfaces.some(surface => surface.kind !== 'ground' && surface.elevation === height && surface.blocked)) return [full];
+    let bounds = [full];
+    for (const stair of this.surfaceIndex.stairsAtColumn(tx, ty)) {
+      if (stair.profile !== 'terraced') continue;
+      const g = stairGeometry(stair), a = g.pointAt(0), b = g.pointAt(1);
+      const cut = { left: Math.min(a.x, b.x) - Math.abs(g.dy) * stair.width / 2,
+        top: Math.min(a.y, b.y) - Math.abs(g.dx) * stair.width / 2,
+        right: Math.max(a.x, b.x) + Math.abs(g.dy) * stair.width / 2,
+        bottom: Math.max(a.y, b.y) + Math.abs(g.dx) * stair.width / 2 };
+      bounds = bounds.flatMap(rect => {
+        const left = Math.max(rect.left, cut.left), top = Math.max(rect.top, cut.top);
+        const right = Math.min(rect.right, cut.right), bottom = Math.min(rect.bottom, cut.bottom);
+        if (right <= left || bottom <= top) return [rect];
+        const pieces: StairBodyBounds[] = [];
+        if (left > rect.left) pieces.push({ ...rect, right: left });
+        if (right < rect.right) pieces.push({ ...rect, left: right });
+        if (top > rect.top) pieces.push({ left, right, top: rect.top, bottom: top });
+        if (bottom < rect.bottom) pieces.push({ left, right, top: bottom, bottom: rect.bottom });
+        return pieces;
+      });
+    }
+    return bounds;
   }
   isHiding(x: number, y: number, point?: import('./types').Vec2): boolean {
     const tx = Math.floor(x / TILE_SIZE), ty = Math.floor(y / TILE_SIZE);

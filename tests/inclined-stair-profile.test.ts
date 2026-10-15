@@ -93,7 +93,7 @@ test('raising a legacy rock tile does not copy its implicit terrain blockage int
   document.tiles.push({ x: 2, y: 3, terrain: 'rock', suppressAssets: true });
   const before = new World(document.seed, 16, 'world', document, []);
   assert.equal(before.surfaceAt(2, 3)!.blocked, true);
-  new SurfaceStroke(document, p => before.surfaceAt(p.x, p.y, p.surfaceId)).paint({ x: 2, y: 3 }, 'raise-height', paintSettings);
+  new SurfaceStroke(document, p => before.surfaceAt(p.x, p.y, p.surfaceId)).paint({ x: 2, y: 3 }, 'raise-height', { ...paintSettings, layout: 'legacy' });
   assert.equal(document.surfaceCells![0].blocked, undefined);
   assert.equal(new World(document.seed, 16, 'world', document, []).surfaceAt(2, 3)!.blocked, false);
 });

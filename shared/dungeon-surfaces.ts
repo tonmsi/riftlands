@@ -21,6 +21,7 @@ export function parseDungeonSurfaces(input: { surfaceCells?: unknown; surfaceLin
         || (c.blocked !== undefined && typeof c.blocked !== 'boolean')) fail();
       const key = `${c.x},${c.y}@${c.surfaceId}`; if (keys.has(key)) fail(); keys.add(key);
       cells.push({ x: c.x, y: c.y, surfaceId: c.surfaceId, elevation: c.elevation, material: c.material, wallMaterial: c.wallMaterial, kind: c.kind,
+        ...(c.layout !== undefined ? { layout: c.layout } : {}),
         ...(c.wallSkin !== undefined ? { wallSkin: c.wallSkin } : {}),
         ...(c.blocked !== undefined ? { blocked: c.blocked } : {}) });
     }
@@ -38,6 +39,7 @@ export function parseDungeonSurfaces(input: { surfaceCells?: unknown; surfaceLin
   const stairs = (input.surfaceStairs ?? []) as SurfaceStair[];
   for (const stair of stairs) if (!point(stair.from) || !point(stair.to)) fail();
   return { ...(input.surfaceStairs !== undefined ? { surfaceStairs: stairs.map(s => ({ id: s.id, kind: s.kind, width: s.width,
+    ...(s.profile !== undefined ? { profile: s.profile } : {}),
     ...(s.underpass !== undefined ? { underpass: s.underpass } : {}),
     from: { x: s.from.x, y: s.from.y, surfaceId: s.from.surfaceId, elevation: s.from.elevation }, to: { x: s.to.x, y: s.to.y, surfaceId: s.to.surfaceId, elevation: s.to.elevation } })) } : {}), ...(input.surfaceCells !== undefined ? { surfaceCells: cells } : {}), ...(input.surfaceLinks !== undefined ? { surfaceLinks: links } : {}) };
 }

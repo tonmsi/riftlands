@@ -8,7 +8,7 @@ import { WORLD_DOCUMENT } from '../../shared/world-content';
 import { mapDocument } from '../../shared/warps';
 import { worldDungeons } from '../../shared/world-validation';
 import { ARENA_GATE } from '../../shared/arena';
-import { WorldAssetArt } from './world-asset-art';
+import { WorldAssetArt, clipElevationAssetTop, elevationAssetTopHeight } from './world-asset-art';
 import { drawItemArt } from '../ui/interactions/item-art';
 import { canCollectItem } from '../../shared/items';
 import { shapeBounds, type TileBounds } from '../../shared/world-authoring';
@@ -232,7 +232,9 @@ export class Renderer {
     const assetElevations = new Map<AssetPlacement, number>();
     const assetElevation = (p: AssetPlacement): number => {
       const cached = assetElevations.get(p); if (cached !== undefined) return cached;
-      const value = this.elevation({ ...p, x: p.x * TILE_SIZE, y: p.y * TILE_SIZE }); assetElevations.set(p, value); return value;
+      const asset = this.world.authoring.assets.get(p.assetId)!;
+      const value = elevationAssetTopHeight(this.world, asset, p) ?? this.elevation({ ...p, x: p.x * TILE_SIZE, y: p.y * TILE_SIZE });
+      assetElevations.set(p, value); return value;
     };
     const worldAssets = this.assetsForView({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
       right: this.bounds.right / TILE_SIZE, bottom: (this.bounds.bottom + ELEVATION_STEP * MAX_ELEVATION) / TILE_SIZE }).filter(p => {
@@ -265,6 +267,7 @@ export class Renderer {
       const a = this.world.authoring.assets.get(p.assetId)!, fade = assetFades.get(p.id)!;
       if (overhead && !fade.annotated) return;
       ctx.save();
+      clipElevationAssetTop(ctx, this.world, a, p);
       ctx.translate(0, -assetElevation(p) * ELEVATION_STEP);
       if (fade.annotated) {
         clipAssetCells(ctx, a, p, TILE_SIZE, cell => (cell.visibility !== 'normal') === overhead);

@@ -67,6 +67,7 @@ test('world authoring creates a whole staircase and preserves both banks when it
       const root = document.querySelector('main')!; root.innerHTML = elevationControls;
       const editor = new WorldElevationEditor(root, (action: () => void) => { undo = structuredClone(doc); action(); world = new World(doc.seed, 16, 'world', doc, []); }, () => doc, () => world, () => {});
       root.querySelector<HTMLSelectElement>('#surface-stair-width')!.value = '96';
+      root.querySelector<HTMLSelectElement>('#surface-stair-profile')!.value = 'incline';
       editor.click({ x: 2, y: 5, surfaceId: 'ground' }); editor.click({ x: 5, y: 5, surfaceId: 'ground' });
       const built = { structures: doc.surfaceStairs?.length, supports: doc.surfaceCells.filter((c: { kind: string }) => c.kind === 'stairs').length, links: doc.surfaceLinks?.length, width: doc.surfaceStairs?.[0].width };
       const saved = structuredClone(doc);

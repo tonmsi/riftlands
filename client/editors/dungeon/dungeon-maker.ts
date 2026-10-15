@@ -11,7 +11,7 @@ import { WORLD_DOCUMENT } from '../../../shared/world-content';
 import { newWorldDocument, parseWorldDocument, worldAssetVisual, worldAssetLayer, type WorldAsset } from '../../../shared/world-schema';
 import { loadWorldCheckpoint } from '../world/world-editor-storage';
 import { WorldAssetCatalog } from '../world/world-asset-catalog';
-import { WorldAssetArt } from '../../render/world-asset-art';
+import { WorldAssetArt, clipElevationAssetTop, elevationAssetTopHeight } from '../../render/world-asset-art';
 import { parseDungeonFile } from '../../../shared/dungeon-import';
 import { BOSS_TEMPLATES as BOSS_DEFINITIONS, BOSS_TEMPLATE_BY_ID } from '../../../shared/boss-templates';
 import { parseActorCatalog } from '../../../shared/actor-catalog';
@@ -317,7 +317,11 @@ function draw(): void {
         if (surfaceEditor.showUnder() && (p.surfaceId ?? BASE_SURFACE) !== BASE_SURFACE) continue;
         ctx.save(); clipBridgeCovers(p);
         const a = sharedAssets.find(a => a.id === p.assetId);
-        if (a) assetArt.draw(ctx, a, { ...p, y: p.y - surfaceEditor.elevation(p) * ELEVATION_STEP / 48 }, 1, s, performance.now());
+        if (a) {
+            clipElevationAssetTop(ctx, previewWorld, a, p, s);
+            const elevation = elevationAssetTopHeight(previewWorld, a, p) ?? surfaceEditor.elevation(p);
+            assetArt.draw(ctx, a, { ...p, y: p.y - elevation * ELEVATION_STEP / 48 }, 1, s, performance.now());
+        }
         if (!a || p.id === selected) {
             ctx.strokeStyle = a ? '#fff' : '#ed997e'; ctx.lineWidth = 2;
             ctx.strokeRect(p.x * s, (p.y - surfaceEditor.elevation(p) * ELEVATION_STEP / 48) * s, (a?.width ?? 1) * s, (a?.height ?? 1) * s);

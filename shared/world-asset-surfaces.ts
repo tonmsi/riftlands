@@ -1,7 +1,7 @@
 import type { Vec2 } from './types';
 import { DEFAULT_ASSET_ELEVATION, type WorldAsset, type WorldDocument } from './world-schema';
-import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, surfaceKey, type SurfaceCell } from './world-surfaces';
-import { stairFootprint, stairGeometry } from './surface-stairs';
+import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, SurfaceIndex, surfaceKey, type SurfaceCell } from './world-surfaces';
+import { stairFootprint, stairGeometry, stairSpatialIssues } from './surface-stairs';
 import { TILE_SIZE } from './tile-size';
 
 function footprint(asset: WorldAsset, point: Vec2): { x: number; y: number }[] {
@@ -21,6 +21,7 @@ export function planElevationAsset(document: WorldDocument, asset: WorldAsset, p
   // A ground stamp must not silently bury a bridge or invalidate an existing stair flight.
   if (cells.some(c => keys.has(`${c.x},${c.y}`) && c.kind === 'bridge' && settings.height >= c.elevation)) return;
   for (const stair of document.surfaceStairs ?? []) {
+    if (stair.profile === 'terraced') continue;
     const g = stairGeometry(stair);
     for (const p of stairFootprint(stair)) {
       if (!keys.has(`${p.x},${p.y}`)) continue;
@@ -34,8 +35,23 @@ export function planElevationAsset(document: WorldDocument, asset: WorldAsset, p
       }
     }
   }
-  return points.map(p => ({ ...p, surfaceId: BASE_SURFACE, elevation: settings.height, material: settings.material,
+  const updates: SurfaceCell[] = points.map(p => ({ ...p, surfaceId: BASE_SURFACE, elevation: settings.height, material: settings.material, layout: 'terraced',
     wallMaterial: settings.wallMaterial, ...(settings.wallSkin !== undefined ? { wallSkin: settings.wallSkin } : {}), kind: 'ground', blocked: false }));
+  // A stamp cannot influence a remote flight beyond the bounded height transform.
+  const nearby = (document.surfaceStairs ?? []).filter(stair => stair.profile === 'terraced'
+    && Math.max(stair.from.x, stair.to.x) + MAX_ELEVATION + 2 >= point.x && Math.min(stair.from.x, stair.to.x) - MAX_ELEVATION - 2 < point.x + asset.columns
+    && Math.max(stair.from.y, stair.to.y) + MAX_ELEVATION + 2 >= point.y && Math.min(stair.from.y, stair.to.y) - MAX_ELEVATION - 2 < point.y + asset.rows);
+  for (const stair of nearby) {
+    const left = Math.min(stair.from.x, stair.to.x) - MAX_ELEVATION - 2, right = Math.max(stair.from.x, stair.to.x) + MAX_ELEVATION + 2;
+    const top = Math.min(stair.from.y, stair.to.y) - MAX_ELEVATION - 2, bottom = Math.max(stair.from.y, stair.to.y) + MAX_ELEVATION + 2;
+    const relevant = (cell: SurfaceCell) => cell.surfaceId === BASE_SURFACE && cell.x >= left && cell.x <= right && cell.y >= top && cell.y <= bottom;
+    const revised = [...cells.filter(c => relevant(c) && !keys.has(`${c.x},${c.y}`)), ...updates.filter(relevant)];
+    const index = new SurfaceIndex(revised);
+    if (stairSpatialIssues(stair, (x, y, id) => index.at(x, y, id) ?? (id === BASE_SURFACE ? {
+        x, y, surfaceId: BASE_SURFACE, elevation: 0, kind: 'ground', material: 'grass', wallMaterial: 'earth',
+      } : undefined)).length) return;
+  }
+  return updates;
 }
 
 function upsertCells(document: WorldDocument, updates: readonly SurfaceCell[], indices?: Map<string, number>): boolean {
@@ -45,7 +61,7 @@ function upsertCells(document: WorldDocument, updates: readonly SurfaceCell[], i
   for (const cell of updates) {
     const key = surfaceKey(cell.x, cell.y, cell.surfaceId), index = indices.get(key), old = index === undefined ? undefined : cells[index];
     if (old && old.elevation === cell.elevation && old.material === cell.material && old.wallMaterial === cell.wallMaterial
-      && old.kind === cell.kind && old.wallSkin === cell.wallSkin && old.blocked === cell.blocked) continue;
+      && old.kind === cell.kind && old.wallSkin === cell.wallSkin && old.blocked === cell.blocked && old.layout === cell.layout) continue;
     if (index === undefined) { indices.set(key, cells.length); cells.push(cell); } else cells[index] = cell;
     changed = true;
   }

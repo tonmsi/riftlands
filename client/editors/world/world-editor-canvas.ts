@@ -6,7 +6,7 @@ import type { WorldDocument, WorldAsset, WorldZone } from '../../../shared/world
 import { worldAssetVisual, worldAssetImageBounds, worldAssetLayer } from '../../../shared/world-schema';
 import { NPC_DEFINITIONS } from '../../../shared/npcs';
 import { canStampAsset } from '../../../shared/world-editing';
-import { WorldAssetArt } from '../../render/world-asset-art';
+import { WorldAssetArt, clipElevationAssetTop, elevationAssetTopHeight } from '../../render/world-asset-art';
 import { AssetGridCamera } from '../../render/world-asset-view';
 import { terrains } from './world-maker-layout';
 import type { AssetPlacement } from '../../../shared/world-schema';
@@ -117,7 +117,9 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         if (options.showUnder && (p.surfaceId ?? BASE_SURFACE) !== BASE_SURFACE) continue;
         const a = world.authoring.assets.get(p.assetId)!;
         ctx.save(); clipBelowBridges(p);
-        art.draw(ctx, a, { ...p, y: p.y - lift(p) }, 1, s, time);
+        clipElevationAssetTop(ctx, world, a, p, s);
+        const artworkLift = elevationAssetTopHeight(world, a, p);
+        art.draw(ctx, a, { ...p, y: p.y - (artworkLift === undefined ? lift(p) : artworkLift * ELEVATION_STEP / TILE_SIZE) }, 1, s, time);
         animated ||= worldAssetVisual(a).kind === 'fire';
         if (selected?.kind === 'placement' && selected.id === p.id) {
             ctx.strokeStyle = '#f0df9d';
@@ -148,8 +150,11 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         ctx.stroke();
         // Follow the visible tops rather than drawing only the flat base grid.
         ctx.strokeStyle = '#192d2460';
-        for (const c of draft.surfaceCells ?? []) if (c.elevation && (!options.showUnder || c.kind === 'ground'))
-            ctx.strokeRect(c.x * s, (c.y - c.elevation * ELEVATION_STEP / TILE_SIZE) * s, s, s);
+        for (const authored of draft.surfaceCells ?? []) {
+            const c = world.surfaceIndex.at(authored.x, authored.y, authored.surfaceId);
+            if (c?.elevation && (!options.showUnder || c.kind === 'ground'))
+                ctx.strokeRect(c.x * s, (c.y - c.elevation * ELEVATION_STEP / TILE_SIZE) * s, s, s);
+        }
     }
     for (const d of world.dungeons) {
         const t = d.layout.bounds;
@@ -229,7 +234,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         const support = world.surfaceAt(pointerTile.x, pointerTile.y, layer);
         const previewPoint = { ...pointerTile, ...(layer !== BASE_SURFACE ? { surfaceId: layer } : {}), ...(support?.elevation ? { elevation: support.elevation } : {}) };
         const previewLift = a.category === 'elevation' ? (a.elevation?.height ?? 3) * ELEVATION_STEP / TILE_SIZE : lift(previewPoint);
-        ctx.strokeStyle = support && canStampAsset({ ...draft, placements: local }, a, previewPoint) ? '#d3eaa9' : '#ef9a7e';
+        ctx.strokeStyle = support && canStampAsset({ ...draft, placements: local }, a, previewPoint, undefined, world.surfaceIndex) ? '#d3eaa9' : '#ef9a7e';
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 4]);
         ctx.strokeRect(pointerTile.x * s, (pointerTile.y - previewLift) * s, a.columns * s, a.rows * s);

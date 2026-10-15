@@ -2,7 +2,7 @@ import type { Vec2 } from './types';
 import { DEFAULT_CELL, worldAssetLayer, type WorldDocument, type WorldAsset, type AssetPlacement } from './world-schema';
 import { placementBounds, overlaps, SpatialIndex } from './world-authoring';
 import { planElevationAsset, stampElevationAsset, stampFloorSupport } from './world-asset-surfaces';
-import { surfaceKey } from './world-surfaces';
+import { BASE_SURFACE, SurfaceIndex, surfaceKey } from './world-surfaces';
 import type { TileOverride } from './world-schema';
 import { EDIT_CHUNK_SIZE, decodeTileChunk, encodeTileChunk, tileCode, tileFromCode, tileChunkKey, worldTileMetrics, setWorldTileMetrics, type WorldTileChunk } from './world-tiles';
 
@@ -24,9 +24,14 @@ export function brushTiles(center: Vec2, radius: number): Vec2[] {
   return result;
 }
 /** Asset image and behavior mask share the same top-left origin. Pivot only controls painter ordering. */
-export function canStampAsset(document: WorldDocument, asset: WorldAsset, point: Vec2, ignoreId?: string): boolean {
+export function canStampAsset(document: WorldDocument, asset: WorldAsset, point: Vec2, ignoreId?: string, surfaces?: SurfaceIndex): boolean {
   if (asset.category === 'elevation') return !!planElevationAsset(document, asset, point);
   const bounds = placementBounds({ id: '', assetId: asset.id, ...point }, asset);
+  if (worldAssetLayer(asset) === 'object' && (point.surfaceId ?? BASE_SURFACE) === BASE_SURFACE) {
+    surfaces ??= new SurfaceIndex(document.surfaceCells, document.surfaceLinks, document.surfaceStairs);
+    for (let y = bounds.top; y < bounds.bottom; y++) for (let x = bounds.left; x < bounds.right; x++)
+      if (surfaces.at(x, y)?.terrainRole === 'wall') return false;
+  }
   return !document.placements.some(p => {
     if (p.id === ignoreId) return false;
     if ((p.surfaceId ?? 'ground') !== (point.surfaceId ?? 'ground') || (p.elevation ?? 0) !== (point.elevation ?? 0)) return false;
@@ -65,6 +70,7 @@ export class WorldBrush {
   private placements: SpatialIndex<AssetPlacement>;
   private npcTiles: Map<string, string[]>;
   private surfaceIndices: Map<string, number>;
+  private surfaceGeometry: SurfaceIndex;
   constructor(private document: WorldDocument, tilesOnly = false) {
     for (const [i, c] of (document.tileChunks ?? []).entries()) this.chunkIndices.set(tileChunkKey(c[0], c[1]), i);
     this.assets = new Map(tilesOnly ? [] : document.assets.map(a => [a.id, a]));
@@ -73,6 +79,7 @@ export class WorldBrush {
     this.npcIndices = new Map(tilesOnly ? [] : document.npcs.map((n, i) => [n.id, i]));
     this.npcTiles = new Map(); for (const n of tilesOnly ? [] : document.npcs) { const key = `${n.x},${n.y}`, ids = this.npcTiles.get(key) ?? []; ids.push(n.id); this.npcTiles.set(key, ids); }
     this.surfaceIndices = new Map((tilesOnly ? [] : document.surfaceCells ?? []).map((cell, i) => [surfaceKey(cell.x, cell.y, cell.surfaceId), i]));
+    this.surfaceGeometry = new SurfaceIndex(tilesOnly ? [] : document.surfaceCells, tilesOnly ? [] : document.surfaceLinks, tilesOnly ? [] : document.surfaceStairs);
     this.placements = new SpatialIndex(p => placementBounds(p, this.assets.get(p.assetId)!));
     for (const p of tilesOnly ? [] : document.placements) this.placements.add(p);
   }
@@ -120,6 +127,7 @@ export class WorldBrush {
     if (a.category === 'elevation') {
       const before = this.document.placements.length;
       const changed = stampElevationAsset(this.document, a, point, id, this.surfaceIndices);
+      if (changed) this.surfaceGeometry = new SurfaceIndex(this.document.surfaceCells, this.document.surfaceLinks, this.document.surfaceStairs);
       for (let i = before; i < this.document.placements.length; i++) {
         const p = this.document.placements[i]; this.placementIndices.set(p.id, i); this.placements.add(p);
       }
@@ -128,8 +136,13 @@ export class WorldBrush {
     const bounds = placementBounds({ id, assetId: a.id, ...point }, a), gap = a.generation.spacing;
     const candidates = this.placements.query({ left: bounds.left - gap, top: bounds.top - gap, right: bounds.right + gap, bottom: bounds.bottom + gap })
       .filter(p => this.placementIndices.has(p.id));
-    if (!canStampAsset({ ...this.document, placements: candidates }, a, point)) return false;
-    const p = { id, assetId: a.id, ...point }; this.placementIndices.set(id, this.document.placements.length); this.document.placements.push(p); this.placements.add(p); stampFloorSupport(this.document, a, point, this.surfaceIndices); return true;
+    if (!canStampAsset({ ...this.document, placements: candidates }, a, point, undefined, this.surfaceGeometry)) return false;
+    const changesHeight = a.category === 'floor' && (point.elevation ?? 0) > 0 && (point.surfaceId ?? BASE_SURFACE) === BASE_SURFACE
+      && Array.from({ length: a.columns * a.rows }, (_, i) => surfaceKey(point.x + i % a.columns, point.y + Math.floor(i / a.columns)))
+        .some(key => !this.surfaceIndices.has(key));
+    const p = { id, assetId: a.id, ...point }; this.placementIndices.set(id, this.document.placements.length); this.document.placements.push(p); this.placements.add(p); stampFloorSupport(this.document, a, point, this.surfaceIndices);
+    if (changesHeight) this.surfaceGeometry = new SurfaceIndex(this.document.surfaceCells, this.document.surfaceLinks, this.document.surfaceStairs);
+    return true;
   }
   private chunk(point: Vec2) {
     const x = Math.floor(point.x / EDIT_CHUNK_SIZE), y = Math.floor(point.y / EDIT_CHUNK_SIZE), key = tileChunkKey(x, y);

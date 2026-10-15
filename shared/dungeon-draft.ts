@@ -336,8 +336,11 @@ export function compileDungeonDraft(input: DungeonDraft, assets: readonly WorldA
     pickupSpawns: draft.entities.filter(e => e.kind === 'pickup').map(e => ({ ...position(e), id: e.id, kind: e.template as PickupKind, radius: 12 })),
     ...(draft.assetPlacements !== undefined ? { assetPlacements: draft.assetPlacements.map(p => {
       const surface = draftWorld.surfaceAt(p.x, p.y, p.surfaceId ?? BASE_SURFACE);
+      const authored = draftWorld.surfaceIndex.authoredAt(p.x, p.y, p.surfaceId ?? BASE_SURFACE);
+      const elevation = assets.find(a => a.id === p.assetId)?.category === 'elevation' && authored?.layout === 'terraced'
+        ? authored.elevation : surface?.elevation ?? p.elevation;
       return { ...p, x: p.x + draft.origin.x, y: p.y + draft.origin.y,
-        ...((p.elevation !== undefined || surface?.elevation) ? { elevation: surface?.elevation ?? p.elevation } : {}) };
+        ...((p.elevation !== undefined || elevation) ? { elevation } : {}) };
     }) } : {}),
     ...(draft.surfaceCells !== undefined ? { surfaceCells: draft.surfaceCells.map(c => ({ ...c, x: c.x + draft.origin.x, y: c.y + draft.origin.y })) } : {}),
     ...(draft.surfaceStairs !== undefined ? { surfaceStairs: draft.surfaceStairs.map(s => ({ ...s, from: { ...s.from, x: s.from.x + draft.origin.x, y: s.from.y + draft.origin.y }, to: { ...s.to, x: s.to.x + draft.origin.x, y: s.to.y + draft.origin.y } })) } : {}),

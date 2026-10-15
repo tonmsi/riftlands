@@ -17,7 +17,7 @@ import { INSTALLED_DUNGEON_DEFINITIONS as DUNGEON_DEFINITIONS, type DungeonDefin
 import { worldDungeons, validateWorld } from '../../../shared/world-validation';
 import { shapeBounds, insideShape, placementVisualBounds, overlaps } from '../../../shared/world-authoring';
 import { parseWorldDocument, resizeWorldAsset, worldAssetVisual, worldAssetImageBounds, worldAssetCategory, setWorldAssetCategory, DEFAULT_ASSET_ELEVATION, DEFAULT_ASSET_FADE, WORLD_TERRAINS, type WorldAssetCategory, type WorldDocument, type WorldAsset, type WorldZone, type AssetCell, type AssetPlacement } from '../../../shared/world-schema';
-import { brushTiles, strokeTiles, WorldBrush, forkWorldDocument } from '../../../shared/world-editing';
+import { brushTiles, strokeTiles, WorldBrush, forkWorldDocument, canStampAsset } from '../../../shared/world-editing';
 import { compactWorldTiles, worldTileMetrics, worldDocumentsEqual } from '../../../shared/world-tiles';
 import { WorldAssetArt } from '../../render/world-asset-art';
 import { WorldEditorHistory } from './world-editor-history';
@@ -475,7 +475,7 @@ function paint(p: Vec2): void {
         else if (gesture.tool === 'erase')
             gesture.brush!.erase({ ...q, surfaceId: elevationEditor.activeSurface() });
         else if (gesture.tool === 'asset' && asset) {
-            try { gesture.brush!.stamp(asset, elevationEditor.placement(q), uid('asset')); }
+            try { gesture.brush!.stamp(asset, elevationEditor.placement(q, asset.category === 'elevation'), uid('asset')); }
             catch (e) { report(e); }
         }
     }
@@ -612,7 +612,7 @@ canvas.addEventListener('pointermove', event => {
             y: Math.max(bounds ? 0 : -10_000_000, Math.min(bounds ? bounds.height - 1 : 10_000_000, gesture.spawnMove.y + pointerTile.y - gesture.start.y)),
         };
         const support = world.surfaceAt(moved.x, moved.y, moved.surfaceId ?? BASE_SURFACE);
-        if (!support) { status('Lo spawn deve rimanere sulla sua superficie.'); return; }
+        if (!support || support.terrainRole === 'wall') { status('Lo spawn deve rimanere su una superficie percorribile, fuori dalle fasce rocciose.'); return; }
         if (support.elevation) moved.elevation = support.elevation; else delete moved.elevation;
         surface().spawn = moved;
         refresh(); schedule(true); return;
@@ -630,6 +630,14 @@ canvas.addEventListener('pointermove', event => {
         if (move.kind === 'placement' || move.kind === 'npc') {
             const support = world.surfaceAt(x, y, entity.surfaceId ?? BASE_SURFACE);
             if (!support) { status('L’istanza deve rimanere sulla sua superficie.'); return; }
+            const decoration = move.kind === 'placement' && surface().assets.find(asset => asset.id === entity.assetId)?.category === 'elevation';
+            if (support.terrainRole === 'wall' && !decoration) { status('Posiziona l’istanza sulla sommità, fuori dalle fasce rocciose.'); return; }
+            if (move.kind === 'placement') {
+                const asset = surface().assets.find(asset => asset.id === entity.assetId);
+                if (asset && !canStampAsset(surface(), asset, { x, y, surfaceId: entity.surfaceId, elevation: support.elevation }, entity.id)) {
+                    status('L’ingombro dell’oggetto deve restare libero e fuori dalle fasce rocciose.'); return;
+                }
+            }
             if (support.elevation) entity.elevation = support.elevation; else delete entity.elevation;
         }
         position.x = x; position.y = y;

@@ -90,20 +90,23 @@ test('floor painting retains elevation, a deck and objects on its selected plane
 test('a plateau stamp creates walkable elevated terrain and keeps ground objects, NPCs and spawn attached', () => {
   const document = fixture(), plateau = asset('plateau'), stone = asset('stone');
   stone.generation.spacing = 0;
-  resizeWorldAsset(plateau, 2, 1); setWorldAssetCategory(plateau, 'elevation'); document.assets.push(plateau, stone);
+  resizeWorldAsset(plateau, 9, 9); setWorldAssetCategory(plateau, 'elevation'); document.assets.push(plateau, stone);
   plateau.cells.forEach(cell => { cell.blocked = true; cell.visibility = 'hide-fade'; });
-  document.placements.push({ id: 'stone', assetId: stone.id, x: 2, y: 2 });
-  document.npcs.push({ id: 'npc', npcKind: 'slime', level: 1, x: 3, y: 2 }); document.spawn = { x: 2, y: 2 };
+  document.placements.push({ id: 'stone', assetId: stone.id, x: 5, y: 5 });
+  document.npcs.push({ id: 'npc', npcKind: 'slime', level: 1, x: 6, y: 5 }); document.spawn = { x: 5, y: 5 };
   assert.equal(new WorldBrush(document).stamp(plateau, { x: 2, y: 2 }, 'height'), true);
   assert.equal(document.placements.length, 2, 'the PNG is retained as a top-face decoration');
   assert.deepEqual(document.placements[1], { id: 'height', assetId: plateau.id, x: 2, y: 2, surfaceId: 'ground', elevation: 3 });
   assert.equal(document.placements[0].elevation, 3); assert.equal(document.npcs[0].elevation, 3); assert.equal(document.spawn.elevation, 3);
-  assert.equal(document.surfaceCells!.length, 2); assert.equal(stampElevationAsset(document, plateau, { x: 2, y: 2 }), false, 'same stamp does not accumulate height');
+  assert.equal(document.surfaceCells!.length, 81); assert.ok(document.surfaceCells!.every(cell => cell.layout === 'terraced'));
+  assert.equal(stampElevationAsset(document, plateau, { x: 2, y: 2 }), false, 'same stamp does not accumulate height');
   const restored = parseWorldDocument(document), world = new World(document.seed, 16, 'world', restored, []);
-  assert.equal(world.surfaceAt(2, 2)!.elevation, 3); assert.equal(world.surfaceAt(2, 2)!.blocked, false);
-  assert.equal(world.isHiding(120, 120), false, 'elevation artwork never conceals or blocks the walkable top');
+  assert.equal(world.surfaceAt(5, 5)!.elevation, 3); assert.equal(world.surfaceAt(5, 5)!.blocked, false);
+  assert.equal(world.surfaceAt(2, 2)!.logicalElevation, 3); assert.equal(world.surfaceAt(2, 2)!.elevation, 1);
+  assert.equal(world.surfaceAt(2, 2)!.terrainRole, 'wall'); assert.equal(world.surfaceAt(2, 2)!.blocked, true);
+  assert.equal(world.isHiding(264, 264), false, 'elevation artwork never conceals or blocks the walkable top');
   assert.equal(world.surfaceAt(1, 2)!.elevation, 0); assert.equal(world.surfaceAt(1, 2)!.blocked, false);
-  assert.equal(canStampAsset(document, stone, { x: 3, y: 2, surfaceId: 'ground', elevation: 3 }), true);
+  assert.equal(canStampAsset(document, stone, { x: 7, y: 5, surfaceId: 'ground', elevation: 3 }), true);
 });
 
 test('elevation artwork uses a real stamp anchor and the brush indexes it for subsequent editing', () => {
@@ -121,6 +124,47 @@ test('elevation artwork uses a real stamp anchor and the brush indexes it for su
   const snapshot = structuredClone(document);
   assert.equal(stampElevationAsset(document, plateau, { x: 6, y: 6 }, 'art'), false, 'duplicate IDs cannot create a partial terrain stamp');
   assert.deepEqual(document, snapshot);
+});
+
+test('objects cannot straddle a wall band and floors never turn a band into a walkable top', () => {
+  const document = fixture(), plateau = asset('large-plateau'), object = asset('wide-object'), floor = asset('band-floor');
+  resizeWorldAsset(plateau, 9, 9); setWorldAssetCategory(plateau, 'elevation');
+  resizeWorldAsset(object, 2, 1); object.generation.spacing = 0; setWorldAssetCategory(floor, 'floor');
+  document.assets.push(plateau, object, floor);
+  const brush = new WorldBrush(document);
+  assert.equal(brush.stamp(plateau, { x: 0, y: 0 }, 'plateau-art'), true);
+  assert.equal(canStampAsset(document, object, { x: 5, y: 4, elevation: 3 }), false, 'the anchor is a top but the second cell is a wall');
+  assert.equal(brush.stamp(object, { x: 5, y: 4, elevation: 3 }, 'cross-wall'), false, 'the brush geometry refreshes after stamping height');
+  assert.equal(brush.stamp(object, { x: 3, y: 4, elevation: 3 }, 'top-object'), true);
+  assert.equal(brush.stamp(floor, { x: 6, y: 4, elevation: 3 }, 'wall-floor'), true);
+  assert.equal(new World(document.seed, 16, 'world', document, []).surfaceAt(6, 4)!.terrainRole, 'wall');
+  assert.equal(new World(document.seed, 16, 'world', document, []).surfaceAt(6, 4)!.blocked, true);
+});
+
+test('the brush refreshes band boundaries when an elevated floor supplies a previously missing neighbour', () => {
+  const document = fixture(), floor = asset('edge-floor'), object = asset('edge-object');
+  setWorldAssetCategory(floor, 'floor'); object.generation.spacing = 0; document.assets.push(floor, object);
+  document.surfaceCells = [{ x: 0, y: 0, surfaceId: 'ground', kind: 'ground', elevation: 1, material: 'grass', wallMaterial: 'rock', layout: 'terraced' }];
+  const brush = new WorldBrush(document);
+  assert.equal(brush.stamp(object, { x: 0, y: 0, elevation: 1 }, 'blocked'), false);
+  for (const [i, point] of [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }].entries())
+    assert.equal(brush.stamp(floor, { ...point, elevation: 1 }, `floor-${i}`), true);
+  assert.equal(new World(document.seed, 16, 'world', document, []).surfaceAt(0, 0)!.terrainRole, undefined);
+  assert.equal(brush.stamp(object, { x: 0, y: 0, elevation: 1 }, 'new-top'), true);
+});
+
+test('matching terrain stamps preserve integrated stairs and reject a change that removes their bands', () => {
+  const document = fixture(), plateau = asset('stair-plateau'); resizeWorldAsset(plateau, 7, 7); setWorldAssetCategory(plateau, 'elevation'); document.assets.push(plateau);
+  assert.equal(stampElevationAsset(document, plateau, { x: 1, y: 1 }), true);
+  const world = new World(document.seed, 16, 'world', document, []);
+  const flight = planStair({ x: 0, y: 4, surfaceId: 'ground' }, { x: 4, y: 4, surfaceId: 'ground' },
+    (x, y, id) => world.surfaceAt(x, y, id), { id: 'stamp-flight', profile: 'terraced', cells: document.surfaceCells });
+  document.surfaceCells!.push(...flight.cells); document.surfaceLinks = flight.links; document.surfaceStairs = [flight.stair];
+  assert.ok(planElevationAsset(document, plateau, { x: 1, y: 1 }), 'logical height 3 correctly retains the physical height 1/2/3 wall bands');
+  const snapshot = structuredClone(document); plateau.elevation!.height = 1;
+  assert.equal(planElevationAsset(document, plateau, { x: 1, y: 1 }), undefined);
+  snapshot.assets[0].elevation!.height = 1;
+  assert.deepEqual(document, snapshot, 'planning never partially edits the flight or its ground');
 });
 
 test('elevation stamps reject structural intersections and fail without partially changing the document', () => {

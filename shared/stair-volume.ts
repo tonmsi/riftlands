@@ -113,7 +113,7 @@ export class StairVolumeIndex {
 }
 
 /** Minkowski sum with rounded corners, so a narrow body never blocks an entire support tile. */
-function sweptCircleRectangle(start: Vec2, end: Vec2, radius: number, bounds: StairBodyBounds): number | null {
+export function sweptCircleRectangle(start: Vec2, end: Vec2, radius: number, bounds: StairBodyBounds): number | null {
   let earliest = Infinity;
   const rectangleHit = (left: number, top: number, right: number, bottom: number): number | null => {
     let enter = 0, leave = 1;

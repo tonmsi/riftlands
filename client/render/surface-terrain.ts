@@ -1,7 +1,7 @@
 import { TILE_SIZE } from '../../shared/config';
 import type { Vec2 } from '../../shared/types';
 import type { World } from '../../shared/world';
-import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, surfaceKey, type SurfaceCell } from '../../shared/world-surfaces';
+import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, surfaceKey, type SurfaceCell, type TerrainSurfaceCell } from '../../shared/world-surfaces';
 import type { RenderBounds } from './render-types';
 import { TerrainMaterials, WALL_COLORS, MATERIAL_PRIORITY } from './terrain-materials';
 import { EnvironmentArt, paintWaterBank, type WaterBankStyle } from './environment-art';
@@ -14,13 +14,14 @@ import { paintPathEdges, DEFAULT_PATH_EDGE_STYLE, type PathEdgeStyle } from './p
 import { RockCliffArt } from './rock-cliff-art';
 import { authoredRockStairGeometry, authoredStairWallOpening, rockStairGeometry, rockWallOpenings, stairEndpointMouth } from './rock-cliff-geometry';
 import { WallSpriteArt, type WallFaceTerminals } from './wall-sprite-art';
-import { stairLanes, stairLinks, stairPath } from '../../shared/surface-stairs';
+import { stairFootprint, stairLanes, stairLinks, stairPath } from '../../shared/surface-stairs';
 import { BridgeArt } from './bridge-art';
 import { surfaceContour, traceContour, type SurfaceContour, type ContourPoint } from './surface-contours';
 import { fillTerrainPaths, fillTerrainRect } from './terrain-fill';
 
-export interface TerrainLevel { elevation: number; cells: SurfaceCell[]; }
-function visibleSurface(world: World, tx: number, ty: number, surfaceId = BASE_SURFACE): SurfaceCell | undefined {
+interface StairShaft { projected: ContourPoint[]; flat: ContourPoint[]; }
+export interface TerrainLevel { elevation: number; cells: TerrainSurfaceCell[]; }
+function visibleSurface(world: World, tx: number, ty: number, surfaceId = BASE_SURFACE): TerrainSurfaceCell | undefined {
   const authored = world.surfaceIndex.at(tx, ty, surfaceId);
   if (authored) return authored;
   if (surfaceId !== BASE_SURFACE) return undefined;
@@ -45,7 +46,7 @@ export class SurfaceTerrain {
   private cachedLevels?: { world: World; key: string; levels: TerrainLevel[] };
   private cachedContours?: { world: World; revision: number; cells: WeakMap<SurfaceCell, SurfaceContour | undefined> };
   private cachedOpenings?: { world: World; revision: number; cells: Map<string, { x: number; width: number }[]>;
-    mouths: Map<string, ContourPoint[][]>; owned: Set<string> };
+    mouths: Map<string, ContourPoint[][]>; shafts: Map<string, StairShaft[]>; owned: Set<string> };
   constructor(private readonly materials: TerrainMaterials, private readonly art: EnvironmentArt, wallArt = new WallSpriteArt()) {
     this.bridgeArt = new BridgeArt(materials); this.wallArt = wallArt;
   }
@@ -53,6 +54,7 @@ export class SurfaceTerrain {
     if (!this.cachedOpenings || this.cachedOpenings.world !== world || this.cachedOpenings.revision !== world.authoringRevision) {
       const cells = new Map<string, { x: number; width: number }[]>();
       const mouths = new Map<string, ContourPoint[][]>();
+      const shafts = new Map<string, StairShaft[]>();
       const lookup = (p: { x: number; y: number; surfaceId: string }) => visibleSurface(world, p.x, p.y, p.surfaceId);
       const addMouth = (low: SurfaceCell, high: SurfaceCell, cell: SurfaceCell, width: number) => {
         const mouth = stairEndpointMouth(low, high, cell, width, false); if (!mouth) return;
@@ -69,6 +71,14 @@ export class SurfaceTerrain {
       }
       for (const stair of world.surfaceIndex.stairs) {
         const { low, high } = authoredRockStairGeometry(stair, false);
+        if (stair.profile === 'terraced') {
+          const shaft = { projected: authoredRockStairGeometry(stair).corridor, flat: authoredRockStairGeometry(stair, false).corridor };
+          const affected = new Set<string>();
+          // A face can project into the next row, so include the immediate neighbors.
+          for (const point of stairFootprint(stair)) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
+            affected.add(surfaceKey(point.x + dx, point.y + dy, BASE_SURFACE));
+          for (const key of affected) shafts.set(key, [...shafts.get(key) ?? [], shaft]);
+        }
         for (const lane of stairLanes(stair)) {
           const path = stairPath(stair, lane);
           for (const endpoint of [path[0], path.at(-1)!]) {
@@ -79,12 +89,23 @@ export class SurfaceTerrain {
           }
         }
       }
-      this.cachedOpenings = { world, revision: world.authoringRevision, cells, mouths, owned };
+      this.cachedOpenings = { world, revision: world.authoringRevision, cells, mouths, shafts, owned };
     }
     return this.cachedOpenings;
   }
   private wallOpenings(world: World, cell: SurfaceCell): { x: number; width: number }[] {
     return this.accessGeometry(world).cells.get(surfaceKey(cell.x, cell.y, cell.surfaceId)) ?? [];
+  }
+  private clipWallShafts(ctx: CanvasRenderingContext2D, world: World, cell: SurfaceCell, projectElevation: boolean): void {
+    const lift = projectElevation ? cell.elevation * ELEVATION_STEP : 0;
+    const bounds = { x: cell.x * TILE_SIZE - 512, y: cell.y * TILE_SIZE - lift - 512,
+      width: TILE_SIZE + 1024, height: TILE_SIZE + 1024 };
+    for (const shaft of this.accessGeometry(world).shafts.get(surfaceKey(cell.x, cell.y, cell.surfaceId)) ?? []) {
+      ctx.beginPath(); ctx.rect(bounds.x, bounds.y, bounds.width, bounds.height);
+      const points = projectElevation ? shaft.projected : shaft.flat;
+      points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+      ctx.closePath(); ctx.clip('evenodd');
+    }
   }
   private clipAccessMouths(ctx: CanvasRenderingContext2D, world: World, cell: SurfaceCell, lift: number,
     bounds?: { x: number; y: number; width: number; height: number }): void {
@@ -151,7 +172,7 @@ export class SurfaceTerrain {
     if (this.cachedLevels?.world === world && this.cachedLevels.key === key) return kind
       ? this.cachedLevels.levels.map(level => ({ ...level, cells: level.cells.filter(cell => cell.kind === kind) })).filter(level => level.cells.length)
       : this.cachedLevels.levels;
-    const levels = new Map<number, SurfaceCell[]>();
+    const levels = new Map<number, TerrainSurfaceCell[]>();
     const margin = ELEVATION_STEP * MAX_ELEVATION;
     const minTx = Math.floor(bounds.left / TILE_SIZE), maxTx = Math.ceil(bounds.right / TILE_SIZE);
     const minTy = Math.floor(bounds.top / TILE_SIZE), maxTy = Math.ceil((bounds.bottom + margin) / TILE_SIZE);
@@ -166,7 +187,7 @@ export class SurfaceTerrain {
         seen.add(key);
         // Dungeon definitions override world metadata in the active index.
         const surface = world.surfaceIndex.at(candidate.x, candidate.y, candidate.surfaceId);
-        if (!surface || surface.kind === 'ground' && surface.elevation === 0 && surface.material === world.getTile(surface.x, surface.y)) continue;
+        if (!surface || surface.terrainRole !== 'wall' && surface.kind === 'ground' && surface.elevation === 0 && surface.material === world.getTile(surface.x, surface.y)) continue;
         const cells = levels.get(surface.elevation) ?? [];
         cells.push(surface); levels.set(surface.elevation, cells);
       }
@@ -183,11 +204,17 @@ export class SurfaceTerrain {
   drawGroundLevel(ctx: CanvasRenderingContext2D, world: World, level: TerrainLevel, projectElevation = true): void {
     const lift = projectElevation ? level.elevation * ELEVATION_STEP : 0;
     // Stair supports are painted once as their complete structure; bridges own their union contour.
-    const cells = level.cells.filter(cell => cell.kind === 'ground').sort((a, b) => a.y - b.y || a.x - b.x);
+    const ground = level.cells.filter(cell => cell.kind === 'ground').sort((a, b) => a.y - b.y || a.x - b.x);
+    const cells = ground.filter(cell => cell.terrainRole !== 'wall');
     if (this.cachedContours?.world !== world || this.cachedContours.revision !== world.authoringRevision) {
       this.cachedContours = { world, revision: world.authoringRevision, cells: new WeakMap() };
     }
     const contourCache = this.cachedContours.cells;
+    for (const cell of ground) if (cell.terrainRole === 'wall') {
+      if (!contourCache.has(cell)) contourCache.set(cell, surfaceContour(cell,
+        (dx, dy) => visibleSurface(world, cell.x + dx, cell.y + dy, cell.surfaceId)));
+      this.drawWallBand(ctx, world, cell, contourCache.get(cell), projectElevation);
+    }
     const contours = new Map(cells.map(cell => {
       if (!contourCache.has(cell)) contourCache.set(cell, surfaceContour(cell,
         (dx, dy) => visibleSurface(world, cell.x + dx, cell.y + dy, cell.surfaceId)));
@@ -535,6 +562,45 @@ export class SurfaceTerrain {
         } else this.naturalEdges.cliff(ctx, { ...base, trimStart: 3, trimEnd: 3 });
       }
     }
+  }
+  private drawWallBand(ctx: CanvasRenderingContext2D, world: World, cell: TerrainSurfaceCell,
+    contour: SurfaceContour | undefined, projectElevation: boolean): void {
+    const lift = projectElevation ? cell.elevation * ELEVATION_STEP : 0;
+    const x = cell.x * TILE_SIZE, y = cell.y * TILE_SIZE - lift;
+    const neighbor = (dx: number, dy: number) => visibleSurface(world, cell.x + dx, cell.y + dy, cell.surfaceId);
+    let capMask = 0, lowerMask = cell.wallMask ?? 0;
+    for (const [dx, dy, bit] of [[0, -1, 1], [1, 0, 2], [0, 1, 4], [-1, 0, 8]]) {
+      const adjacent = neighbor(dx, dy);
+      if ((adjacent?.elevation ?? 0) < cell.elevation) lowerMask |= bit;
+      if (adjacent && adjacent.terrainRole !== 'wall' && adjacent.kind === 'ground'
+        && adjacent.elevation >= cell.elevation && adjacent.material === 'grass') capMask |= bit;
+    }
+    ctx.save(); this.clipWallShafts(ctx, world, cell, projectElevation);
+    ctx.save();
+    const outline = contour?.outline ?? [{ x: 0, y: 0 }, { x: TILE_SIZE, y: 0 },
+      { x: TILE_SIZE, y: TILE_SIZE }, { x: 0, y: TILE_SIZE }];
+    traceContour(ctx, outline, x, y, true); ctx.clip();
+    const painted = cell.wallMaterial === 'rock' && this.rockArt.paintBand(ctx, cell, x, y, contour, capMask, lowerMask);
+    if (!painted) {
+      ctx.fillStyle = this.materials.fill(ctx, cell.wallMaterial, WALL_COLORS[cell.wallMaterial], lift);
+      fillTerrainRect(ctx, x, y, TILE_SIZE, TILE_SIZE);
+      const shade = ctx.createLinearGradient(x, y, x + TILE_SIZE, y + TILE_SIZE);
+      shade.addColorStop(0, '#e0d6b21a'); shade.addColorStop(1, '#18231c55');
+      ctx.fillStyle = shade; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+    }
+    this.wallArt.paintBand(ctx, cell, x, y, lowerMask, contour);
+    ctx.restore();
+    // The cell itself supplies the depth; this small front closes the projection
+    // difference to the next lower band instead of replacing a whole wall tile.
+    const drop = projectElevation ? Math.max(0, cell.elevation - (neighbor(0, 1)?.elevation ?? 0)) * ELEVATION_STEP : 0;
+    if (drop) {
+      ctx.save(); ctx.beginPath(); ctx.rect(x, y, TILE_SIZE, TILE_SIZE + drop + 8); ctx.clip();
+      this.drawContourWall(ctx, cell,
+        contour?.southFace ?? [{ x: 0, y: TILE_SIZE }, { x: TILE_SIZE, y: TILE_SIZE }], x, y,
+        drop, lift, false, []);
+      ctx.restore();
+    }
+    ctx.restore();
   }
   private drawContourRim(ctx: CanvasRenderingContext2D, contour: SurfaceContour, x: number, y: number): void {
     ctx.save(); ctx.lineWidth = 1.3;

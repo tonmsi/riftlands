@@ -1,48 +1,118 @@
 import type { Vec2 } from '../../../shared/types';
 import type { WorldDocument } from '../../../shared/world-schema';
 import type { World } from '../../../shared/world';
-import { BASE_SURFACE, ELEVATION_STEP, type SurfaceCell, type SurfaceLink, type SurfaceMaterial, type SurfaceStair, type WallMaterial } from '../../../shared/world-surfaces';
+import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, SurfaceIndex, type SurfaceCell, type SurfaceLink, type SurfaceMaterial, type SurfaceStair, type TerrainSurfaceCell, type WallMaterial } from '../../../shared/world-surfaces';
+import { SpatialIndex } from '../../../shared/world-authoring';
 import { pickSurfacePoint, planBridge, removeBridge, upsertSurfaceLinks } from '../surface-authoring';
-import { planStair, removeStair, stairGeometry } from '../../../shared/surface-stairs';
+import { planStair, removeStair, stairFootprint, stairGeometry, stairSpatialIssues } from '../../../shared/surface-stairs';
 import { installWallSpriteKitControl } from '../wall-sprite-kit-control';
 
 const materials: [SurfaceMaterial, string][] = [['grass', 'Erba'], ['path', 'Terra / sentiero'], ['water', 'Acqua'], ['rock', 'Roccia'], ['stone', 'Lastre di pietra'], ['brick', 'Mattoni'], ['sand', 'Sabbia'], ['wood', 'Legno'], ['mud', 'Fango'], ['snow', 'Neve'], ['ice', 'Ghiaccio']];
 const walls: [WallMaterial, string][] = [['rock', 'Roccia naturale'], ['earth', 'Terra naturale'], ['stone', 'Muro di pietra'], ['brick', 'Muro di mattoni'], ['wood', 'Legno']];
 export const elevationTools = [['raise-height', '↑', 'Alza +1'], ['lower-height', '↓', 'Abbassa −1'], ['bridge', '═', 'Traccia ponte'], ['surface-link', '⇄', 'Scala / rampa'], ['clear-height', '↧', 'Ripristina terreno'], ['clear-bridge', '⌫', 'Rimuovi ponte'], ['clear-link', '×', 'Rimuovi accesso'], ['height', '▰', 'Dipingi livello']] as const;
 export const elevationControls = `<details id="elevation-controls" open><summary>Alture, acqua e ponti</summary><div class="tool-grid">${elevationTools.map(([id, icon, name]) => `<button data-tool="${id}"><span>${icon}</span>${name}</button>`).join('')}</div><div class="fields"><label>Materiale<select id="surface-material">${materials.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}</select></label><label>Bordi e pareti<select id="surface-wall">${walls.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}</select></label><label class="check"><input id="surface-show-under" type="checkbox">Mostra sotto i ponti</label><p id="surface-plane-hint" class="hint">Clicca il piano visibile per selezionarlo.</p><label>Accesso<select id="surface-link-kind"><option value="stairs">Scala</option><option value="ramp">Rampa</option><option value="bridge-entry">Ingresso a un ponte esistente</option></select></label>
+<label>Geometria rialzo<select id="surface-layout"><option value="terraced">Fasce di 1 tile per livello</option><option value="legacy">Parete verticale precedente</option></select></label>
+<p class="hint">Le fasce occupano il bordo interno del rialzo. Allarga l’area per lasciare una sommità percorribile. Dipingi livello applica la geometria scelta anche alle alture esistenti.</p>
 <label>Kit PNG delle pareti<select id="surface-wall-skin"><option value="">Predefinito</option></select></label>
 <p id="surface-wall-kit-info" class="hint" role="status" hidden></p>
 <label>Larghezza scala<select id="surface-stair-width"><option value="48">1 corsia</option><option value="96">2 corsie</option><option value="144">3 corsie</option></select></label>
-<label>Profilo scala / rampa<select id="surface-stair-profile"><option value="incline">Parete inclinata continua</option><option value="incline-45">Parete inclinata · 45°</option><option value="landings">Con pianerottoli alle estremità</option></select></label>
-<p id="surface-stair-profile-info" class="hint">La salita occupa spazio sul terreno: una corsa di 1 tile collega 3 livelli a 45°. La superficie superiore è calpestabile; il corpo e i lati restano solidi.</p>
+<label>Profilo scala / rampa<select id="surface-stair-profile"><option value="terraced">Incassata nelle fasce del terreno</option><option value="incline">Parete inclinata continua</option><option value="incline-45">Parete inclinata · 45°</option><option value="landings">Con pianerottoli alle estremità</option></select></label>
+<p id="surface-stair-profile-info" class="hint">Ogni livello attraversa una fascia di 1 tile. Clicca i due pianerottoli allineati ai lati delle pareti: la scala ne apre il passaggio.</p>
 <label class="check"><input id="surface-stair-underpass" type="checkbox">Scala sospesa · consenti passaggio sotto</label>
 <label>Larghezza ponte<select id="surface-bridge-width"><option value="1">1 corsia</option><option value="2">2 corsie</option><option value="3">3 corsie</option></select></label>
 <label>Tracciato ponte<select id="surface-bridge-route"><option value="straight">Rettilineo</option><option value="horizontal-first">Svolta · prima orizzontale</option><option value="vertical-first">Svolta · prima verticale</option></select></label>
 <label class="check"><input id="surface-bridge-extend" type="checkbox">Prolunga un ponte esistente</label>
 <button id="surface-link-cancel" type="button" hidden>Annulla primo punto</button><p id="surface-link-hint" class="hint" role="status">Alza o abbassa con il pennello. Per scale e rampe clicca due piani allineati; per un ponte scegli le due sponde.</p><details><summary>Livello preciso e opzioni avanzate</summary><label>Livello · 0–16<input id="surface-elevation" type="number" min="0" max="16" step="1" value="1"></label><label class="check"><input id="surface-blocked" type="checkbox">Superficie non percorribile</label><label>Piano per gli oggetti<select id="placement-surface"><option value="auto">Automatico · piano cliccato</option><option value="ground">Terreno</option></select></label></details><a id="surface-lab" class="wide dungeon-editor-link" href="/surface-lab.html" target="riftlands-surfaces">Laboratorio alture e ponti ↗</a></div></details>`;
 
-export interface SurfacePaintSettings { elevation: number; material: SurfaceMaterial; wallMaterial: WallMaterial; wallSkin?: string; surfaceId: string; blocked: boolean; }
+export interface SurfacePaintSettings { elevation: number; material: SurfaceMaterial; wallMaterial: WallMaterial; wallSkin?: string; surfaceId: string; blocked: boolean; layout?: 'terraced' | 'legacy'; }
 const cellKey = (point: { x: number; y: number; surfaceId: string }) => `${point.surfaceId}:${point.x},${point.y}`;
 const endpointAt = (end: SurfaceLink['from'], point: Vec2, surfaceId: string) => end.x === point.x && end.y === point.y && end.surfaceId === surfaceId;
-const introductoryHint = 'Alza o abbassa con il pennello. Per scale e rampe clicca due piani allineati; per un ponte scegli due sponde alla stessa quota.';
-function stairAt(document: WorldDocument, point: Vec2, surfaceId = point.surfaceId ?? BASE_SURFACE): SurfaceStair | undefined {
-    return document.surfaceStairs?.find(stair => [stair.from, stair.to].some(p => endpointAt(p, point, surfaceId))
-      || document.surfaceCells?.some(c => c.x === point.x && c.y === point.y && c.surfaceId === surfaceId && c.surfaceId === `stair:${stair.id}`)
-      || document.surfaceLinks?.some(link => link.id.startsWith(`${stair.id}:`) && [link.from, link.to].some(p => endpointAt(p, point, surfaceId))));
+const introductoryHint = 'Alza o abbassa con il pennello. Ogni quota aggiunge una fascia interna di 1 tile. Per la scala scegli due pianerottoli allineati; per un ponte due sponde alla stessa quota.';
+function stairAt(stairs: readonly SurfaceStair[], point: Vec2, surfaceId = point.surfaceId ?? BASE_SURFACE): SurfaceStair | undefined {
+    return stairs.find(stair => stairFootprint(stair).some(p => p.x === point.x && p.y === point.y && (p.surfaceId === surfaceId || surfaceId === BASE_SURFACE)));
+}
+
+/** Clicks may lie inside either plateau; the flight itself spans only its wall bands. */
+export function snapTerracedStairEndpoints(from: SurfaceLink['from'], to: SurfaceLink['to'],
+    lookup: (x: number, y: number, id: string) => TerrainSurfaceCell | undefined): { from: SurfaceLink['from']; to: SurfaceLink['to'] } {
+    const unchanged = { from, to }, source = lookup(from.x, from.y, from.surfaceId), target = lookup(to.x, to.y, to.surfaceId);
+    if (from.surfaceId !== BASE_SURFACE || to.surfaceId !== BASE_SURFACE || !source || !target || source.elevation === target.elevation
+        || from.x !== to.x && from.y !== to.y) return unchanged;
+    const reverse = source.elevation > target.elevation, low = reverse ? to : from, high = reverse ? from : to;
+    const lowHeight = Math.min(source.elevation, target.elevation), highHeight = Math.max(source.elevation, target.elevation), bands = highHeight - lowHeight;
+    const distance = Math.abs(high.x - low.x) + Math.abs(high.y - low.y), dx = Math.sign(high.x - low.x), dy = Math.sign(high.y - low.y);
+    if (distance > 32 || distance < bands + 1) return unchanged;
+    const pointAt = (step: number) => ({ x: low.x + dx * step, y: low.y + dy * step, surfaceId: BASE_SURFACE });
+    const at = (step: number) => { const p = pointAt(step); return lookup(p.x, p.y, BASE_SURFACE); };
+    for (let start = 1; start + bands <= distance; start++) {
+        const before = at(start - 1), after = at(start + bands);
+        if (!before || before.blocked || before.terrainRole === 'wall' || before.elevation !== lowHeight
+            || !after || after.blocked || after.terrainRole === 'wall' || after.elevation !== highHeight) continue;
+        let consecutive = true;
+        for (let level = 0; level < bands; level++) {
+            const wall = at(start + level);
+            if (wall?.layout !== 'terraced' || wall.terrainRole !== 'wall' || wall.elevation !== lowHeight + level + 1) { consecutive = false; break; }
+        }
+        if (consecutive) {
+            const a = pointAt(start - 1), b = pointAt(start + bands);
+            return reverse ? { from: b, to: a } : { from: a, to: b };
+        }
+    }
+    return unchanged;
 }
 
 /** Surface edits share the brush transaction, including references placed on the edited ground. */
 export class SurfaceStroke {
     private indices: Map<string, number>;
+    private stairColumns = new Map<string, SurfaceStair[]>();
+    private liveStairs: Map<string, SurfaceStair>;
+    private nearbyStairs = new SpatialIndex<SurfaceStair>(stair => ({
+        left: Math.min(stair.from.x, stair.to.x) - MAX_ELEVATION - 2, right: Math.max(stair.from.x, stair.to.x) + MAX_ELEVATION + 3,
+        top: Math.min(stair.from.y, stair.to.y) - MAX_ELEVATION - 2, bottom: Math.max(stair.from.y, stair.to.y) + MAX_ELEVATION + 3,
+    }));
     constructor(private readonly document: WorldDocument, private readonly lookup?: (point: Vec2) => SurfaceCell | undefined) {
         document.surfaceCells ??= [];
         this.indices = new Map(document.surfaceCells.map((cell, i) => [cellKey(cell), i]));
+        this.liveStairs = new Map((document.surfaceStairs ?? []).map(stair => [stair.id, stair]));
+        for (const stair of this.liveStairs.values()) {
+            if (stair.profile === 'terraced') this.nearbyStairs.add(stair);
+            for (const point of stairFootprint(stair)) {
+                const key = `${point.x},${point.y}`, column = this.stairColumns.get(key) ?? [];
+                column.push(stair); this.stairColumns.set(key, column);
+            }
+        }
+    }
+    private removeStructure(stair: SurfaceStair): void {
+        removeStair(this.document, stair.id); this.liveStairs.delete(stair.id);
+        this.indices = new Map((this.document.surfaceCells ?? []).map((cell, i) => [cellKey(cell), i]));
+    }
+    private repairStairs(point: Vec2): void {
+        const nearby = this.nearbyStairs.query({ left: point.x, top: point.y, right: point.x + 1, bottom: point.y + 1 }).filter(stair => this.liveStairs.has(stair.id));
+        if (!nearby.length) return;
+        for (const stair of nearby) {
+            // Heights propagate at most MAX_ELEVATION tiles. This local halo gives
+            // the same bands as a full rebuild without scanning a large map per dab.
+            const cells: SurfaceCell[] = [];
+            for (let y = Math.min(stair.from.y, stair.to.y) - MAX_ELEVATION - 2; y <= Math.max(stair.from.y, stair.to.y) + MAX_ELEVATION + 2; y++)
+                for (let x = Math.min(stair.from.x, stair.to.x) - MAX_ELEVATION - 2; x <= Math.max(stair.from.x, stair.to.x) + MAX_ELEVATION + 2; x++) {
+                    const position = this.indices.get(cellKey({ x, y, surfaceId: BASE_SURFACE }));
+                    if (position !== undefined) cells.push(this.document.surfaceCells![position]);
+                }
+            const index = new SurfaceIndex(cells);
+            if (stairSpatialIssues(stair, (x, y, id) => index.at(x, y, id) ?? this.lookup?.({ x, y, surfaceId: id })).length) {
+                this.removeStructure(stair);
+            }
+        }
     }
     paint(point: Vec2, tool: string, settings: SurfacePaintSettings): void {
-        const structure = stairAt(this.document, point);
-        if (structure && ['clear-height', 'clear-bridge', 'clear-link', 'height', 'raise-height', 'lower-height'].includes(tool)) {
-            removeStair(this.document, structure.id);
-            this.indices = new Map((this.document.surfaceCells ?? []).map((cell, i) => [cellKey(cell), i]));
+        const structureTools = ['clear-height', 'clear-bridge', 'clear-link', 'height', 'raise-height', 'lower-height'];
+        const candidates = () => (this.stairColumns.get(`${point.x},${point.y}`) ?? []).filter(stair => this.liveStairs.has(stair.id));
+        let structure = stairAt(candidates(), point), removed = false;
+        while (structure && structureTools.includes(tool)) {
+            this.removeStructure(structure); removed = true;
+            structure = stairAt(candidates(), point);
+        }
+        if (removed) {
             if (['clear-bridge', 'clear-link'].includes(tool)) return;
         }
         const surfaceId = tool === 'clear-bridge' ? point.surfaceId ?? settings.surfaceId : BASE_SURFACE;
@@ -68,15 +138,17 @@ export class SurfaceStroke {
             if (relative) elevation = Math.max(0, Math.min(16, (existing?.elevation ?? 0) + (tool === 'raise-height' ? 1 : -1)));
             if (relative && elevation === (existing?.elevation ?? 0)) return;
             const wallSkin = relative && index !== undefined ? existing!.wallSkin : settings.wallSkin;
+            const layout = relative && existing?.elevation ? existing.layout : settings.layout === 'legacy' ? undefined : 'terraced';
             const cell: SurfaceCell = { x: point.x, y: point.y, surfaceId, elevation, material: relative ? existing?.material ?? settings.material : settings.material,
                 wallMaterial: relative && index !== undefined ? existing!.wallMaterial : settings.wallMaterial,
-                ...(wallSkin !== undefined ? { wallSkin } : {}), kind: 'ground', ...(relative ? index !== undefined && existing?.blocked !== undefined ? { blocked: existing.blocked } : {} : settings.blocked ? { blocked: true } : {}) };
+                ...(wallSkin !== undefined ? { wallSkin } : {}), ...(layout ? { layout } : {}), kind: 'ground', ...(relative ? index !== undefined && existing?.blocked !== undefined ? { blocked: existing.blocked } : {} : settings.blocked ? { blocked: true } : {}) };
             if (index === undefined) { this.indices.set(key, cells.length); cells.push(cell); } else cells[index] = cell;
         }
         if (surfaceId === BASE_SURFACE) for (const p of [...this.document.placements, ...this.document.npcs, this.document.spawn]) {
             if (p.x !== point.x || p.y !== point.y || (p.surfaceId ?? BASE_SURFACE) !== surfaceId) continue;
             if (elevation) p.elevation = elevation; else delete p.elevation;
         }
+        if (surfaceId === BASE_SURFACE) this.repairStairs(point);
     }
     paintMaterial(point: Vec2, material: SurfaceMaterial, blocked?: boolean): void {
         const surfaceId = point.surfaceId ?? BASE_SURFACE, key = cellKey({ ...point, surfaceId });
@@ -93,6 +165,7 @@ export class SurfaceStroke {
                 ...(blocked === true ? { blocked: true } : {}) };
             this.indices.set(key, this.document.surfaceCells!.length); this.document.surfaceCells!.push(cell);
         }
+        if (surfaceId === BASE_SURFACE) this.repairStairs(point);
     }
 }
 
@@ -109,33 +182,44 @@ export class WorldElevationEditor {
         this.root.querySelector('#surface-link-cancel')!.addEventListener('click', () => this.cancel());
         this.root.querySelector('#surface-show-under')!.addEventListener('change', () => { this.active = BASE_SURFACE; this.cancel(); });
         for (const id of ['surface-stair-width', 'surface-stair-profile', 'surface-stair-underpass', 'surface-bridge-width', 'surface-bridge-route', 'surface-link-kind'])
-            this.root.querySelector(`#${id}`)!.addEventListener('change', () => this.redraw());
+            this.root.querySelector(`#${id}`)!.addEventListener('change', () => { this.updateStairProfile(); this.redraw(); });
+        this.updateStairProfile();
     }
     private value(id: string): string { return this.root.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)!.value.trim(); }
     private hint(message: string): void { this.root.querySelector('#surface-link-hint')!.textContent = message; }
+    private updateStairProfile(): void {
+        const terraced = this.value('surface-stair-profile') === 'terraced', toggle = this.root.querySelector<HTMLInputElement>('#surface-stair-underpass')!;
+        toggle.disabled = terraced; if (terraced) toggle.checked = false;
+        this.root.querySelector('#surface-stair-profile-info')!.textContent = terraced
+            ? 'Ogni livello attraversa una fascia di 1 tile. Clicca i due pianerottoli allineati ai lati delle pareti: la scala ne apre il passaggio.'
+            : 'Profilo precedente: i due pianerottoli determinano la corsa. Per 45° una corsa di 1 tile collega 3 livelli; abbassa il terreno sotto la salita.';
+    }
     settings(): SurfacePaintSettings {
         const elevation = Number(this.value('surface-elevation'));
         if (!Number.isInteger(elevation) || elevation < 0 || elevation > 16) throw new Error('Il livello deve essere un intero fra 0 e 16.');
         return { elevation, surfaceId: this.active, material: this.value('surface-material') as SurfaceMaterial, wallMaterial: this.value('surface-wall') as WallMaterial,
-            wallSkin: this.value('surface-wall-skin') || undefined, blocked: this.root.querySelector<HTMLInputElement>('#surface-blocked')!.checked };
+            wallSkin: this.value('surface-wall-skin') || undefined, blocked: this.root.querySelector<HTMLInputElement>('#surface-blocked')!.checked,
+            layout: this.value('surface-layout') as 'terraced' | 'legacy' };
     }
     showUnder(): boolean { return this.root.querySelector<HTMLInputElement>('#surface-show-under')!.checked; }
     pick(x: number, y: number, tool: string, support = this.world()): Vec2 {
         const choice = this.value('placement-surface');
         const bridgeGround = tool === 'bridge' && !this.root.querySelector<HTMLInputElement>('#surface-bridge-extend')!.checked;
         const forced = this.showUnder() || bridgeGround || ['height', 'raise-height', 'lower-height', 'clear-height', 'restore', 'zone', 'dungeon'].includes(tool) ? BASE_SURFACE : choice === 'auto' ? undefined : choice;
-        return pickSurfacePoint(x, y, (tx, ty) => support.surfacesAt(tx, ty), forced);
+        return pickSurfacePoint(x, y, (tx, ty) => support.surfacesAt(tx, ty), forced, true);
     }
     select(point: Vec2): void {
         this.active = point.surfaceId ?? BASE_SURFACE;
         const ids = [...new Set((this.document().surfaceCells ?? []).filter(c => c.kind === 'bridge').map(c => c.surfaceId))];
-        const name = this.active === BASE_SURFACE ? 'Terreno' : this.active.startsWith('stair:') ? 'Scala' : `Ponte ${ids.indexOf(this.active) + 1}`;
+        const wall = this.world().surfaceAt(point.x, point.y, this.active)?.terrainRole === 'wall';
+        const name = wall ? 'Parete · fascia non percorribile' : this.active === BASE_SURFACE ? 'Terreno' : this.active.startsWith('stair:') ? 'Scala' : `Ponte ${ids.indexOf(this.active) + 1}`;
         this.root.querySelector('#surface-plane-hint')!.textContent = `${name} · livello ${point.elevation ?? 0}`;
     }
-    placement(point: Vec2): Vec2 {
+    placement(point: Vec2, allowWalls = false): Vec2 {
         const choice = this.value('placement-surface'), surfaceId = choice === 'auto' ? point.surfaceId ?? this.active : choice;
         const cell = this.world().surfaceAt(point.x, point.y, surfaceId);
         if (!cell) throw new Error('Clicca un piano esistente per posizionare l’oggetto.');
+        if (!allowWalls && cell.terrainRole === 'wall') throw new Error('La fascia rocciosa è una parete. Posiziona l’oggetto sulla sommità percorribile.');
         return { x: point.x, y: point.y, ...(surfaceId !== BASE_SURFACE ? { surfaceId } : {}), ...(cell.elevation ? { elevation: cell.elevation } : {}) };
     }
     activeSurface(): string { return this.active; }
@@ -184,9 +268,11 @@ export class WorldElevationEditor {
     private stairPlan(to: SurfaceLink['to']) {
         const doc = this.document(), source = this.world().surfaceAt(this.pending!.x, this.pending!.y, this.pending!.surfaceId);
         const kind = this.value('surface-link-kind'), settings = this.settings();
-        const result = planStair(this.pending!, to, (x, y, id) => this.world().surfaceAt(x, y, id), {
+        const lookup = (x: number, y: number, id: string) => this.world().surfaceAt(x, y, id);
+        const endpoints = this.value('surface-stair-profile') === 'terraced' ? snapTerracedStairEndpoints(this.pending!, to, lookup) : { from: this.pending!, to };
+        const result = planStair(endpoints.from, endpoints.to, lookup, {
             id: this.pendingStairId, kind: kind === 'ramp' ? 'ramp' : 'stairs', width: Number(this.value('surface-stair-width')),
-            profile: this.value('surface-stair-profile') === 'landings' ? 'landings' : 'incline',
+            profile: this.value('surface-stair-profile') === 'terraced' ? 'terraced' : this.value('surface-stair-profile') === 'landings' ? 'landings' : 'incline',
             ...(this.value('surface-stair-profile') === 'incline-45' ? { angle: 45 as const } : {}),
             underpass: this.root.querySelector<HTMLInputElement>('#surface-stair-underpass')!.checked,
             material: source?.material, wallMaterial: settings.wallMaterial, wallSkin: settings.wallSkin,
@@ -200,6 +286,7 @@ export class WorldElevationEditor {
     click(point: Vec2): void {
         const surfaceId = point.surfaceId ?? BASE_SURFACE;
         const cell = this.world().surfaceAt(point.x, point.y, surfaceId);
+        if (cell?.terrainRole === 'wall') throw new Error('Clicca un pianerottolo ai lati delle fasce rocciose. Ogni livello richiede una fascia di 1 tile.');
         if (!cell || cell.blocked || cell.material === 'water') throw new Error('Clicca un piano percorribile.');
         const endpoint = { x: point.x, y: point.y, surfaceId };
         if (!this.pending) {
@@ -243,7 +330,9 @@ export class WorldElevationEditor {
                 const geometry = stairGeometry(stair); ctx.beginPath();
                 for (let i = 0; i <= 24; i++) { const t = i / 24, p = geometry.pointAt(t), x = p.x * s / 48, py = (p.y - geometry.elevationAt(t) * ELEVATION_STEP) * s / 48;
                     if (i) ctx.lineTo(x, py); else ctx.moveTo(x, py); }
-                ctx.stroke(); this.hint(`Scala pronta · ${geometry.angle.toFixed(1)}° · corsa ${geometry.run / 48} tile · ingombro ${geometry.run / 48 + 1} celle per corsia · ${stair.underpass ? 'sospesa' : 'corpo solido'}. Clicca per costruire.`);
+                ctx.stroke(); this.hint(stair.profile === 'terraced'
+                    ? `Scala incassata pronta · ${Math.abs(stair.to.elevation - stair.from.elevation)} fasce · verso ${geometry.dx > 0 ? 'est' : geometry.dx < 0 ? 'ovest' : geometry.dy > 0 ? 'sud' : 'nord'} · accessi (${stair.from.x}, ${stair.from.y}) → (${stair.to.x}, ${stair.to.y}). Clicca per costruire.`
+                    : `Scala pronta · ${geometry.angle.toFixed(1)}° · corsa ${geometry.run / 48} tile · ingombro ${geometry.run / 48 + 1} celle per corsia · ${stair.underpass ? 'sospesa' : 'corpo solido'}. Clicca per costruire.`);
             }
             ctx.beginPath(); ctx.moveTo((start.x + .5) * s, y(start) + s / 2); ctx.lineTo((this.hovered.x + .5) * s, y(this.hovered) + s / 2); ctx.stroke();
             if (valid && this.bridgeStart) this.hint('Ponte pronto: rilascia o clicca per costruirlo con entrambi gli accessi.');

@@ -3,6 +3,8 @@ import type { Actor, Vec2 } from './types';
 import { World } from './world';
 import { stairGeometry } from './surface-stairs';
 import { walkingStepDistance } from './stair-walking';
+import { terracedStairEntryDirection } from './stair-entry';
+import { sweptCircleRectangle } from './stair-volume';
 
 /** Circle vs solid terrain AABBs, also correct across negative chunk coordinates. */
 export function collidesWorld(x: number, y: number, radius: number, world: World, support?: Vec2): boolean {
@@ -50,8 +52,7 @@ function integrateMovement(actor: Vec2 & { radius: number }, dx: number, dy: num
   const steps = Math.max(1, Math.ceil(totalDist / 7));
   const stepDist = totalDist / steps;
   
-  const dirX = dx / magnitude;
-  const dirY = dy / magnitude;
+  const inputDirection = { x: dx / magnitude, y: dy / magnitude };
   
   let x = actor.x, y = actor.y;
   const layered = world.surfaceIndex.hasSurfaces || actor.surfaceId !== undefined && actor.surfaceId !== 'ground';
@@ -69,6 +70,8 @@ function integrateMovement(actor: Vec2 & { radius: number }, dx: number, dy: num
   const stride = (ux: number, uy: number, budget = stepDist) => walking
     ? walkingStepDistance({ x, y, surfaceId, elevation }, ux, uy, budget, world) : budget;
   for (let i = 0; i < steps; i++) {
+    const direction = walking ? terracedStairEntryDirection({ x, y, surfaceId, elevation, radius: actor.radius }, inputDirection, stepDist, world) : inputDirection;
+    const { x: dirX, y: dirY } = direction;
     const directDist = stride(dirX, dirY);
     const targetX = x + dirX * directDist;
     const targetY = y + dirY * directDist;
@@ -120,7 +123,8 @@ export function hasLineOfSight(a: Vec2, b: Vec2, world: World): boolean {
   if (!world.sameRoom(a, b) || !world.sameLevel(a, b)) return false;
   if (world.stairBodyHit(a, b) !== null) return false;
   const room = world.roomAt(a.x, a.y);
-  const blocked = (tx: number, ty: number) => world.blocksTerrainRay(tx, ty, a) || (world.roomTiles.get(`${tx},${ty}`) ?? '') !== room;
+  const blocked = (tx: number, ty: number) => (world.roomTiles.get(`${tx},${ty}`) ?? '') !== room
+    || world.terrainRayBounds(tx, ty, a).some(bounds => sweptCircleRectangle(a, b, 0, bounds) !== null);
   const dx = b.x - a.x, dy = b.y - a.y;
   // Grid DDA checks every crossed tile, including the two corner-adjacent cells.
   let tx = Math.floor(a.x / TILE_SIZE), ty = Math.floor(a.y / TILE_SIZE);

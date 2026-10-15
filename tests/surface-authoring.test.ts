@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pickSurfacePoint, planBridge, removeBridge, syncGroundWarpElevations, upsertSurfaceLinks } from '../client/editors/surface-authoring';
 import { planStair, validateSurfaceStairs, type StairData } from '../shared/surface-stairs';
-import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, validateSurfaceData, type SurfaceCell, type SurfaceLink } from '../shared/world-surfaces';
+import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, SurfaceIndex, validateSurfaceData, type SurfaceCell, type SurfaceLink } from '../shared/world-surfaces';
 import { TILE_SIZE } from '../shared/config';
 import type { Vec2 } from '../shared/types';
-import { SurfaceStroke, type SurfacePaintSettings } from '../client/editors/world/elevation-editor';
+import { SurfaceStroke, snapTerracedStairEndpoints, type SurfacePaintSettings } from '../client/editors/world/elevation-editor';
 import { newWorldDocument } from '../shared/world-schema';
 import { World } from '../shared/world';
 
@@ -133,6 +133,73 @@ test('PNG wall kits persist on relative height changes and explicit default pain
   assert.equal('wallSkin' in document.surfaceCells![0], false);
   stroke.paint({ x: 4, y: 3 }, 'raise-height', { ...paintSettings, wallSkin: 'wall-roccia' });
   assert.equal(document.surfaceCells![1].wallSkin, 'wall-roccia');
+});
+
+test('new height strokes create tile bands while explicit painting converts legacy elevations', () => {
+  const document = newWorldDocument(); document.surfaceCells = [cell(3, 4, 2), cell(4, 4)];
+  const stroke = new SurfaceStroke(document);
+  stroke.paint({ x: 1, y: 4 }, 'raise-height', paintSettings);
+  assert.equal(document.surfaceCells.find(c => c.x === 1)!.layout, 'terraced');
+  assert.equal(new SurfaceIndex(document.surfaceCells).at(1, 4)!.terrainRole, 'wall');
+  stroke.paint({ x: 3, y: 4 }, 'raise-height', paintSettings);
+  assert.equal(document.surfaceCells.find(c => c.x === 3)!.layout, undefined, 'relative changes keep a raised legacy map intact');
+  stroke.paint({ x: 4, y: 4 }, 'raise-height', paintSettings);
+  assert.equal(document.surfaceCells.find(c => c.x === 4)!.layout, 'terraced', 'flat legacy terrain adopts the new geometry');
+  stroke.paint({ x: 3, y: 4 }, 'height', { ...paintSettings, elevation: 3, layout: 'terraced' });
+  assert.equal(document.surfaceCells.find(c => c.x === 3)!.layout, 'terraced');
+  stroke.paint({ x: 3, y: 4 }, 'height', { ...paintSettings, elevation: 3, layout: 'legacy' });
+  assert.equal(document.surfaceCells.find(c => c.x === 3)!.layout, undefined);
+});
+
+test('wall picking exposes logical height to the brush without presenting a wall as a walking top', () => {
+  const index = new SurfaceIndex([{ ...cell(3, 5, 3), layout: 'terraced' }]);
+  const column = (x: number, y: number) => index.atColumn(x, y);
+  const visualY = 5 - ELEVATION_STEP / TILE_SIZE + .5;
+  assert.deepEqual(pickSurfacePoint(3.5, visualY, column, BASE_SURFACE, true), { x: 3, y: 5, surfaceId: BASE_SURFACE, elevation: 3 });
+  assert.equal(pickSurfacePoint(3.5, visualY, column).elevation, 0);
+});
+
+test('integrated stair clicks snap to the banks and adapt their length to the crossed levels in four directions', () => {
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (const height of [1, 2, 3]) {
+    const document = newWorldDocument(); document.surfaceCells = [];
+    for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) {
+      document.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
+      document.surfaceCells.push({ ...cell(x, y, height), layout: 'terraced' });
+    }
+    for (let y = -9; y <= 9; y++) for (let x = -9; x <= 9; x++) document.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
+    const world = new World(document.seed, 16, 'world', document, []), low = { x: -dx * 9, y: -dy * 9, surfaceId: BASE_SURFACE }, high = { x: 0, y: 0, surfaceId: BASE_SURFACE };
+    const lookup = (x: number, y: number, id: string) => world.surfaceAt(x, y, id);
+    const snapped = snapTerracedStairEndpoints(low, high, lookup), reversed = snapTerracedStairEndpoints(high, low, lookup);
+    assert.deepEqual(reversed, { from: snapped.to, to: snapped.from });
+    assert.equal(Math.abs(snapped.to.x - snapped.from.x) + Math.abs(snapped.to.y - snapped.from.y), height + 1);
+    const plan = planStair(snapped.from, snapped.to, lookup, { id: 'snapped', profile: 'terraced', cells: document.surfaceCells });
+    assert.equal(plan.cells.length, height); assert.equal(plan.stair.to.elevation, height);
+  }
+});
+
+test('editing a stair corridor or a neighbouring landing wall removes the whole integrated flight', () => {
+  const fixture = () => {
+    const document = newWorldDocument(); document.surfaceCells = [];
+    for (let y = 1; y <= 7; y++) for (let x = 1; x <= 7; x++) document.surfaceCells.push({ ...cell(x, y, 3), layout: 'terraced' });
+    for (let y = 0; y <= 8; y++) for (let x = 0; x <= 8; x++) document.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
+    const world = new World(document.seed, 16, 'world', document, []);
+    const plan = planStair({ x: 0, y: 4, surfaceId: BASE_SURFACE }, { x: 4, y: 4, surfaceId: BASE_SURFACE },
+      (x, y, id) => world.surfaceAt(x, y, id), { id: 'integrated', profile: 'terraced', cells: document.surfaceCells });
+    document.surfaceCells.push(...plan.cells); document.surfaceLinks = plan.links; document.surfaceStairs = [plan.stair];
+    return document;
+  };
+  for (const point of [{ x: 2, y: 4 }, { x: 4, y: 3 }]) {
+    const document = fixture(), before = new World(document.seed, 16, 'world', document, []);
+    new SurfaceStroke(document, p => before.surfaceAt(p.x, p.y, p.surfaceId)).paint(point, 'clear-height', paintSettings);
+    assert.deepEqual(document.surfaceStairs, []); assert.deepEqual(document.surfaceLinks, []);
+    assert.ok(document.surfaceCells!.every(c => c.kind === 'ground'));
+    assert.equal(new SurfaceIndex(document.surfaceCells).at(1, 4)!.terrainRole, 'wall', 'remaining bands recover their collision');
+    validateSurfaceData(document.surfaceCells, document.surfaceLinks, document.surfaceStairs);
+  }
+  const flooded = fixture(), beforeFlood = new World(flooded.seed, 16, 'world', flooded, []);
+  new SurfaceStroke(flooded, p => beforeFlood.surfaceAt(p.x, p.y, p.surfaceId)).paintMaterial({ x: 4, y: 4 }, 'water');
+  assert.deepEqual(flooded.surfaceStairs, [], 'a water landing removes its owned supports even without an explicit blocked flag');
+  assert.deepEqual(flooded.surfaceLinks, []);
 });
 
 test('new stair supports inherit the landing PNG kit unless the author explicitly chooses default artwork', () => {

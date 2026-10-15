@@ -4,6 +4,46 @@ import { worldAssetVisual, worldAssetImageBounds, DEFAULT_ASSET_FADE } from '../
 import { AssetFadeTransitions, makeAssetFadeMask } from './world-asset-fade';
 import { drawWorldFire } from './world-fire-art';
 import { coordinateHash } from '../../shared/coordinate-random';
+import type { World } from '../../shared/world';
+import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, type SurfaceStair } from '../../shared/world-surfaces';
+import { authoredRockStairGeometry } from './rock-cliff-geometry';
+
+/** PNG tops follow the resolved summit; they cannot paint over occupied wall bands. */
+export function clipElevationAssetTop(ctx: CanvasRenderingContext2D, world: World, asset: WorldAsset,
+  placement: AssetPlacement, unit = TILE_SIZE): void {
+  if (asset.category !== 'elevation') return;
+  const id = placement.surfaceId ?? BASE_SURFACE;
+  let terraced = false;
+  for (let y = 0; y < asset.rows && !terraced; y++) for (let x = 0; x < asset.columns; x++)
+    if (world.surfaceIndex.at(placement.x + x, placement.y + y, id)?.layout === 'terraced') { terraced = true; break; }
+  if (!terraced) return;
+  const stairs = new Set<SurfaceStair>();
+  ctx.beginPath();
+  for (let y = 0; y < asset.rows; y++) for (let x = 0; x < asset.columns; x++) {
+    for (const stair of world.surfaceIndex.stairsAtColumn(placement.x + x, placement.y + y))
+      if (stair.profile === 'terraced') stairs.add(stair);
+    const cell = world.surfaceIndex.at(placement.x + x, placement.y + y, id);
+    if (!cell || cell.terrainRole === 'wall' || cell.kind !== 'ground') continue;
+    ctx.rect(cell.x * unit, (cell.y - cell.elevation * ELEVATION_STEP / TILE_SIZE) * unit,
+      Math.min(1, asset.width - x) * unit, Math.min(1, asset.height - y) * unit);
+  }
+  ctx.clip();
+  for (const stair of stairs) {
+    const corridor = authoredRockStairGeometry(stair).corridor;
+    ctx.beginPath();
+    ctx.rect(placement.x * unit, (placement.y - MAX_ELEVATION * ELEVATION_STEP / TILE_SIZE) * unit,
+      asset.width * unit, (asset.height + MAX_ELEVATION * ELEVATION_STEP / TILE_SIZE) * unit);
+    corridor.forEach((point, index) => index ? ctx.lineTo(point.x * unit / TILE_SIZE, point.y * unit / TILE_SIZE)
+      : ctx.moveTo(point.x * unit / TILE_SIZE, point.y * unit / TILE_SIZE));
+    ctx.closePath(); ctx.clip('evenodd');
+  }
+}
+
+export function elevationAssetTopHeight(world: World, asset: WorldAsset, placement: AssetPlacement): number | undefined {
+  if (asset.category !== 'elevation') return;
+  const cell = world.surfaceIndex.authoredAt(placement.x, placement.y, placement.surfaceId ?? BASE_SURFACE);
+  return cell?.layout === 'terraced' ? cell.elevation : undefined;
+}
 
 /** Shared by the game and editor. Each source is decoded once; SVG is rasterized outside the frame loop.
  * Cache pressure is bounded by both pixels and entries, independent of catalog size. */

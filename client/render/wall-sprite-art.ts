@@ -3,6 +3,7 @@ import { ELEVATION_STEP, type SurfaceCell } from '../../shared/world-surfaces';
 import { parseWallSpriteKitCatalog, type WallSpriteKit, type WallSpriteKitCatalog, type WallSpritePart } from '../../shared/wall-sprite-kits';
 import { traceContour, type ContourPoint, type SurfaceContour } from './surface-contours';
 import type { RockStairGeometry } from './rock-cliff-geometry';
+import { paintRockBandLighting, ROCK_BACK_TEXTURE_SCALE } from './rock-cliff-art';
 
 export interface WallFaceTerminals {
   left: boolean; right: boolean; innerLeft?: boolean; innerRight?: boolean;
@@ -47,7 +48,7 @@ export class WallSpriteArt {
     const source = kit.parts[part]; return source && this.images.get(source.image);
   }
   private pattern(ctx: CanvasRenderingContext2D, kit: WallSpriteKit, part: WallSpritePart,
-    x: number, y: number, verticalBand = false): CanvasPattern | undefined {
+    x: number, y: number, verticalBand = false, verticalScale = 1): CanvasPattern | undefined {
     const image = this.image(kit, part); if (!image) return;
     let cache = this.patterns.get(ctx); if (!cache) this.patterns.set(ctx, cache = new Map());
     const key = `${kit.id}:${part}:${verticalBand ? 1 : 0}`;
@@ -64,19 +65,20 @@ export class WallSpriteArt {
       paint.drawImage(image, 0, 0, canvas.width, canvas.height);
       this.rasters.set(key, raster = { canvas, width, height });
     }
-    const cached = cache.get(key), pattern = cached ?? ctx.createPattern(raster.canvas, 'repeat');
+    const patternKey = `${key}:${verticalScale}`;
+    const cached = cache.get(patternKey), pattern = cached ?? ctx.createPattern(raster.canvas, 'repeat');
     if (!pattern) return;
-    if (!cached) cache.set(key, pattern);
+    if (!cached) cache.set(patternKey, pattern);
     // The raster is bounded; its repeat period retains the exact authored size,
     // including fractional heights, instead of rounding the geometry to pixels.
     pattern.setTransform(new DOMMatrix().translate(x, y).scale(raster.width / raster.canvas.width,
-      raster.height / raster.canvas.height));
+      raster.height / raster.canvas.height * verticalScale));
     return pattern;
   }
   private fillPart(ctx: CanvasRenderingContext2D, kit: WallSpriteKit, part: WallSpritePart,
     region: { x: number; y: number; width: number; height: number }, anchorX: number, anchorY: number,
-    verticalBand = false): boolean {
-    const pattern = this.pattern(ctx, kit, part, anchorX, anchorY, verticalBand); if (!pattern) return false;
+    verticalBand = false, verticalScale = 1): boolean {
+    const pattern = this.pattern(ctx, kit, part, anchorX, anchorY, verticalBand, verticalScale); if (!pattern) return false;
     ctx.save(); ctx.imageSmoothingEnabled = !kit.pixelated; ctx.fillStyle = pattern;
     ctx.fillRect(region.x, region.y, region.width, region.height); ctx.restore(); return true;
   }
@@ -212,6 +214,37 @@ export class WallSpriteArt {
       this.fillPart(ctx, kit, 'foot', { x: x - 16, y: y + top, width: TILE_SIZE + 32, height: bottom - top + 2 },
         0, y + Math.max(...profile.map(p => p.y)) + height - footHeight);
       ctx.restore();
+    }
+    return true;
+  }
+  /** In the terraced layout every module stays inside its owning wall cell. */
+  paintBand(ctx: CanvasRenderingContext2D, cell: SurfaceCell, x: number, y: number,
+    lowerMask: number, contour?: SurfaceContour): boolean {
+    const kit = this.kit(cell); if (!kit) return false;
+    const region = { x, y, width: TILE_SIZE, height: TILE_SIZE };
+    const grid = kit.layout === 'grid-3x3', back = !grid && !!(lowerMask & 1);
+    this.fillPart(ctx, kit, 'body', region, 0, -cell.elevation * ELEVATION_STEP, true,
+      back ? ROCK_BACK_TEXTURE_SCALE : 1);
+    if (!grid) {
+      paintRockBandLighting(ctx, x, y, lowerMask);
+      if (back) {
+        ctx.strokeStyle = '#38526466'; ctx.lineWidth = .85;
+        traceContour(ctx, contour?.edges.north ?? [{ x: 0, y: 0 }, { x: TILE_SIZE, y: 0 }], x, y); ctx.stroke();
+      }
+      return true;
+    }
+    let part: WallSpritePart = lowerMask & 4 ? 'front' : lowerMask & 1 ? 'back'
+      : lowerMask & 8 ? 'side-left' : lowerMask & 2 ? 'side-right' : 'body';
+    if ((lowerMask & 12) === 12) part = 'corner-left';
+    else if ((lowerMask & 6) === 6) part = 'corner-right';
+    else if ((lowerMask & 9) === 9) part = 'back-left';
+    else if ((lowerMask & 3) === 3) part = 'back-right';
+    if (!this.image(kit, part)) part = 'front';
+    this.frameModule(ctx, kit, part, region);
+    for (const inlet of contour?.inlets ?? []) {
+      const side = inlet.rim.some(point => point.x < 0) ? 'left' : 'right';
+      const inner = `inner-corner-${side}` as WallSpritePart;
+      if (this.image(kit, inner)) this.frameModule(ctx, kit, inner, region);
     }
     return true;
   }
@@ -380,7 +413,7 @@ export class WallSpriteArt {
     }
     const border = this.image(kit, 'stairs-border');
     if (border) for (const p of geometry.shoulders) ctx.drawImage(border, p.x - 3, p.y - 3, 6, 6);
-    this.quad(ctx, kit, 'stairs-landing', geometry.landing);
+    if (geometry.landing.length === 4) this.quad(ctx, kit, 'stairs-landing', geometry.landing);
     // geometry.lowerLanding remains bare ground, as in the base renderer.
     ctx.restore();
   }

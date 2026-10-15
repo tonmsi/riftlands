@@ -1,6 +1,7 @@
 import { TILE_SIZE } from './tile-size';
 import type { Vec2 } from './types';
-import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, surfaceKey, validSurfaceId, type StairProfile, type SurfaceCell, type SurfaceEndpoint, type SurfaceLink, type SurfaceStair } from './world-surfaces';
+import { BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, surfaceKey, validSurfaceId, type StairProfile, type SurfaceCell, type SurfaceEndpoint, type SurfaceLink, type SurfaceStair, type TerrainSurfaceCell } from './world-surfaces';
+import { deriveTerracedTerrain } from './terraced-terrain';
 
 /** Half-tile landings on long flights; shorter flights reserve a quarter at each end. */
 export const STAIR_LANDING = 24;
@@ -85,6 +86,10 @@ export function planStair(from: SurfaceEndpoint, to: SurfaceEndpoint,
   if (settings.stairs?.some(s => s.id === stair.id)) throw new Error('Scala: identificativo già usato.');
   if (settings.stairs?.some(s => flightsOverlap(stair, s))) throw new Error('La scala incrocia il tratto inclinato di un’altra scala. Lascia spazio ai pianerottoli.');
   const geometry = stairGeometry(stair), cells: SurfaceCell[] = [];
+  if (stair.profile === 'terraced') {
+    const issues = terracedStairIssues(stair, lookup);
+    if (issues.length) throw new Error(issues[0]);
+  }
   for (const lane of stairLanes(stair)) {
     const path = stairPath(stair, lane);
     for (const [p, height] of [[path[0], a.elevation], [path.at(-1)!, b.elevation]] as const) {
@@ -96,7 +101,7 @@ export function planStair(from: SurfaceEndpoint, to: SurfaceEndpoint,
       const ground = lookup(p.x, p.y, BASE_SURFACE), elevation = Math.round(geometry.elevationAt(geometry.progressAt({ x: (p.x + .5) * TILE_SIZE, y: (p.y + .5) * TILE_SIZE })));
       const t = geometry.progressAt({ x: (p.x + .5) * TILE_SIZE, y: (p.y + .5) * TILE_SIZE });
       const minimum = geometry.elevationAt(Math.max(0, t - TILE_SIZE / geometry.run / 2));
-      if (ground && ground.elevation > minimum + 1e-8) throw new Error('Scala: il terreno intermedio interseca i gradini; abbassa prima il corridoio.');
+      if (stair.profile !== 'terraced' && ground && ground.elevation > minimum + 1e-8) throw new Error('Scala: il terreno intermedio interseca i gradini; abbassa prima il corridoio.');
       const wallSkin = 'wallSkin' in settings ? settings.wallSkin : a.wallSkin;
       cells.push({ ...p, elevation, material: settings.material ?? a.material, wallMaterial: settings.wallMaterial ?? a.wallMaterial,
         ...(wallSkin !== undefined ? { wallSkin } : {}), kind: 'stairs', blocked: false });
@@ -136,7 +141,29 @@ export function stairSpatialIssues(stair: SurfaceStair, lookup: (x: number, y: n
     for (const p of path.slice(1, -1)) {
       const ground = lookup(p.x, p.y, BASE_SURFACE), t = g.progressAt({ x: (p.x + .5) * TILE_SIZE, y: (p.y + .5) * TILE_SIZE });
       const minimum = g.elevationAt(Math.max(0, t - TILE_SIZE / g.run / 2));
-      if (ground && ground.elevation > minimum + 1e-8) issues.push(`Scala ${stair.id}: gradini intersecati dal terreno alla casella ${p.x}, ${p.y}.`);
+      if (stair.profile !== 'terraced' && ground && ground.elevation > minimum + 1e-8) issues.push(`Scala ${stair.id}: gradini intersecati dal terreno alla casella ${p.x}, ${p.y}.`);
+    }
+  }
+  return [...issues, ...(stair.profile === 'terraced' ? terracedStairIssues(stair, lookup) : [])];
+}
+
+/** A terrain flight replaces exactly one wall cell per crossed elevation level. */
+function terracedStairIssues(stair: SurfaceStair,
+  lookup: (x: number, y: number, surfaceId: string) => SurfaceCell | undefined): string[] {
+  const issues: string[] = [], g = stairGeometry(stair);
+  if (stair.from.surfaceId !== BASE_SURFACE || stair.to.surfaceId !== BASE_SURFACE)
+    issues.push(`Scala ${stair.id}: le scale incassate collegano due quote del terreno.`);
+  for (const lane of stairLanes(stair)) {
+    const path = stairPath(stair, lane), ordered = stair.from.elevation > stair.to.elevation ? path.slice().reverse() : path;
+    for (const [point, elevation] of [[ordered[0], g.low.elevation], [ordered.at(-1)!, g.high.elevation]] as const) {
+      const bank = lookup(point.x, point.y, BASE_SURFACE) as TerrainSurfaceCell | undefined;
+      if ((bank?.elevation ?? 0) !== elevation || bank?.blocked || bank?.terrainRole === 'wall' || bank?.material === 'water')
+        issues.push(`Scala ${stair.id}: pianerottolo incassato assente, bloccato o a quota diversa alla casella ${point.x}, ${point.y}.`);
+    }
+    for (const [index, point] of ordered.slice(1, -1).entries()) {
+      const ground = lookup(point.x, point.y, BASE_SURFACE) as TerrainSurfaceCell | undefined;
+      if (ground?.layout !== 'terraced' || ground.terrainRole !== 'wall' || ground.elevation !== g.low.elevation + index + 1)
+        issues.push(`Scala ${stair.id}: serve una fascia rocciosa consecutiva per ogni quota alla casella ${point.x}, ${point.y}.`);
     }
   }
   return issues;
@@ -146,12 +173,18 @@ function validateStairShape(stair: SurfaceStair): void {
   const fail = (detail: string): never => { throw new Error(`Scala non valida: ${detail}`); };
   if (!stair || !validSurfaceId(stair.id) || stair.id.length > 108 || !['stairs', 'ramp'].includes(stair.kind)) fail('identificativo o tipo');
   if (stair.underpass !== undefined && typeof stair.underpass !== 'boolean') fail('il passaggio sotto deve essere vero o falso');
-  if (stair.profile !== undefined && !['landings', 'incline'].includes(stair.profile)) fail('profilo inclinato o con pianerottoli');
+  if (stair.profile !== undefined && !['landings', 'incline', 'terraced'].includes(stair.profile)) fail('profilo inclinato, con pianerottoli o incassato');
   for (const p of [stair.from, stair.to]) if (!p || !validSurfaceId(p.surfaceId) || !Number.isSafeInteger(p.x) || !Number.isSafeInteger(p.y)
     || Math.abs(p.x) > 10_000_000 || Math.abs(p.y) > 10_000_000 || !Number.isInteger(p.elevation) || p.elevation < 0 || p.elevation > MAX_ELEVATION) fail('accesso o quota');
   const dx = stair.to.x - stair.from.x, dy = stair.to.y - stair.from.y, length = Math.abs(dx) + Math.abs(dy);
   if (dx && dy || length < 1 || length > 32 || stair.from.elevation === stair.to.elevation) fail('usa 1–32 celle in linea e quote diverse');
   if (!Number.isFinite(stair.width) || stair.width < MIN_STAIR_WIDTH || stair.width > TILE_SIZE * 3) fail('larghezza: 40–144 pixel');
+  if (stair.profile === 'terraced') {
+    if (stair.underpass) fail('una scala incassata non può avere un passaggio sotto');
+    if (length !== Math.abs(stair.to.elevation - stair.from.elevation) + 1)
+      fail('la scala incassata richiede una cella per ogni dislivello e due pianerottoli; tra pianerottoli separati usa più scale');
+    if (stair.width % TILE_SIZE !== 0) fail('larghezza della scala incassata: una, due o tre celle');
+  }
   const g = stairGeometry(stair);
   if (g.dy > 0 && g.run - 2 * g.landing <= g.rise) fail('allunga la scala verso sud o cambia orientamento: a 45° la proiezione verso sud si appiattisce. Deve avanzare lungo tutta la salita');
 }
@@ -159,10 +192,17 @@ function validateStairShape(stair: SurfaceStair): void {
 export function validateSurfaceStairs(cells: readonly SurfaceCell[], links: readonly SurfaceLink[], stairs: unknown = []): void {
   if (!Array.isArray(stairs) || stairs.length > 100_000) throw new Error('Scale non valide: budget');
   const ids = new Set<string>(), supports = new Map(cells.map(c => [surfaceKey(c.x, c.y, c.surfaceId), c])), edges = new Map(links.map(l => [l.id, l])), ownedCells = new Set<string>(), ownedEdges = new Set<string>();
+  const terraces = deriveTerracedTerrain(cells);
   for (const stair of stairs as SurfaceStair[]) {
     validateStairShape(stair);
     if (ids.has(stair.id)) throw new Error('Scale non valide: identificativi duplicati'); ids.add(stair.id);
     const g = stairGeometry(stair);
+    if (stair.profile === 'terraced') {
+      const issues = terracedStairIssues(stair, (x, y, id) => id === BASE_SURFACE
+        ? terraces.get(`${x},${y}`) ?? supports.get(surfaceKey(x, y, id))
+        : supports.get(surfaceKey(x, y, id)));
+      if (issues.length) throw new Error(issues[0]);
+    }
     for (const lane of stairLanes(stair)) {
       const path = stairPath(stair, lane);
       for (const [endpoint, height] of [[path[0], stair.from.elevation], [path.at(-1)!, stair.to.elevation]] as const) {

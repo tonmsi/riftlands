@@ -25,6 +25,7 @@ test('both makers default to solid stairs and author a suspended staircase only 
       let world = new World(doc.seed, 16, 'world', doc, []), worldDraws = 0;
       const editor = new WorldElevationEditor(root, (action: () => void) => { action(); world = new World(doc.seed, 16, 'world', doc, []); }, () => doc, () => world, () => worldDraws++);
       const worldToggle = root.querySelector<HTMLInputElement>('#surface-stair-underpass')!, worldDefault = worldToggle.checked;
+      const profile = root.querySelector<HTMLSelectElement>('#surface-stair-profile')!; profile.value = 'incline'; profile.dispatchEvent(new Event('change'));
       editor.click({ x: 2, y: 3, surfaceId: 'ground' }); editor.click({ x: 6, y: 3, surfaceId: 'ground' });
       editor.click({ x: 2, y: 8, surfaceId: 'ground' }); editor.hover({ x: 6, y: 8, surfaceId: 'ground' });
       const worldDrawsBefore = worldDraws;

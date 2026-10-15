@@ -4,25 +4,26 @@ import type { WorldDocument } from '../../shared/world-schema';
 import { removeStair, type StairData } from '../../shared/surface-stairs';
 import {
   BASE_SURFACE, ELEVATION_STEP, MAX_ELEVATION, surfaceKey, validSurfaceId,
-  type SurfaceCell, type SurfaceLink, type SurfaceMaterial, type WallMaterial,
+  type SurfaceCell, type SurfaceLink, type SurfaceMaterial, type TerrainSurfaceCell, type WallMaterial,
 } from '../../shared/world-surfaces';
 
 /** Map a projected top face back to its logical tile, including the selected plane. */
 export function pickSurfacePoint(x: number, y: number,
-  surfacesAt: (tx: number, ty: number) => readonly SurfaceCell[], surfaceId?: string): Vec2 {
+  surfacesAt: (tx: number, ty: number) => readonly TerrainSurfaceCell[], surfaceId?: string, includeWalls = false): Vec2 {
   if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error('Scegli un punto della mappa.');
   const tx = Math.floor(x), start = Math.floor(y), last = Math.floor(y + MAX_ELEVATION * ELEVATION_STEP / TILE_SIZE);
-  let picked: SurfaceCell | undefined;
+  let picked: TerrainSurfaceCell | undefined;
   for (let ty = start; ty <= last; ty++) {
     for (const surface of surfacesAt(tx, ty)) {
       if (surfaceId !== undefined && surface.surfaceId !== surfaceId) continue;
+      if (surface.terrainRole === 'wall' && !includeWalls) continue;
       const top = ty - surface.elevation * ELEVATION_STEP / TILE_SIZE;
       if (y < top || y >= top + 1) continue;
       if (!picked || surface.elevation > picked.elevation || surface.elevation === picked.elevation
         && (surface.y > picked.y || surface.y === picked.y && surface.kind === 'bridge' && picked.kind !== 'bridge')) picked = surface;
     }
   }
-  return picked ? { x: picked.x, y: picked.y, surfaceId: picked.surfaceId, elevation: picked.elevation }
+  return picked ? { x: picked.x, y: picked.y, surfaceId: picked.surfaceId, elevation: picked.terrainRole === 'wall' ? picked.logicalElevation ?? picked.elevation : picked.elevation }
     : { x: tx, y: start, surfaceId: BASE_SURFACE, elevation: 0 };
 }
 

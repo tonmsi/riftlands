@@ -4,6 +4,7 @@ import { World } from '../shared/world';
 import { newSurfaceDemoWorld } from '../shared/surface-demo';
 import { newRockCliffDemoWorld } from '../shared/rock-cliff-demo';
 import { newTerrainReferenceDemoWorld, REFERENCE_BRIDGE } from '../shared/terrain-reference-demo';
+import { newTerracedTerrainDemoWorld } from '../shared/terraced-terrain-demo';
 import { TILE_SIZE } from '../shared/config';
 import { moveWalkingWithCollisions, resolveActorCollisions } from '../shared/physics';
 import { serializeWorldDocument } from '../shared/world-tiles';
@@ -20,14 +21,14 @@ root.innerHTML = `<header><div><span class="eyebrow">RIFTLANDS / TERRENO IBRIDO<
 let example = newSurfaceDemoWorld(), world = new World(example.seed, 16, 'world',
   { ...example, interiorBounds: { width: 24, height: 18, name: 'Alture e ponti', id: 'surface-lab', pvp: false } }, []);
 const canvas = document.querySelector<HTMLCanvasElement>('#lab-canvas')!, renderer = new Renderer(canvas);
-const sceneLabel = document.createElement('label'); sceneLabel.innerHTML = 'Esempio <select id="lab-scene"><option value="surfaces">Alture e ponti</option><option value="rock">Pareti rocciose e gradoni</option><option value="reference">Terrazze, scale e ponte</option></select>';
+const sceneLabel = document.createElement('label'); sceneLabel.innerHTML = 'Esempio <select id="lab-scene"><option value="surfaces">Alture e ponti</option><option value="rock">Pareti rocciose e gradoni</option><option value="reference">Terrazze, scale e ponte</option><option value="terraced">Rialzi a fasce e scale incassate</option></select>';
 document.querySelector('.lab-toolbar')!.prepend(sceneLabel);
 const kitLabel = document.createElement('label');
 kitLabel.innerHTML = 'Kit parete <select id="lab-wall-skin"><option value="">Predefinito</option></select>';
 sceneLabel.after(kitLabel);
 const kitSelect = kitLabel.querySelector<HTMLSelectElement>('select')!;
 let wallKits: WallSpriteKit[] = [];
-let rockScene = false, referenceScene = false;
+let rockScene = false, referenceScene = false, terracedScene = false;
 document.querySelector<HTMLSelectElement>('#lab-zoom')!.add(new Option('Intera scena', '.72'));
 renderer.world = world; renderer.weather = 'clear'; renderer.setCameraSettings({ zoom: 1, viewLimit: 'standard' });
 function actor(id: string, name: string, x: number, y: number, surfaceId = 'ground'): Actor {
@@ -42,6 +43,17 @@ const keys = new Set<string>(); let pointer: Vec2 | undefined, previous = perfor
 const instructions = document.querySelector<HTMLElement>('#lab-instructions')!, support = document.querySelector<HTMLOutputElement>('#lab-support')!;
 function reset(mode: 'route' | 'under' | 'above'): void {
   keys.clear();
+  if (terracedScene) {
+    self = mode === 'under' ? actor('self', 'Tu', 21, 14)
+      : mode === 'above' ? actor('self', 'Tu', 10, 20) : actor('self', 'Tu', example.spawn.x, example.spawn.y);
+    other = actor('other', 'Sommità', 10, 13);
+    instructions.textContent = mode === 'under'
+      ? 'Tieni D o →: attraversa tre rialzi consecutivi, dalle quote 0 a 1, 2 e 3. Le superfici fra le scale restano percorribili.'
+      : mode === 'above' ? 'Tieni W o ↑: sali dalla parete sud. Dalla sommità puoi scendere dalle scale sui quattro lati.'
+      : 'Tieni D o → per salire. Scala larga 1 tile, lunga 3 tile di parete, con 2 celle di accesso. Esplora la sommità e le scale sui quattro lati.';
+    for (const button of root.querySelectorAll<HTMLButtonElement>('.lab-toolbar button')) button.classList.toggle('active', button.id === `lab-${mode}`);
+    canvas.focus(); return;
+  }
   if (referenceScene) {
     self = mode === 'above' ? actor('self', 'Tu', 17, 11, REFERENCE_BRIDGE)
       : mode === 'under' ? actor('self', 'Tu', 17, 15) : actor('self', 'Tu', example.spawn.x, example.spawn.y);
@@ -71,18 +83,26 @@ function loadScene(): void {
   const scene = document.querySelector<HTMLSelectElement>('#lab-scene')!.value;
   rockScene = scene === 'rock';
   referenceScene = scene === 'reference';
-  example = referenceScene ? newTerrainReferenceDemoWorld() : rockScene ? newRockCliffDemoWorld() : newSurfaceDemoWorld();
+  terracedScene = scene === 'terraced';
+  example = terracedScene ? newTerracedTerrainDemoWorld() : referenceScene ? newTerrainReferenceDemoWorld() : rockScene ? newRockCliffDemoWorld() : newSurfaceDemoWorld();
   const kit = wallKits.find(kit => kit.id === kitSelect.value);
   if (kit) for (const cell of example.surfaceCells ?? []) if (cell.wallMaterial === 'rock' && cell.kind !== 'bridge') {
     cell.wallSkin = kit.id; cell.wallMaterial = kit.material;
   }
   world = new World(example.seed, 16, 'world', { ...example, interiorBounds: example.interiorBounds ?? { width: 24, height: 18, name: 'Alture e ponti', id: 'surface-lab', pvp: false } }, []);
   renderer.world = world;
-  if (referenceScene) {
+  if (terracedScene) {
+    document.querySelector<HTMLSelectElement>('#lab-zoom')!.value = '1.35'; renderer.setCameraSettings({ zoom: 1.35, viewLimit: 'standard' });
+  } else if (referenceScene) {
     document.querySelector<HTMLSelectElement>('#lab-zoom')!.value = '.72'; renderer.setCameraSettings({ zoom: .72, viewLimit: 'standard' });
   }
   for (const id of ['lab-under', 'lab-above']) document.querySelector<HTMLButtonElement>(`#${id}`)!.disabled = rockScene;
-  document.querySelector('footer span')!.textContent = referenceScene ? 'Scale corte, lunghe e larghe · pareti · ponte a L/T · vegetazione e casa.' : rockScene ? 'Scala, parete e personaggio condividono la stessa quota.' : 'L’altro personaggio occupa il percorso sopra o sotto.';
+  document.querySelector('#lab-route')!.textContent = terracedScene ? 'Scala da ovest' : 'Percorso completo';
+  document.querySelector('#lab-under')!.textContent = terracedScene ? 'Tre rialzi consecutivi' : 'Passa sotto';
+  document.querySelector('#lab-above')!.textContent = terracedScene ? 'Scala da sud' : 'Sul ponte';
+  document.querySelector('header h1')!.textContent = terracedScene ? 'Rialzi e scale incassate.' : 'Alture e ponti.';
+  document.querySelector('header p')!.textContent = terracedScene ? 'Una fascia di parete per quota, quattro direzioni e terrazze consecutive.' : 'Erba e roccia, pavimento e mattoni, due percorsi nello stesso spazio.';
+  document.querySelector('footer span')!.textContent = terracedScene ? 'Pareti solide · scale nelle quattro direzioni · quote 0 / 1 / 2 / 3.' : referenceScene ? 'Scale corte, lunghe e larghe · pareti · ponte a L/T · vegetazione e casa.' : rockScene ? 'Scala, parete e personaggio condividono la stessa quota.' : 'L’altro personaggio occupa il percorso sopra o sotto.';
   reset('route');
 }
 document.querySelector('#lab-scene')!.addEventListener('change', loadScene);
@@ -90,7 +110,7 @@ kitSelect.addEventListener('change', loadScene);
 document.querySelector<HTMLSelectElement>('#lab-zoom')!.addEventListener('change', event => renderer.setCameraSettings({ zoom: Number((event.target as HTMLSelectElement).value), viewLimit: 'standard' }));
 document.querySelector('#lab-download')!.addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([serializeWorldDocument(example)], { type: 'application/json' }));
-  const link = document.createElement('a'); link.href = url; link.download = referenceScene ? 'riftlands-terrazze-scale-ponte.json' : rockScene ? 'riftlands-pareti-rocciose.json' : 'riftlands-alture-ponti.json'; link.click(); URL.revokeObjectURL(url);
+  const link = document.createElement('a'); link.href = url; link.download = terracedScene ? 'riftlands-rialzi-scale-incassate.json' : referenceScene ? 'riftlands-terrazze-scale-ponte.json' : rockScene ? 'riftlands-pareti-rocciose.json' : 'riftlands-alture-ponti.json'; link.click(); URL.revokeObjectURL(url);
 });
 window.addEventListener('keydown', event => { if (event.target instanceof HTMLSelectElement) return; if (['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight'].includes(event.code)) { event.preventDefault(); keys.add(event.code); } });
 window.addEventListener('keyup', event => keys.delete(event.code)); window.addEventListener('blur', () => keys.clear());
@@ -105,16 +125,16 @@ function draw(now: number): void {
   self.spriteRow = playerSpriteDirectionRow(dx, dy, self.spriteRow ?? 0, true);
   renderer.weather = 'clear';
   const overview = document.querySelector<HTMLSelectElement>('#lab-zoom')!.value === '.72';
-  renderer.render({ time: now, self, actors: rockScene ? [self] : [self, other], projectiles: [], pickups: [], traps: [], events: [],
-    selectedId: null, previewClass: 'warrior', playing: true, cameraTarget: referenceScene ? overview ? { x: 18 * TILE_SIZE, y: 13 * TILE_SIZE } : undefined : rockScene ? undefined : { x: 11 * TILE_SIZE, y: 8 * TILE_SIZE }, moveDirection: { x: dx, y: dy } });
+  renderer.render({ time: now, self, actors: rockScene || terracedScene ? [self] : [self, other], projectiles: [], pickups: [], traps: [], events: [],
+    selectedId: null, previewClass: 'warrior', playing: true, cameraTarget: terracedScene ? overview ? { x: 20 * TILE_SIZE, y: 14 * TILE_SIZE } : undefined : referenceScene ? overview ? { x: 18 * TILE_SIZE, y: 13 * TILE_SIZE } : undefined : rockScene ? undefined : { x: 11 * TILE_SIZE, y: 8 * TILE_SIZE }, moveDirection: { x: dx, y: dy } });
   const current = world.surfaceFor(self);
   support.value = `Quota ${self.elevation ?? 0} · ${current?.kind === 'bridge' ? 'Ponte' : current?.kind === 'stairs' ? 'Scala' : 'Terreno'} · ${current?.material ?? 'erba'} · (${Math.floor(self.x / TILE_SIZE)}, ${Math.floor(self.y / TILE_SIZE)})`;
   canvas.dataset.surfaceId = self.surfaceId ?? 'ground'; canvas.dataset.elevation = String(self.elevation ?? 0);
   frameId = requestAnimationFrame(draw);
 }
 const query = new URLSearchParams(location.search);
-if (query.get('scene') === 'reference') {
-  document.querySelector<HTMLSelectElement>('#lab-scene')!.value = 'reference'; document.querySelector('#lab-scene')!.dispatchEvent(new Event('change'));
+if (['reference', 'terraced'].includes(query.get('scene') ?? '')) {
+  document.querySelector<HTMLSelectElement>('#lab-scene')!.value = query.get('scene')!; document.querySelector('#lab-scene')!.dispatchEvent(new Event('change'));
 }
 const kitsReady = fetch('/terrain-walls/catalog.json').then(async response => {
   if (!response.ok) return;

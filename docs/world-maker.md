@@ -49,6 +49,8 @@ Il raggio del pennello è espresso in celle del mondo, indipendentemente dallo z
 
 ## Alture, acqua e ponti
 
+**Geometria rialzo → Fasce di 1 tile per livello** riserva una fascia interna di parete per ogni quota e arretra automaticamente la sommità. Le pareti sono celle bloccanti; il profilo scala incassato attraversa una fascia per livello nelle quattro direzioni, allineando automaticamente gli accessi al bordo. **Dipingi livello** permette anche di convertire un rialzo precedente. Vedi [sopraelevazioni e scale a fasce](terraced-terrain.md) per ingombri, pianerottoli e compatibilità.
+
 Il pannello **Alture, acqua e ponti** offre **Alza +1** e **Abbassa −1**: il pennello conserva materiali, proprietà di passaggio e oggetti ancorati al terreno. **Dipingi livello**, nelle opzioni precise, imposta quota 0–16 e materiali: erba sopra roccia, lastre sopra mattoni e altre combinazioni. Le pareti naturali hanno contorni arrotondati e irregolari; pietra lavorata e mattoni mantengono gli spigoli costruiti. **Ripristina terreno** elimina l’intervento e i suoi accessi. **Terreno** cambia anche il materiale di una superficie rialzata, conservandone quota e pareti.
 
 **Laboratorio alture e ponti ↗** apre una zona di prova separata dal progetto, in cui verificare materiali, scale e passaggi sopra e sotto il ponte.

@@ -12,12 +12,12 @@ export interface RockStairGeometry {
 
 interface StairProfile {
   low: SurfaceCell; high: SurfaceCell; dx: number; dy: number; width: number; run: number;
-  landing: number; elevationAt(t: number): number;
+  landing: number; inset?: boolean; elevationAt(t: number): number;
 }
 
 /** Map axes orient the slabs; elevation projects them without rotating their risers. */
 function buildGeometry(profile: StairProfile, projectElevation: boolean): RockStairGeometry {
-  const { low, high, dx, dy, width, run, landing, elevationAt } = profile;
+  const { low, high, dx, dy, width, run, landing, inset, elevationAt } = profile;
   const rise = (high.elevation - low.elevation) * ELEVATION_STEP;
   const nx = -dy * width / 2, ny = dx * width / 2;
   const position = (t: number, elevation = elevationAt(t), side = 0): ContourPoint => ({
@@ -36,18 +36,21 @@ function buildGeometry(profile: StairProfile, projectElevation: boolean): RockSt
     };
   });
   // The stone body begins at the first riser; the lower flat approach keeps its terrain.
-  const samples = [...Array.from({ length: count + 1 }, (_, i) => start + (end - start) * i / count), 1];
+  const samples = Array.from({ length: count + 1 }, (_, i) => start + (end - start) * i / count);
+  // Inset flights meet the edge of the upper ground cell. That ground owns its
+  // flat landing, so neither stone artwork nor the shaft extends over its top.
+  if (!inset) samples.push(1);
   const corridor = [...samples.map(t => position(t, elevationAt(t), -1)), ...samples.slice().reverse().map(t => position(t, elevationAt(t), 1))];
   const shoulders: ContourPoint[] = [];
   const shoulderCount = Math.max(2, Math.ceil(Math.max(rise, run) / 15));
-  for (let i = 0; i <= shoulderCount; i++) {
+  for (let i = 0; !inset && i <= shoulderCount; i++) {
     const t = start + (1 - start) * i / shoulderCount;
     // Border stones sit outside the useful corridor, which already includes the actor's margin.
     shoulders.push(position(t, elevationAt(t), -1 - 6 / width), position(t, elevationAt(t), 1 + 6 / width));
   }
   const landingQuad = (a: number, b: number, elevation: number) =>
     [position(a, elevation, -1), position(a, elevation, 1), position(b, elevation, 1), position(b, elevation, -1)];
-  const upperLanding = landingQuad(end, landing ? 1 : 1 + 6 / run, high.elevation);
+  const upperLanding = inset ? [] : landingQuad(end, landing ? 1 : 1 + 6 / run, high.elevation);
   const lowerLanding = landingQuad(landing ? 0 : -6 / run, start, low.elevation);
   const front = dx > 0 ? 1 : -1;
   const sideFace = dx ? [...samples.map(t => position(t, elevationAt(t), front)), ...samples.slice().reverse().map(t => position(t, low.elevation, front))] : [];
@@ -69,8 +72,11 @@ export function authoredRockStairGeometry(stair: SurfaceStair, projectElevation 
   const geometry = stairGeometry(stair);
   const cell = (endpoint: SurfaceStair['from']): SurfaceCell => ({ ...endpoint, material: 'stone', wallMaterial: 'rock',
     kind: endpoint.surfaceId === 'ground' ? 'ground' : 'stairs' });
-  const result = buildGeometry({ ...geometry, low: cell(geometry.low), high: cell(geometry.high) }, projectElevation);
-  if (stair.underpass === true) result.sideFace = [];
+  const result = buildGeometry({ ...geometry, low: cell(geometry.low), high: cell(geometry.high),
+    inset: stair.profile === 'terraced' }, projectElevation);
+  // An inset flight borrows its body from the wall bands around its shaft.
+  // Painting the ordinary side triangle would cover the neighboring rock again.
+  if (stair.underpass === true || stair.profile === 'terraced') result.sideFace = [];
   return result;
 }
 

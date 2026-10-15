@@ -7,6 +7,26 @@ import { authoredRockStairGeometry, rockStairGeometry, type RockStairGeometry } 
 
 type Rect = { x: number; y: number; width: number; height: number };
 type FaceStyle = typeof atlas.front;
+export const ROCK_BACK_TEXTURE_SCALE = .58;
+
+/** A north band is a rocky slope seen from above; south bands retain a dark face. */
+export function paintRockBandLighting(ctx: CanvasRenderingContext2D, x: number, y: number, lowerMask: number): void {
+  const back = !!(lowerMask & 1), front = !!(lowerMask & 4);
+  const shade = ctx.createLinearGradient(x, y, back || front ? x : x + TILE_SIZE, y + TILE_SIZE);
+  if (back) {
+    shade.addColorStop(0, '#29465d27'); shade.addColorStop(.45, '#e0dfbe2e'); shade.addColorStop(1, '#eee8c44c');
+  } else {
+    shade.addColorStop(0, '#d4d0b816'); shade.addColorStop(1, front ? '#10203960' : '#15253b38');
+  }
+  ctx.fillStyle = shade; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+  // A continuous corner shade lets a back slope turn into its side without a seam.
+  if (back && lowerMask & 10) {
+    const east = !!(lowerMask & 2), corner = ctx.createLinearGradient(x + (east ? 0 : TILE_SIZE), y,
+      x + (east ? TILE_SIZE : 0), y + TILE_SIZE);
+    corner.addColorStop(0, '#15283f00'); corner.addColorStop(1, east ? '#15283f32' : '#dce4c621');
+    ctx.fillStyle = corner; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+  }
+}
 
 function joinStripEdges(ctx: CanvasRenderingContext2D, width: number, height: number): void {
   const pixels = ctx.getImageData(0, 0, width, height), data = pixels.data, band = 5;
@@ -39,10 +59,11 @@ export class RockCliffArt {
     }))).then(() => {});
   }
   get loaded(): boolean { return this.images.size === 3; }
-  private pattern(ctx: CanvasRenderingContext2D, style: FaceStyle, part: 'body' | 'cap' | 'toe', offset: number): CanvasPattern | undefined {
+  private pattern(ctx: CanvasRenderingContext2D, style: FaceStyle, part: 'body' | 'cap' | 'toe', offset: number,
+    verticalScale = 1): CanvasPattern | undefined {
     const image = this.images.get(style.image); if (!image) return;
     // Elevation is bounded to sixteen levels, so the cache cannot grow with map size.
-    const key = `${style.image}:${part}:${offset}`, cached = this.patterns.get(key);
+    const key = `${style.image}:${part}:${offset}:${verticalScale}`, cached = this.patterns.get(key);
     if (cached) return cached;
     const source = style[part], canvas = document.createElement('canvas');
     canvas.width = style.worldWidth; canvas.height = part === 'body' ? style.worldHeight : part === 'cap' ? 8 : 7;
@@ -51,7 +72,7 @@ export class RockCliffArt {
     paint.drawImage(image, source.x, source.y, source.width, source.height, 0, 0, canvas.width, canvas.height);
     if (part === 'body') joinStripEdges(paint, canvas.width, canvas.height);
     const pattern = ctx.createPattern(canvas, 'repeat'); if (!pattern) return;
-    pattern.setTransform(new DOMMatrix().translate(0, offset));
+    pattern.setTransform(new DOMMatrix().translate(0, offset).scale(1, verticalScale));
     if (this.patterns.size >= 128) this.patterns.delete(this.patterns.keys().next().value!);
     this.patterns.set(key, pattern); return pattern;
   }
@@ -77,6 +98,41 @@ export class RockCliffArt {
       const toe = [...profile.map(p => ({ x: p.x, y: p.y + height - 6 })), ...profile.slice().reverse().map(p => ({ x: p.x, y: p.y + height + 1 }))];
       ctx.save(); traceContour(ctx, toe, x, y, true); ctx.clip(); ctx.fillStyle = foot;
       ctx.fillRect(x - 16, y + top, TILE_SIZE + 32, bottom - top + 2); ctx.restore();
+    }
+    return true;
+  }
+  /** A wall band owns a complete map cell; its texture is never a walkable top. */
+  paintBand(ctx: CanvasRenderingContext2D, cell: SurfaceCell, x: number, y: number,
+    contour: SurfaceContour | undefined, capMask: number, footMask: number): boolean {
+    const back = !!(footMask & 1);
+    const body = this.pattern(ctx, atlas.front, 'body', -cell.elevation * 16, back ? ROCK_BACK_TEXTURE_SCALE : 1);
+    if (!body) return false;
+    ctx.fillStyle = '#616b79'; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+    ctx.fillStyle = body; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+    paintRockBandLighting(ctx, x, y, footMask);
+    const cap = back ? undefined : this.pattern(ctx, atlas.front, 'cap', -cell.elevation * 16);
+    const toe = back ? undefined : this.pattern(ctx, atlas.front, 'toe', -cell.elevation * 16);
+    const square = {
+      north: [{ x: 0, y: 0 }, { x: TILE_SIZE, y: 0 }],
+      east: [{ x: TILE_SIZE, y: 0 }, { x: TILE_SIZE, y: TILE_SIZE }],
+      south: [{ x: TILE_SIZE, y: TILE_SIZE }, { x: 0, y: TILE_SIZE }],
+      west: [{ x: 0, y: TILE_SIZE }, { x: 0, y: 0 }],
+    };
+    for (const [edge, bit, dx, dy] of [['north', 1, 0, 1], ['east', 2, -1, 0],
+      ['south', 4, 0, -1], ['west', 8, 1, 0]] as const) {
+      const points = contour?.edges[edge] ?? square[edge];
+      const band = [...points, ...points.slice().reverse().map(p => ({ x: p.x + dx * 6, y: p.y + dy * 6 }))];
+      const texture = capMask & bit ? cap : footMask & bit ? toe : undefined;
+      if (texture) {
+        ctx.save(); traceContour(ctx, band, x, y, true); ctx.clip();
+        ctx.fillStyle = texture; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); ctx.restore();
+      }
+      if (capMask & bit || footMask & bit) {
+        ctx.strokeStyle = back ? edge === 'north' ? '#38526466' : '#e3e0bc70'
+          : edge === 'north' || edge === 'west' ? '#ddd6b54d' : '#15233a66';
+        ctx.lineWidth = back ? .85 : 1.2;
+        traceContour(ctx, points, x, y); ctx.stroke();
+      }
     }
     return true;
   }
@@ -117,6 +173,7 @@ export class RockCliffArt {
     ctx.restore();
   }
   private quad(ctx: CanvasRenderingContext2D, image: HTMLImageElement | undefined, region: Rect, points: readonly ContourPoint[], fallback: string): void {
+    if (points.length !== 4) return;
     ctx.save(); traceContour(ctx, points, 0, 0, true); ctx.clip(); ctx.fillStyle = fallback; ctx.fill();
     if (!image) { ctx.restore(); return; }
     const [a, b, , d] = points;
@@ -177,10 +234,12 @@ export class RockCliffArt {
       else { ctx.fillStyle = '#69758a'; ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size); }
     }
     // Keep the lower landing physically flat without painting a separate stone slab over it.
-    this.quad(ctx, image, atlas.steps.tread, landing, '#90938d');
-    // Each upper entrance meets the grass/rock surface with a short mortar-dark joint.
-    ctx.strokeStyle = '#33405299'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(landing[2].x, landing[2].y); ctx.lineTo(landing[3].x, landing[3].y); ctx.stroke();
+    if (landing.length === 4) {
+      this.quad(ctx, image, atlas.steps.tread, landing, '#90938d');
+      // Standalone structures meet their upper support with a short mortar joint.
+      ctx.strokeStyle = '#33405299'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(landing[2].x, landing[2].y); ctx.lineTo(landing[3].x, landing[3].y); ctx.stroke();
+    }
     if (dx && !dy && !ramp) {
       // In side view, the narrow visible riser edge remains vertical like the reference gradoni.
       ctx.strokeStyle = '#d4cdb580'; ctx.lineWidth = .8;

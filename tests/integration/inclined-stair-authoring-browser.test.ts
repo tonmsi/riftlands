@@ -49,7 +49,7 @@ test('both makers author solid continuous 45 degree stairs and explain mismatche
       return { defaultProfile, dungeonDefault, worldHint, dungeonHint, worldError, statuses,
         world: doc.surfaceStairs?.map(metric), dungeon: draft.surfaceStairs?.map(metric) };
     });
-    assert.equal(result.defaultProfile, 'incline'); assert.equal(result.dungeonDefault, 'incline');
+    assert.equal(result.defaultProfile, 'terraced'); assert.equal(result.dungeonDefault, 'incline');
     assert.match(result.worldHint!, /45\.0°.*ingombro 2 celle.*corpo solido/);
     assert.match(result.dungeonHint!, /45\.0°.*ingombro 2 celle.*corpo solido/);
     assert.match(result.worldError, /3 livelli ogni tile/); assert.match(result.statuses.at(-1)!, /3 livelli ogni tile/);

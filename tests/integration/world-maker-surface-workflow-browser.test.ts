@@ -28,7 +28,7 @@ test('actual maker assigns PNG semantics, builds raised terrain and places walka
   const floor = newWorldAsset('workflow-floor', 'PNG pavimento di prova', '/world-assets/montagna/roccia-tile.png');
   floor.layer = 'ground'; floor.cells[0] = { blocked: true, visibility: 'hide-fade' };
   const height = newWorldAsset('workflow-height', 'PNG rialzo di prova', '/world-assets/montagna/roccia-tile.png');
-  resizeWorldAsset(height, 3, 2); height.layer = 'ground';
+  resizeWorldAsset(height, 9, 8); height.layer = 'ground';
   doc.assets = [floor, height];
   try {
     await server.listen(); browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -78,28 +78,29 @@ test('actual maker assigns PNG semantics, builds raised terrain and places walka
     const configuredHeight = exported.assets.find(asset => asset.id === height.id)!;
     assert.equal(configuredHeight.category, 'elevation');
     assert.deepEqual(configuredHeight.elevation, { height: 3, material: 'grass', wallMaterial: 'rock' });
-    const summit = exported.surfaceCells!.filter(cell => cell.x >= 0 && cell.x < 3 && cell.y >= 2 && cell.y < 4);
-    assert.equal(summit.length, 6); assert.ok(summit.every(cell => cell.elevation === 3 && !cell.blocked));
+    const summit = exported.surfaceCells!.filter(cell => cell.x >= 0 && cell.x < 9 && cell.y >= 2 && cell.y < 10);
+    assert.equal(summit.length, 72); assert.ok(summit.every(cell => cell.elevation === 3 && cell.layout === 'terraced' && !cell.blocked));
     assert.ok(exported.placements.some(placement => placement.assetId === height.id && placement.x === 0 && placement.y === 2 && placement.elevation === 3));
     const summitBeforeObjects = structuredClone(summit);
 
     await page.locator('button[data-build-mode="object"]').click();
     await page.locator('[data-terrain-object="rock"]').click();
     await expect(page.locator('#asset-name')).toHaveValue('Sasso · oggetto');
-    await clickTile(0, 2, 3);
+    await clickTile(3, 5, 3);
     await page.locator('[data-terrain-object="bush"]').click();
     await expect(page.locator('#asset-name')).toHaveValue('Cespuglio · oggetto');
-    await clickTile(1, 2, 3);
+    await clickTile(4, 5, 3);
     exported = await exportedDocument(page);
-    assert.deepEqual(exported.surfaceCells!.filter(cell => cell.x >= 0 && cell.x < 3 && cell.y >= 2 && cell.y < 4), summitBeforeObjects);
-    assert.ok(exported.placements.some(placement => placement.assetId === 'maker-rock' && placement.x === 0 && placement.y === 2 && placement.elevation === 3));
-    assert.ok(exported.placements.some(placement => placement.assetId === 'maker-bush' && placement.x === 1 && placement.y === 2 && placement.elevation === 3));
+    assert.deepEqual(exported.surfaceCells!.filter(cell => cell.x >= 0 && cell.x < 9 && cell.y >= 2 && cell.y < 10), summitBeforeObjects);
+    assert.ok(exported.placements.some(placement => placement.assetId === 'maker-rock' && placement.x === 3 && placement.y === 5 && placement.elevation === 3));
+    assert.ok(exported.placements.some(placement => placement.assetId === 'maker-bush' && placement.x === 4 && placement.y === 5 && placement.elevation === 3));
     const world = new World(exported.seed, 16, 'world', exported, []);
-    assert.equal(world.surfaceAt(0, 2)?.blocked, true); assert.equal(world.surfaceAt(1, 2)?.blocked, false);
-    assert.equal(world.isHiding(1.5 * TILE_SIZE, 2.5 * TILE_SIZE, { x: 1.5 * TILE_SIZE, y: 2.5 * TILE_SIZE, elevation: 3 }), true);
+    assert.equal(world.surfaceAt(3, 5)?.blocked, true); assert.equal(world.surfaceAt(4, 5)?.blocked, false);
+    assert.equal(world.surfaceAt(0, 2)?.terrainRole, 'wall');
+    assert.equal(world.isHiding(4.5 * TILE_SIZE, 5.5 * TILE_SIZE, { x: 4.5 * TILE_SIZE, y: 5.5 * TILE_SIZE, elevation: 3 }), true);
 
     await page.locator('#asset-category-filter').selectOption('floor');
-    await page.locator('#asset-list [data-asset="workflow-floor"]').click(); await clickTile(2, 2, 3);
+    await page.locator('#asset-list [data-asset="workflow-floor"]').click(); await clickTile(5, 5, 3);
     await page.locator('button[data-build-mode="floor"]').click();
     await page.locator('#floor-controls [data-tool="terrain"]').click(); await page.locator('#terrain').selectOption('grass');
     await clickTile(-3, 3, 2);
@@ -107,8 +108,8 @@ test('actual maker assigns PNG semantics, builds raised terrain and places walka
     const repaired = exported.surfaceCells!.find(cell => cell.x === -3 && cell.y === 3)!;
     assert.notEqual(repaired.blocked, true); assert.equal(repaired.material, 'grass'); assert.equal(repaired.elevation, 2);
     assert.equal(new World(exported.seed, 16, 'world', exported, []).surfaceAt(-3, 3)?.blocked, false);
-    assert.equal(exported.surfaceCells!.find(cell => cell.x === 2 && cell.y === 2)?.elevation, 3);
-    assert.ok(exported.placements.some(placement => placement.assetId === floor.id && placement.x === 2 && placement.y === 2 && placement.elevation === 3));
+    assert.equal(exported.surfaceCells!.find(cell => cell.x === 5 && cell.y === 5)?.elevation, 3);
+    assert.ok(exported.placements.some(placement => placement.assetId === floor.id && placement.x === 5 && placement.y === 5 && placement.elevation === 3));
     await page.locator('#terrain').selectOption('stone'); await clickTile(-5, 0);
     exported = await exportedDocument(page);
     const stoneFloor = exported.surfaceCells!.find(cell => cell.x === -5 && cell.y === 0)!;
