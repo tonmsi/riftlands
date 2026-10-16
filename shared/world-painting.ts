@@ -5,7 +5,46 @@ export interface MaterialPaint { color: string; intensity: number; size: number;
 export interface MaskPoint { x: number; y: number; }
 /** Interior control points only; shared edge endpoints are supplied by the renderer. */
 export interface MaskShape { curves: MaskPoint[][]; smooth: boolean; }
+export const TRANSITION_MATERIALS = ['water', 'grass', 'mud', 'ice', 'path', 'snow', 'stone'] as const;
+export type TransitionMaterial = typeof TRANSITION_MATERIALS[number];
+export interface TransitionRule {
+  curve?: number;
+  maskShapes?: Partial<Record<number, MaskShape>>;
+  priority?: number;
+  owner?: TransitionMaterial;
+}
+export const TRANSITION_PRIORITY: Record<TransitionMaterial,number> = {water:70,stone:60,snow:50,path:40,ice:30,mud:20,grass:10};
+export const transitionPairKey = (a: TransitionMaterial,b: TransitionMaterial): string => [a,b].sort().join(':');
+export interface ResolvedTransition {
+  source: 'general' | 'material' | 'pair'; key: string; owner?: TransitionMaterial;
+  curve: number; maskShapes?: WorldPainting['maskShapes']; priority: number;
+}
+/** Resolve once per surface combination, outside the frame loop. Pair > material > general.
+ * Junctions use one winning rule, ordered by specificity, priority and stable key. */
+export function resolveTransition(p: WorldPainting, surfaces: readonly TransitionMaterial[]): ResolvedTransition {
+  const unique=[...new Set(surfaces)].sort() as TransitionMaterial[];
+  const materialPriority=(s:TransitionMaterial)=>p.materialRules?.[s]?.priority??TRANSITION_PRIORITY[s];
+  const candidates: {source:'material'|'pair';key:string;owner:TransitionMaterial;rule:TransitionRule}[]=[];
+  for(const s of unique)if(p.materialRules?.[s])candidates.push({source:'material',key:s,owner:s,rule:p.materialRules[s]!});
+  for(let i=0;i<unique.length;i++)for(let j=i+1;j<unique.length;j++){
+    const a=unique[i],b=unique[j],key=transitionPairKey(a,b),rule=p.pairRules?.[key];
+    if(rule){
+      const owner=rule.owner??[a,b].sort((x,y)=>materialPriority(y)-materialPriority(x)||x.localeCompare(y))[0];
+      candidates.push({source:'pair',key,owner,rule});
+    }
+  }
+  candidates.sort((a,b)=>(b.source==='pair'?2:1)-(a.source==='pair'?2:1)
+    ||(b.rule.priority??materialPriority(b.owner))-(a.rule.priority??materialPriority(a.owner))||a.key.localeCompare(b.key));
+  const winner=candidates[0];
+  if(!winner)return {source:'general',key:'general',curve:p.curve,maskShapes:p.maskShapes,priority:0};
+  const base=winner.source==='pair'?p.materialRules?.[winner.owner]:undefined;
+  return {source:winner.source,key:winner.key,owner:winner.owner,priority:winner.rule.priority??materialPriority(winner.owner),
+    curve:winner.rule.curve??base?.curve??p.curve,
+    maskShapes:{...p.maskShapes,...base?.maskShapes,...winner.rule.maskShapes}};
+}
 export interface WorldPainting {
+  materialRules?: Partial<Record<TransitionMaterial,TransitionRule>>;
+  pairRules?: Partial<Record<string,TransitionRule>>;
   maskShapes?: Partial<Record<number, MaskShape>>;
   edges: 'masks' | 'legacy';
   curve: number;
@@ -23,6 +62,25 @@ export function defaultWorldPainting(): WorldPainting {
 export function validWorldPainting(value: unknown): value is WorldPainting {
   if (!value || typeof value !== 'object') return false;
   const p = value as WorldPainting;
+  const validRule=(r:TransitionRule)=>!!r&&typeof r==='object'&&!Array.isArray(r)
+    &&(r.curve===undefined||(Number.isFinite(r.curve)&&r.curve>=0&&r.curve<=1))
+    &&(r.priority===undefined||(Number.isInteger(r.priority)&&r.priority>=0&&r.priority<=1000))
+    &&(r.owner===undefined||TRANSITION_MATERIALS.includes(r.owner))
+    &&validWorldPainting({...defaultWorldPainting(),maskShapes:r.maskShapes});
+  for(const [kind,rules] of [['material',p.materialRules],['pair',p.pairRules]] as const){
+    if(rules===undefined)continue;
+    if(!rules||typeof rules!=='object'||Array.isArray(rules)||Object.keys(rules).length>(kind==='pair'?21:7))return false;
+    for(const [key,rule] of Object.entries(rules)){
+      if(!validRule(rule!))return false;
+      if(kind==='material'){
+        if(!TRANSITION_MATERIALS.includes(key as TransitionMaterial)||rule!.owner!==undefined)return false;
+      }else{
+        const parts=key.split(':') as TransitionMaterial[];
+        if(parts.length!==2||parts[0]===parts[1]||!parts.every(s=>TRANSITION_MATERIALS.includes(s))
+          ||transitionPairKey(parts[0],parts[1])!==key||(rule!.owner!==undefined&&!parts.includes(rule!.owner)))return false;
+      }
+    }
+  }
   if (p.maskShapes !== undefined) {
     if (!p.maskShapes || typeof p.maskShapes !== 'object' || Array.isArray(p.maskShapes)) return false;
     for (const [key, shape] of Object.entries(p.maskShapes)) {

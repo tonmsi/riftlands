@@ -58,6 +58,7 @@ export function terrainMaskCommands(mask: number, size: number, curve: number, s
   }
 }
 export class TerrainMasks {
+  get pathCount():number { return this.paths.length; }
   private curve = -1;
   private shapes?: WorldPainting['maskShapes'];
   private size = -1;

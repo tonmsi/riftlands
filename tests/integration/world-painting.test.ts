@@ -35,6 +35,41 @@ test('World Painting previews, undoes, exports, installs and reloads its palette
       return results;
     });
     for(let mask=0;mask<16;mask++) assert.deepEqual(masks[mask],[0,1,2,3].map(bit=>!!(mask & 1<<bit)));
+    const complement = await page.evaluate(async()=>{
+      const { TransitionMasks }=await import('/client/render/transition-masks.ts' as string);
+      const { terrainMaskCommands }=await import('/client/render/terrain-masks.ts' as string);
+      const { defaultWorldPainting }=await import('/shared/world-painting.ts' as string);
+      const p=defaultWorldPainting();
+      const shape={smooth:false,curves:[[{x:.2,y:.2},{x:.7,y:.8}]]};
+      p.materialRules={water:{maskShapes:{12:shape}}};
+      const cache=new TransitionMasks();cache.configure(p,64);
+      const compiled=cache.forSurfaces(['water','grass']);
+      const waterCanvas=document.createElement('canvas'),landCanvas=document.createElement('canvas');
+      waterCanvas.width=waterCanvas.height=landCanvas.width=landCanvas.height=64;
+      const water=waterCanvas.getContext('2d',{willReadFrequently:true})!,land=landCanvas.getContext('2d',{willReadFrequently:true})!;
+      water.fill(new Path2D(terrainMaskCommands(12,64,p.curve,shape)),'evenodd');
+      const path=compiled.get(3,64,['grass']);land.fill(path,'evenodd');
+      const a=water.getImageData(0,0,64,64).data,b=land.getImageData(0,0,64,64).data;
+      let gaps=0,overlaps=0,minSum=510,maxSum=0;
+      // Separate rasterizations can differ by a few alpha units on the contour.
+      for(let i=3;i<a.length;i+=4){minSum=Math.min(minSum,a[i]+b[i]);maxSum=Math.max(maxSum,a[i]+b[i]);if(a[i]+b[i]<245)gaps++;if(a[i]+b[i]>265)overlaps++;}
+      return {gaps,overlaps,minSum,maxSum,same:path===compiled.get(3,64,['grass']),owner:compiled.rule.owner,stats:cache.stats};
+    });
+    assert.equal(complement.gaps,0);assert.equal(complement.overlaps,0,JSON.stringify(complement));
+    assert.equal(complement.owner,'water');assert.ok(complement.same,'unchanged rules reuse compiled paths');
+    const artReuse=await page.evaluate(async()=>{
+      const { EnvironmentArt }=await import('/client/render/environment-art.ts' as string);
+      const { defaultWorldPainting }=await import('/shared/world-painting.ts' as string);
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=64;
+      const ctx=canvas.getContext('2d')!,art=new EnvironmentArt(),p=defaultWorldPainting();
+      art.configure(p);art.paintGround(ctx,'grass',0,0);art.draw(ctx,'grass',0,0,.5);
+      const wash=art.washes.get('grass'),sprite=[...art.cache.values()][0];
+      const rules=structuredClone(p);rules.materialRules={water:{curve:.2}};art.configure(rules);
+      const reused=art.washes.get('grass')===wash&&[...art.cache.values()][0]===sprite;
+      const changed=structuredClone(rules);changed.materials.grass.intensity=.5;art.configure(changed);
+      return {reused,cleared:art.washes.size===0&&art.cache.size===0};
+    });
+    assert.ok(artReuse.reused,'editing contours preserves bitmap artwork');assert.ok(artReuse.cleared,'editing pigments invalidates artwork');
     const seams = await page.evaluate(async () => {
       const { PaintedTerrain } = await import('/client/render/painted-terrain.ts' as string);
       const { defaultWorldPainting } = await import('/shared/world-painting.ts' as string);
@@ -84,6 +119,26 @@ test('World Painting previews, undoes, exports, installs and reloads its palette
     await page.screenshot({path:join(root,'artifacts/world-painting-mask-editor.png')});
     await page.locator('#mask-choice').selectOption('12');await page.locator('#mask-reset').click();
     await page.locator('#mask-close').click();await page.locator('#undo').click();
+    await page.locator('#transition-scope').selectOption('material');
+    await expect(page.locator('#transition-source')).toContainText('regola generale');
+    await page.locator('#painting-curve').fill('0.9');await page.locator('#painting-curve').dispatchEvent('change');
+    await page.locator('#painting-edit-masks').click();await page.locator('#mask-choice').selectOption('12');
+    await expect(page.locator('#mask-rule-label')).toContainText('Acqua');
+    await page.locator('#mask-wave').click();await page.locator('#mask-apply').click();await page.locator('#mask-close').click();
+    await page.locator('#transition-scope').selectOption('pair');
+    await expect(page.locator('#transition-source')).toContainText('materiale Acqua');
+    await page.locator('#painting-curve').fill('0.2');await page.locator('#painting-curve').dispatchEvent('change');
+    await page.locator('#transition-priority').fill('90');await page.locator('#transition-priority').dispatchEvent('change');
+    await page.locator('#painting-edit-masks').click();await page.locator('#mask-choice').selectOption('12');
+    await page.locator('#mask-angular').click();await page.locator('#mask-apply').click();await page.locator('#mask-close').click();
+    await page.locator('#transition-scope').selectOption('material');await page.locator('#transition-a').selectOption('grass');
+    await page.locator('#transition-priority').fill('120');await page.locator('#transition-priority').dispatchEvent('change');
+    await page.locator('#transition-scope').selectOption('pair');
+    await expect(page.locator('#transition-source')).toContainText('Origine: coppia');
+    await page.locator('#transition-reset').click();await expect(page.locator('#transition-source')).toContainText('materiale Erba');
+    await page.locator('#undo').click();await expect(page.locator('#transition-source')).toContainText('Origine: coppia');
+    await page.screenshot({path:join(root,'artifacts/world-painting-rules.png')});
+    await page.locator('#transition-scope').selectOption('general');
     await page.locator('#show-grid').uncheck();
     await mkdir(join(root,'artifacts'),{recursive:true});
     await page.screenshot({path:join(root,'artifacts/world-painting.png')});
@@ -96,6 +151,12 @@ test('World Painting previews, undoes, exports, installs and reloads its palette
     assert.ok(Math.abs(saved.painting.maskShapes[12].curves[0][0].y-.7)<.01);
     assert.equal(saved.painting.maskShapes[10].smooth,false);
     assert.deepEqual(saved.painting.maskShapes[10].curves.map((c:unknown[])=>c.length),[4,4]);
+    assert.equal(saved.painting.materialRules.water.curve,.9);
+    assert.equal(saved.painting.materialRules.water.maskShapes[12].smooth,true);
+    assert.equal(saved.painting.materialRules.grass.priority,120);
+    assert.equal(saved.painting.pairRules['grass:water'].curve,.2);
+    assert.equal(saved.painting.pairRules['grass:water'].owner,'water');
+    assert.equal(saved.painting.pairRules['grass:water'].maskShapes[12].smooth,false);
     const download = page.waitForEvent('download');await page.locator('#export-world').click();
     const archive = join(directory,'painting.project.json');await (await download).saveAs(archive);
     assert.deepEqual(JSON.parse(await readFile(archive,'utf8')).document.painting,saved.painting);
@@ -109,6 +170,9 @@ test('World Painting previews, undoes, exports, installs and reloads its palette
     await page.locator('#painting-edit-masks').click();await page.locator('#mask-choice').selectOption('10');
     await expect(page.locator('#mask-smooth')).not.toBeChecked();await expect(page.locator('#mask-contour option')).toHaveCount(2);
     await page.locator('#mask-close').click();
+    await page.locator('#transition-scope').selectOption('pair');
+    await expect(page.locator('#painting-curve')).toHaveValue('0.2');
+    await expect(page.locator('#transition-owner')).toHaveValue('water');
     assert.deepEqual(errors,[]);
   } finally {
     await browser?.close();await studio.close();

@@ -1,12 +1,12 @@
-import { defaultWorldPainting, type MaskShape, type MaskPoint } from '../../../shared/world-painting';
-import type { WorldDocument } from '../../../shared/world-schema';
+import type { MaskShape, MaskPoint } from '../../../shared/world-painting';
 import { maskContours, terrainMaskCommands } from '../../render/terrain-masks';
+import type { TransitionScope } from './painting-transition-scope';
 
-export function installPaintingMaskEditor(panel: HTMLElement, current: () => WorldDocument, change: (action: () => void) => void) {
+export function installPaintingMaskEditor(panel: HTMLElement, change: (action: () => void) => void, scope:TransitionScope) {
   const dialog = document.createElement('dialog');
   dialog.id = 'painting-mask-dialog';
   dialog.style.cssText = 'width:min(620px,90vw);max-height:90vh;overflow:auto';
-  dialog.innerHTML = `<h2>Disegna una maschera</h2><div class="fields"><label>Maschera<select id="mask-choice">${Array.from({length:14},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}</select></label>
+  dialog.innerHTML = `<h2>Disegna una maschera</h2><p id="mask-rule-label" class="hint"></p><div class="fields"><label>Maschera<select id="mask-choice">${Array.from({length:14},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}</select></label>
     <label>Contorno<select id="mask-contour"></select></label><label class="check"><input id="mask-smooth" type="checkbox">Raccordi morbidi</label></div>
     <canvas id="mask-editor-canvas" width="480" height="480" style="display:block;width:min(100%,480px);margin:12px auto;touch-action:none;cursor:crosshair" aria-label="Trascina i punti della maschera; clicca per aggiungere un punto"></canvas>
     <p class="hint">Trascina i punti chiari. Clicca sul disegno per aggiungerne uno (massimo 8 per contorno); doppio clic su un punto per rimuoverlo. Gli estremi dorati restano fissi per raccordare i quadrati vicini. Le maschere 0 e 15 sono vuota e piena.</p>
@@ -19,11 +19,12 @@ export function installPaintingMaskEditor(panel: HTMLElement, current: () => Wor
   const smooth = dialog.querySelector<HTMLInputElement>('#mask-smooth')!, status = dialog.querySelector('#mask-edit-status')!;
   let mask = 1, curveIndex = 0, selected = 0, dragging = false, draft: MaskShape = {curves:[],smooth:true};
   const clamp = (v: number) => Math.max(.03,Math.min(.97,v));
-  const painting = () => current().painting ?? defaultWorldPainting();
+  const painting = () => scope.style();
   const draw = () => {
     const p=painting();ctx.clearRect(0,0,480,480);ctx.save();ctx.translate(24,24);
-    ctx.fillStyle=p.materials.water.color;ctx.fillRect(0,0,432,432);
-    ctx.fillStyle=p.materials.grass.color;ctx.fill(new Path2D(terrainMaskCommands(mask,432,p.curve,draft)),'evenodd');
+    const colors=scope.colors();
+    ctx.fillStyle=colors.background;ctx.fillRect(0,0,432,432);
+    ctx.fillStyle=colors.foreground;ctx.fill(new Path2D(terrainMaskCommands(mask,432,p.curve,draft)),'evenodd');
     ctx.strokeStyle='#ffffff30';ctx.lineWidth=1;
     for(let i=0;i<=4;i++){ctx.beginPath();ctx.moveTo(i*108,0);ctx.lineTo(i*108,432);ctx.moveTo(0,i*108);ctx.lineTo(432,i*108);ctx.stroke();}
     const info=maskContours(mask,p.curve)[curveIndex], points=draft.curves[curveIndex];
@@ -35,11 +36,14 @@ export function installPaintingMaskEditor(panel: HTMLElement, current: () => Wor
   };
   const load = () => {
     const p=painting();mask=Number(choice.value);
+    dialog.querySelector('#mask-rule-label')!.textContent=scope.label()+' · applica per salvare solo questa eccezione.';
     draft=structuredClone(p.maskShapes?.[mask] ?? {curves:maskContours(mask,p.curve).map(c=>[c.point]),smooth:true});
     curveIndex=0;selected=0;
     contour.replaceChildren(...draft.curves.map((_,i)=>new Option(`Contorno ${i+1}`,String(i))));
     contour.disabled=draft.curves.length===1;
-    status.textContent='Applica per salvare le modifiche nella bozza.';draw();
+    status.textContent=scope.target()?.maskShapes?.[mask]
+      ?'Maschera personalizzata in questa regola. Applica per salvare le modifiche.'
+      :'Maschera ereditata. Applica per creare un’eccezione solo in questa regola.';draw();
   };
   choice.onchange=load;
   contour.onchange=()=>{curveIndex=Number(contour.value);selected=0;draw();};
@@ -79,11 +83,11 @@ export function installPaintingMaskEditor(panel: HTMLElement, current: () => Wor
   dialog.querySelector('#mask-angular')!.addEventListener('click',()=>preset(true));
   dialog.querySelector('#mask-apply')!.addEventListener('click',()=>{
     const saved=structuredClone(draft), selectedMask=mask;
-    change(()=>{const p=current().painting??=defaultWorldPainting();(p.maskShapes??={})[selectedMask]=saved;});
+    change(()=>{const p=scope.target(true)!;(p.maskShapes??={})[selectedMask]=saved;});
     status.textContent='Maschera salvata nella bozza. Puoi modificarne un’altra o chiudere.';
   });
   dialog.querySelector('#mask-reset')!.addEventListener('click',()=>{
-    change(()=>{if(current().painting?.maskShapes)delete current().painting!.maskShapes![mask];});load();
+    change(()=>{const p=scope.target();if(p?.maskShapes)delete p.maskShapes[mask];});load();
   });
   dialog.querySelector('#mask-close')!.addEventListener('click',()=>dialog.close());
   return {open: (index=1)=>{choice.value=String(Math.max(1,Math.min(14,index)));load();dialog.showModal();},refresh:()=>{if(dialog.open)load();}};

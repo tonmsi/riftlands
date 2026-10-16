@@ -5,6 +5,7 @@ import { newWorldDocument, parseWorldDocument } from '../shared/world-schema';
 import { World } from '../shared/world';
 import { WorldEditorHistory } from '../client/editors/world/world-editor-history';
 import { terrainMaskCommands } from '../client/render/terrain-masks';
+import { resolveTransition, transitionPairKey } from '../shared/world-painting';
 
 test('painting survives parsing, export and history without changing procedural terrain or climate', () => {
   const before = newWorldDocument(), after = structuredClone(before);
@@ -52,4 +53,36 @@ test('painting rejects invalid palettes and unbounded effects, including nested 
   doc.interiors = [{ id:'room', name:'Room', width:24, height:24,
     document: { ...newWorldDocument(), painting: { ...defaultWorldPainting(), curve: -1 } } }];
   assert.throws(() => parseWorldDocument(doc), /world painting/);
+});
+
+test('transition rules resolve pairs, material priorities, inheritance and junctions deterministically',()=>{
+  const p=defaultWorldPainting();p.curve=.25;
+  const wave={smooth:true,curves:[[{x:.3,y:.2},{x:.7,y:.8}]]};
+  p.maskShapes={3:wave};
+  assert.equal(resolveTransition(p,['water','grass']).source,'general');
+  p.materialRules={water:{curve:.8,maskShapes:{12:wave}},grass:{curve:.4}};
+  const water=resolveTransition(p,['water','grass']);
+  assert.equal(water.owner,'water');assert.equal(water.curve,.8);
+  assert.deepEqual(water.maskShapes?.[3],wave);assert.deepEqual(water.maskShapes?.[12],wave);
+  assert.equal(resolveTransition(p,['water','snow']).owner,'water');
+  p.materialRules.grass!.priority=100;
+  assert.equal(resolveTransition(p,['water','grass']).owner,'grass');
+  const pair=transitionPairKey('grass','water');assert.equal(pair,transitionPairKey('water','grass'));
+  p.pairRules={[pair]:{owner:'water',curve:.1,maskShapes:{3:{...wave,smooth:false}}}};
+  const specific=resolveTransition(p,['grass','water']);
+  assert.equal(specific.source,'pair');assert.equal(specific.owner,'water');assert.equal(specific.curve,.1);
+  assert.equal(specific.maskShapes?.[3]?.smooth,false);assert.deepEqual(specific.maskShapes?.[12],wave);
+  assert.deepEqual(resolveTransition(p,['snow','water','grass']),resolveTransition(p,['grass','water','snow']));
+  delete p.pairRules[pair];assert.equal(resolveTransition(p,['grass','water']).owner,'grass');
+  assert.deepEqual(parseWorldDocument({...newWorldDocument(),painting:p}).painting,p);
+});
+
+test('transition rules reject invalid pairs, owners, priorities and geometry',()=>{
+  for(const extra of [
+    {materialRules:{rock:{curve:.5}}},{materialRules:{water:{priority:1001}}},
+    {materialRules:{water:{owner:'water'}}},{materialRules:{water:{curve:NaN}}},
+    {pairRules:{'water:grass':{}}},{pairRules:{'water:water':{}}},
+    {pairRules:{'grass:water':{owner:'snow'}}},{pairRules:{'grass:water':{priority:-1}}},
+    {pairRules:{'grass:water':{maskShapes:{15:{curves:[],smooth:true}}}}},
+  ])assert.throws(()=>parseWorldDocument({...newWorldDocument(),painting:{...defaultWorldPainting(),...extra}}),/world painting/);
 });

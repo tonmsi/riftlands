@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 
@@ -350,6 +350,68 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
     console.log('A/B full terrain rebuild CPU median (same scenes):', comparison);
     assert.ok(comparison.masksMs <= comparison.legacyMs * 1.35 + 2,
       'mask rebuilds must stay within the existing terrain CPU budget: ' + JSON.stringify(comparison));
+    const hardware = await page.evaluate(async () => {
+      const { TerrainRenderer } = await import('/client/render/terrain-renderer.ts' as string);
+      const { World } = await import('/shared/world.ts' as string);
+      const { WORLD_DOCUMENT } = await import('/shared/world-content.ts' as string);
+      const { defaultWorldPainting, TRANSITION_MATERIALS, transitionPairKey } = await import('/shared/world-painting.ts' as string);
+      const { maskContours } = await import('/client/render/terrain-masks.ts' as string);
+      const cases=[];
+      const percentile=(values:number[],fraction:number)=>values.slice().sort((a,b)=>a-b)[Math.min(values.length-1,Math.floor(values.length*fraction))];
+      for(const mode of ['general','all-rules']){
+        const painting=defaultWorldPainting();
+        if(mode==='all-rules'){
+          painting.materialRules={};painting.pairRules={};
+          for(const material of TRANSITION_MATERIALS)painting.materialRules[material]={curve:.8};
+          for(let a=0;a<TRANSITION_MATERIALS.length;a++)for(let b=a+1;b<TRANSITION_MATERIALS.length;b++){
+            const shapes:any={};
+            for(let mask=1;mask<15;mask++)shapes[mask]={smooth:true,curves:maskContours(mask,.8).map((c:any)=>Array.from({length:8},(_,i)=>{
+              const t=(i+1)/9,dx=c.end.x-c.start.x,dy=c.end.y-c.start.y,offset=(i%2?1:-1)*.09;
+              return {x:Math.max(.03,Math.min(.97,c.start.x+dx*t-dy*offset)),y:Math.max(.03,Math.min(.97,c.start.y+dy*t+dx*offset))};
+            }))};
+            painting.pairRules[transitionPairKey(TRANSITION_MATERIALS[a],TRANSITION_MATERIALS[b])]={owner:TRANSITION_MATERIALS[a],maskShapes:shapes};
+          }
+        }
+        const canvas=document.createElement('canvas');canvas.width=1920;canvas.height=1080;
+        const ctx=canvas.getContext('2d',{willReadFrequently:true})!,terrain=new TerrainRenderer(ctx);
+        const world=new World(WORLD_DOCUMENT.seed,160,'world',{...WORLD_DOCUMENT,painting});
+        const view={camera:{x:640,y:360},width:1280,height:720,dpr:1.5,zoom:1};
+        let builds=0,warmRebuilds=0,warmTotalMs=0;
+        const original=terrain.drawTerrain.bind(terrain);
+        terrain.drawTerrain=(...args:unknown[])=>{builds++;return original(...args);};
+        const draw=()=>{
+          ctx.setTransform(1.5,0,0,1.5,960-view.camera.x*1.5,540-view.camera.y*1.5);
+          const start=window.performance.now();terrain.drawCachedTerrain(world,view,0);return window.performance.now()-start;
+        };
+        const cold:number[]=[],warm:number[]=[],scroll:number[]=[];
+        for(const [x,y] of [[0,0],[2700,2900],[-3000,5000],[12000,-9000]]){
+          view.camera.x=x+640;view.camera.y=y+360;terrain.invalidate();cold.push(draw());
+          const before=builds;
+          const warmStart=window.performance.now();
+          for(let i=0;i<120;i++){view.camera.x+=.5;warm.push(draw());}
+          warmTotalMs+=window.performance.now()-warmStart;
+          warmRebuilds+=builds-before;
+          for(let i=0;i<8;i++){view.camera.x+=208;scroll.push(draw());}
+        }
+        const art=terrain.environmentArt,cache=terrain.terrainCache.canvas;
+        const bytes={viewport:canvas.width*canvas.height*4,terrain:cache.width*cache.height*4,sprites:art.cachedPixels*4,
+          washes:art.washes.size*1536*1536*4};
+        cases.push({mode,coldMedianMs:percentile(cold,.5),coldMaxMs:Math.max(...cold),warmP95Ms:percentile(warm,.95),warmMeanMs:warmTotalMs/warm.length,
+          scrollMedianMs:percentile(scroll,.5),scrollP95Ms:percentile(scroll,.95),scrollMaxMs:Math.max(...scroll),warmRebuilds,
+          rgbaBytes:bytes,rgbaTotalMiB:Object.values(bytes).reduce((a,b)=>a+b,0)/1048576,
+          geometry:terrain.maskedTerrain.transitions.stats});
+      }
+      return {viewport:'1280x720, DPR 1.5',backend:'headless Chrome, Canvas CPU; timings exclude GPU completion and other game systems',
+        memory:'RGBA arithmetic for terrain surfaces only; browser copies, actors, imported assets and other resources excluded',cases};
+    });
+    writeFileSync('artifacts/terrain-hardware.json',JSON.stringify(hardware,null,2));
+    console.log('Terrain hardware budget:',hardware);
+    for(const result of hardware.cases){
+      assert.equal(result.warmRebuilds,0,'cached frames never resolve or rebuild transition geometry');
+      assert.ok(result.warmP95Ms<5,'cached terrain CPU submission stays small');
+      assert.ok(result.geometry.rules<=29&&result.geometry.paths<=928,'transition geometry stays bounded');
+    }
+    assert.deepEqual(hardware.cases[0].rgbaBytes,hardware.cases[1].rgbaBytes,'rules add geometry, not raster surfaces');
     assert.deepEqual(errors, []);
   } finally {
     await browser?.close();

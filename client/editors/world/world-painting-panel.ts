@@ -2,6 +2,7 @@ import { defaultWorldPainting, type PaintMaterial } from '../../../shared/world-
 import type { WorldDocument } from '../../../shared/world-schema';
 import { terrainMaskCommands } from '../../render/terrain-masks';
 import { installPaintingMaskEditor } from './painting-mask-editor';
+import { installTransitionScope } from './painting-transition-scope';
 
 const names: Record<PaintMaterial, string> = { grass: 'Erba', path: 'Strade', water: 'Mare / acqua', mud: 'Fango',
   snow: 'Neve', ice: 'Ghiaccio', rock: 'Rocce', bush: 'Cespugli', stone: 'Pavimenti dungeon' };
@@ -27,7 +28,8 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
   const button = document.createElement('button'); button.textContent = 'Painting';
   button.onclick = () => { panel.open = true; panel.scrollIntoView({ block: 'start' }); }; nav.append(button);
   const input = (id: string) => panel.querySelector<HTMLInputElement>(`#${id}`)!;
-  const maskEditor = installPaintingMaskEditor(panel,current,change);
+  const scope=installTransitionScope(panel,current,change);
+  const maskEditor = installPaintingMaskEditor(panel,change,scope);
   panel.querySelector('#painting-edit-masks')!.addEventListener('click',()=>maskEditor.open());
   const atlas = panel.querySelector<HTMLCanvasElement>('#painting-masks')!;
   atlas.style.cursor='pointer';
@@ -37,8 +39,10 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
   });
   const refresh = () => {
     const painting = current().painting ?? defaultWorldPainting();
+    scope.refresh();
+    const style=scope.style(),colors=scope.colors();
     (panel.querySelector('#painting-edges') as HTMLSelectElement).value = painting.edges;
-    input('painting-curve').value = String(painting.curve);
+    input('painting-curve').value = String(style.curve);
     for (const key of Object.keys(names) as PaintMaterial[]) for (const prop of ['color', 'intensity', 'size'] as const) {
       const control = input(`painting-${key}-${prop}`); control.value = String(painting.materials[key][prop]);
       control.title = control.value;
@@ -47,19 +51,19 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
     ctx.clearRect(0,0,288,288);
     for (let mask = 0; mask < 16; mask++) {
       ctx.save(); ctx.translate(mask % 4 * 72 + 4, Math.floor(mask / 4) * 72 + 4);
-      ctx.fillStyle = painting.materials.water.color; ctx.fillRect(0,0,64,64);
-      ctx.fillStyle = painting.materials.grass.color; ctx.fill(new Path2D(terrainMaskCommands(mask,64,painting.curve,painting.maskShapes?.[mask])), 'evenodd');
+      ctx.fillStyle = colors.background; ctx.fillRect(0,0,64,64);
+      ctx.fillStyle = colors.foreground; ctx.fill(new Path2D(terrainMaskCommands(mask,64,style.curve,style.maskShapes?.[mask])), 'evenodd');
       ctx.fillStyle = '#14291a'; ctx.font = '11px sans-serif'; ctx.fillText(String(mask),3,13); ctx.restore();
     }
     maskEditor.refresh();
   };
   panel.addEventListener('change', event => {
     const target = event.target as HTMLInputElement;
-    if (!target.id.startsWith('painting-')) return;
+    if (target.id!=='painting-edges'&&target.id!=='painting-curve'&&!/^painting-(grass|path|water|mud|snow|ice|rock|bush|stone)-(color|intensity|size)$/.test(target.id)) return;
     change(() => {
       const painting = current().painting ??= defaultWorldPainting();
       if (target.id === 'painting-edges') painting.edges = target.value as 'masks' | 'legacy';
-      else if (target.id === 'painting-curve') painting.curve = Number(target.value);
+      else if (target.id === 'painting-curve') scope.target(true)!.curve = Number(target.value);
       else if (/^painting-(grass|path|water|mud|snow|ice|rock|bush|stone)-(color|intensity|size)$/.test(target.id)) {
         const [, key, prop] = target.id.split('-') as [string, PaintMaterial, 'color' | 'intensity' | 'size'];
         if (prop === 'color') painting.materials[key].color = target.value;
@@ -71,12 +75,14 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
     // Preview mask geometry immediately; the map commits once on slider release.
     const canvas = panel.querySelector('canvas')!, ctx = canvas.getContext('2d')!;
     const painting = current().painting ?? defaultWorldPainting();
+    const style=scope.style(),colors=scope.colors();
     for (let mask = 0; mask < 16; mask++) {
       ctx.save(); ctx.translate(mask % 4 * 72 + 4, Math.floor(mask / 4) * 72 + 4);
-      ctx.fillStyle = painting.materials.water.color; ctx.fillRect(0,0,64,64);
-      ctx.fillStyle = painting.materials.grass.color; ctx.fill(new Path2D(terrainMaskCommands(mask,64,Number(input('painting-curve').value),painting.maskShapes?.[mask])), 'evenodd'); ctx.restore();
+      ctx.fillStyle = colors.background; ctx.fillRect(0,0,64,64);
+      ctx.fillStyle = colors.foreground; ctx.fill(new Path2D(terrainMaskCommands(mask,64,Number(input('painting-curve').value),style.maskShapes?.[mask])), 'evenodd'); ctx.restore();
     }
   });
   panel.querySelector('#painting-reset')!.addEventListener('click', () => change(() => { current().painting = defaultWorldPainting(); }));
+  scope.onSelection(refresh);
   return refresh;
 }

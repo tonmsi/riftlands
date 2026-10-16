@@ -35,6 +35,7 @@ function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, r
 
 export class EnvironmentArt {
   private painting = defaultWorldPainting();
+  private materialSignature = JSON.stringify(this.painting.materials);
   private palette = { ...TERRAIN };
   private pigment(tile: 'rock' | 'bush', color: string, patch = false): string {
     const settings = this.painting.materials[tile];
@@ -46,7 +47,11 @@ export class EnvironmentArt {
   }
   configure(painting: WorldPainting): void {
     if (this.painting === painting) return;
+    const signature=JSON.stringify(painting.materials);
     this.painting = painting;
+    // Contour/priority edits rebuild geometry, not the much larger artwork atlases.
+    if(this.materialSignature===signature)return;
+    this.materialSignature=signature;
     for (const tile of Object.keys(TERRAIN) as TileKind[]) this.palette[tile] = painting.materials[tile].color;
     this.cache.clear(); this.cachedPixels = 0; this.washes.clear(); this.waterPaint.clear();
   }

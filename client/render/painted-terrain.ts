@@ -2,6 +2,7 @@ import { TILE_SIZE } from '../../shared/config';
 import type { WorldPainting, PaintMaterial } from '../../shared/world-painting';
 import type { EnvironmentArt } from './environment-art';
 import { TerrainMasks } from './terrain-masks';
+import { TransitionMasks } from './transition-masks';
 import type { RenderBounds } from './render-types';
 import { noise } from './render-primitives';
 import type { World } from '../../shared/world';
@@ -13,11 +14,13 @@ const order: Surface[] = ['water', 'grass', 'mud', 'ice', 'path', 'snow', 'stone
  * establish one deterministic priority for saddles and junctions of 3+ materials. */
 export class PaintedTerrain {
   private masks = new TerrainMasks();
+  private transitions = new TransitionMasks();
   draw(ctx: CanvasRenderingContext2D, bounds: RenderBounds, painting: WorldPainting, art: EnvironmentArt,
     surfaceAt: (x: number, y: number) => Surface | null,
     colorAt: (s: Exclude<Surface, 'water'>, x: number, y: number) => string,
     world: World): void {
     const firstX = Math.floor(bounds.left / TILE_SIZE - .5), firstY = Math.floor(bounds.top / TILE_SIZE - .5);
+    this.transitions.configure(painting,TILE_SIZE);
     const lastX = Math.ceil(bounds.right / TILE_SIZE - .5), lastY = Math.ceil(bounds.bottom / TILE_SIZE - .5);
     // The sea is one continuous backing. Land masks cover it, without a world-sized canvas.
     ctx.fillStyle = painting.materials.water.color;
@@ -38,7 +41,8 @@ export class PaintedTerrain {
     };
     const regions = new Map<Surface, Path2D>();
     const exclusions = new Map<Surface, Path2D[]>();
-    const customShapes = !!painting.maskShapes && Object.keys(painting.maskShapes).length > 0;
+    const customShapes = (!!painting.maskShapes && Object.keys(painting.maskShapes).length > 0)
+      || !!Object.keys(painting.materialRules??{}).length || !!Object.keys(painting.pairRules??{}).length;
     for (let ty = firstY; ty <= lastY; ty++) for (let tx = firstX; tx <= lastX; tx++) {
       const corners = [surfaceAt(tx, ty), surfaceAt(tx+1, ty), surfaceAt(tx+1, ty+1), surfaceAt(tx, ty+1)];
       const x = (tx + .5) * TILE_SIZE, y = (ty + .5) * TILE_SIZE;
@@ -61,11 +65,16 @@ export class PaintedTerrain {
       }
       const ranks = corners.map(s => order.indexOf(s!));
       const layers = [...new Set(ranks)].sort((a,b) => a-b);
+      const surfaces=layers.map(rank=>order[rank]);
+      const transition=layers.length>1?this.transitions.forSurfaces(surfaces):undefined;
+      const geometry=(bits:number,layer:number)=>layer===0||!transition
+        ?this.masks.get(bits,TILE_SIZE,painting.curve,painting.maskShapes)
+        :transition.get(bits,TILE_SIZE,surfaces.slice(layer));
       for (let layer = 0; layer < layers.length; layer++) {
         const rank = layers[layer], s = order[rank], source = ranks.indexOf(rank);
         const sx = tx + (source === 1 || source === 2 ? 1 : 0), sy = ty + (source >= 2 ? 1 : 0);
         const mask = layer === 0 ? 15 : ranks.reduce((bits, r, i) => bits | (r >= rank ? 1 << i : 0), 0);
-        const path = this.masks.get(mask, TILE_SIZE, painting.curve, painting.maskShapes);
+        const path = geometry(mask,layer);
         let region = regions.get(s);
         if (!region) { region = new Path2D(); regions.set(s, region); }
         region.addPath(path, matrix);
@@ -77,11 +86,11 @@ export class PaintedTerrain {
           for(let above=layer+1;above<layers.length;above++){
             const bits=ranks.reduce((b,r,i)=>b|(r>=layers[above]?1<<i:0),0);
             const slot=above-layer-1;
-            (cuts[slot]??=new Path2D()).addPath(this.masks.get(bits,TILE_SIZE,painting.curve,painting.maskShapes),matrix);
+            (cuts[slot]??=new Path2D()).addPath(geometry(bits,above),matrix);
           }
         } else if (layer + 1 < layers.length) {
           const nextMask = ranks.reduce((bits, r, i) => bits | (r >= layers[layer+1] ? 1 << i : 0), 0);
-          region.addPath(this.masks.get(nextMask, TILE_SIZE, painting.curve, painting.maskShapes), matrix);
+          region.addPath(geometry(nextMask,layer+1), matrix);
         }
         if (mask !== 15) {
           ctx.save();
