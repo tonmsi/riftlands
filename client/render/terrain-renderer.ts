@@ -1,3 +1,5 @@
+import { defaultWorldPainting, PAINT_COLORS, type WorldPainting } from '../../shared/world-painting';
+import { PaintedTerrain } from './painted-terrain';
 import { CHUNK_SIZE, TILE_SIZE } from '../../shared/config';
 import type { TileKind } from '../../shared/types';
 import type { World } from '../../shared/world';
@@ -6,6 +8,12 @@ import { EnvironmentArt } from './environment-art';
 import { noise } from './render-primitives';
 import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor } from './terrain-style';
 import type { RenderBounds, TerrainViewport } from './render-types';
+const DEFAULT_PAINTING = defaultWorldPainting();
+function tintGround(color: string, original: string, chosen: string): string {
+  if (original === chosen) return color;
+  const rgb = color.startsWith('#') ? [1,3,5].map(i => parseInt(color.slice(i,i+2),16)) : color.match(/\d+/g)!.map(Number);
+  return 'rgb(' + rgb.map((v,i) => Math.max(0, Math.min(255, v + parseInt(chosen.slice(i*2+1,i*2+3),16) - parseInt(original.slice(i*2+1,i*2+3),16)))).join(',') + ')';
+}
 function coverTileBleed(ctx: CanvasRenderingContext2D, vx: number, vy: number, corner: number, radius: number, color: string, scale: number): void {
   ctx.fillStyle = color;
   const e = Math.max(1, 1.5 / scale);
@@ -25,6 +33,9 @@ function coverTileBleed(ctx: CanvasRenderingContext2D, vx: number, vy: number, c
 /** Terrain painting and scrolling cache. No camera, gameplay or actor animation state. */
 export class TerrainRenderer {
   private activeWorld?: World;
+  private painting: WorldPainting = defaultWorldPainting();
+  private readonly maskedTerrain = new PaintedTerrain();
+  private paintingRevision = -1;
   private readonly environmentArt = new EnvironmentArt();
   private terrainCache?: {
     canvas: HTMLCanvasElement;
@@ -57,6 +68,10 @@ export class TerrainRenderer {
   }
   drawCachedTerrain(world: World, view: TerrainViewport, time: number): void {
     this.activeWorld = world;
+    if (this.painting !== (world.authoring.document.painting ?? DEFAULT_PAINTING) || this.paintingRevision !== world.authoringRevision) {
+      this.invalidate();
+      this.paintingRevision = world.authoringRevision;
+    }
     if (this.lockRevision !== world.lockRevision) {
       this.invalidate();
       this.lockRevision = world.lockRevision;
@@ -114,6 +129,10 @@ export class TerrainRenderer {
     this.ctx.drawImage(cache.canvas, cache.left, cache.top, cache.canvas.width / scale, cache.canvas.height / scale);
   }
   drawTerrain(world: World, time: number, ctx: CanvasRenderingContext2D, bounds: RenderBounds): void {
+    this.activeWorld = world;
+    this.painting = world.authoring.document.painting ?? DEFAULT_PAINTING;
+    this.environmentArt.configure(this.painting);
+    const palette = this.painting.materials;
     const waterPlants: { x: number; y: number; variation: number; shore: number }[] = [];
     const transform = ctx.getTransform();
     type SurfaceKind = 'grass' | 'path' | 'mud' | 'stone' | 'water' | 'snow' | 'ice';
@@ -173,14 +192,14 @@ export class TerrainRenderer {
 
     const surfaceColor = (surface: Exclude<SurfaceKind, 'water'>, tx: number, ty: number) => {
       if (surface === 'grass') {
-        return groundColor(
+        return tintGround(groundColor(
           world.getMoisture((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE),
           world.getTemperature(tx, ty)
-        );
+        ), PAINT_COLORS.grass, palette.grass.color);
       }
-      if (surface === 'path') return pathColor(world.getTemperature(tx, ty));
-      if (surface === 'stone') return this.dungeonAt(tx, ty)?.theme.floor ?? TERRAIN.path;
-      return TERRAIN[surface];
+      if (surface === 'path') return tintGround(pathColor(world.getTemperature(tx, ty)), PAINT_COLORS.path, palette.path.color);
+      if (surface === 'stone') return palette.stone.color === PAINT_COLORS.stone ? this.dungeonAt(tx, ty)?.theme.floor ?? palette.stone.color : palette.stone.color;
+      return palette[surface].color;
     };
 
     const cornerNeighbours = [
@@ -223,6 +242,9 @@ export class TerrainRenderer {
       }
     }
 
+    if (this.painting.edges === 'masks') {
+      this.maskedTerrain.draw(ctx, bounds, this.painting, this.environmentArt, surfaceAt, surfaceColor, world);
+    } else {
     for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
       for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
         if (this.outsideLocalMap(tx, ty) || (world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7))) {
@@ -383,6 +405,7 @@ export class TerrainRenderer {
       this.environmentArt.drawWaterPlants(ctx, plant.x, plant.y, plant.variation, plant.shore);
     }
 
+    }
     const getScenery = (tx: number, ty: number): TileKind => {
       if (this.outsideLocalMap(tx, ty)) return 'grass';
       if (world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return 'grass';

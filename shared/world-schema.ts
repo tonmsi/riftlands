@@ -1,4 +1,5 @@
 import type { TileKind, Vec2 } from './types';
+import { validWorldPainting, type WorldPainting } from './world-painting';
 import { validNpcSettings, type NpcSettings } from './npc-settings';
 import { NPC_DEFINITIONS, type NpcKind, type NpcTemplateId } from './npcs';
 import { WORLD_TILE_TERRAINS, type WorldTileChunk } from './world-tiles';
@@ -53,6 +54,7 @@ export interface WorldWarp {
   reverseId?: string;
 }
 export interface WorldDocument {
+  painting?: WorldPainting;
   version: 1 | 2; generatorVersion: 1; seed: number; spawn: Vec2;
   assets: WorldAsset[]; placements: AssetPlacement[]; tiles: TileOverride[];
   zones: WorldZone[]; npcs: WorldNpc[]; dungeons: WorldDungeon[];
@@ -116,6 +118,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   const range = (v: any) => Array.isArray(v) && v.length === 2 && v.every(n => finite(n, 0, 1)) && v[0] <= v[1];
   const boolean = (v: any) => typeof v === 'boolean';
   if (!object(d) || ![1, 2].includes(d.version) || d.generatorVersion !== 1 || !integer(d.seed, -2147483648, 2147483647) || !point(d.spawn)) fail('versione, seed o spawn');
+  if (d.painting !== undefined && !validWorldPainting(d.painting)) fail('world painting');
   list(d.assets, 4096, 'catalogo asset'); list(d.placements, 100_000, 'piazzamenti'); list(d.tiles, 500_000, 'terreno');
   list(d.zones, 10_000, 'zone'); list(d.npcs, 100_000, 'NPC'); list(d.dungeons, 4096, 'dungeon');
   if (d.version === 2 && (!Array.isArray(d.tileChunks) || d.tiles.length)) fail('versione 2: terreno in chunk');
@@ -199,7 +202,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       || (w.reverseId !== undefined && (!id(w.reverseId) || w.reverseId === w.id))) fail('collegamento warp');
   }
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
-  const result: WorldDocument = structuredClone({ version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
+  const result: WorldDocument = structuredClone({ ...(d.painting !== undefined ? { painting: d.painting } : {}), version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
     placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons, ...(d.tileChunks !== undefined ? { tileChunks: d.tileChunks } : {}),
     ...(d.interiors !== undefined ? { interiors: d.interiors.map((m: WorldInterior) => ({ id: m.id, name: m.name, width: m.width, height: m.height,
       ...(m.pvp !== undefined ? { pvp: m.pvp } : {}), ...(m.kind !== undefined ? { kind: m.kind } : {}),

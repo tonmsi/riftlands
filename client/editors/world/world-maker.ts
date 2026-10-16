@@ -1,3 +1,4 @@
+import { installWorldPaintingPanel } from './world-painting-panel';
 import { syncWorldAssetFiles } from './world-asset-sync';
 import { organizeWorldPanels } from './world-panels';
 import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../npc-properties';
@@ -84,6 +85,7 @@ const warpEditor = installWarpEditor(root, {
         refresh(); schedule(true); centerAt(surface().spawn.x, surface().spawn.y);
     },
 });
+const refreshPainting = installWorldPaintingPanel(root, surface, change);
 let gesture: {
     pointer: number;
     before: WorldDocument;
@@ -206,6 +208,7 @@ function showValidation(): string[] {
     return issues;
 }
 function refresh(): void {
+    refreshPainting();
     if (validationActive && validatedDraft !== draft) showValidation();
     if (activeMap !== 'world' && !draft.interiors?.some(m => m.id === activeMap)) activeMap = 'world';
     warpEditor.refresh();
@@ -329,7 +332,7 @@ function refreshSelection(): void {
 }
 function draw(): void {
     ensureWorld();
-    const animated = drawWorldEditorMap(canvas, world, mapDocument(draft, activeMap), view, art, { grid: input('show-grid').checked, cells: input('show-cells').checked,
+    const animated = drawWorldEditorMap(canvas, world, mapDocument(draft, activeMap), view, art, { painting: input('show-painting').checked, grid: input('show-grid').checked, cells: input('show-cells').checked,
         zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, gesture, pointerTile, tool, activeAsset: active() });
     if ((animated || (!el('asset-inspector').hidden && active() && worldAssetVisual(active()!).kind === 'fire')) && animationTimer === undefined)
         animationTimer = setTimeout(() => { animationTimer = undefined; schedule(); }, 33);
@@ -712,7 +715,7 @@ on('goto-close', () => el<HTMLDialogElement>('goto-dialog').close());
 on('goto-confirm', () => { const x = num('goto-x'), y = num('goto-y'); if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 10000000 || Math.abs(y) > 10000000)
     throw new Error('Coordinate oltre i limiti numerici.'); centerAt(x, y); el<HTMLDialogElement>('goto-dialog').close(); });
 on('properties-toggle', () => { root.querySelector('.inspector')!.classList.toggle('collapsed'); schedule(); });
-for (const id of ['show-grid', 'show-zones', 'show-cells', 'show-npcs'])
+for (const id of ['show-grid', 'show-zones', 'show-cells', 'show-npcs', 'show-painting'])
     input(id).addEventListener('change', () => schedule());
 input('preview-fade').addEventListener('change', () => schedule());
 input('asset-search').addEventListener('input', palette);

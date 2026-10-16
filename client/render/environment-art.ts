@@ -1,6 +1,7 @@
 import { TILE_SIZE } from '../../shared/config';
 import type { TileKind } from '../../shared/types';
 import { TERRAIN, bushColor } from './terrain-style';
+import { defaultWorldPainting, type WorldPainting } from '../../shared/world-painting';
 
 const TAU = Math.PI * 2;
 const DENSITY = 2;
@@ -33,6 +34,22 @@ function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, r
 }
 
 export class EnvironmentArt {
+  private painting = defaultWorldPainting();
+  private palette = { ...TERRAIN };
+  private pigment(tile: 'rock' | 'bush', color: string, patch = false): string {
+    const settings = this.painting.materials[tile];
+    const rgb = [1,3,5].map(i => Math.max(0, Math.min(255,
+      parseInt(color.slice(i,i+2),16) + parseInt(settings.color.slice(i,i+2),16) - parseInt(TERRAIN[tile].slice(i,i+2),16)))
+      .toString(16).padStart(2,'0')).join('');
+    const alpha = color.length === 9 ? parseInt(color.slice(7),16) : 255;
+    return '#' + rgb + Math.min(255, Math.round(alpha * (patch ? settings.intensity : 1))).toString(16).padStart(2,'0');
+  }
+  configure(painting: WorldPainting): void {
+    if (this.painting === painting) return;
+    this.painting = painting;
+    for (const tile of Object.keys(TERRAIN) as TileKind[]) this.palette[tile] = painting.materials[tile].color;
+    this.cache.clear(); this.cachedPixels = 0; this.washes.clear(); this.waterPaint.clear();
+  }
   // Margine extra aumentato per accogliere la chioma sporgente dell'SVG senza tagliarla
   private static readonly BUSH_MARGIN = 20;
 
@@ -66,13 +83,15 @@ export class EnvironmentArt {
     bounds: { left: number; top: number; right: number; bottom: number },
     world: { getTile(x: number, y: number): TileKind }
   ): void {
+    const settings = this.painting.materials.water;
+    if (!settings.intensity) return;
     if (this.waterSource !== world) {
       this.waterPaint.clear();
       this.waterSource = world;
     }
     const spacing = 110;
-    for (let gy = Math.floor(bounds.top / spacing) - 1; gy <= Math.floor(bounds.bottom / spacing) + 1; gy++) {
-      for (let gx = Math.floor(bounds.left / spacing) - 1; gx <= Math.floor(bounds.right / spacing) + 1; gx++) {
+    for (let gy = Math.floor(bounds.top / spacing) - 2; gy <= Math.floor(bounds.bottom / spacing) + 2; gy++) {
+      for (let gx = Math.floor(bounds.left / spacing) - 2; gx <= Math.floor(bounds.right / spacing) + 2; gx++) {
         const key = `${gx},${gy}`;
         if (!this.waterPaint.has(key)) {
           const rng = random(Math.imul(gx, 73856093) ^ Math.imul(gy, 19349663) ^ 615937);
@@ -80,8 +99,8 @@ export class EnvironmentArt {
           if (rng() > 0.12) {
             const x = (gx + rng()) * spacing;
             const y = (gy + rng()) * spacing;
-            const w = 27 + rng() * 48;
-            const h = 15 + rng() * 29;
+            const w = (27 + rng() * 48) * settings.size;
+            const h = (15 + rng() * 29) * settings.size;
             let clear = true;
             for (let ty = Math.floor((y - h - 5) / TILE_SIZE); clear && ty <= Math.floor((y + h + 5) / TILE_SIZE); ty++) {
               for (let tx = Math.floor((x - w - 5) / TILE_SIZE); tx <= Math.floor((x + w + 5) / TILE_SIZE); tx++) {
@@ -101,7 +120,8 @@ export class EnvironmentArt {
               path.lineTo(x - w * 0.5, y + h * 0.65);
               path.closePath();
               const light = rng() > 0.5;
-              mark = { path, color: light ? '#c4ded018' : '#27566e16' };
+              const alpha = Math.round((light ? 24 : 22) * settings.intensity).toString(16).padStart(2,'0');
+              mark = { path, color: (light ? '#c4ded0' : '#27566e') + alpha };
             }
           }
           if (this.waterPaint.size >= 512) this.waterPaint.delete(this.waterPaint.keys().next().value!);
@@ -383,7 +403,7 @@ export class EnvironmentArt {
     ctx.beginPath(); ctx.moveTo(points[0], points[1]);
     for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
     ctx.closePath();
-    ctx.fillStyle = isSnowy ? '#22483d' : bushColor(_variant / 4);
+    ctx.fillStyle = isSnowy ? '#22483d' : this.pigment('bush', bushColor(_variant / 4));
     ctx.fill();
 
     ctx.save(); ctx.clip();
@@ -433,12 +453,12 @@ export class EnvironmentArt {
         oval(ctx, bx - 0.5, by - 0.6, 0.7, 0.7, '#ffffff');
       }
     } else {
-      shape(ctx, [-27,-17, 4,-25, 20,-13, 9,0, -6,7, -25,0], '#a8ca72');
-      shape(ctx, [9,0, 20,-13, 29,2, 15,20, -2,25, -6,7], '#70a15d');
+      shape(ctx, [-27,-17, 4,-25, 20,-13, 9,0, -6,7, -25,0], this.pigment('bush', '#a8ca72'));
+      shape(ctx, [9,0, 20,-13, 29,2, 15,20, -2,25, -6,7], this.pigment('bush', '#70a15d'));
       for (let i = 0; i < 5; i++) {
-        const x = rng() * 48 - 24, y = rng() * 42 - 21, w = 3 + rng() ** 2 * 22;
+        const x = rng() * 48 - 24, y = rng() * 42 - 21, w = (3 + rng() ** 2 * 22) * this.painting.materials.bush.size;
         shape(ctx, [x-w,y, x-w*.3,y-4, x+w*.5,y-6, x+w,y+1, x+1,y+5],
-          i % 3 === 0 ? '#c0cc8848' : '#244e3b40');
+          this.pigment('bush', i % 3 === 0 ? '#c0cc8848' : '#244e3b40', true));
       }
       if (_variant % 4 === 0) {
         for (const [x, y] of [[-10, 3], [4, -7], [12, 8]] as const) {
@@ -494,17 +514,17 @@ export class EnvironmentArt {
     oval(ctx, 25, 40, 22, 6, '#202b2945');
     const peak = 20 + rng() * 12, shoulder = 7 + rng() * 7;
     const contour = [2, 25, shoulder, 9, peak, 3, 40, 10, 47, 29, 38, 44, 14, 45, 3, 36];
-    shape(ctx, contour, TERRAIN.rock);
+    shape(ctx, contour, this.palette.rock);
     ctx.save();
     ctx.clip();
-    shape(ctx, [peak, 3, 40, 10, 47, 29, 38, 44, 27, 46, 32, 26, 29, 14], '#616e7b');
-    shape(ctx, [2, 28, 17, 31, 32, 26, 27, 46, 14, 45, 3, 36], '#748187');
-    shape(ctx, [shoulder, 9, peak, 3, 29, 14, 17, 22, 3, 25], '#aeb9b5');
-    shape(ctx, [17, 22, 29, 14, 32, 26, 24, 33, 10, 29], '#9ca7a0');
+    shape(ctx, [peak, 3, 40, 10, 47, 29, 38, 44, 27, 46, 32, 26, 29, 14], this.pigment('rock', '#616e7b'));
+    shape(ctx, [2, 28, 17, 31, 32, 26, 27, 46, 14, 45, 3, 36], this.pigment('rock', '#748187'));
+    shape(ctx, [shoulder, 9, peak, 3, 29, 14, 17, 22, 3, 25], this.pigment('rock', '#aeb9b5'));
+    shape(ctx, [17, 22, 29, 14, 32, 26, 24, 33, 10, 29], this.pigment('rock', '#9ca7a0'));
     for (let i = 0; i < 4; i++) {
-      const x = rng() * 48, y = rng() * 48, w = 3 + rng() ** 2 * 25, h = 2 + rng() * 13;
+      const x = rng() * 48, y = rng() * 48, w = (3 + rng() ** 2 * 25) * this.painting.materials.rock.size, h = (2 + rng() * 13) * this.painting.materials.rock.size;
       shape(ctx, [x - w, y, x - 2, y - h, x + w, y - h * 0.4, x + w * 0.7, y + h * 0.6, x + 1, y + h],
-        i % 3 === 0 ? '#d7ceaf46' : '#32414b38');
+        this.pigment('rock', i % 3 === 0 ? '#d7ceaf46' : '#32414b38', true));
     }
     if (rng() > 0.35) shape(ctx, [0, 35, 9, 30, 18, 34, 22, 43, 9, 47, 0, 43], '#5e70534d');
     ctx.restore();
@@ -589,7 +609,7 @@ export class EnvironmentArt {
     variation: number
   ): void {
     const rng = random(Math.floor(variation * 99991) + 431);
-    const snowColor = TERRAIN.snow;
+    const snowColor = this.palette.snow;
     const shadowColor = 'rgba(175, 210, 230, 0.4)';
 
     ctx.save();
@@ -699,7 +719,7 @@ export class EnvironmentArt {
     const inset = 5;
 
     // 1. Base d'acqua profonda
-    ctx.fillStyle = TERRAIN.water;
+    ctx.fillStyle = this.palette.water;
     ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
     for (let corner = 0; corner < 4; corner++) {
@@ -798,13 +818,15 @@ export class EnvironmentArt {
     }
   }
 
-  paintGround(ctx: CanvasRenderingContext2D, tile: TileKind, x: number, y: number, dungeonFloor = false): void {
+  paintGround(ctx: CanvasRenderingContext2D, tile: TileKind, x: number, y: number, dungeonFloor = false, width = TILE_SIZE, height = TILE_SIZE): void {
     const material = dungeonFloor
       ? 'stone'
-      : tile === 'path' || tile === 'mud' || tile === 'snow' || tile === 'ice'
+      : tile === 'path' || tile === 'mud' || tile === 'snow' || tile === 'ice' || tile === 'water'
         ? tile
         : 'grass';
 
+    const settings = this.painting.materials[material];
+    if (!settings.intensity) return;
     let pattern = this.washes.get(material);
     if (!pattern) {
       const size = 1536, canvas = document.createElement('canvas');
@@ -813,12 +835,14 @@ export class EnvironmentArt {
       for (let i = 0; i < 68; i++) {
         const px = rng() * size, py = rng() * size;
         const w = 16 + rng() ** 2 * 115, h = 9 + rng() ** 2 * 60;
-        const color = material === 'stone' ? (i % 2 ? '#d1c8af25' : '#313f3925')
+        const rawColor = material === 'stone' ? (i % 2 ? '#d1c8af25' : '#313f3925')
           : material === 'path' ? (i % 2 ? '#ead19e2e' : '#82674829')
           : material === 'mud' ? (i % 2 ? '#c4ba8a2c' : '#3e634f28')
           : material === 'snow' ? (i % 2 ? '#ffffff40' : '#bad8ea30')
           : material === 'ice' ? (i % 2 ? '#d7f6ff2c' : '#367c9622')
+          : material === 'water' ? (i % 2 ? '#c4ded018' : '#27566e16')
           : i % 2 ? '#c5cb942e' : '#41684329';
+        const color = rawColor.slice(0,7) + Math.min(255,Math.round(parseInt(rawColor.slice(7),16) * settings.intensity)).toString(16).padStart(2,'0');
 
         for (const dx of [-size, 0, size]) {
           for (const dy of [-size, 0, size]) {
@@ -839,12 +863,13 @@ export class EnvironmentArt {
         }
       }
       pattern = ctx.createPattern(canvas, 'repeat')!;
+      pattern.setTransform(new DOMMatrix().scale(settings.size));
       this.washes.set(material, pattern);
     }
 
     const t = ctx.getTransform();
     const left = Math.round(x * t.a + t.e), top = Math.round(y * t.d + t.f);
-    const right = Math.round((x + TILE_SIZE) * t.a + t.e), bottom = Math.round((y + TILE_SIZE) * t.d + t.f);
+    const right = Math.round((x + width) * t.a + t.e), bottom = Math.round((y + height) * t.d + t.f);
     ctx.fillStyle = pattern;
     ctx.fillRect((left - t.e) / t.a, (top - t.f) / t.d, (right - left) / t.a, (bottom - top) / t.d);
   }

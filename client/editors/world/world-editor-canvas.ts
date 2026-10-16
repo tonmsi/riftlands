@@ -1,3 +1,4 @@
+import { TerrainRenderer } from '../../render/terrain-renderer';
 import { TILE_SIZE, CHUNK_TILES } from '../../../shared/config';
 import type { Vec2 } from '../../../shared/types';
 import type { World } from '../../../shared/world';
@@ -10,6 +11,7 @@ import { WorldAssetArt } from '../../render/world-asset-art';
 import { AssetGridCamera } from '../../render/world-asset-view';
 import { terrains } from './world-maker-layout';
 import type { AssetPlacement } from '../../../shared/world-schema';
+const terrainPainters = new WeakMap<HTMLCanvasElement, TerrainRenderer>();
 const terrainViews = new WeakMap<HTMLCanvasElement, { key: string; world: World; canvas: HTMLCanvasElement; placements: AssetPlacement[] }>();
 export interface EditorView {
     x: number;
@@ -21,6 +23,7 @@ export interface EditorSelection {
     id: string;
 }
 export interface MapOptions {
+    painting?: boolean;
     grid: boolean;
     cells: boolean;
     zones: boolean;
@@ -61,14 +64,20 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
     ctx.translate(view.x, view.y);
     // At distant zoom, bounded sampling shows landforms rather than generating millions of tiles.
     const step = Math.max(1, Math.ceil(Math.sqrt((b.right - b.left) * (b.bottom - b.top) / 16000)));
-    const key = `${world.authoringRevision}:${world.lockRevision}:${view.x}:${view.y}:${s}:${width}:${height}:${dpr}`;
+    const key = `${options.painting}:${world.authoringRevision}:${world.lockRevision}:${view.x}:${view.y}:${s}:${width}:${height}:${dpr}`;
     let cached = terrainViews.get(canvas);
     if (!cached || cached.world !== world || cached.key !== key) {
-        const bitmap = document.createElement('canvas'); bitmap.width = canvas.width; bitmap.height = canvas.height;
+        const bitmap = cached?.canvas ?? document.createElement('canvas'); bitmap.width = canvas.width; bitmap.height = canvas.height;
         const paint = bitmap.getContext('2d')!; paint.setTransform(dpr, 0, 0, dpr, view.x * dpr, view.y * dpr);
-        for (let y = Math.floor(b.top / step) * step; y < b.bottom; y += step)
+        if (options.painting && step === 1 && s >= 12) {
+            let painter = terrainPainters.get(canvas);
+            if (!painter) { painter = new TerrainRenderer(paint); terrainPainters.set(canvas, painter); }
+            paint.scale(s / TILE_SIZE, s / TILE_SIZE);
+            painter.drawTerrain(world, time, paint, { left: b.left * TILE_SIZE, top: b.top * TILE_SIZE, right: b.right * TILE_SIZE, bottom: b.bottom * TILE_SIZE });
+            paint.setTransform(dpr, 0, 0, dpr, view.x * dpr, view.y * dpr);
+        } else for (let y = Math.floor(b.top / step) * step; y < b.bottom; y += step)
             for (let x = Math.floor(b.left / step) * step; x < b.right; x += step) {
-                paint.fillStyle = terrains[world.getTile(x, y)].color;
+                paint.fillStyle = world.authoring.document.painting?.materials[world.getTile(x, y)].color ?? terrains[world.getTile(x, y)].color;
                 paint.fillRect(x * s, y * s, step * s + .5, step * s + .5);
             }
         const placements = step === 1 ? world.assetsIn(b) : world.authoring.visibleAssetsIn(b);

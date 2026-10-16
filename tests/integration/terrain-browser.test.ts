@@ -23,7 +23,9 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       const { TERRAIN } = await import('/client/render/terrain-style.ts' as string);
       const canvas = document.querySelector('canvas')!;
       canvas.width = 1200; canvas.height = 900;
-      const ctx = canvas.getContext('2d')!, art = new EnvironmentArt();
+      // Keep rasterization on the CPU throughout pixel comparisons; repeated readback
+      // otherwise switches Chrome from GPU to CPU and changes antialias rounding.
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })!, art = new EnvironmentArt();
       ctx.fillStyle = TERRAIN.grass; ctx.fillRect(0, 0, 1200, 900);
       for (let mask = 0; mask < 256; mask++) {
         const x = (mask % 16) * 56 + 8, y = Math.floor(mask / 16) * 56 + 8;
@@ -311,13 +313,43 @@ test('terrain renders all shoreline masks and a natural landscape at fractional 
       renderer.bounds = { left: -600, top: centerY - 450, right: 600, bottom: centerY + 450 };
       renderer.terrain.drawTerrain(renderer.world, 1200, renderer.ctx, renderer.bounds);
       return {
-        grassBank: [...renderer.ctx.getImageData(409, 141, 1, 1).data],
-        pathBank: [...renderer.ctx.getImageData(451, 141, 1, 1).data],
+        grassBank: [...renderer.ctx.getImageData(409, 153, 1, 1).data],
+        pathBank: [...renderer.ctx.getImageData(480, 153, 1, 1).data],
       };
     });
+    await page.screenshot({ path: 'artifacts/outpost-terrain.png' });
+    console.log('Mixed shoreline samples:', outpost);
     assert.ok(outpost.grassBank[0] + 30 < outpost.pathBank[0],
       'a mixed shoreline keeps grass and path backing in separate rounded corners');
     await page.screenshot({ path: 'artifacts/outpost-terrain.png' });
+    const comparison = await page.evaluate(async () => {
+      const { TerrainRenderer } = await import('/client/render/terrain-renderer.ts' as string);
+      const { World } = await import('/shared/world.ts' as string);
+      const { WORLD_DOCUMENT } = await import('/shared/world-content.ts' as string);
+      const { defaultWorldPainting } = await import('/shared/world-painting.ts' as string);
+      const results: Record<string, number[]> = { legacy: [], masks: [] };
+      for (const edges of ['legacy', 'masks']) {
+        const canvas = document.createElement('canvas'); canvas.width=1200;canvas.height=900;
+        const ctx = canvas.getContext('2d', { willReadFrequently:true })!;
+        const painting = defaultWorldPainting(); painting.edges = edges;
+        const world = new World(WORLD_DOCUMENT.seed, 160, 'world', {...WORLD_DOCUMENT, painting});
+        const terrain = new TerrainRenderer(ctx);
+        for (const [x,y] of [[0,0], [2700,2900], [-3000,5000]]) {
+          ctx.setTransform(1,0,0,1,-x,-y);
+          const bounds = {left:x,top:y,right:x+1200,bottom:y+900};
+          terrain.drawTerrain(world,0,ctx,bounds);
+          for(let i=0;i<12;i++) {
+            const start=window.performance.now();terrain.drawTerrain(world,0,ctx,bounds);
+            results[edges].push(window.performance.now()-start);
+          }
+        }
+      }
+      const median=(values:number[])=>values.sort((a,b)=>a-b)[Math.floor(values.length/2)];
+      return {legacyMs:median(results.legacy), masksMs:median(results.masks)};
+    });
+    console.log('A/B full terrain rebuild CPU median (same scenes):', comparison);
+    assert.ok(comparison.masksMs <= comparison.legacyMs * 1.35 + 2,
+      'mask rebuilds must stay within the existing terrain CPU budget: ' + JSON.stringify(comparison));
     assert.deepEqual(errors, []);
   } finally {
     await browser?.close();
