@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FrameBudget, renderDpr } from '../client/core/frame-budget';
+import { FrameBudget, renderDpr, FPS_LIMITS,parseFpsLimit } from '../client/core/frame-budget';
 
 test('render pacing stays at 60 FPS across display refresh rates', () => {
   for (const hz of [60, 90, 120, 144, 165, 240]) {
@@ -32,4 +32,16 @@ test('pixel budget is identical across devices and bounded on large displays', (
   assert.equal(renderDpr(.8, 1440, 900), .8);
   const dpr = renderDpr(2, 3840, 2160);
   assert.ok(3840 * 2160 * dpr * dpr <= 3_000_001);
+});
+
+test('selectable FPS limits preserve pacing and reject invalid saved values',()=>{
+  for(const value of [null,'',{},'NaN',15,61,Infinity,0])assert.equal(parseFpsLimit(value),60);
+  for(const limit of FPS_LIMITS){
+    assert.equal(parseFpsLimit(String(limit)),limit);
+    for(const hz of [60,90,120,144,240]){
+      const budget=new FrameBudget();let frames=0;
+      for(let i=0;i<hz*10;i++)if(budget.ready(i*1000/hz,limit))frames++;
+      assert.ok(Math.abs(frames-Math.min(hz,limit)*10)<=1,`${limit} FPS on ${hz} Hz: ${frames}`);
+    }
+  }
 });

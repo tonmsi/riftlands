@@ -882,7 +882,9 @@
       },
       "shallowSteps": 32,
       "featherSteps": 7
-    }
+    },
+    "seaEnabled": true,
+    "masksEnabled": true
   },
   "version": 2,
   "generatorVersion": 1,

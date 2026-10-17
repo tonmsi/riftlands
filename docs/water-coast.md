@@ -33,7 +33,7 @@ Prima verifica delle sole coste statiche: Chrome headless, Canvas CPU, scena di 
 
 Nella scena sono state compilate 68 patch e 204 gradienti. La precisione del timer sulle chiamate con cache valida non permette confronti utili inferiori al millisecondo. Questi numeri misurano l'invio CPU del solo terreno; non misurano il completamento GPU, RAM/VRAM residente o il frame del gioco completo.
 
-Il test più ampio del terreno, a 1280×720 e DPR 1,5, ha misurato nella configurazione generale una mediana di 24,2 ms per le ricostruzioni complete, 3,8 ms per gli scorrimenti e un massimo di scorrimento di 35,1 ms. Le ricostruzioni restano quindi un possibile punto di rallentamento. La stima RGBA delle superfici del terreno resta 74,19 MiB; esclude copie del browser e altri sistemi. Il confronto precedente alle coste è documentato in [world-painting-performance.md](world-painting-performance.md).
+Le misure iniziali delle coste precedono la preparazione anticipata del terreno: ricostruzioni e fasce potevano superare il budget del frame. La soluzione attuale, la memoria della seconda bitmap e la conferma sul telefono sono documentate in [Prestazioni del client](performance.md). Le tabelle di questa pagina descrivono soltanto gli effetti costieri nelle scene di prova indicate.
 
 ## Misura del movimento
 

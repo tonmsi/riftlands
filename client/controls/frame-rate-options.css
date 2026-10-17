@@ -1,0 +1,3 @@
+.frame-rate-setting{display:grid!important;gap:6px!important;align-items:start!important;padding:10px 0}
+.frame-rate-setting select{min-height:36px;border:1px solid #5d827e;border-radius:6px;background:#243d43;color:#eef8f6;padding:5px 8px;max-width:100%}
+.frame-rate-setting small{font-size:11px;line-height:1.4;opacity:.8}

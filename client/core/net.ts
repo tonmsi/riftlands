@@ -1,6 +1,7 @@
 import { PROTOCOL_VERSION } from '../../shared/config';
 import type { ClassId, ClientMessage, ServerMessage, RoomState, InputCommand } from '../../shared/types';
 import { SnapshotDecoder, type SnapshotPacket } from '../../shared/snapshot-stream';
+import { performanceLog as perf } from './performance-log';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'online' | 'reconnecting' | 'offline';
 export interface NetworkCallbacks {
@@ -44,6 +45,7 @@ export class GameConnection {
   get connected(): boolean {
     return this.welcomed && this.socket?.readyState === WebSocket.OPEN;
   }
+  get bufferedBytes():number {return this.socket?.bufferedAmount??0;}
 
   serverTime(): number {
     return performance.now() + this.clockOffset;
@@ -139,12 +141,15 @@ export class GameConnection {
 
     socket.onmessage = event => {
       if (generation !== this.generation) return;
+      const receiveStart=perf.begin();
+      try {
       let message: ServerMessage | SnapshotPacket;
+      const parseStart=perf.begin();
       try {
         message = JSON.parse(String(event.data));
       } catch {
         return;
-      }
+      } finally {perf.end('network-json',parseStart);}
       if (!message || typeof message !== 'object' || typeof message.type !== 'string') return;
       this.lastReceived = performance.now();
 
@@ -192,10 +197,11 @@ export class GameConnection {
 
       if (message.type === 'snapshot' && 'encoding' in message) {
         let snapshot;
-        try { snapshot = this.snapshots.decode(message); }
+        try { snapshot = perf.measure('snapshot-decode',()=>this.snapshots.decode(message as SnapshotPacket)); }
         catch { this.retry(generation, 'Sincronizzazione interrotta. Riconnessione in corso.'); return; }
-        this.callbacks.message(snapshot);
-      } else this.callbacks.message(message);
+        perf.measure('snapshot-callback',()=>this.callbacks.message(snapshot));
+      } else perf.measure(message.type==='snapshot'?'snapshot-callback':'network-callback',()=>this.callbacks.message(message as ServerMessage));
+      } finally {perf.end('network-message',receiveStart);}
     };
 
     socket.onerror = () => { /* gestito da onclose e watchdog */ };

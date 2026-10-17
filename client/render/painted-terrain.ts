@@ -9,6 +9,7 @@ import type { World } from '../../shared/world';
 import { DEFAULT_WATER_COAST } from '../../shared/world-painting';
 import { WaterCoastArt } from './water-coast';
 import { CoastMotionArt } from './coast-motion';
+import { performanceLog as perf } from '../core/performance-log';
 
 export type Surface = Exclude<PaintMaterial, 'rock' | 'bush'>;
 const order: Surface[] = ['water', 'grass', 'mud', 'ice', 'path', 'snow', 'stone'];
@@ -19,15 +20,17 @@ export class PaintedTerrain {
   private masks = new TerrainMasks();
   private transitions = new TransitionMasks();
   private coasts = new WaterCoastArt();
-  readonly motion = new CoastMotionArt();
+  motion = new CoastMotionArt();
   draw(ctx: CanvasRenderingContext2D, bounds: RenderBounds, painting: WorldPainting, art: EnvironmentArt,
     surfaceAt: (x: number, y: number) => Surface | null,
     colorAt: (s: Exclude<Surface, 'water'>, x: number, y: number) => string,
-    world: World): void {
+    world: World,temperatureAt=(x:number,y:number)=>world.getTemperature(x,y)): void {
+    const masksStart=perf.begin();
     const firstX = Math.floor(bounds.left / TILE_SIZE - .5), firstY = Math.floor(bounds.top / TILE_SIZE - .5);
     this.transitions.configure(painting,TILE_SIZE);
     this.motion.configure(world,painting);
     const coastSettings=painting.waterCoast??DEFAULT_WATER_COAST;
+    const seaEnabled=painting.seaEnabled!==false;
     if(coastSettings.enabled)this.coasts.configure(world,coastSettings,painting,(tx,ty)=>{
       const corners=[surfaceAt(tx,ty),surfaceAt(tx+1,ty),surfaceAt(tx+1,ty+1),surfaceAt(tx,ty+1)];
       if(corners.includes(null)||!corners.includes('water'))return false;
@@ -60,6 +63,7 @@ export class PaintedTerrain {
     coastCutout.rect((left-transform.e)/transform.a,(top-transform.f)/transform.d,(right-left)/transform.a,(bottom-top)/transform.d);
     const customShapes = (!!painting.maskShapes && Object.keys(painting.maskShapes).length > 0)
       || !!Object.keys(painting.materialRules??{}).length || !!Object.keys(painting.pairRules??{}).length;
+    const matrix=new DOMMatrix();
     for (let ty = firstY; ty <= lastY; ty++) for (let tx = firstX; tx <= lastX; tx++) {
       const corners = [surfaceAt(tx, ty), surfaceAt(tx+1, ty), surfaceAt(tx+1, ty+1), surfaceAt(tx, ty+1)];
       const x = (tx + .5) * TILE_SIZE, y = (ty + .5) * TILE_SIZE;
@@ -70,7 +74,15 @@ export class PaintedTerrain {
       const pixelRight = Math.round((x+TILE_SIZE)*transform.a+transform.e), pixelBottom = Math.round((y+TILE_SIZE)*transform.d+transform.f);
       const wx=(pixelLeft-transform.e)/transform.a, wy=(pixelTop-transform.f)/transform.d;
       const width=(pixelRight-pixelLeft)/transform.a, height=(pixelBottom-pixelTop)/transform.d;
-      const matrix=new DOMMatrix([width/TILE_SIZE,0,0,height/TILE_SIZE,wx,wy]);
+      const same=corners[0];
+      if(same!==null&&corners[1]===same&&corners[2]===same&&corners[3]===same){
+        // Uniform patches have no biome boundary. Avoid layer/rule resolution,
+        // transformed masks and water-path copies for the common interior case.
+        let region=regions.get(same);if(!region){region=new Path2D();regions.set(same,region);}
+        region.rect(wx,wy,width,height);ctx.fillStyle=color(same,tx,ty);ctx.fillRect(wx,wy,width,height);
+        if(same==='water')this.motion.recordRect(tx,ty,wx,wy,width,height);
+        continue;
+      }
       if (corners.some(s => s === null)) {
         // Preserve exact authored map boundaries and dungeon voids.
         for (let i = 0; i < 4; i++) {
@@ -80,6 +92,7 @@ export class PaintedTerrain {
         }
         continue;
       }
+      matrix.a=width/TILE_SIZE;matrix.d=height/TILE_SIZE;matrix.e=wx;matrix.f=wy;
       const ranks = corners.map(s => order.indexOf(s!));
       const layers = [...new Set(ranks)].sort((a,b) => a-b);
       const surfaces=layers.map(rank=>order[rank]);
@@ -89,7 +102,7 @@ export class PaintedTerrain {
       const automatic=coastSettings.enabled&&coastSettings.automatic&&waterBits>0&&waterBits<15
         &&!rule?.maskShapes?.[ownerMask]?this.coasts.get(tx,ty,waterBits,rule?.owner==='water'):undefined;
       if(automatic&&layers.length>2){hasAutomatic=true;coastCutout.addPath(automatic.water,matrix);}
-      if(coastSettings.enabled&&waterBits>0&&waterBits<15&&rule){
+      if(seaEnabled&&coastSettings.enabled&&waterBits>0&&waterBits<15&&rule){
         const material=surfaces.find(s=>s!=='water')!;
         let line=coastLines.get(material);if(!line){line=new Path2D();coastLines.set(material,line);}
         line.addPath(automatic?.boundary??this.coasts.manualBoundary(rule,ownerMask),matrix);
@@ -145,9 +158,11 @@ export class PaintedTerrain {
         }
       }
     }
+    perf.end('masks-geometry',masksStart);
     // One patterned fill per material instead of a pattern switch/clip per tile.
     const x = (firstX+.5)*TILE_SIZE, y = (firstY+.5)*TILE_SIZE;
     for (const [s, region] of regions) {
+      const materialStart=perf.begin();
       ctx.save(); ctx.clip(region, 'evenodd');
       if(hasAutomatic&&s!=='water')ctx.clip(coastCutout,'evenodd');
       for(const cut of exclusions.get(s)??[]){
@@ -158,7 +173,7 @@ export class PaintedTerrain {
       if (s !== 'water' && s !== 'stone') {
         for (let ty = firstY; ty <= lastY+1; ty++) for (let tx = firstX; tx <= lastX+1; tx++) {
           if (surfaceAt(tx,ty) !== s) continue;
-          const temp = world.getTemperature(tx,ty);
+          const temp = temperatureAt(tx,ty);
           art.draw(ctx, s, tx*TILE_SIZE, ty*TILE_SIZE, noise(tx,ty), 0, 1, 1, temp < .28);
           if ((s === 'grass' || s === 'mud') && temp < .38) {
             art.drawSnowFringe(ctx, tx*TILE_SIZE, ty*TILE_SIZE, noise(tx,ty), temp < .30 ? 3 : temp < .34 ? 2 : 1);
@@ -166,11 +181,13 @@ export class PaintedTerrain {
         }
       }
       if (s === 'water') {
+        if(!seaEnabled) {ctx.restore();perf.end('water-static',materialStart);continue;}
         art.paintWater(ctx, {left:x, top:y, right:(lastX+1.5)*TILE_SIZE, bottom:(lastY+1.5)*TILE_SIZE}, world);
-        if(coastSettings.enabled)this.coasts.paint(ctx,[...coastLines].map(([material,path])=>({path,color:painting.materials[material].color})));
+        if(coastSettings.enabled){const start=perf.begin();this.coasts.paint(ctx,[...coastLines].map(([material,path])=>({path,color:painting.materials[material].color})));perf.end('shore-static',start);}
       }
       else art.paintGround(ctx, s === 'stone' ? 'path' : s, x, y, s === 'stone', (lastX-firstX+1)*TILE_SIZE, (lastY-firstY+1)*TILE_SIZE);
       ctx.restore();
+      perf.end(s==='water'?'water-static':'ground-materials',materialStart);
     }
   }
 }

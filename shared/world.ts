@@ -85,6 +85,7 @@ export class World {
   }
   arenaAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE).find(z => z.arenaId)?.id : undefined; }
   get cacheSize(): number { return this.cache.size; }
+  generatedChunks=0;
   setBossLocked(id: string, locked: boolean): void { if (this.lockedBosses.has(id) !== locked) this.lockRevision++; if (locked) this.lockedBosses.add(id); else this.lockedBosses.delete(id); }
   setBossLocks(ids: Iterable<string>): void { const next = new Set(ids); for (const id of this.lockedBosses) if (!next.has(id)) this.setBossLocked(id, false); for (const id of next) this.setBossLocked(id, true); }
   isBossLocked(id: string): boolean { return this.lockedBosses.has(id); }
@@ -167,6 +168,7 @@ export class World {
   getChunk(cx: number, cy: number): Chunk {
     const key = chunkKey(cx, cy), existing = this.cache.get(key);
     if (existing) { this.cache.delete(key); this.cache.set(key, existing); return existing; }
+    this.generatedChunks++;
     const tiles: TileKind[] = [];
     for (let y = 0; y < CHUNK_TILES; y++) for (let x = 0; x < CHUNK_TILES; x++) tiles.push(this.generateTile(cx * CHUNK_TILES + x, cy * CHUNK_TILES + y));
     const chunk: Chunk = { key, cx, cy, tiles, npcs: [], pickups: [] };

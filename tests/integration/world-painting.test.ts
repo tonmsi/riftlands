@@ -102,6 +102,12 @@ test('World Painting previews, undoes, exports, installs and reloads its palette
     await page.locator('#undo').click();await expect(page.locator('#painting-edges')).toHaveValue('masks');
     await page.locator('#redo').click();await expect(page.locator('#painting-edges')).toHaveValue('legacy');
     await page.locator('#painting-edges').selectOption('masks');
+    await expect(page.locator('#painting-sea-enabled')).toBeChecked();
+    await expect(page.locator('#painting-masks-enabled')).toBeChecked();
+    await page.locator('#painting-sea-enabled').uncheck();
+    await page.locator('#undo').click();await expect(page.locator('#painting-sea-enabled')).toBeChecked();
+    await page.locator('#redo').click();await expect(page.locator('#painting-sea-enabled')).not.toBeChecked();
+    await page.locator('#painting-masks-enabled').uncheck();
     await page.locator('#painting-edit-masks').click();
     await page.locator('#mask-choice').selectOption('12');
     await page.locator('#mask-wave').click();
@@ -166,6 +172,7 @@ test('World Painting previews, undoes, exports, installs and reloads its palette
     await page.locator('#apply-world').click();await expect(page.locator('#status')).toContainText('Progetto applicato');
     const saved = JSON.parse(await readFile(options.documentPath,'utf8'));
     assert.equal(saved.painting.materials.grass.color,'#aabb66');assert.equal(saved.painting.materials.water.size,1.5);
+    assert.equal(saved.painting.seaEnabled,false);assert.equal(saved.painting.masksEnabled,false);
     assert.equal(saved.painting.materials.snow.intensity,0);assert.equal(saved.painting.curve,.5);assert.equal(saved.painting.edges,'masks');
     assert.equal(saved.painting.maskShapes[12].curves[0].length,4);
     assert.ok(Math.abs(saved.painting.maskShapes[12].curves[0][0].x-.25)<.01);
@@ -191,6 +198,8 @@ test('World Painting previews, undoes, exports, installs and reloads its palette
     await page.locator('#world-file').setInputFiles(archive);await expect(page.locator('#status')).toContainText('Progetto importato');
     await expect(page.locator('#painting-grass-color')).toHaveValue('#aabb66');
     await page.reload();await expect(page.locator('#status')).toContainText('World Studio pronto');
+    await expect(page.locator('#painting-sea-enabled')).not.toBeChecked();
+    await expect(page.locator('#painting-masks-enabled')).not.toBeChecked();
     await expect(page.locator('#painting-grass-color')).toHaveValue('#aabb66');
     await expect(page.locator('#painting-water-size')).toHaveValue('1.5');
     await expect(page.locator('#coast-feather')).toHaveValue('5');

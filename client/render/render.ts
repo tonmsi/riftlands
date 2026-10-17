@@ -19,6 +19,7 @@ import { DUNGEON_BY_BOSS_ID, INSTALLED_DUNGEON_DEFINITIONS as DUNGEON_DEFINITION
 import type { DungeonDefinition } from '../../shared/dungeons';
 import { DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossLockState } from '../../shared/bosses';
 import { renderDpr } from '../core/frame-budget';
+import { performanceLog as perf } from '../core/performance-log';
 import { TERRAIN } from './terrain-style';
 import { arenaViewSign, cameraZoom, parseCameraSettings, viewVector, type CameraSettings } from '../controls/camera-settings';
 
@@ -69,6 +70,11 @@ export class Renderer {
   private readonly restoreContext = (): void => { this.terrain.invalidate(); };
 
   weather: 'clear' | 'rain' | 'snow' = 'clear';
+  invalidateTerrain():void {this.terrain.invalidate();}
+  resetCamera():void {this.hasCamera=false;this.characters.reset();}
+  performanceInfo(){return {width:this.width,height:this.height,dpr:this.dpr,zoom:this.zoom,canvasPixels:this.canvas.width*this.canvas.height,
+    coarsePointer:this.touchQuery.matches,reducedMotion:this.reducedMotion.matches,painting:this.world.authoring.document.painting??null,
+    terrain:this.terrain.performanceInfo(),actors:this.characters.performanceInfo(),mapAssets:this.worldAssetArt.performanceInfo()};}
   private lastWeatherCheck = 0;
   constructor(private readonly canvas: HTMLCanvasElement, private readonly localDungeons?: readonly DungeonDefinition[]) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -107,7 +113,7 @@ export class Renderer {
   destroy(): void {
     this.resizeObserver.disconnect();
     this.canvas.removeEventListener('contextrestored', this.restoreContext);
-    this.terrain.invalidate();
+    this.terrain.dispose();
   }
 
   private resize(): void {
@@ -127,6 +133,7 @@ export class Renderer {
   }
 
   render(frame: RenderFrame): void {
+    const setupStart=perf.begin();
     const ctx = this.ctx;
     const now = performance.now();
     const delta = this.lastTime ? Math.max(0, Math.min(80, now - this.lastTime)) : 16;
@@ -145,7 +152,9 @@ export class Renderer {
             y: this.world.authoring.document.spawn.y * TILE_SIZE + 12 + Math.cos(frame.time * 0.000019) * 12,
           };
 
-    if (!this.hasCamera || (frame.playing && !this.wasPlaying)) {
+    if(frame.holdCamera&&this.hasCamera){
+      // The respawn veil is fading out; keep the previous scene still.
+    }else if (!this.hasCamera || (frame.playing && !this.wasPlaying)) {
       this.camera.x = target.x;
       this.camera.y = target.y;
       this.hasCamera = true;
@@ -174,7 +183,11 @@ export class Renderer {
     ctx.scale(this.zoom, this.zoom * this.viewSign);
     ctx.translate(-this.camera.x, -this.camera.y);
 
-    this.terrain.drawCachedTerrain(this.world, { camera: this.camera, width: this.width, height: this.height, dpr: this.dpr, zoom: this.zoom }, frame.time);
+    perf.end('camera-canvas-setup',setupStart);
+    const terrainStart=perf.begin();
+    if(perf.feature('terrain'))this.terrain.drawCachedTerrain(this.world, { camera: this.camera, width: this.width, height: this.height, dpr: this.dpr, zoom: this.zoom }, frame.time);
+    perf.end('terrain',terrainStart);
+    const assetsStart=perf.begin();let assetDraws=0,spriteDraws=0;
     this.drawDungeonEntry(frame, false);
 
     if (this.world.mode === 'world') {
@@ -202,15 +215,20 @@ export class Renderer {
       }] as const;
     }));
     const paintObject = (p: typeof objectAssets[number], overhead = false) => {
+      if(!perf.feature('assets'))return;
       const a = this.world.authoring.assets.get(p.assetId)!, fade = assetFades.get(p.id)!;
       if (overhead && !fade.annotated) return;
+      const start=perf.begin();assetDraws++;
       ctx.save();
       if (fade.annotated) {
         clipAssetCells(ctx, a, p, TILE_SIZE, cell => (cell.visibility !== 'normal') === overhead);
       }
       this.worldAssetArt.draw(ctx, a, p, 1, TILE_SIZE, frame.time, fade.traversable, fade.hiding);
       ctx.restore();
+      perf.end('map-asset-draw',start);
     };
+    perf.end('map-assets-setup',assetsStart);
+    const groundStart=perf.begin();
     for (const p of groundAssets) paintObject(p);
     let objectIndex = 0;
 
@@ -332,6 +350,8 @@ export class Renderer {
       for (const trap of frame.traps) if (this.visible(trap)) this.drawTrap(trap, frame.time);
     }
 
+    perf.end('ground-effects',groundStart);
+    const actorSetupStart=perf.begin();
     const actors = frame.playing ? frame.actors.filter(actor => this.visible(actor)) : this.previewActors(frame.previewClass, frame.time);
     if (frame.self && frame.playing) {
       const index = actors.findIndex(actor => actor.id === frame.self!.id);
@@ -345,6 +365,7 @@ export class Renderer {
     for (const event of events) if (event.kind === 'hit' && event.targetId && frame.time - event.at < 130) hitTargets.add(event.targetId);
 
     actors.sort((a, b) => (a.y - b.y) * this.viewSign);
+    perf.end('actor-setup',actorSetupStart);
     for (const actor of actors) {
       if (!this.visible(actor)) continue;
       while (objectIndex < objectAssets.length) {
@@ -360,7 +381,8 @@ export class Renderer {
         ? frame.bossWindups?.find(w => w.bossId === actor.id)
         : undefined;
 
-      this.characters.drawActor(
+      const spriteStart=perf.begin();
+      if(perf.feature('sprites')){spriteDraws++;this.characters.drawActor(
         actor,
         frame.time,
         self,
@@ -371,12 +393,14 @@ export class Renderer {
         activeWindup,
         actors.length <= 200 || self || allied || actor.id === frame.selectedId || actor.npcKind === 'boss',
         this.viewSign
-      );
+      );}
+      perf.end('sprites',spriteStart);
     }
     while (objectIndex < objectAssets.length) paintObject(objectAssets[objectIndex++]);
     // Explicitly annotated cells cover actors on both layers; unannotated cells keep their original depth.
     for (const p of [...groundAssets,...objectAssets]) if (assetFades.get(p.id)!.annotated) paintObject(p, true);
 
+    const effectsStart=perf.begin();
     for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);
 
@@ -384,6 +408,8 @@ export class Renderer {
     if (frame.self && frame.fishing) drawFishingWorld(ctx, frame.self, frame.fishing, frame.fishingTarget, frame.time, this.reducedMotion.matches);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
+    perf.end('post-effects',effectsStart);
+    const weatherStart=perf.begin();
     const outdoorWeather = this.world.mode === 'world' && !this.world.authoring.document.interiorBounds && !frame.warpTransition;
     if (!outdoorWeather) {
       this.weather = 'clear';
@@ -397,11 +423,13 @@ export class Renderer {
       this.weather = !isStorm ? 'clear' : (temp < 0.28 ? 'snow' : 'rain');
     }
 
-    if (this.weather === 'snow') {
+    if (perf.feature('weather')&&this.weather === 'snow') {
       this.drawSnow(frame.time);
-    } else if (this.weather === 'rain') {
+    } else if (perf.feature('weather')&&this.weather === 'rain') {
       this.drawRain(frame.time);
     }
+    perf.end('weather',weatherStart);
+    const overlayStart=perf.begin();
 
    // this.drawVignette();
     this.drawTeamIndicators(frame);
@@ -438,6 +466,10 @@ export class Renderer {
         drawTransitionOverlay(ctx, this.width, this.height, { ...matchResultText(this.matchResult.result), opacity, veil: opacity * .82, position: .42 });
       }
     }
+    perf.end('overlays-speech',overlayStart);
+    if(perf.active)perf.state({weather:this.weather,weatherDrawn:perf.feature('weather'),spriteDraws,actorsVisible:actors.length,mapAssetsVisible:worldAssets.length,
+      mapAssetDraws:assetDraws,viewportWidth:this.width,viewportHeight:this.height,dpr:this.dpr,zoom:this.zoom,
+      canvasPixels:this.canvas.width*this.canvas.height,worldChunks:this.world.cacheSize,chunksGeneratedTotal:this.world.generatedChunks,mode:this.world.mode});
   }
 
   private drawDungeonEntry(frame: RenderFrame, overlay: boolean): void {

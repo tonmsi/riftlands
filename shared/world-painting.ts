@@ -55,6 +55,9 @@ export function resolveTransition(p: WorldPainting, surfaces: readonly Transitio
     maskShapes:{...p.maskShapes,...base?.maskShapes,...winner.rule.maskShapes}};
 }
 export interface WorldPainting {
+  /** Visual comparison switches. Missing values preserve existing artwork. */
+  seaEnabled?:boolean;
+  masksEnabled?:boolean;
   waterCoast?:WaterCoast;
   materialRules?: Partial<Record<TransitionMaterial,TransitionRule>>;
   pairRules?: Partial<Record<string,TransitionRule>>;
@@ -75,6 +78,7 @@ export function defaultWorldPainting(): WorldPainting {
 export function validWorldPainting(value: unknown): value is WorldPainting {
   if (!value || typeof value !== 'object') return false;
   const p = value as WorldPainting;
+  if((p.seaEnabled!==undefined&&typeof p.seaEnabled!=='boolean')||(p.masksEnabled!==undefined&&typeof p.masksEnabled!=='boolean'))return false;
   if(p.waterCoast!==undefined){
     const w=p.waterCoast;
     const range=(v:number,min:number,max:number)=>Number.isFinite(v)&&v>=min&&v<=max;

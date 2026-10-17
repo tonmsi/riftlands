@@ -101,6 +101,8 @@ Verifiche: `npm test`, `npm run build`, `npm run test:world-studio`. Per le veri
 
 La sezione **Painting** del World Maker configura l’aspetto della mappa selezionata, con anteprima dettagliata da 12 pixel per cella. A zoom più lontani resta la vista semplificata. L’anteprima si può disattivare; colori, regolazioni e annullamento sono salvati nella bozza, nell’esportazione e tramite **Applica al gioco**. Gli interni possono avere una propria configurazione.
 
+**Livelli grafici** permette di attivare separatamente Mare e Maschere. Mare OFF usa acqua piatta; Maschere OFF usa celle quadrate. Le impostazioni dettagliate sono conservate per la riattivazione. Queste scelte cambiano soltanto il disegno, senza modificare generazione e collisioni.
+
 Il menu **Bordi** confronta il rendering precedente con le nuove maschere. Ogni quadrato grafico collega i centri di quattro celle: i quattro angoli producono 16 combinazioni con punti di incontro condivisi sui lati. **Curvatura** passa da tagli diagonali a raccordi curvi. Le diagonali e gli incontri di tre o più materiali usano una priorità deterministica: acqua, erba, fango, ghiaccio, strada, neve, pietra. Il mare è una base continua coperta dalla terra; acqua e collisioni rimangono celle della simulazione.
 
 Ogni materiale ha colore base, intensità e grandezza delle macchie. L’erba e le strade conservano le variazioni climatiche relative al colore scelto. Rocce e cespugli procedurali conservano forme e ombreggiature; gli asset importati mantengono la propria immagine. Il reset ripristina soltanto la pittura della mappa selezionata.
@@ -115,4 +117,4 @@ Il selettore **Regola dei passaggi** distingue **Generale**, **Materiale** e **C
 
 Il colore pieno dell’anteprima indica il terreno che definisce la maschera; l’altro terreno usa il contorno complementare, senza disegnare un bordo indipendente. Nelle coppie il terreno guida è selezionabile. Agli incontri di tre o quattro materiali prevale una regola per quadrato: prima la specificità, poi la priorità, poi la chiave. I contorni restano raccordati sui lati. Questa scelta evita soluzioni geometriche incompatibili nello stesso punto.
 
-La risoluzione delle precedenze avviene quando si ricostruisce il terreno. Le combinazioni condividono al massimo 29 regole compilate (generale, sette materiali, 21 coppie), senza aggiungere canvas. Misure e limiti del benchmark sono descritti in [World Painting: prestazioni](world-painting-performance.md).
+La risoluzione delle precedenze avviene quando si ricostruisce il terreno. Le combinazioni condividono al massimo 29 regole compilate (generale, sette materiali, 21 coppie); le regole non aggiungono canvas. Il gioco può usare una seconda bitmap per preparare il terreno prima che la camera lo raggiunga. Problema, soluzione, misure sul telefono e limiti sono descritti in [Prestazioni del client](performance.md).

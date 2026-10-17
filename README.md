@@ -4,7 +4,9 @@ Prototipo multiplayer 2D dall’alto: mondo procedurale, combattimento PvP/PvE e
 
 La [progressione dei personaggi](docs/character-progression.md) descrive XP e quest per classe, sblocchi ai livelli 2/5/10, build a 10 gold e ricompense. Il Cacciatore per sviluppatori parte al livello massimo 20.
 
-La review di rete, mobile e architettura, con misure e priorità, è in [docs/code-review-2026-09-18.md](docs/code-review-2026-09-18.md). Il [dungeon maker](docs/dungeon-maker.md) si apre dal menu o da `/dungeon-maker.html`.
+La guida alle [prestazioni del client](docs/performance.md) documenta gli scatti su mobile, la preparazione anticipata del terreno, i risultati sul telefono, il benchmark NPC e gli interventi ancora da valutare. Il respawn usa una breve schermata nera con camera spostata direttamente alla destinazione. La diagnostica è disponibile solo in sviluppo su richiesta; nelle impostazioni resta il limite FPS (60 predefiniti).
+
+La review storica di rete, mobile e architettura del 18 settembre è in [docs/code-review-2026-09-18.md](docs/code-review-2026-09-18.md); per le prestazioni attuali fare riferimento alla guida sopra. Il [dungeon maker](docs/dungeon-maker.md) si apre dal menu o da `/dungeon-maker.html`.
 
 Il [World Maker locale](docs/world-maker.md) si avvia con `npm run world:studio`: importa PNG/SVG, definisce ingombri e comportamenti per cella, dipinge terreno e asset sul mondo procedurale e gestisce clima, PvP, ingressi arena e popolazione NPC. I dungeon si costruiscono nel Dungeon Maker e si posizionano nel World Maker.
 
@@ -43,7 +45,7 @@ La modalità **Segui il cursore** muove il personaggio verso il puntatore mentre
 
 Su dispositivi touch, l'ingresso richiede subito il fullscreen con `navigationUI: 'hide'` e prova a bloccare l'orientamento landscape. Il gioco resta utilizzabile anche in portrait o se il browser rifiuta il fullscreen; il pulsante **Schermo intero** consente di riprovare. Il primo Indietro durante la partita apre la conferma d'uscita. Uscire ripristina scorrimento, orientamento e presentazione del menu. CSS limita overscroll, pull-to-refresh e gesti sulle superfici di gioco; le gesture riservate al sistema operativo e l'effettiva disponibilità del fullscreen rimangono sotto il controllo del browser/dispositivo. `client/ui/game-display.ts` concentra questa integrazione per il futuro wrapper Android.
 
-HUD touch e desktop condividono dati, abilità e cooldown. `client/styles/mobile.css` organizza le aree touch con margini per notch e barre di sistema, pulsanti di almeno 44 px e layout dedicati a portrait, landscape e tablet. Canvas del mondo e minimappa si ridimensionano alla superficie disponibile e alla densità del display (massimo DPR 2). In arena touch la camera segue il personaggio senza rimpicciolire gli attori per far entrare tutta la mappa. **Mostra/Nascondi mappa** funziona anche su PC e salva la preferenza localmente; sui dispositivi touch la mappa è inizialmente nascosta.
+HUD touch e desktop condividono dati, abilità e cooldown. `client/styles/mobile.css` organizza le aree touch con margini per notch e barre di sistema, pulsanti di almeno 44 px e layout dedicati a portrait, landscape e tablet. Il Canvas del mondo usa DPR massimo 1,5 e un budget di 3 milioni di pixel. In arena touch la camera segue il personaggio senza rimpicciolire gli attori per far entrare tutta la mappa. **Mostra/Nascondi mappa** funziona anche su PC e salva la preferenza localmente; sui dispositivi touch la mappa è inizialmente nascosta.
 
 | Comando | Azione |
 | --- | --- |

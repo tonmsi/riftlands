@@ -2,6 +2,7 @@ import { TILE_SIZE } from '../../shared/config';
 import type { TileKind } from '../../shared/types';
 import { TERRAIN, bushColor } from './terrain-style';
 import { defaultWorldPainting, type WorldPainting } from '../../shared/world-painting';
+import { performanceLog as perf } from '../core/performance-log';
 
 const TAU = Math.PI * 2;
 const DENSITY = 2;
@@ -34,6 +35,8 @@ function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, r
 }
 
 export class EnvironmentArt {
+  performanceInfo(){return {spriteEntries:this.cache.size,spritePixels:this.cachedPixels,washPatterns:this.washes.size,
+    washPixels:this.washes.size*1536*1536,waterEntries:this.waterPaint.size};}
   private painting = defaultWorldPainting();
   private materialSignature = JSON.stringify(this.painting.materials);
   private palette = { ...TERRAIN };
@@ -62,6 +65,8 @@ export class EnvironmentArt {
   private cachedPixels = 0;
   private readonly washes = new Map<string, CanvasPattern>();
   private waterSource?: object;
+  private waterRevision?:number;
+  private waterLockRevision?:number;
   private readonly waterPaint = new Map<string, { path: Path2D; color: string } | null>();
 
   // Riferimento all'SVG caricato per il cespuglio e cache della versione invernale
@@ -86,13 +91,15 @@ export class EnvironmentArt {
   paintWater(
     ctx: CanvasRenderingContext2D,
     bounds: { left: number; top: number; right: number; bottom: number },
-    world: { getTile(x: number, y: number): TileKind }
+    world: { getTile(x: number, y: number): TileKind; authoringRevision?:number; lockRevision?:number }
   ): void {
+    if(!perf.feature('paint'))return;
     const settings = this.painting.materials.water;
     if (!settings.intensity) return;
-    if (this.waterSource !== world) {
+    if (this.waterSource !== world || this.waterRevision!==world.authoringRevision || this.waterLockRevision!==world.lockRevision) {
       this.waterPaint.clear();
       this.waterSource = world;
+      this.waterRevision=world.authoringRevision;this.waterLockRevision=world.lockRevision;
     }
     const spacing = 110;
     for (let gy = Math.floor(bounds.top / spacing) - 2; gy <= Math.floor(bounds.bottom / spacing) + 2; gy++) {
@@ -260,6 +267,7 @@ export class EnvironmentArt {
     let sprite = this.cache.get(key);
 
     if (!sprite) {
+      const rasterStart=perf.begin();
       sprite = document.createElement('canvas');
       const isBush = tile === 'bush';
       const margin = isBush ? EnvironmentArt.BUSH_MARGIN : 0;
@@ -301,6 +309,7 @@ export class EnvironmentArt {
       }
       this.cache.set(key, sprite);
       this.cachedPixels += pixels;
+      perf.end('environment-sprite-raster',rasterStart);
     }
 
     if (tile === 'bush') {
@@ -824,6 +833,7 @@ export class EnvironmentArt {
   }
 
   paintGround(ctx: CanvasRenderingContext2D, tile: TileKind, x: number, y: number, dungeonFloor = false, width = TILE_SIZE, height = TILE_SIZE): void {
+    if(!perf.feature('paint'))return;
     const material = dungeonFloor
       ? 'stone'
       : tile === 'path' || tile === 'mud' || tile === 'snow' || tile === 'ice' || tile === 'water'
@@ -834,6 +844,7 @@ export class EnvironmentArt {
     if (!settings.intensity) return;
     let pattern = this.washes.get(material);
     if (!pattern) {
+      const rasterStart=perf.begin();
       const size = 1536, canvas = document.createElement('canvas');
       canvas.width = canvas.height = size;
       const art = canvas.getContext('2d')!, rng = random(834927);
@@ -870,6 +881,7 @@ export class EnvironmentArt {
       pattern = ctx.createPattern(canvas, 'repeat')!;
       pattern.setTransform(new DOMMatrix().scale(settings.size));
       this.washes.set(material, pattern);
+      perf.end('ground-wash-raster',rasterStart);
     }
 
     const t = ctx.getTransform();

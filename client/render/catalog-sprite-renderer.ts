@@ -12,6 +12,7 @@ function loadCatalog(): Promise<ActorCatalog> {
   }).catch(error => { console.warn('Catalogo attori non disponibile', error); return ACTOR_CATALOG; });
 }
 export class CatalogSpriteRenderer {
+  performanceInfo(){return this.sprites.performanceInfo();}
   private catalog = ACTOR_CATALOG;
   private readonly sprites = new ActorSpriteRenderer();
   playerDrawSize(classId: ClassId): number { return playerDrawSize(this.catalog, classId); }

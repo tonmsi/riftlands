@@ -7,6 +7,22 @@ import { WorldEditorHistory } from '../client/editors/world/world-editor-history
 import { terrainMaskCommands } from '../client/render/terrain-masks';
 import { resolveTransition, transitionPairKey, DEFAULT_WATER_COAST, defaultCoastMotion } from '../shared/world-painting';
 
+test('sea and mask switches survive parsing and history without changing world physics',()=>{
+  const before=newWorldDocument(),history=new WorldEditorHistory();
+  for(const seaEnabled of [true,false])for(const masksEnabled of [true,false]){
+    const after={...before,painting:{...defaultWorldPainting(),seaEnabled,masksEnabled}};
+    const parsed=parseWorldDocument(JSON.stringify(after));assert.deepEqual(parsed.painting,after.painting);
+    assert.ok(history.commit(before,parsed));assert.equal(history.undo(parsed).painting,undefined);
+    assert.deepEqual(history.redo(before).painting,after.painting);
+    const a=new World(42,16,'world',before,[]),b=new World(42,16,'world',parsed,[]);
+    for(let y=-8;y<8;y++)for(let x=-8;x<8;x++){
+      assert.equal(a.getTile(x,y),b.getTile(x,y));assert.equal(a.isBlocked(x,y),b.isBlocked(x,y));
+    }
+  }
+  for(const setting of [{seaEnabled:0},{masksEnabled:'false'},{seaEnabled:null}])
+    assert.throws(()=>parseWorldDocument({...before,painting:{...defaultWorldPainting(),...setting}}),/world painting/);
+});
+
 test('painting survives parsing, export and history without changing procedural terrain or climate', () => {
   const before = newWorldDocument(), after = structuredClone(before);
   after.painting = defaultWorldPainting();

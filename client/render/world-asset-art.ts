@@ -4,10 +4,13 @@ import { worldAssetVisual, worldAssetImageBounds, DEFAULT_ASSET_FADE } from '../
 import { AssetFadeTransitions, makeAssetFadeMask } from './world-asset-fade';
 import { drawWorldFire } from './world-fire-art';
 import { coordinateHash } from '../../shared/coordinate-random';
+import { performanceLog as perf } from '../core/performance-log';
 
 /** Shared by the game and editor. Each source is decoded once; SVG is rasterized outside the frame loop.
  * Cache pressure is bounded by both pixels and entries, independent of catalog size. */
 export class WorldAssetArt {
+  performanceInfo(){return {entries:this.cache.size,pixels:this.pixels,pending:this.pending.size,failed:this.failed.size,
+    dynamicPixels:(this.fireSurface?this.fireSurface.width*this.fireSurface.height:0)+(this.fadeSurface?this.fadeSurface.width*this.fadeSurface.height:0)};}
   private cache = new Map<string, HTMLCanvasElement>();
   private pending = new Set<string>();
   private failed = new Set<string>();
@@ -30,6 +33,7 @@ export class WorldAssetArt {
       this.pending.add(key);
       const image = new Image(); image.decoding = 'async';
       image.onload = () => {
+        const start=perf.begin();
         try {
           const bitmap = document.createElement('canvas');
           const factor = Math.min(2, 1024 / (Math.max(b.width, b.height) * TILE_SIZE));
@@ -38,6 +42,7 @@ export class WorldAssetArt {
           this.remember(key, bitmap);
         } catch { this.failed.add(key); }
         this.pending.delete(key); this.redraw();
+        perf.end('map-asset-raster',start);
       };
       image.onerror = () => { this.pending.delete(key); this.failed.add(key); this.redraw(); };
       image.src = a.image;

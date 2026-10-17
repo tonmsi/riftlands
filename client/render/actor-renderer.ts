@@ -19,6 +19,8 @@ const SPRITE_COLUMNS = 4;
 const TAU = Math.PI * 2;
 /** Character sheets, procedural fallbacks and per-actor animation history. */
 export class ActorRenderer {
+  performanceInfo(){let pixels=0;for(const sheet of this.classSprites.values())for(const f of sheet.frames)pixels+=f.width*f.height;
+    return {playerPixels:pixels,catalog:this.actorSprites.performanceInfo()};}
   private readonly classSprites = new Map<ClassId, RasterSpriteSheet>();
   private readonly classMotion = new Map<string, { x: number; y: number; row: number; startedAt: number; moving: boolean }>();
   private readonly actorSprites = new CatalogSpriteRenderer();

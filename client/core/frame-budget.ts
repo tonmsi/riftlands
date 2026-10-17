@@ -1,4 +1,12 @@
 /** Shared by every device; CSS size and input coordinates stay unchanged. */
+export const FPS_STORAGE_KEY='riftlands.fps-limit.v1';
+export const FPS_LIMITS=[20,30,45,60,90,120,144,165,240] as const;
+export function parseFpsLimit(value:unknown):number {
+  const n=typeof value==='string'||typeof value==='number'?Number(value):NaN;
+  return (FPS_LIMITS as readonly number[]).includes(n)?n:60;
+}
+export function readFpsLimit():number {try{return parseFpsLimit(localStorage.getItem(FPS_STORAGE_KEY));}catch{return 60;}}
+
 export function renderDpr(deviceDpr: number, width: number, height: number): number {
   return Math.min(deviceDpr || 1, 1.5, Math.sqrt(3_000_000 / Math.max(1, width * height)));
 }

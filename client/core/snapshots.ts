@@ -9,6 +9,9 @@ export interface BufferedFrame { self: Actor; actors: Actor[]; projectiles: Proj
 
 /** Remote presentation follows packet arrival time, never the ping-adjusted combat clock. */
 export class SnapshotBuffer {
+  performanceInfo(now:number){return {snapshotBufferCount:this.snapshots.length,snapshotJitterMs:this.jitter,
+    snapshotBufferAgeMs:this.snapshots.length?Math.max(0,now-this.lastReceived):null,
+    interpolationLagMs:this.playhead===null||!this.snapshots.length?null:this.snapshots.at(-1)!.time-this.playhead};}
   constructor(private readonly intervalMs = 1000 / SNAPSHOT_RATE) {}
   private snapshots: Snapshot[] = [];
   // Weak keys release indexes as soon as their buffered snapshot is discarded.

@@ -16,6 +16,7 @@ const smooth=(t:number)=>t*t*(3-2*t);
 export class WaterCoastArt {
   private world?:World;
   private revision=-1;
+  private lockRevision=-1;
   private settings:Readonly<WaterCoast>=DEFAULT_WATER_COAST;
   private patches=new Map<string,CoastPatch>();
   private gradients=new Map<string,Point>();
@@ -26,8 +27,8 @@ export class WaterCoastArt {
   get stats(){return {patches:this.patches.size,gradients:this.gradients.size,extraCanvases:0};}
   configure(world:World,settings:Readonly<WaterCoast>,painting:WorldPainting,automaticAt:(x:number,y:number)=>boolean):void {
     this.automaticAt=automaticAt;
-    if(this.world===world&&this.revision===world.authoringRevision&&this.settings===settings&&this.painting===painting)return;
-    this.world=world;this.revision=world.authoringRevision;this.settings=settings;
+    if(this.world===world&&this.revision===world.authoringRevision&&this.lockRevision===world.lockRevision&&this.settings===settings&&this.painting===painting)return;
+    this.world=world;this.revision=world.authoringRevision;this.lockRevision=world.lockRevision;this.settings=settings;
     this.painting=painting;this.patches.clear();this.gradients.clear();this.eligibility.clear();
   }
   private canMove(x:number,y:number):boolean {

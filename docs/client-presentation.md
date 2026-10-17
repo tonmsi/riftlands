@@ -11,6 +11,7 @@ La presentazione conserva due punti di ingresso per `main.ts`: `GameUI` e `Rende
 | `hud-ui.ts` | Snapshot corrente, classe attiva, bersaglio, vita/risorse, abilità, effetti, stato arena/dungeon, mappa, conferma di uscita e integrazione con journal e interazioni. |
 | `social-ui.ts` | Amici, inviti, roster del team e attesa locale di tre secondi fra inviti. Consuma gli snapshot e legge il bersaglio tramite callback. |
 | `world-entrance.ts` | Overlay di ingresso, animazione e timer. Attende almeno due secondi e il primo snapshot prima di chiudere la transizione; l'annullamento cancella frame e timeout. |
+| `respawn-transition.ts` | Copertura nera al respawn: camera ferma durante l'uscita, riposizionamento diretto a schermo coperto, rivelazione dopo il disegno della destinazione e rilascio degli input. |
 | `ui-layout.ts` | HTML iniziale della presentazione. |
 | `ui-dom.ts` / `ui-art.ts` | Riferimenti DOM delle viste, piccoli helper, icone e ritratti. |
 
@@ -27,6 +28,8 @@ Al ritorno al menu vengono chiusi i pannelli di gioco, cancellati la transizione
 `Renderer` mantiene mondo, camera, dimensioni, DPR, conversione delle coordinate del puntatore, selezione degli oggetti visibili e ordine dei passaggi. Conserva la composizione per profondità di attori e asset del mondo, oltre a dungeon, effetti e meteo.
 
 `TerrainRenderer` possiede `EnvironmentArt` e la cache scorrevole del terreno. Riceve esplicitamente mondo e geometria del viewport. Invalida la cache quando cambiano i blocchi del mondo; il coordinatore segnala inoltre cambio seed, ridimensionamento e ripristino del contesto Canvas. Il riuso delle strisce del terreno resta nello stesso modulo della loro generazione.
+
+Dopo uno scorrimento di almeno 10 ms abilita una seconda bitmap e prepara porzioni anticipate su più frame. La bitmap visibile e i ritagli del mare restano stabili finché la nuova è completa. Il coordinatore del respawn mantiene ferma la camera durante la dissolvenza e chiama `resetCamera()` soltanto sotto il nero. Misure, memoria, fallback e sviluppo futuro sono in [Prestazioni del client](performance.md).
 
 `ActorRenderer` possiede caricamento delle sprite e stato delle animazioni di giocatori, NPC e boss, con i fallback procedurali. Il coordinatore gli comunica gli ID ancora presenti, così la storia delle animazioni scomparse viene liberata. Cambio seed azzera la storia del movimento. Risveglio e attacchi dei boss continuano a usare i tempi autorevoli.
 

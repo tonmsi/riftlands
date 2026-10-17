@@ -22,7 +22,11 @@ import { dungeonAt } from '../shared/dungeons';
 import { CONTROLS_STORAGE_KEY, defaultControls, GameControls, parseControls } from './controls/controls';
 import { MobileControls } from './controls/mobile-controls';
 import { GameAudio } from './core/audio';
-import { FrameBudget } from './core/frame-budget';
+import { FrameBudget,readFpsLimit } from './core/frame-budget';
+import { installFrameRateOptions } from './controls/frame-rate-options';
+import { performanceLog as perf } from './core/performance-log';
+import { didRespawn } from './core/respawn';
+import { RespawnTransition } from './ui/respawn-transition';
 import { prepareLobbyArt } from './ui/lobby/lobby-assets';
 import { CAMERA_STORAGE_KEY, parseCameraSettings } from './controls/camera-settings';
 import { CameraOptions } from './controls/camera-options';
@@ -33,6 +37,7 @@ import { WORLD_DOCUMENT } from '../shared/world-content';
 import { BettingUI } from './ui/betting-ui';
 
 let playing = false;
+let fpsLimit=readFpsLimit();
 let latest: Snapshot | null = null;
 let questProgress: NarrativeProgress | undefined;
 let predicted: Actor | null = null;
@@ -56,6 +61,7 @@ let mobileControls: MobileControls | undefined;
 const releaseControls = (): void => { controls.clear(); mobileControls?.reset(); };
 let activeMapId = 'world', warpRoomReceived = false;
 const warpUI = new WarpUI(warpId => { connection.send({ type: 'interaction', command: { kind: 'warp', warpId } }); });
+const respawnUI=new RespawnTransition();
 
 const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
   releaseControls,
@@ -97,6 +103,7 @@ const ui = new GameUI(document.querySelector<HTMLDivElement>('#app')!, {
     ui.toast('Disconnessione completata.');
   },
   leave: () => {
+    respawnUI.cancel();
     bettingUI.reset();
     fishingUI.reset();
     renderer.clearMatchResult();
@@ -141,10 +148,11 @@ new CameraOptions(document.querySelector<HTMLElement>('#app')!, cameraSettings, 
 const deviceOptions = new DeviceOptions(document.querySelector<HTMLElement>('#app')!, audio, refreshAudioButton, releaseControls);
 const menuAssetsReady = prepareLobbyArt(renderer.spritesReady, (done, total, failed) => ui.setAssetProgress(done, total, failed), Object.values(PROFILE_URLS)).then(art => ui.setLobbyArt(art));
 const connection = new GameConnection({
-  reset: () => { fishingUI.reset(); renderer.clearMatchResult(); releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
+  reset: () => { respawnUI.cancel();fishingUI.reset(); renderer.clearMatchResult(); releaseControls(); audio.reset(); seq = 0; pending = []; predicted = null; snapshotBuffer.clear(); renderedActors = []; localMovement.reset(); localCombat.reset(); effects.clear(); },
   status: (status, detail) => {
+    perf.event('network-status',{status});
     ui.setConnection(status, detail);
-    if (status === 'offline' || status === 'reconnecting') { fishingUI.reset(); releaseControls(); localCombat.reset(); warpUI.cancel(); }
+    if (status === 'offline' || status === 'reconnecting') { respawnUI.cancel();fishingUI.reset(); releaseControls(); localCombat.reset(); warpUI.cancel(); }
     if (status === 'offline') { bettingUI.reset(); playing = false; ui.setPlaying(false); if (detail) ui.toast(detail, 'error'); }
   },
   authExpired: () => {
@@ -172,6 +180,7 @@ const connection = new GameConnection({
       if (message.phase === 'start') { warpRoomReceived = false; warpUI.start(); ui.interactions.reset(); fishingUI.reset(); }
       else warpUI.cancel();
     } else if (message.type === 'room') {
+      respawnUI.cancel();
       activeMapId = message.room.mapId ?? 'world';
       renderer.setSeed(message.room.seed, message.room.mode, activeMapId);
       warpRoomReceived = warpUI.blocked;
@@ -185,8 +194,13 @@ const connection = new GameConnection({
       ui.interactions.reset();
       fishingUI.reset();
     } else if (message.type === 'snapshot') {
+      perf.snapshot();
       if (warpRoomReceived) { warpRoomReceived = false; warpUI.arrive(); }
       const old = predicted;
+      if(!message.betting?.spectating&&didRespawn(old,message.self)){
+        respawnUI.start();releaseControls();pending=[];selectedId=null;ui.setSelected(null);effects.clear();localCombat.reset();snapshotBuffer.clear();audio.reset(false);
+        fishingUI.reset();ui.interactions.reset();
+      }
       latest = message;
       renderer.world.setBossLocks((message.bossLocks ?? []).filter(lock => lock.locked).map(lock => lock.bossId));
       const result = message.betting?.spectating ? { actor: message.self, pending: [] } : reconcile(message.self, message.ack, pending, renderer.world, message.time);
@@ -228,6 +242,16 @@ const connection = new GameConnection({
   }
 });
 const bettingUI = new BettingUI(document.querySelector<HTMLElement>('.rift-app')!, action => connection.send({ type: 'betting', action }), releaseControls);
+if(import.meta.env.DEV&&new URLSearchParams(location.search).get('diagnostics')==='1')void import('./ui/performance-panel').then(({installPerformancePanel})=>{
+installPerformancePanel(document.querySelector<HTMLElement>('#app')!,()=>({
+  userAgent:navigator.userAgent,language:navigator.language,hardwareConcurrency:navigator.hardwareConcurrency??null,
+  deviceMemoryGiB:(navigator as Navigator&{deviceMemory?:number}).deviceMemory??null,
+  screen:{width:screen.width,height:screen.height,devicePixelRatio},renderer:renderer.performanceInfo(),
+  fpsLimit,
+}),()=>renderer.invalidateTerrain(),releaseControls);
+installFrameRateOptions(document.querySelector<HTMLElement>('#app')!,fpsLimit,value=>{fpsLimit=value;releaseControls();});
+});
+installFrameRateOptions(document.querySelector<HTMLElement>('#app')!,fpsLimit,value=>{fpsLimit=value;releaseControls();});
 
 function saveProfile(profile: PublicAccount): void {
   const serialized = JSON.stringify(profile);
@@ -258,7 +282,7 @@ const isTyping = (): boolean => {
 };
 
 window.addEventListener('keydown', event => {
-  if (!playing || !connection.connected || ui.inputBlocked || bettingUI.visible || latest?.betting?.spectating || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (!playing || !connection.connected || ui.inputBlocked || respawnUI.blocked || bettingUI.visible || latest?.betting?.spectating || isTyping() || event.ctrlKey || event.metaKey || event.altKey) return;
   if (latest?.fishing && ['Space', 'Enter', 'Escape'].includes(event.code)) { event.preventDefault(); if (!event.repeat) { if (event.code === 'Escape') fishingUI.close(); else fishingUI.press(); } return; }
   if (event.code === 'KeyF' && !event.repeat && predicted) {
     const target = renderedActors.filter(actor => canTalkToNpc(predicted, actor, renderer.world)).sort((a, b) => Math.hypot(a.x - predicted!.x, a.y - predicted!.y) - Math.hypot(b.x - predicted!.x, b.y - predicted!.y))[0];
@@ -276,7 +300,7 @@ document.addEventListener('focusin', () => { if (isTyping()) releaseControls(); 
 document.addEventListener('visibilitychange', () => { if (document.hidden) { releaseControls(); localCombat.reset(); audio.setActive(false); } });
 ui.canvas.addEventListener('pointermove', event => { if (playing && event.pointerType === 'mouse') controls.setPointer({ x: event.clientX, y: event.clientY }); });
 ui.canvas.addEventListener('pointerdown', event => {
-  if (!playing || !connection.connected || ui.inputBlocked || bettingUI.visible || latest?.betting?.spectating || ![0, 1, 2].includes(event.button)) return;
+  if (!playing || !connection.connected || ui.inputBlocked || respawnUI.blocked || bettingUI.visible || latest?.betting?.spectating || ![0, 1, 2].includes(event.button)) return;
   ui.canvas.focus({ preventScroll: true });
   if (event.pointerType === 'mouse') {
     controls.setPointer({ x: event.clientX, y: event.clientY });
@@ -296,7 +320,7 @@ ui.canvas.addEventListener('pointerdown', event => {
 
 // Mouse events fire for every button in a chord; pointerdown/up only fire for the first/last.
 ui.canvas.addEventListener('mousedown', event => {
-  if (!playing || !connection.connected || ui.inputBlocked || bettingUI.visible || latest?.betting?.spectating || ![0, 1, 2].includes(event.button)) return;
+  if (!playing || !connection.connected || ui.inputBlocked || respawnUI.blocked || bettingUI.visible || latest?.betting?.spectating || ![0, 1, 2].includes(event.button)) return;
   if (latest?.fishing) return;
   controls.setPointer({ x: event.clientX, y: event.clientY });
   const point = renderer.screenToWorld(event.clientX, event.clientY);
@@ -310,7 +334,7 @@ ui.canvas.addEventListener('contextmenu', event => event.preventDefault());
 ui.canvas.addEventListener('auxclick', event => event.preventDefault());
 
 function inputTick(): void {
-  if (!playing || !connection.connected || !predicted || document.hidden || latest?.betting?.spectating || warpUI.blocked) return;
+  if (!playing || !connection.connected || !predicted || document.hidden || latest?.betting?.spectating || warpUI.blocked || respawnUI.blocked) return;
   // Do not fill the reconciliation queue while the arena simulation is paused.
   if ((latest?.betting?.startsAt ?? 0) > connection.serverTime()) { releaseControls(); return; }
   localMovement.advance(predicted, predicted);
@@ -339,11 +363,11 @@ function advanceInputs(now: number): void {
   inputAccumulator += elapsed;
   while (inputAccumulator >= 1000 / TICK_RATE) { inputAccumulator -= 1000 / TICK_RATE; inputTick(); }
 }
-setInterval(() => advanceInputs(performance.now()), 8);
+setInterval(() => {const start=perf.begin();advanceInputs(performance.now());perf.end('input-timer',start);}, 8);
 
 mobileControls = new MobileControls(document.querySelector<HTMLElement>('.rift-app')!, {
   ability: slot => equippedAbility(predicted ?? { classId: ui.selectedClass }, slot),
-  enabled: () => playing && connection.connected && !ui.inputBlocked && !warpUI.blocked && !bettingUI.visible && !latest?.betting?.spectating && !!predicted && predicted.hp > 0,
+  enabled: () => playing && connection.connected && !ui.inputBlocked && !warpUI.blocked && !respawnUI.blocked && !bettingUI.visible && !latest?.betting?.spectating && !!predicted && predicted.hp > 0,
   move: vector => controls.setTouchMovement(vector),
   aim: angle => controls.setTouchAim(angle),
   cast: slot => controls.cast(slot),
@@ -354,9 +378,16 @@ const frameBudget = new FrameBudget();
 function frame(now: number): void {
   requestAnimationFrame(frame);
   if (document.hidden) { frameBudget.reset(); lastFrame = now; return; }
-  if (!frameBudget.ready(now, playing ? 60 : 30)) return;
+  perf.observeRaf(now);
+  const targetFps=playing?fpsLimit:Math.min(30,fpsLimit);
+  if (!frameBudget.ready(now, targetFps)) return;
+  perf.beginFrame(now,targetFps);
+  try {
   const delta = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  const inputStart=perf.begin();
   advanceInputs(now);
+  perf.end('input',inputStart);
+  const simulationStart=perf.begin();
   const time = connection.serverTime();
   const remoteFrame = snapshotBuffer.sample(performance.now());
   const actors = remoteFrame?.actors ?? [];
@@ -365,11 +396,13 @@ function frame(now: number): void {
   // Never switch the owner's body onto the delayed remote timeline near enemies.
   const self = latest?.betting?.spectating ? actors.find(a => a.id === latest!.self.id) ?? latest.self : immediateSelf;
   warpUI.update(renderer.world, self, WORLD_DOCUMENT.warps ?? [], activeMapId,
-    playing && connection.connected && renderer.world.mode === 'world' && !ui.inputBlocked && !latest?.dialogue && !latest?.fishing && !bettingUI.visible);
+    playing && connection.connected && renderer.world.mode === 'world' && !ui.inputBlocked && !respawnUI.blocked && !latest?.dialogue && !latest?.fishing && !bettingUI.visible);
   for (const [id, effect] of effects) if (time > effect.at + effect.duration + 250) effects.delete(id);
   const combat = localCombat.sample(self, remoteFrame?.projectiles ?? [], [...effects.values()], renderer.world, time);
   const projectiles = combat.projectiles;
   const audible = playing && connection.connected && !document.hidden && !!self;
+  perf.end('simulation-presentation',simulationStart);
+  const audioStart=perf.begin();
   audio.setActive(playing && connection.connected && !document.hidden);
   if (now >= nextMusicCheck) {
     nextMusicCheck = now + 100;
@@ -378,7 +411,11 @@ function frame(now: number): void {
   }
   const frameEvents = combat.events;
   if (audible && self) audio.update(self, actors, frameEvents, latest?.bossWindups ?? [], time);
+  perf.end('audio',audioStart);
+  const renderStart=perf.begin();
+  if(respawnUI.placeCamera())renderer.resetCamera();
   renderer.render({
+    holdCamera:respawnUI.holdCamera,
     warpTransition: warpUI.blocked,
     ambientSpeechBlocked: !connection.connected || document.hidden || ui.inputBlocked || !!latest?.dialogue || !!latest?.fishing || bettingUI.visible,
     spectating: !!latest?.betting?.spectating,
@@ -408,11 +445,18 @@ function frame(now: number): void {
       return { x: input.dx, y: input.dy };
     })() : null,
   });
+  respawnUI.rendered();
+  perf.end('render',renderStart);
+  const minimapStart=perf.begin();
   if (self && playing && ui.mapUnlocked && now - lastMinimap > 250) {
     drawMinimap(ui.compactMinimap, renderer.world, self, actors, latest?.pickups ?? [], 1600, renderer.orientation, questProgress);
     if (ui.minimapVisible) drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? [], 4800, renderer.orientation, questProgress);
     lastMinimap = now;
   }
+  perf.end('minimap',minimapStart);
+  if(perf.active)perf.state({playing,connected:connection.connected,pingMs:connection.ping,pendingInputs:pending.length,networkBufferedBytes:connection.bufferedBytes,snapshotAgeMs:perf.snapshotAge(),
+    actorsReceived:actors.length,projectilesReceived:projectiles.length,events:frameEvents.length,...snapshotBuffer.performanceInfo(performance.now())});
+  } finally {perf.endFrame();}
 }
 requestAnimationFrame(frame);
 

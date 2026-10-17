@@ -11,6 +11,10 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
   const panel = document.createElement('details');
   panel.id = 'world-painting-panel'; panel.className = 'world-panel';
   panel.innerHTML = `<summary>05 · World Painting</summary><p class="hint">Aspetto della mappa selezionata. I confini usano quattro celle vicine e 16 maschere. Il mare continua sotto la terra.</p>
+    <fieldset><legend>Livelli grafici</legend><div class="fields">
+    <label class="check"><input id="painting-sea-enabled" type="checkbox">Mare · ON/OFF</label>
+    <label class="check"><input id="painting-masks-enabled" type="checkbox">Maschere · ON/OFF</label></div>
+    <p class="hint">Mare OFF: acqua piatta, senza macchie, sfumature costiere o animazione. Maschere OFF: celle quadrate, senza maschere di transizione. Le due opzioni sono indipendenti; terreno e collisioni restano gli stessi. Usa “Applica al gioco” per installare le modifiche.</p></fieldset>
     <div class="fields"><label>Bordi<select id="painting-edges"><option value="masks">Nuove maschere · 4 angoli</option><option value="legacy">Bordi precedenti · confronto</option></select></label>
     <label>Curvatura dei bordi<input id="painting-curve" type="range" min="0" max="1" step=".05"></label>
     <label class="check"><input id="show-painting" type="checkbox" checked>Anteprima pittorica sulla mappa</label></div>
@@ -42,6 +46,8 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
   const refresh = () => {
     refreshCoast();
     const painting = current().painting ?? defaultWorldPainting();
+    input('painting-sea-enabled').checked=painting.seaEnabled!==false;
+    input('painting-masks-enabled').checked=painting.masksEnabled!==false;
     scope.refresh();
     const style=scope.style(),colors=scope.colors();
     (panel.querySelector('#painting-edges') as HTMLSelectElement).value = painting.edges;
@@ -62,10 +68,12 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
   };
   panel.addEventListener('change', event => {
     const target = event.target as HTMLInputElement;
-    if (target.id!=='painting-edges'&&target.id!=='painting-curve'&&!/^painting-(grass|path|water|mud|snow|ice|rock|bush|stone)-(color|intensity|size)$/.test(target.id)) return;
+    if (target.id!=='painting-sea-enabled'&&target.id!=='painting-masks-enabled'&&target.id!=='painting-edges'&&target.id!=='painting-curve'&&!/^painting-(grass|path|water|mud|snow|ice|rock|bush|stone)-(color|intensity|size)$/.test(target.id)) return;
     change(() => {
       const painting = current().painting ??= defaultWorldPainting();
-      if (target.id === 'painting-edges') painting.edges = target.value as 'masks' | 'legacy';
+      if(target.id==='painting-sea-enabled')painting.seaEnabled=target.checked;
+      else if(target.id==='painting-masks-enabled')painting.masksEnabled=target.checked;
+      else if (target.id === 'painting-edges') painting.edges = target.value as 'masks' | 'legacy';
       else if (target.id === 'painting-curve') scope.target(true)!.curve = Number(target.value);
       else if (/^painting-(grass|path|water|mud|snow|ice|rock|bush|stone)-(color|intensity|size)$/.test(target.id)) {
         const [, key, prop] = target.id.split('-') as [string, PaintMaterial, 'color' | 'intensity' | 'size'];

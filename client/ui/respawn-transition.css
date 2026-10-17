@@ -1,0 +1,3 @@
+.respawn-veil{position:fixed;inset:0;z-index:1100;background:#000;opacity:0;pointer-events:none;transition:opacity 160ms linear}
+.respawn-veil.active{pointer-events:auto}.respawn-veil.covered{opacity:1}
+@media(prefers-reduced-motion:reduce){.respawn-veil{transition:none}}

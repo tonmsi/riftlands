@@ -1,9 +1,11 @@
 import { loadImage } from './sprite-sheet';
 import type { ActorVisual, SpriteAnimation } from '../../shared/actor-catalog';
 import { animationFrame, resolveAnimation, type AnimationState } from './actor-animation';
+import { performanceLog as perf } from '../core/performance-log';
 
 /** Shared by the game and the visual editor; all image slicing happens outside draw(). */
 export class ActorSpriteRenderer {
+  performanceInfo(){let pixels=0,frames=0;for(const sheet of this.sheets.values())for(const f of sheet.frames){pixels+=f.width*f.height;frames++;}return {sheets:this.sheets.size,frames,pixels};}
   private readonly sheets = new Map<string, { frames: HTMLCanvasElement[]; ratio: number }>();
   private readonly jobs = new Map<string, Promise<void>>();
   private key(a: SpriteAnimation) { return `${a.asset}:${a.columns}:${a.rows}`; }
@@ -12,6 +14,7 @@ export class ActorSpriteRenderer {
       const key = this.key(a), existing = this.jobs.get(key);
       if (existing) return existing;
       const job = loadImage(a.asset).then(image => {
+        const rasterStart=perf.begin();
         if (image.naturalWidth % a.columns || image.naturalHeight % a.rows) throw new Error(`Griglia spritesheet non compatibile: ${a.asset}`);
         const width = image.naturalWidth / a.columns, height = image.naturalHeight / a.rows, frames: HTMLCanvasElement[] = [];
         if (width < 1 || height < 1 || image.naturalWidth * image.naturalHeight > 32_000_000) throw new Error('Spritesheet troppo grande o non valido.');
@@ -20,6 +23,7 @@ export class ActorSpriteRenderer {
           frame.getContext('2d')!.drawImage(image, x * width, y * height, width, height, 0, 0, width, height); frames.push(frame);
         }
         this.sheets.set(key, { frames, ratio: height / width });
+        perf.end('actor-sprite-raster',rasterStart);
       });
       const retryable = job.catch(error => { this.jobs.delete(key); throw error; });
       this.jobs.set(key, retryable); return retryable;
