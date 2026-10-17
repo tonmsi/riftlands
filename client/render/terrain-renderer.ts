@@ -1,4 +1,4 @@
-import { defaultWorldPainting, PAINT_COLORS, type WorldPainting } from '../../shared/world-painting';
+import { DEFAULT_WATER_COAST, defaultCoastMotion, defaultWorldPainting, PAINT_COLORS, type WorldPainting } from '../../shared/world-painting';
 import { PaintedTerrain } from './painted-terrain';
 import { CHUNK_SIZE, TILE_SIZE } from '../../shared/config';
 import type { TileKind } from '../../shared/types';
@@ -9,6 +9,7 @@ import { noise } from './render-primitives';
 import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor } from './terrain-style';
 import type { RenderBounds, TerrainViewport } from './render-types';
 const DEFAULT_PAINTING = defaultWorldPainting();
+const DEFAULT_COAST_MOTION=defaultCoastMotion();
 function tintGround(color: string, original: string, chosen: string): string {
   if (original === chosen) return color;
   const rgb = color.startsWith('#') ? [1,3,5].map(i => parseInt(color.slice(i,i+2),16)) : color.match(/\d+/g)!.map(Number);
@@ -51,7 +52,7 @@ export class TerrainRenderer {
   constructor(private readonly ctx: CanvasRenderingContext2D, private readonly localDungeons?: readonly DungeonDefinition[]) {
     this.spritesReady = Promise.resolve();
   }
-  invalidate(): void { this.terrainCache = undefined; }
+  invalidate(): void { this.terrainCache = undefined; this.maskedTerrain.motion.clear(); }
   private outsideLocalMap(tx: number, ty: number): boolean {
     const interior = this.activeWorld?.authoring.document.interiorBounds;
     if (interior && (tx < 0 || ty < 0 || tx >= interior.width || ty >= interior.height)) return true;
@@ -117,20 +118,32 @@ export class TerrainRenderer {
         ctx.fillRect(strip.left, strip.top, strip.right - strip.left, strip.bottom - strip.top);
         ctx.setTransform(scale, 0, 0, scale, -x * scale, -y * scale);
         this.drawTerrain(world, time, ctx, {
-          left: x + strip.left / scale - 100,
-          top: y + strip.top / scale - 100,
-          right: x + strip.right / scale + 100,
-          bottom: y + strip.bottom / scale + 100,
+          left: x + strip.left / scale,
+          top: y + strip.top / scale,
+          right: x + strip.right / scale,
+          bottom: y + strip.bottom / scale,
         });
         ctx.restore();
       }
       this.terrainCache = cache;
     }
     this.ctx.drawImage(cache.canvas, cache.left, cache.top, cache.canvas.width / scale, cache.canvas.height / scale);
+    this.drawCoastMotion(this.ctx,cache,time);
+  }
+  drawCoastMotion(ctx:CanvasRenderingContext2D,bounds:RenderBounds,time:number):boolean {
+    return this.maskedTerrain.motion.draw(ctx,bounds,time);
   }
   drawTerrain(world: World, time: number, ctx: CanvasRenderingContext2D, bounds: RenderBounds): void {
     this.activeWorld = world;
     this.painting = world.authoring.document.painting ?? DEFAULT_PAINTING;
+    this.maskedTerrain.motion.configure(world,this.painting);
+    const coast=this.painting.waterCoast??DEFAULT_WATER_COAST,motion=coast.motion??DEFAULT_COAST_MOTION;
+    const reach=this.painting.edges==='masks'&&coast.enabled?Math.max(coast.feather,coast.shallows,
+      ...(motion.enabled?motion.bands.filter(b=>b.width>0&&b.opacity>0).map(b=>b.width+motion.amplitude):[])):0;
+    // A broad band may reach into the viewport from an offscreen coastline.
+    // Keep the usual scenery margin, expanding it only for wider shore effects.
+    const padding=Math.max(100,reach);
+    bounds={left:bounds.left-padding,top:bounds.top-padding,right:bounds.right+padding,bottom:bounds.bottom+padding};
     this.environmentArt.configure(this.painting);
     const palette = this.painting.materials;
     const waterPlants: { x: number; y: number; variation: number; shore: number }[] = [];

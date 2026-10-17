@@ -5,7 +5,7 @@ import { newWorldDocument, parseWorldDocument } from '../shared/world-schema';
 import { World } from '../shared/world';
 import { WorldEditorHistory } from '../client/editors/world/world-editor-history';
 import { terrainMaskCommands } from '../client/render/terrain-masks';
-import { resolveTransition, transitionPairKey } from '../shared/world-painting';
+import { resolveTransition, transitionPairKey, DEFAULT_WATER_COAST, defaultCoastMotion } from '../shared/world-painting';
 
 test('painting survives parsing, export and history without changing procedural terrain or climate', () => {
   const before = newWorldDocument(), after = structuredClone(before);
@@ -85,4 +85,23 @@ test('transition rules reject invalid pairs, owners, priorities and geometry',()
     {pairRules:{'grass:water':{owner:'snow'}}},{pairRules:{'grass:water':{priority:-1}}},
     {pairRules:{'grass:water':{maskShapes:{15:{curves:[],smooth:true}}}}},
   ])assert.throws(()=>parseWorldDocument({...newWorldDocument(),painting:{...defaultWorldPainting(),...extra}}),/world painting/);
+});
+
+test('water coast controls are bounded and survive document round trips',()=>{
+  const doc={...newWorldDocument(),painting:{...defaultWorldPainting(),waterCoast:{...DEFAULT_WATER_COAST,seed:491,noise:2.5}}};
+  assert.deepEqual(parseWorldDocument(JSON.stringify(doc)).painting,doc.painting);
+  for(const invalid of [{noise:7},{noiseScale:0},{seed:1.5},{seed:Infinity},{feather:129},{shallows:513},{shallows:-1},{smoothing:NaN},{enabled:1},{shallowColor:'blue'},{featherOpacity:1.1},{shallowOpacity:-.1},{shallowSteps:33},{featherSteps:1.5}])
+    assert.throws(()=>parseWorldDocument({...doc,painting:{...doc.painting,waterCoast:{...doc.painting.waterCoast,...invalid}}}),/world painting/);
+  const a=new World(42,16,'world',newWorldDocument(),[]),b=new World(42,16,'world',doc,[]);
+  for(let y=-8;y<8;y++)for(let x=-8;x<8;x++)assert.equal(a.getTile(x,y),b.getTile(x,y));
+});
+
+test('coast motion accepts wide independent bands and validates bounded animation settings',()=>{
+  const motion=defaultCoastMotion();motion.bands=[{width:512,color:'#abcdef',opacity:1,softness:16}];
+  const doc={...newWorldDocument(),painting:{...defaultWorldPainting(),waterCoast:{...DEFAULT_WATER_COAST,feather:128,shallows:512,featherSteps:32,shallowSteps:1,motion}}};
+  assert.deepEqual(parseWorldDocument(JSON.stringify(doc)).painting,doc.painting);
+  for(const invalid of [{enabled:1},{amplitude:129},{speed:-1},{randomness:NaN},{seed:1.1},{bands:Array(13).fill(motion.bands[0])},
+    ...[{width:513},{opacity:-1},{softness:0},{softness:1.5},{color:'red'}].map(b=>({bands:[{...motion.bands[0],...b}]}))])
+    assert.throws(()=>parseWorldDocument({...doc,painting:{...doc.painting,waterCoast:{...doc.painting.waterCoast,motion:{...motion,...invalid}}}}),/world painting/);
+  assert.notEqual(defaultCoastMotion().bands,defaultCoastMotion().bands);
 });

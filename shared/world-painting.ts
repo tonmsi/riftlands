@@ -5,6 +5,18 @@ export interface MaterialPaint { color: string; intensity: number; size: number;
 export interface MaskPoint { x: number; y: number; }
 /** Interior control points only; shared edge endpoints are supplied by the renderer. */
 export interface MaskShape { curves: MaskPoint[][]; smooth: boolean; }
+export interface CoastBand { width:number; color:string; opacity:number; softness:number; }
+export interface CoastMotion { enabled:boolean; amplitude:number; speed:number; randomness:number; seed:number; bands:CoastBand[]; }
+export const defaultCoastMotion=():CoastMotion=>({enabled:true,amplitude:3,speed:.35,randomness:.5,seed:271,
+  bands:[{width:24,color:'#c9e8dc',opacity:.12,softness:3},{width:9,color:'#e3f0db',opacity:.2,softness:3}]});
+export interface WaterCoast {
+  enabled:boolean; automatic:boolean; smoothing:number; noise:number; noiseScale:number; seed:number;
+  feather:number; shallows:number; shallowColor:string;
+  featherOpacity?:number; shallowOpacity?:number;
+  featherSteps?:number; shallowSteps?:number; motion?:CoastMotion;
+}
+export const DEFAULT_WATER_COAST:Readonly<WaterCoast>={enabled:true,automatic:true,smoothing:1,noise:1.5,noiseScale:8,seed:137,
+  feather:4,shallows:14,shallowColor:'#8dcabe',featherOpacity:.94,shallowOpacity:.45};
 export const TRANSITION_MATERIALS = ['water', 'grass', 'mud', 'ice', 'path', 'snow', 'stone'] as const;
 export type TransitionMaterial = typeof TRANSITION_MATERIALS[number];
 export interface TransitionRule {
@@ -43,6 +55,7 @@ export function resolveTransition(p: WorldPainting, surfaces: readonly Transitio
     maskShapes:{...p.maskShapes,...base?.maskShapes,...winner.rule.maskShapes}};
 }
 export interface WorldPainting {
+  waterCoast?:WaterCoast;
   materialRules?: Partial<Record<TransitionMaterial,TransitionRule>>;
   pairRules?: Partial<Record<string,TransitionRule>>;
   maskShapes?: Partial<Record<number, MaskShape>>;
@@ -62,6 +75,23 @@ export function defaultWorldPainting(): WorldPainting {
 export function validWorldPainting(value: unknown): value is WorldPainting {
   if (!value || typeof value !== 'object') return false;
   const p = value as WorldPainting;
+  if(p.waterCoast!==undefined){
+    const w=p.waterCoast;
+    const range=(v:number,min:number,max:number)=>Number.isFinite(v)&&v>=min&&v<=max;
+    if(!w||typeof w!=='object'||typeof w.enabled!=='boolean'||typeof w.automatic!=='boolean'
+      ||!range(w.smoothing,0,1)||!range(w.noise,0,6)||!range(w.noiseScale,2,32)
+      ||!Number.isInteger(w.seed)||!range(w.seed,0,1_000_000)||!range(w.feather,0,128)
+      ||!range(w.shallows,0,512)||!/^#[0-9a-f]{6}$/i.test(w.shallowColor)
+      ||(w.featherOpacity!==undefined&&!range(w.featherOpacity,0,1))||(w.shallowOpacity!==undefined&&!range(w.shallowOpacity,0,1)))return false;
+    for(const steps of [w.featherSteps,w.shallowSteps])if(steps!==undefined&&(!Number.isInteger(steps)||!range(steps,1,32)))return false;
+    if(w.motion!==undefined){
+      const m=w.motion;
+      if(!m||typeof m!=='object'||typeof m.enabled!=='boolean'||!range(m.amplitude,0,128)||!range(m.speed,0,4)
+        ||!range(m.randomness,0,1)||!Number.isInteger(m.seed)||!range(m.seed,0,1_000_000)
+        ||!Array.isArray(m.bands)||m.bands.length>12||!m.bands.every(b=>b&&range(b.width,0,512)
+          &&/^#[0-9a-f]{6}$/i.test(b.color)&&range(b.opacity,0,1)&&Number.isInteger(b.softness)&&range(b.softness,1,16)))return false;
+    }
+  }
   const validRule=(r:TransitionRule)=>!!r&&typeof r==='object'&&!Array.isArray(r)
     &&(r.curve===undefined||(Number.isFinite(r.curve)&&r.curve>=0&&r.curve<=1))
     &&(r.priority===undefined||(Number.isInteger(r.priority)&&r.priority>=0&&r.priority<=1000))

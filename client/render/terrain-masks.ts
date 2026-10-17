@@ -1,6 +1,6 @@
 import type { MaskPoint, MaskShape, WorldPainting } from '../../shared/world-painting';
-export function maskContours(mask: number, curve: number): { start: MaskPoint; end: MaskPoint; point: MaskPoint }[] {
-  const c = Math.max(.03, .25*(1-curve));
+export function maskContours(mask: number, curve: number, editable=true): { start: MaskPoint; end: MaskPoint; point: MaskPoint }[] {
+  const c = Math.max(editable ? .03 : 0, .25*(1-curve));
   const corners = [
     {start:{x:.5,y:0},end:{x:0,y:.5},point:{x:c,y:c}},
     {start:{x:1,y:.5},end:{x:.5,y:0},point:{x:1-c,y:c}},

@@ -85,6 +85,11 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         cached = { key, world, canvas: bitmap, placements }; terrainViews.set(canvas, cached);
     }
     ctx.drawImage(cached.canvas, -view.x, -view.y, width, height);
+    if(options.painting&&step===1&&s>=12){
+        ctx.save();ctx.scale(s/TILE_SIZE,s/TILE_SIZE);
+        animated=terrainPainters.get(canvas)?.drawCoastMotion(ctx,{left:b.left*TILE_SIZE,top:b.top*TILE_SIZE,right:b.right*TILE_SIZE,bottom:b.bottom*TILE_SIZE},time)??false;
+        ctx.restore();
+    }
     const placements = cached.placements;
     for (const p of placements) {
         const a = world.authoring.assets.get(p.assetId)!;

@@ -3,6 +3,7 @@ import type { WorldDocument } from '../../../shared/world-schema';
 import { terrainMaskCommands } from '../../render/terrain-masks';
 import { installPaintingMaskEditor } from './painting-mask-editor';
 import { installTransitionScope } from './painting-transition-scope';
+import { installWaterCoastControls } from './water-coast-controls';
 
 const names: Record<PaintMaterial, string> = { grass: 'Erba', path: 'Strade', water: 'Mare / acqua', mud: 'Fango',
   snow: 'Neve', ice: 'Ghiaccio', rock: 'Rocce', bush: 'Cespugli', stone: 'Pavimenti dungeon' };
@@ -29,6 +30,7 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
   button.onclick = () => { panel.open = true; panel.scrollIntoView({ block: 'start' }); }; nav.append(button);
   const input = (id: string) => panel.querySelector<HTMLInputElement>(`#${id}`)!;
   const scope=installTransitionScope(panel,current,change);
+  const refreshCoast=installWaterCoastControls(panel,current,change);
   const maskEditor = installPaintingMaskEditor(panel,change,scope);
   panel.querySelector('#painting-edit-masks')!.addEventListener('click',()=>maskEditor.open());
   const atlas = panel.querySelector<HTMLCanvasElement>('#painting-masks')!;
@@ -38,6 +40,7 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
     if(mask>0&&mask<15)maskEditor.open(mask);
   });
   const refresh = () => {
+    refreshCoast();
     const painting = current().painting ?? defaultWorldPainting();
     scope.refresh();
     const style=scope.style(),colors=scope.colors();
