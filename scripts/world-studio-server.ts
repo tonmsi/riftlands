@@ -13,7 +13,7 @@ import { serveAudioFile } from '../server/audio-files';
 
 async function readBody(request: IncomingMessage): Promise<any> {
   const chunks: Buffer[] = []; let size = 0;
-  for await (const chunk of request) { size += chunk.length; if (size > 40_000_000) throw new Error('Richiesta oltre 40 MB.'); chunks.push(Buffer.from(chunk)); }
+  for await (const chunk of request) { size += chunk.length; if (size > 256_000_000) throw new Error('Richiesta oltre 256 MB.'); chunks.push(Buffer.from(chunk)); }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 export async function startWorldStudio(options: { root: string; documentPath: string; dungeonPath: string; dataPath: string; port: number }) {

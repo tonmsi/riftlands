@@ -1,4 +1,5 @@
 import { TILE_SIZE } from './config';
+import { elevationOf, type Elevated } from './elevation';
 import type { Vec2 } from './types';
 import type { DungeonDefinition } from './dungeons';
 import { newWorldDocument, type WorldDocument, type WorldInterior, type WorldWarp } from './world-schema';
@@ -6,7 +7,8 @@ import { newWorldDocument, type WorldDocument, type WorldInterior, type WorldWar
 export const WARP_RADIUS = TILE_SIZE * .65;
 export const WARP_FADE_MS = 280;
 export function warpPosition(p: Vec2): Vec2 { return { x: (p.x + .5) * TILE_SIZE, y: (p.y + .5) * TILE_SIZE }; }
-export function atWarp(p: Vec2, warp: WorldWarp, extra = 0): boolean {
+export function atWarp(p: Vec2 & Elevated, warp: WorldWarp, extra = 0): boolean {
+  if (elevationOf(p) !== (warp.entryElevation ?? 0)) return false;
   const entry = warpPosition(warp.entry), size=warp.entrySize ?? {x:1,y:1};
   const dx=Math.max(entry.x-p.x,0,p.x-(entry.x+(size.x-1)*TILE_SIZE));
   const dy=Math.max(entry.y-p.y,0,p.y-(entry.y+(size.y-1)*TILE_SIZE));
@@ -28,12 +30,13 @@ export function setWarpReturn(project: WorldDocument, warp: WorldWarp, enabled: 
   } else Object.assign(reverse, { from: warp.to, to: warp.from, entry: { ...warp.arrival }, arrival: { ...warp.entry }, activation: warp.activation });
   if (warp.arrivalSize) reverse.entrySize = {...warp.arrivalSize}; else delete reverse.entrySize;
   if (warp.entrySize) reverse.arrivalSize = {...warp.entrySize}; else delete reverse.arrivalSize;
+  reverse.entryElevation = warp.arrivalElevation ?? 0; reverse.arrivalElevation = warp.entryElevation ?? 0;
 }
 export function mapDocument(project: WorldDocument, id = 'world'): WorldDocument {
   if (id === 'world') return project;
   const map = project.interiors?.find(m => m.id === id);
   if (!map) throw new Error(`Interno non disponibile: ${id}`);
-  return { ...map.document, seed: project.seed, assets: project.assets, interiorBounds: { id, name: map.name, width: map.width, height: map.height, pvp: map.pvp ?? false } };
+  return { ...map.document, seed: project.seed, assets: project.assets, cliffAssets: project.cliffAssets, interiorBounds: { id, name: map.name, width: map.width, height: map.height, pvp: map.pvp ?? false } };
 }
 export function newDungeonInterior(id: string, dungeon: DungeonDefinition, pvp = false, seed = 734291): WorldInterior {
   const bounds = dungeon.layout.bounds;

@@ -1,4 +1,5 @@
 import { sweptWorldHit } from '../shared/projectiles';
+import { elevationOf, sameElevation, validElevation, type Elevated } from '../shared/elevation';
 export { sweptWorldHit } from '../shared/projectiles';
 import { randomUUID } from '../shared/id';
 import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, levelFromXp } from '../shared/config';
@@ -28,7 +29,7 @@ const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
 const copyActor = (actor: Actor): Actor => ({ ...actor, ...(actor.loadout ? { loadout: { ...actor.loadout } } : {}), effects: actor.effects.map(effect => ({ ...effect })), cooldowns: { ...actor.cooldowns } });
 type Connection = { account: Account; connected: boolean; removeAt: number; inputs: InputCommand[]; ack: number; highestSeq: number; combatAt: number; combatUntil?: number };
-type NpcMeta = { settings?: import('../shared/npc-settings').NpcSettings; home: Vec2; chunk: string; nextAttack: number; aggroTargetId?: string; windup?: { targetId: string; readyAt: number }; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
+type NpcMeta = { settings?: import('../shared/npc-settings').NpcSettings; home: Vec2 & Elevated; chunk: string; nextAttack: number; aggroTargetId?: string; windup?: { targetId: string; readyAt: number }; wander?: { destination?: Vec2; nextAt: number; sequence: number } };
 type ActiveChunk = { key: string; lastUsed: number; npcIds: string[]; pickupIds: string[] };
 type Team = { id: string; leaderId: string; members: Set<string> };
 type Invite = { fromId: string; teamId: string; expiresAt: number };
@@ -108,6 +109,7 @@ export class WorldSimulation {
         const definition = (environment?.bosses ?? BOSS_BY_ID).get(dungeon.bossId);
         if (!definition || definition.dungeonId !== dungeon.id) throw new Error(`Configurazione dungeon non valida: ${dungeon.id}`);
         const encounter = new BossEncounter(definition, now, store?.bossStates[definition.id], store, dungeon);
+        Object.assign(encounter.boss, this.world.elevation.at(encounter.boss.x, encounter.boss.y, 0));
         this.bosses.set(definition.id, encounter);
         this.npcs.set(encounter.boss.id, encounter.boss);
         if (store) store.bossStates[definition.id] = encounter.state;
@@ -185,7 +187,10 @@ export class WorldSimulation {
       effects: validSaved ? saved.effects.filter(effect => effect.until > this.now).map(effect => ({ ...effect })) : [],
       cooldowns: validSaved ? { ...saved.cooldowns } : EMPTY_COOLDOWNS(),
     };
-    if (collidesWorld(player.x, player.y, player.radius, this.world)) Object.assign(player, spawn);
+    Object.assign(player, this.world.elevation.at(player.x, player.y, validSaved && validElevation(saved.elevation) ? saved.elevation : this.world.authoring.document.spawnElevation ?? 0));
+    if (collidesWorld(player.x, player.y, player.radius, this.world, elevationOf(player))) {
+      Object.assign(player, spawn, this.world.elevation.at(spawn.x, spawn.y, this.world.authoring.document.spawnElevation));
+    }
     if (this.mode === 'world' && this.world.pvpAt(player.x, player.y)) player.spawnProtectedUntil = 0;
     if (player.hp <= 0 && player.deadUntil <= 0) player.deadUntil = this.now + 5000;
     syncSoulEscort(player, account.narrative, this.mode === 'world');
@@ -283,7 +288,7 @@ export class WorldSimulation {
         const magnitude = Math.hypot(input.dx, input.dy);
         if (magnitude > 0) Object.assign(actor, moveWithCollisions(actor, input.dx / Math.max(1, magnitude), input.dy / Math.max(1, magnitude), movementSpeed(actor, this.now) * terrainSpeed(actor, this.world) * dt, this.world));
       }
-      actor.hidden = this.world.isHiding(actor.x, actor.y);
+      actor.hidden = this.world.isHiding(actor.x, actor.y, elevationOf(actor));
       if (this.mode === 'world' && this.world.pvpAt(actor.x, actor.y)) actor.spawnProtectedUntil = 0;
     }
     this.rebuildCells();
@@ -316,7 +321,7 @@ export class WorldSimulation {
 
   private readonly pendingCasts = new Map<string, InputCommand>();
 
-  private safeSpawn(id: string): Vec2 {
+  private safeSpawn(id: string): Vec2 & Elevated {
     if (this.environment) return { ...this.environment.spawn };
     if (this.mode !== 'world') {
       const teamId = this.players.get(id)?.teamId;
@@ -334,7 +339,8 @@ export class WorldSimulation {
       const origin = this.world.authoring.document.spawn;
       const offset = this.world.authoring.document.interiorBounds ? .5 : 0;
       const point = { x: (origin.x + offset) * TILE_SIZE + Math.cos(angle + i * 2.4) * r, y: (origin.y + offset) * TILE_SIZE + Math.sin(angle + i * 2.4) * r };
-      if (!this.world.arenaAt(point.x, point.y) && !collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, this.world) && ![...this.players.values()].some(actor => actor.hp > 0 && distance(actor, point) < 40)) return point;
+      const state = this.world.elevation.at(point.x, point.y, this.world.authoring.document.spawnElevation);
+      if (!this.world.arenaAt(point.x, point.y) && !collidesWorld(point.x, point.y, PLAYER_RADIUS + 2, this.world, elevationOf(state)) && ![...this.players.values()].some(actor => actor.hp > 0 && sameElevation(actor, state) && distance(actor, point) < 40)) return { ...point, ...state };
     }
     return { x: this.world.authoring.document.spawn.x * TILE_SIZE + TILE_SIZE / 2, y: this.world.authoring.document.spawn.y * TILE_SIZE + TILE_SIZE / 2 };
   }
@@ -385,13 +391,15 @@ export class WorldSimulation {
 
   private canAutoAim(actor: Actor, target: Actor): boolean {
     return target.hp > 0 && !this.allied(actor, target) && target.spawnProtectedUntil <= this.now
-      && distance(actor, target) < INTEREST_RADIUS && this.visibleTo(actor, target) && hasLineOfSight(actor, target, this.world)
+      && sameElevation(actor, target) && distance(actor, target) < INTEREST_RADIUS && this.visibleTo(actor, target) && hasLineOfSight(actor, target, this.world)
       && !(target.kind === 'player' && this.isSafeProtected(target))
       && (!target.bossKey || !!this.bosses.get(target.bossKey)?.canDamage(actor));
   }
 
   private emit(event: Omit<GameEvent, 'id' | 'at'>): void {
-    this.events.push({ ...event, id: randomUUID(), at: this.now });
+    const sourceId = event.targetId ?? event.actorId;
+    const source = sourceId ? this.players.get(sourceId) ?? this.npcs.get(sourceId) : undefined;
+    this.events.push({ ...event, elevation: event.elevation ?? (source ? elevationOf(source) : 0), id: randomUUID(), at: this.now });
     if (this.events.length > 500) this.events.splice(0, this.events.length - 500);
   }
 
@@ -409,7 +417,7 @@ export class WorldSimulation {
           burst.currentAngle += burst.angleStep;
           const projectile: Projectile = {
             id: randomUUID(),
-            ownerId: owner.id,
+            ownerId: owner.id, elevation: elevationOf(owner),
             x: owner.x,
             y: owner.y,
             vx: Math.cos(burst.currentAngle) * burst.speed,
@@ -452,11 +460,11 @@ export class WorldSimulation {
       let triggered = false;
 
       for (const target of this.near(trap, trap.radius)) {
-        if (target.id === trap.ownerId || target.hp <= 0 || target.spawnProtectedUntil > this.now) continue;
+        if (!sameElevation(trap, target) || target.id === trap.ownerId || target.hp <= 0 || target.spawnProtectedUntil > this.now || !hasLineOfSight(trap, target, this.world)) continue;
         if (owner && this.allied(owner, target)) continue;
         if (trap.teamId && target.teamId === trap.teamId) continue;
 
-        if (!this.damage(target, owner, trap.damage)) continue;
+        if (!this.damage(target, owner, trap.damage, elevationOf(trap))) continue;
         triggered = true;
         this.effect(target, 'root', trap.duration);
         this.emit({
@@ -504,6 +512,7 @@ export class WorldSimulation {
     if (ability.kind === 'projectile') {
       const speed = ability.speed ?? 400;
       const projectile: Projectile = { id: randomUUID(), ownerId: actor.id, x: actor.x, y: actor.y, vx: Math.cos(actor.aim) * speed, vy: Math.sin(actor.aim) * speed, radius: ability.radius, damage: ability.damage * this.damageMultiplier(actor), expiresAt: this.now + ability.range / speed * 1000, color: ability.color, slow: ability.slow };
+      projectile.elevation = elevationOf(actor);
       if (inputSeq !== undefined) projectile.inputSeq = inputSeq;
       this.projectiles.set(projectile.id, projectile);
       this.projectileTeams.set(projectile.id, actor.teamId);
@@ -512,12 +521,13 @@ export class WorldSimulation {
     // Gestione della trappola dell'Hunter
     if (ability.kind === 'trap') {
       const dist = Math.min(ability.range || 60, 60);
-      const placeX = actor.x + Math.cos(actor.aim) * dist;
-      const placeY = actor.y + Math.sin(actor.aim) * dist;
+      const placement = moveWithCollisions(actor, Math.cos(actor.aim), Math.sin(actor.aim), dist, this.world);
+      const placeX = placement.x;
+      const placeY = placement.y;
       const trapId = randomUUID();
       const trap: Trap = {
         id: trapId,
-        ownerId: actor.id,
+        ownerId: actor.id, elevation: elevationOf(placement),
         teamId: actor.teamId,
         x: placeX,
         y: placeY,
@@ -554,6 +564,7 @@ export class WorldSimulation {
         expiresAt: this.now + (range / speed) * 1000,
         color: ability.color,
       };
+      firstShot.elevation = elevationOf(actor);
       this.projectiles.set(firstShot.id, firstShot);
       this.projectileTeams.set(firstShot.id, actor.teamId);
 
@@ -576,13 +587,19 @@ export class WorldSimulation {
     if (ability.kind === 'dash') {
       const start = { x: actor.x, y: actor.y };
       const intended = { x: start.x + Math.cos(actor.aim) * ability.range, y: start.y + Math.sin(actor.aim) * ability.range };
-      const wall = sweptWorldHit(start, intended, actor.radius, this.world);
-      const travel = wall === null ? 1 : Math.max(0, wall - 0.001);
-      const end = { x: start.x + (intended.x - start.x) * travel, y: start.y + (intended.y - start.y) * travel };
+      // Dash follows the same support/border rules as walking; stop at the first blocked substep.
+      let end: Vec2 & Elevated = { ...start, elevation: elevationOf(actor), surfaceId: actor.surfaceId };
+      for (let d = 0; d < ability.range; d += 4) {
+        const step = Math.min(4, ability.range - d);
+        const next = { x: end.x + Math.cos(actor.aim) * step, y: end.y + Math.sin(actor.aim) * step };
+        const state = this.world.elevation.transition(end, next, actor.radius);
+        if (!state || !sameElevation(actor, state)) break;
+        end = { ...next, ...state };
+      }
       let contact: Actor | undefined;
       let fraction = 1;
       for (const target of this.near(start, ability.range + 50)) {
-        if (target.id === actor.id) continue;
+        if (target.id === actor.id || !sameElevation(actor, target)) continue;
         const hit = segmentCircleHit(start, end, target, target.radius + actor.radius + 0.5);
         if (hit !== null && hit < fraction) { fraction = hit; contact = target; }
       }
@@ -615,7 +632,8 @@ export class WorldSimulation {
     return (actor.effects.some(effect => effect.kind === 'power' && effect.until > this.now) ? 1.3 : 1) * (actor.effects.some(effect => effect.kind === 'weakness' && effect.until > this.now) ? 0.7 : 1);
   }
 
-  private damage(target: Actor, attacker: Actor | undefined, amount: number): boolean {
+  private damage(target: Actor, attacker: Actor | undefined, amount: number, attackElevation = attacker ? elevationOf(attacker) : elevationOf(target)): boolean {
+    if (elevationOf(target) !== attackElevation) return false;
     if (attacker && !this.world.sameRoom(attacker, target)) return false;
     if (target.disposition === 'neutral' || target.hp <= 0 || target.spawnProtectedUntil > this.now || (attacker && this.allied(attacker, target))) return false;
     const encounter = target.bossKey ? this.bosses.get(target.bossKey) : undefined;
@@ -683,6 +701,7 @@ export class WorldSimulation {
 
   private respawn(actor: Actor): void {
     Object.assign(actor, this.safeSpawn(actor.id));
+    Object.assign(actor, this.world.elevation.at(actor.x, actor.y, this.world.authoring.document.spawnElevation));
     actor.hp = actor.maxHp;
     actor.resource = CLASSES[actor.classId].resource === 'mana' ? actor.maxResource : 0;
     actor.deadUntil = 0;
@@ -699,17 +718,17 @@ export class WorldSimulation {
       const travelDt = Math.min(dt, Math.max(0, (projectile.expiresAt - (this.now - dt * 1000)) / 1000));
       const start = { x: projectile.x, y: projectile.y };
       const end = { x: start.x + projectile.vx * travelDt, y: start.y + projectile.vy * travelDt };
-      const wallAt = sweptWorldHit(start, end, projectile.radius, this.world) ?? 1.01;
+      const wallAt = sweptWorldHit(start, end, projectile.radius, this.world, elevationOf(projectile)) ?? 1.01;
       let hit: Actor | undefined;
       let hitAt = wallAt;
       const oldTeam = this.projectileTeams.get(id);
       for (const actor of this.near(start, distance(start, end) + projectile.radius + 30)) {
-        if (actor.disposition === 'neutral' || actor.id === projectile.ownerId || actor.spawnProtectedUntil > this.now || (owner && this.allied(owner, actor)) || (oldTeam && actor.teamId === oldTeam)) continue;
+        if (!sameElevation(projectile, actor) || actor.disposition === 'neutral' || actor.id === projectile.ownerId || actor.spawnProtectedUntil > this.now || (owner && this.allied(owner, actor)) || (oldTeam && actor.teamId === oldTeam)) continue;
         const t = segmentCircleHit(start, end, actor, actor.radius + projectile.radius);
         if (t !== null && t < hitAt) { hitAt = t; hit = actor; }
       }
       if (hit) {
-        const applied = this.damage(hit, owner, projectile.damage);
+        const applied = this.damage(hit, owner, projectile.damage, elevationOf(projectile));
         if (applied && projectile.slow && hit.hp > 0) this.effect(hit, 'slow', projectile.slow);
       }
       if (hit || wallAt <= 1 || this.now >= projectile.expiresAt) {
@@ -745,9 +764,10 @@ export class WorldSimulation {
             hp: npcHp, maxHp: npcHp, resource: 0, maxResource: 100, aim: (npc.settings?.initialAngle ?? 0) * Math.PI / 180, speed: npc.settings?.speed ?? spec.speed,
             level: npc.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: EMPTY_COOLDOWNS(),
           };
+          if (!slept) Object.assign(actor, this.world.elevation.at(actor.x, actor.y, npc.elevation));
           this.npcs.set(actor.id, actor);
           if (this.dungeonCorpses.has(actor.id)) { actor.hp = 0; actor.deadUntil = Number.MAX_SAFE_INTEGER; }
-          this.npcMeta.set(actor.id, { settings: npc.settings, home: { x: npc.x, y: npc.y }, chunk: key, nextAttack: slept?.nextAttack ?? this.now + 1500 });
+          this.npcMeta.set(actor.id, { settings: npc.settings, home: { x: npc.x, y: npc.y, ...this.world.elevation.at(npc.x, npc.y, npc.elevation) }, chunk: key, nextAttack: slept?.nextAttack ?? this.now + 1500 });
           this.npcSleep.delete(actor.id);
           chunk.npcIds.push(actor.id);
         }
@@ -784,7 +804,7 @@ export class WorldSimulation {
       for (let i = 0; i < 12; i++) {
         const direction = angle + i * Math.PI / 6;
         const destination = { x: meta.home.x + Math.cos(direction) * radius, y: meta.home.y + Math.sin(direction) * radius };
-        if (distance(npc, destination) > 8 && !collidesWorld(destination.x, destination.y, npc.radius, this.world) && hasLineOfSight(npc, destination, this.world)) { state.destination = destination; break; }
+        if (distance(npc, destination) > 8 && !collidesWorld(destination.x, destination.y, npc.radius, this.world, elevationOf(npc)) && hasLineOfSight(npc, { ...destination, elevation: elevationOf(npc) }, this.world)) { state.destination = destination; break; }
       }
       if (!state.destination) pause();
     }
@@ -862,6 +882,7 @@ export class WorldSimulation {
         if (ranged) {
           if (this.projectiles.size >= 1000) continue;
           const projectile: Projectile = { id: randomUUID(), ownerId: npc.id, x: npc.x, y: npc.y, vx: Math.cos(npc.aim) * 270, vy: Math.sin(npc.aim) * 270, radius: 7, damage: 9 + Math.min(10, npc.level), expiresAt: this.now + 1300, color: '#b5dff2' };
+          projectile.elevation = elevationOf(npc);
           this.projectiles.set(projectile.id, projectile);
           this.projectileTeams.set(projectile.id, null);
         } else this.damage(target, npc, 8 + Math.min(npc.level, 10));
@@ -875,7 +896,7 @@ export class WorldSimulation {
     for (const player of this.players.values()) {
       if (player.hp <= 0) continue;
       for (const [id, pickup] of this.pickups) {
-        if (!this.world.sameRoom(player, pickup) || distance(player, pickup) > player.radius + pickup.radius) continue;
+        if (!sameElevation(player, pickup) || !this.world.sameRoom(player, pickup) || distance(player, pickup) > player.radius + pickup.radius) continue;
         if (pickup.kind === 'heal') this.heal(player, 35);
         else this.effect(player, pickup.kind, pickup.kind === 'weakness' ? 7000 : 10_000);
         this.pickups.delete(id);

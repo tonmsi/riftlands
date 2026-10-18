@@ -1,15 +1,18 @@
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE } from './config';
+import { WorldElevation } from './world-elevation';
+import { containsRectPoint } from './elevation';
 import { arenaTileIsWall } from './arena';
 import { DUNGEON_DEFINITIONS, configuredDungeonTile, dungeonEncounters, dungeonStoneTiles, inDungeonApproachCorridor, insideDungeon, onDungeonApproach, type DungeonDefinition } from './dungeons';
 import type { Biome, Pickup, TileKind, RoomMode } from './types';
 import { WORLD_DOCUMENT } from './world-content';
 import { WorldAuthoring, type TileBounds, type GenerationEnvironment } from './world-authoring';
 import type { AssetPlacement, WorldDocument } from './world-schema';
+import { assetCellColumns,assetCellRows,assetCellSubdivision } from './world-schema';
 import { coordinateHash } from './coordinate-random';
 import { EDIT_CHUNK_SIZE, type WorldTileChunk } from './world-tiles';
 export { coordinateHash } from './coordinate-random';
 
-export interface NpcSpawn { id: string; x: number; y: number; npcKind: import('./npcs').NpcTemplateId; level: number; settings?: import('./npc-settings').NpcSettings; }
+export interface NpcSpawn { id: string; x: number; y: number; elevation?: number; npcKind: import('./npcs').NpcTemplateId; level: number; settings?: import('./npc-settings').NpcSettings; }
 export interface Chunk { key: string; cx: number; cy: number; tiles: TileKind[]; npcs: NpcSpawn[]; pickups: Pickup[]; }
 export const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 export const chunkCoords = (x: number, y: number): { cx: number; cy: number } => ({ cx: Math.floor(x / CHUNK_SIZE), cy: Math.floor(y / CHUNK_SIZE) });
@@ -25,6 +28,7 @@ function noise(x: number, y: number, seed: number): number {
 
 /** Pure terrain plus a bounded LRU cache; neither client nor server retains infinity. */
 export class World {
+  readonly elevation: WorldElevation;
   readonly roomTiles = new Map<string, string>();
   readonly rooms: { id: string; name: string; tiles: { x: number; y: number }[] }[] = [];
   roomAt(x: number, y: number): string { return this.roomTiles.size ? this.roomTiles.get(`${Math.floor(x / TILE_SIZE)},${Math.floor(y / TILE_SIZE)}`) ?? '' : ''; }
@@ -40,6 +44,7 @@ export class World {
   constructor(public readonly seed = WORLD_DOCUMENT.seed, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world',
     document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS) {
     this.authoring = new WorldAuthoring(document);
+    this.elevation = new WorldElevation(this);
     for (const dungeon of dungeons) for (const room of dungeon.rooms ?? []) {
       const id = `${dungeon.id}:${room.id}`; this.rooms.push({ ...room, id });
       for (const tile of room.tiles) this.roomTiles.set(`${tile.x},${tile.y}`, id);
@@ -68,11 +73,22 @@ export class World {
   }
   locationAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE)[0]?.name ?? this.authoring.document.interiorBounds?.name : undefined; }
   isBlocked(tx: number, ty: number): boolean {
-    return isSolid(this.getTile(tx, ty)) || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false).some(p => this.authoring.cell(p, tx, ty)?.blocked);
+    return isSolid(this.getTile(tx, ty)) || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false).some(p => {
+      const a=this.authoring.assets.get(p.assetId)!,division=assetCellSubdivision(a),columns=assetCellColumns(a),rows=assetCellRows(a);
+      for(let row=Math.max(0,Math.floor((ty-p.y)*division));row<Math.min(rows,Math.ceil((ty+1-p.y)*division));row++)
+        for(let col=Math.max(0,Math.floor((tx-p.x)*division));col<Math.min(columns,Math.ceil((tx+1-p.x)*division));col++) if(a.cells[row*columns+col].blocked) return true;
+      return false;
+    });
   }
-  isHiding(x: number, y: number): boolean {
+  isHiding(x: number, y: number, elevation = 0): boolean {
     const tx = Math.floor(x / TILE_SIZE), ty = Math.floor(y / TILE_SIZE);
-    return this.getTile(tx, ty) === 'bush' || this.assetsIn({ left: tx, top: ty, right: tx + 1, bottom: ty + 1 }, false).some(p => ['hide', 'hide-fade'].includes(this.authoring.cell(p, tx, ty)?.visibility ?? ''));
+    const bounds = { left: tx, top: ty, right: tx + 1, bottom: ty + 1 };
+    const surface = this.elevation.geometry(bounds).surfaces.find(s => s.elevation === elevation && containsRectPoint(s, x / TILE_SIZE, y / TILE_SIZE));
+    return this.elevation.cliffHidesAt(x/TILE_SIZE,y/TILE_SIZE,elevation) || (surface?.terrain === 'bush' || (!surface && elevation === this.elevation.baseAt(tx, ty) && this.getTile(tx, ty) === 'bush'))
+      || this.assetsIn(bounds, false).some(p => {
+        const cell=this.authoring.cell(p,x/TILE_SIZE,y/TILE_SIZE);
+        return (p.baseElevation??this.elevation.terrainElevationAt(p.x+.5,p.y+.5))+(cell?.elevation??0)===elevation&&['hide','hide-fade'].includes(cell?.visibility??'');
+      });
   }
   pvpAt(x: number, y: number): boolean {
     if (this.mode !== 'world') return true;
@@ -178,7 +194,8 @@ export class World {
       const ty = Math.floor(coordinateHash(cx, cy * 41 + i, this.seed + 97) * CHUNK_TILES);
       const tile = tiles[ty * CHUNK_TILES + tx];
       const x = (cx * CHUNK_TILES + tx + 0.5) * TILE_SIZE, y = (cy * CHUNK_TILES + ty + 0.5) * TILE_SIZE;
-      if (this.isBlocked(cx * CHUNK_TILES + tx, cy * CHUNK_TILES + ty) || tile === 'path'
+      const state = this.elevation.at(x, y, this.elevation.terrainElevationAt(x / TILE_SIZE, y / TILE_SIZE));
+      if (this.elevation.blocked(x, y, 19, state.elevation ?? 0) || tile === 'path'
         || this.dungeons.some(definition => insideDungeon(definition, { x, y }, definition.spawnExclusionMargin))) continue;
       if (chunk.npcs.some(n => Math.hypot(n.x - x, n.y - y) < 120) || chunk.pickups.some(p => Math.hypot(p.x - x, p.y - y) < 100)) continue;
       const rule = this.authoring.rule(x / TILE_SIZE, y / TILE_SIZE, 'npcs');
@@ -188,15 +205,15 @@ export class World {
         const index = chunk.npcs.length;
         let weight = coordinateHash(cx, cy + i, this.seed + 123) * total;
         const npcKind = (['slime', 'wisp', 'sentinel'] as const).find(k => (weight -= weights[k]) < 0)!;
-        chunk.npcs.push({ id: `npc:${key}:${index}`, x, y, npcKind, level: Math.min(25, 1 + Math.floor(Math.hypot(x, y) / 2200)) });
+        chunk.npcs.push({ id: `npc:${key}:${index}`, x, y, elevation: state.elevation, npcKind, level: Math.min(25, 1 + Math.floor(Math.hypot(x, y) / 2200)) });
       } else if (chunk.pickups.length < 2 && (rule?.density ?? 1) > 0) {
         const index = chunk.pickups.length;
-        chunk.pickups.push({ id: `pickup:${key}:${index}`, x, y, radius: 12, kind: (['heal', 'haste', 'power', 'weakness'] as const)[Math.floor(coordinateHash(cx + i, cy, this.seed + 345) * 4)] });
+        chunk.pickups.push({ id: `pickup:${key}:${index}`, x, y, elevation: state.elevation, radius: 12, kind: (['heal', 'haste', 'power', 'weakness'] as const)[Math.floor(coordinateHash(cx + i, cy, this.seed + 345) * 4)] });
       }
     }
     if (this.mode === 'world' && !this.authoring.document.interiorBounds && cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
     if (this.mode === 'world' && !this.authoring.document.interiorBounds && cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
-    if (this.mode === 'world') for (const n of this.manualNpcs.get(key) ?? []) if (!this.isBlocked(Math.floor(n.x / TILE_SIZE), Math.floor(n.y / TILE_SIZE))) chunk.npcs.push({ ...n });
+    if (this.mode === 'world') for (const n of this.manualNpcs.get(key) ?? []) if (!this.elevation.blocked(n.x, n.y, 19, n.elevation ?? 0)) chunk.npcs.push({ ...n });
     if (this.mode === 'world') for (const dungeon of this.dungeons) for (const npc of dungeon.npcSpawns ?? []) {
       const position = chunkCoords(npc.x, npc.y);
       if (position.cx === cx && position.cy === cy) chunk.npcs.push({ ...npc, id: `dungeon:${dungeon.id}:${npc.id}` });

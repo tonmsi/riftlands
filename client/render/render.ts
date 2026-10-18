@@ -1,4 +1,9 @@
 import { PICKUP_COLORS, circle, noise, polygon } from './render-primitives';
+import { elevationOf, placedGeometry } from '../../shared/elevation';
+import { drawElevationSurface, drawElevationStair } from './elevation-art';
+import { drawTerrainCliff } from './cliff-art';
+import { cliffLevels } from '../../shared/cliff-assets';
+import { worldAssetImageBounds } from '../../shared/world-schema';
 import { CHUNK_SIZE, CLASSES, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED } from '../../shared/config';
 import { equippedAbility } from '../../shared/progression';
 import type { Actor, ClassId, GameEvent, Pickup, Projectile, Trap, Vec2, RoomMode, MatchResult } from '../../shared/types';
@@ -198,11 +203,21 @@ export class Renderer {
     }
     const worldAssets = this.world.assetsIn({ left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE,
       right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE });
-    const assetOrder = (p: typeof worldAssets[number], q: typeof worldAssets[number]) => { const a=this.world.authoring.assets.get(p.assetId)!,b=this.world.authoring.assets.get(q.assetId)!;return p.y+a.height*(p.pivotY??a.pivot.y)-q.y-b.height*(q.pivotY??b.pivot.y)||p.id.localeCompare(q.id); };
+    const assetElevations = new Map(worldAssets.map(p => [p.id, p.baseElevation ?? this.world.elevation.terrainElevationAt(p.x + .5, p.y + .5)]));
+    const assetElevation = (p: typeof worldAssets[number]) => assetElevations.get(p.id)!;
+    const assetOrder = (p: typeof worldAssets[number], q: typeof worldAssets[number]) => { const a=this.world.authoring.assets.get(p.assetId)!,b=this.world.authoring.assets.get(q.assetId)!;return assetElevation(p)-assetElevation(q)||p.y+a.height*(p.pivotY??a.pivot.y)-q.y-b.height*(q.pivotY??b.pivot.y)||p.id.localeCompare(q.id); };
     const groundAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'ground').sort(assetOrder);
     const objectAssets = worldAssets.filter(p => this.world.authoring.assets.get(p.assetId)!.layer === 'object')
-      .sort((a, b) => (a.y + this.world.authoring.assets.get(a.assetId)!.height * (a.pivotY ?? this.world.authoring.assets.get(a.assetId)!.pivot.y))
-        - (b.y + this.world.authoring.assets.get(b.assetId)!.height * (b.pivotY ?? this.world.authoring.assets.get(b.assetId)!.pivot.y)) || a.id.localeCompare(b.id));
+      .sort(assetOrder);
+    const elevationBounds = { left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE, right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE };
+    const surfaceGeometry = this.world.elevation.geometry(elevationBounds);
+    const cliffs = this.world.elevation.cliffs(elevationBounds);
+    const cliffFloors=new Map(cliffs.map(c=>[c,cliffLevels(this.world.authoring.document,c)]));
+    const mapSurfaces = surfaceGeometry.surfaces.filter(s => !s.id.includes('/'));
+    const deckParts = worldAssets.flatMap(p => {
+      const a = this.world.authoring.assets.get(p.assetId)!;
+      return placedGeometry(this.world.elevation.assetGeometry(a), p.x, p.y, assetElevation(p), p.id).surfaces.map(s => ({ p, s }));
+    });
     const publicPlayers = [...frame.actors.filter(actor => actor.id !== frame.self?.id), ...(frame.self ? [frame.self] : [])]
       .filter(actor => actor.kind === 'player' && actor.hp > 0 && this.world.pvpAt(actor.x, actor.y));
     const assetFades = new Map(worldAssets.map(p => {
@@ -220,6 +235,19 @@ export class Renderer {
       if (overhead && !fade.annotated) return;
       const start=perf.begin();assetDraws++;
       ctx.save();
+      // Draw the upper surfaces in their own floor pass, leaving the rest at the asset base.
+      const localSurfaces=this.world.elevation.assetGeometry(a).surfaces;
+      if (localSurfaces.length) {
+        const image = worldAssetImageBounds(a);
+        for (const s of localSurfaces) {
+          ctx.beginPath();
+          ctx.rect((p.x + Math.min(0, image.x)) * TILE_SIZE, (p.y + Math.min(0, image.y)) * TILE_SIZE,
+            Math.max(a.columns, image.x + image.width) * TILE_SIZE + Math.abs(Math.min(0, image.x)) * TILE_SIZE,
+            Math.max(a.rows, image.y + image.height) * TILE_SIZE + Math.abs(Math.min(0, image.y)) * TILE_SIZE);
+          ctx.rect((p.x + s.x) * TILE_SIZE, (p.y + s.y) * TILE_SIZE, s.width * TILE_SIZE, s.height * TILE_SIZE);
+          ctx.clip('evenodd');
+        }
+      }
       if (fade.annotated) {
         clipAssetCells(ctx, a, p, TILE_SIZE, cell => (cell.visibility !== 'normal') === overhead);
       }
@@ -227,9 +255,16 @@ export class Renderer {
       ctx.restore();
       perf.end('map-asset-draw',start);
     };
+    const paintDeck=(part:typeof deckParts[number],overhead=false)=>{
+      const {p,s}=part,a=this.world.authoring.assets.get(p.assetId)!,fade=assetFades.get(p.id)!;
+      if(overhead&&(!fade.annotated||a.layer==='ground'))return;
+      ctx.save();ctx.beginPath();ctx.rect(s.x*TILE_SIZE,s.y*TILE_SIZE,s.width*TILE_SIZE,s.height*TILE_SIZE);ctx.clip();
+      if(fade.annotated&&a.layer!=='ground')clipAssetCells(ctx,a,p,TILE_SIZE,cell=>(cell.visibility!=='normal')===overhead);
+      if(frame.self&&elevationOf(frame.self)<s.elevation&&frame.self.x>=s.x*TILE_SIZE&&frame.self.x<(s.x+s.width)*TILE_SIZE&&frame.self.y>=s.y*TILE_SIZE&&frame.self.y<(s.y+s.height)*TILE_SIZE)ctx.globalAlpha=.35;
+      this.worldAssetArt.draw(ctx,a,p,1,TILE_SIZE,frame.time,fade.traversable,fade.hiding);ctx.restore();
+    };
     perf.end('map-assets-setup',assetsStart);
     const groundStart=perf.begin();
-    for (const p of groundAssets) paintObject(p);
     let objectIndex = 0;
 
     for (const w of frame.bossWindups ?? []) {
@@ -272,8 +307,8 @@ export class Renderer {
       ctx.restore();
     }
 
-    for (const gold of frame.goldDrops ?? []) {
-      if (this.visible(gold)) {
+    const paintGold = (floor: number) => { for (const gold of frame.goldDrops ?? []) {
+      if (elevationOf(gold) === floor && this.visible(gold)) {
         ctx.save();
         ctx.translate(gold.x, gold.y);
         ctx.fillStyle = 'rgba(241,197,85,0.15)';
@@ -295,9 +330,10 @@ export class Renderer {
       }
     }
 
+    };
     const events = frame.events.filter(event => frame.time >= event.at && frame.time - event.at < event.duration);
     const previewAbility = frame.self && frame.aimPreview ? equippedAbility(frame.self, frame.aimPreview.slot) : undefined;
-    if (frame.self && frame.self.hp > 0 && frame.aimPreview != null && previewAbility) {
+    const paintAimPreview = () => { if (frame.self && frame.self.hp > 0 && frame.aimPreview != null && previewAbility) {
       const ability = previewAbility;
       ctx.save();
       ctx.translate(frame.self.x, frame.self.y);
@@ -331,14 +367,18 @@ export class Renderer {
       ctx.restore();
     }
 
-    for (const event of events) this.drawGroundEvent(event, frame.time);
+    };
 
     const pickups = frame.playing ? frame.pickups : [
       ...this.world.getChunk(0, 0).pickups,
       ...this.world.getChunk(-1, 0).pickups,
     ];
-    for (const pickup of pickups) if (this.visible(pickup)) this.drawPickup(pickup, frame.time);
-    for (const item of frame.groundItems ?? []) if (this.visible(item) && item.expiresAt > frame.time) {
+    const paintFloorItems = (floor: number) => {
+    paintGold(floor);
+    if (frame.self && elevationOf(frame.self) === floor) paintAimPreview();
+    for (const event of events) if (elevationOf(event) === floor) this.drawGroundEvent(event, frame.time);
+    for (const pickup of pickups) if (elevationOf(pickup) === floor && this.visible(pickup)) this.drawPickup(pickup, frame.time);
+    for (const item of frame.groundItems ?? []) if (elevationOf(item) === floor && this.visible(item) && item.expiresAt > frame.time) {
       ctx.save(); ctx.translate(item.x - 11, item.y - 11 + Math.sin(frame.time * .003 + item.x) * 1.5);
       ctx.globalAlpha = frame.inventory && !canCollectItem(frame.inventory, item.stack.itemId, item.stack.quantity) ? .32 : 1;
       drawItemArt(ctx, item.stack.itemId, 22, frame.time);
@@ -347,8 +387,9 @@ export class Renderer {
     }
 
     if (frame.traps) {
-      for (const trap of frame.traps) if (this.visible(trap)) this.drawTrap(trap, frame.time);
+      for (const trap of frame.traps) if (elevationOf(trap) === floor && this.visible(trap)) this.drawTrap(trap, frame.time);
     }
+    };
 
     perf.end('ground-effects',groundStart);
     const actorSetupStart=perf.begin();
@@ -364,13 +405,22 @@ export class Renderer {
     const hitTargets = new Set<string>();
     for (const event of events) if (event.kind === 'hit' && event.targetId && frame.time - event.at < 130) hitTargets.add(event.targetId);
 
-    actors.sort((a, b) => (a.y - b.y) * this.viewSign);
+    actors.sort((a, b) => elevationOf(a) - elevationOf(b) || (a.y - b.y) * this.viewSign);
     perf.end('actor-setup',actorSetupStart);
-    for (const actor of actors) {
+    const floors = [...new Set([0, ...actors.map(elevationOf), ...events.map(elevationOf), ...worldAssets.map(assetElevation), ...mapSurfaces.map(s => s.elevation), ...surfaceGeometry.stairs.flatMap(s => [s.from, s.to]), ...deckParts.map(d => d.s.elevation), ...frame.projectiles.map(elevationOf), ...pickups.map(elevationOf), ...(frame.groundItems ?? []).map(elevationOf), ...(frame.traps ?? []).map(elevationOf)])].sort((a, b) => a - b);
+    for (const floor of [...new Set([...floors, ...cliffs.flatMap(c => cliffFloors.get(c)!)])].sort((a,b) => a-b)) {
+    for (const cliff of cliffs) if (cliffFloors.get(cliff)!.includes(floor)) drawTerrainCliff(ctx, cliff, this.worldAssetArt, surfaceGeometry.stairs, { document: this.world.authoring.document, floor, self: frame.self, publicPlayers, time: frame.time, version:this.world });
+    for (const s of mapSurfaces.filter(s => s.elevation === floor)) drawElevationSurface(ctx, s, frame.self);
+    this.terrain.drawElevatedGround(this.world, ctx, mapSurfaces.filter(s => s.elevation === floor), frame.time);
+    for (const s of surfaceGeometry.stairs.filter(s => !s.id.includes('/') && (s.from === floor || s.to === floor))) drawElevationStair(ctx, s, floor, this.worldAssetArt);
+    for (const part of deckParts.filter(d => d.s.elevation === floor)) paintDeck(part);
+    for (const p of groundAssets.filter(p => assetElevation(p) === floor)) paintObject(p);
+    paintFloorItems(floor);
+    for (const actor of actors.filter(a => elevationOf(a) === floor)) {
       if (!this.visible(actor)) continue;
       while (objectIndex < objectAssets.length) {
         const p = objectAssets[objectIndex], a = this.world.authoring.assets.get(p.assetId)!;
-        if ((p.y + a.height * (p.pivotY ?? a.pivot.y)) * TILE_SIZE > actor.y) break;
+        if (assetElevation(p) > floor || (assetElevation(p) === floor && (p.y + a.height * (p.pivotY ?? a.pivot.y)) * TILE_SIZE > actor.y)) break;
         paintObject(p); objectIndex++;
       }
       const self = !frame.spectating && (actor.id === frame.self?.id || (!frame.playing && actor.id === 'preview'));
@@ -396,15 +446,17 @@ export class Renderer {
       );}
       perf.end('sprites',spriteStart);
     }
-    while (objectIndex < objectAssets.length) paintObject(objectAssets[objectIndex++]);
+    while (objectIndex < objectAssets.length && assetElevation(objectAssets[objectIndex]) === floor) paintObject(objectAssets[objectIndex++]);
     // Explicitly annotated cells cover actors on both layers; unannotated cells keep their original depth.
-    for (const p of [...groundAssets,...objectAssets]) if (assetFades.get(p.id)!.annotated) paintObject(p, true);
+    for (const p of [...groundAssets,...objectAssets]) if (!this.world.authoring.assets.get(p.assetId)!.geometry && assetElevation(p) === floor && assetFades.get(p.id)!.annotated) paintObject(p, true);
+    for(const part of deckParts)if(part.s.elevation===floor)paintDeck(part,true);
+    for (const projectile of frame.projectiles) if (elevationOf(projectile) === floor && this.visible(projectile)) this.drawProjectile(projectile, frame.time);
+    for (const event of events) if (elevationOf(event) === floor) this.drawFloatingEvent(event, frame.time);
+    }
 
     const effectsStart=perf.begin();
-    for (const projectile of frame.projectiles) if (this.visible(projectile)) this.drawProjectile(projectile, frame.time);
     if (this.world.mode === 'world') this.drawDungeonFlames(frame.time, frame.bossLocks);
 
-    for (const event of events) this.drawFloatingEvent(event, frame.time);
     if (frame.self && frame.fishing) drawFishingWorld(ctx, frame.self, frame.fishing, frame.fishingTarget, frame.time, this.reducedMotion.matches);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 

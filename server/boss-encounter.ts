@@ -1,4 +1,5 @@
 import { randomUUID } from '../shared/id';
+import { elevationOf, sameElevation, type Elevated } from '../shared/elevation';
 import { spriteDirectionRow } from '../shared/sprite-direction';
 import type { Actor, Vec2 } from '../shared/types';
 import type { BossAttackDefinition, BossDefinition, BossLockState, BossPreparationState, BossState, BossWindup } from '../shared/bosses';
@@ -11,7 +12,7 @@ import type { Account } from './store';
 import type { GameplayPersistence } from './gameplay-persistence';
 
 /** Verifica se il volume fisico del boss (con margine di sicurezza) può passare in linea retta senza ostacoli. */
-export function canWalkDirectly(from: Vec2, to: Vec2, radius: number, world: World, dungeon: DungeonDefinition): boolean {
+export function canWalkDirectly(from: Vec2 & Elevated, to: Vec2, radius: number, world: World, dungeon: DungeonDefinition): boolean {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const distance = Math.hypot(dx, dy);
@@ -22,7 +23,7 @@ export function canWalkDirectly(from: Vec2, to: Vec2, radius: number, world: Wor
     const x = from.x + dx * t;
     const y = from.y + dy * t;
     if (!insideDungeonRegion(dungeon.encounter.regions.bossLeash, { x, y }, -radius - 4)) return false;
-    if (collidesWorld(x, y, radius, world)) return false;
+    if (collidesWorld(x, y, radius, world, elevationOf(from))) return false;
   }
   return true;
 }
@@ -144,12 +145,12 @@ export class BossEncounter {
     this.state.drops = this.state.drops.filter(drop => drop.expiresAt > now);
     const recipients = [...this.participantIds], share = Math.floor(this.definition.reward.gold / recipients.length);
     if (share > 0) for (const recipient of recipients) this.state.drops.push({ id: randomUUID(), bossId: this.definition.id, ownerId: recipient, amount: share,
-      ...this.state.corpse, availableAt: now + 500, expiresAt: now + this.definition.reward.lootMs });
+      ...this.state.corpse, elevation: elevationOf(this.boss), availableAt: now + 500, expiresAt: now + this.definition.reward.lootMs });
   }
 
   collect(player: Actor, account: Account, connected: boolean, now: number, world?: World): void {
     if (!connected || player.hp <= 0) return;
-    const collectible = this.state.drops.filter(drop => (!world || world.sameRoom(player, drop)) && drop.ownerId === player.id && drop.availableAt <= now && drop.expiresAt > now
+    const collectible = this.state.drops.filter(drop => sameElevation(player, drop) && (!world || world.sameRoom(player, drop)) && drop.ownerId === player.id && drop.availableAt <= now && drop.expiresAt > now
       && Math.hypot(player.x - drop.x, player.y - drop.y) <= player.radius + 18);
     if (!collectible.length) return;
     const gold = (account.gold ?? 0) + collectible.reduce((sum, drop) => sum + drop.amount, 0);
@@ -237,7 +238,7 @@ export class BossEncounter {
     if (!this.engaged) this.engaged = active.some(player => this.detects(player, world));
     if (!this.engaged) return;
     boss.bossAwakenedAt ??= now;
-    const targets = active.filter(player => world.sameRoom(player, boss) && insideDungeonRegion(this.dungeon.encounter.regions.combat, player));
+    const targets = active.filter(player => sameElevation(player, boss) && world.sameRoom(player, boss) && insideDungeonRegion(this.dungeon.encounter.regions.combat, player));
     if (!targets.length) {
       this.targetId = undefined;
       this.windup = undefined;
@@ -301,7 +302,7 @@ export class BossEncounter {
       for (const player of players) {
         const distance = Math.hypot(player.x - windup.x, player.y - windup.y);
         if (distance > windup.radius + player.radius || distance < (windup.innerRadius ?? 0) - player.radius) continue;
-        if (hasLineOfSight(windup, player, world)) damage(player, windup.damage);
+        if (hasLineOfSight({ ...windup, elevation: elevationOf(this.boss) }, player, world)) damage(player, windup.damage);
       }
     }
     const attack = this.definition.attacks.find(candidate => candidate.kind === windup.kind)!;

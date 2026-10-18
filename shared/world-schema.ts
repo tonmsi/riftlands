@@ -1,12 +1,14 @@
 import type { TileKind, Vec2 } from './types';
+import { validGeometry, validElevation, type ElevationGeometry } from './elevation';
 import { validWorldPainting, type WorldPainting } from './world-painting';
 import { validNpcSettings, type NpcSettings } from './npc-settings';
 import { NPC_DEFINITIONS, type NpcKind, type NpcTemplateId } from './npcs';
 import { WORLD_TILE_TERRAINS, type WorldTileChunk } from './world-tiles';
+import { CLIFF_VARIANTS, type CliffVariant } from './terrain-cliffs';
 
 /** Coordinates in authored documents are tiles, including fractional visual dimensions.
  * Gameplay positions remain world units. The format contains data only, never scripts. */
-export interface AssetCell { blocked: boolean; visibility: 'normal' | 'hide' | 'fade' | 'hide-fade'; }
+export interface AssetCell { blocked: boolean; visibility: 'normal' | 'hide' | 'fade' | 'hide-fade'; elevation?: number; }
 export const DEFAULT_ASSET_FADE = { opacity: .28, feather: .35, durationMs: 180 };
 export const assetCellFades = (cell?: AssetCell): boolean => cell?.visibility === 'fade' || cell?.visibility === 'hide-fade';
 export interface AssetGeneration {
@@ -14,6 +16,9 @@ export interface AssetGeneration {
   temperature: [number, number]; moisture: [number, number]; density: number; spacing: number;
 }
 export interface WorldAsset {
+  /** Fine behavior cells per tile edge; never changes image or physical dimensions. */
+  cellSubdivision?: 1 | 2 | 4 | 8;
+  geometry?: ElevationGeometry;
   id: string; name: string; image: string; width: number; height: number;
   columns: number; rows: number; cells: AssetCell[];
   layer: 'ground' | 'object'; pivot: Vec2; generation: AssetGeneration;
@@ -29,7 +34,7 @@ export function worldAssetImageBounds(asset: WorldAsset) {
   const { x = 0, y = 0, scale = 1 } = asset.imageTransform ?? {};
   return { x, y, width: asset.width * scale, height: asset.height * scale };
 }
-export interface AssetPlacement extends Vec2 { id: string; assetId: string; pivotY?: number; }
+export interface AssetPlacement extends Vec2 { id: string; assetId: string; pivotY?: number; baseElevation?: number; }
 export interface TileOverride extends Vec2 { terrain?: TileKind; suppressAssets?: boolean; }
 export type ZoneShape = { kind: 'rect'; x: number; y: number; width: number; height: number }
   | { kind: 'circle'; x: number; y: number; radius: number };
@@ -43,17 +48,21 @@ export interface WorldZone {
   questId?: string;
   music?: ZoneMusic;
 }
-export interface WorldNpc extends Vec2 { id: string; npcKind: NpcTemplateId; level: number; settings?: NpcSettings; }
+export interface WorldNpc extends Vec2 { id: string; npcKind: NpcTemplateId; level: number; elevation?: number; settings?: NpcSettings; }
 /** One placement per installed dungeon, preserving encounter/boss identity and persistence. */
 export interface WorldDungeon extends Vec2 { dungeonId: string; enabled?: boolean; pvp?: boolean; }
 export interface WorldInterior { id: string; name: string; width: number; height: number; document: WorldDocument; pvp?: boolean; kind?: 'building' | 'dungeon'; }
 /** Coordinates are tile centres. Each link is directional; return doors are explicit links. */
 export interface WorldWarp {
+  entryElevation?: number; arrivalElevation?: number;
   id: string; name: string; from: string; to: string; entry: Vec2; arrival: Vec2; entrySize?: Vec2; arrivalSize?: Vec2;
   activation: 'walk' | 'interact';
   reverseId?: string;
 }
 export interface WorldDocument {
+  cliffAssets?: Partial<Record<CliffVariant, string>>;
+  geometry?: ElevationGeometry;
+  spawnElevation?: number;
   painting?: WorldPainting;
   version: 1 | 2; generatorVersion: 1; seed: number; spawn: Vec2;
   assets: WorldAsset[]; placements: AssetPlacement[]; tiles: TileOverride[];
@@ -66,6 +75,28 @@ export interface WorldDocument {
 }
 export const WORLD_TERRAINS = WORLD_TILE_TERRAINS;
 export const DEFAULT_CELL: AssetCell = { blocked: false, visibility: 'normal' };
+export const ASSET_CELL_SUBDIVISIONS = [1, 2, 4, 8] as const;
+export const assetCellSubdivision = (a: Pick<WorldAsset,'cellSubdivision'>): number => a.cellSubdivision ?? 1;
+export const assetCellColumns = (a: Pick<WorldAsset,'cellSubdivision'|'columns'>): number => a.columns * assetCellSubdivision(a);
+export const assetCellRows = (a: Pick<WorldAsset,'cellSubdivision'|'rows'>): number => a.rows * assetCellSubdivision(a);
+export function subdivideWorldAsset(asset: WorldAsset, subdivision: number): void {
+  if (!ASSET_CELL_SUBDIVISIONS.includes(subdivision as 1|2|4|8)) throw new Error('Suddivisione non valida: scegli 1, 2, 4 o 8.');
+  const oldDivision=assetCellSubdivision(asset); if (oldDivision===subdivision) return;
+  const oldColumns=assetCellColumns(asset), oldRows=assetCellRows(asset), old=asset.cells;
+  const columns=asset.columns*subdivision, rows=asset.rows*subdivision;
+  asset.cells=Array.from({length:columns*rows},(_,i)=>{
+    const x=i%columns,y=Math.floor(i/columns); let blocked=false,hide=false,fade=false, elevation: number | undefined, seen=false;
+    for(let oy=Math.floor(y*oldDivision/subdivision);oy<Math.min(oldRows,Math.ceil((y+1)*oldDivision/subdivision));oy++)
+      for(let ox=Math.floor(x*oldDivision/subdivision);ox<Math.min(oldColumns,Math.ceil((x+1)*oldDivision/subdivision));ox++) {
+        const cell=old[oy*oldColumns+ox]; blocked ||= cell.blocked;
+        if(seen && elevation!==cell.elevation) throw new Error('Le sottocelle hanno quote diverse: mantieni la suddivisione o uniforma prima le quote.');
+        elevation=cell.elevation;seen=true;
+        hide ||= cell.visibility==='hide'||cell.visibility==='hide-fade'; fade ||= cell.visibility==='fade'||cell.visibility==='hide-fade';
+      }
+    return {blocked,visibility:hide ? fade ? 'hide-fade' : 'hide' : fade ? 'fade' : 'normal',...(elevation!==undefined?{elevation}:{})};
+  });
+  asset.cellSubdivision=subdivision as 1|2|4|8;
+}
 const LEGACY_FIRE_IMAGES: Readonly<Record<string, 'brazier' | 'campfire'>> = {
   '/world-assets/brazier.svg': 'brazier',
   '/world-assets/ddbdb1a40dac723ae93c5f978cedc1c19c6f7efae2f819ce09f37d0cbb6fe65b.svg': 'brazier',
@@ -97,9 +128,10 @@ export function newWorldAsset(id: string, name: string, image: string): WorldAss
 /** Preserve existing cell annotations when changing scale, rather than silently resampling semantics. */
 export function resizeWorldAsset(asset: WorldAsset, width: number, height: number): void {
   if (![width, height].every(n => Number.isFinite(n) && n >= .25 && n <= 32)) throw new Error('Dimensioni asset: da 0,25 a 32 quadratini.');
-  const columns = Math.ceil(width), rows = Math.ceil(height), old = asset.cells;
-  asset.cells = Array.from({ length: columns * rows }, (_, i) => ({ ...(i % columns < asset.columns && Math.floor(i / columns) < asset.rows
-    ? old[Math.floor(i / columns) * asset.columns + i % columns] : DEFAULT_CELL) }));
+  const columns = Math.ceil(width), rows = Math.ceil(height), old = asset.cells, division=assetCellSubdivision(asset);
+  const oldColumns=assetCellColumns(asset), oldRows=assetCellRows(asset), fineColumns=columns*division;
+  asset.cells = Array.from({ length: fineColumns * rows * division }, (_, i) => ({ ...(i % fineColumns < oldColumns && Math.floor(i / fineColumns) < oldRows
+    ? old[Math.floor(i / fineColumns) * oldColumns + i % fineColumns] : DEFAULT_CELL) }));
   asset.width = width; asset.height = height; asset.columns = columns; asset.rows = rows;
 }
 
@@ -119,19 +151,24 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   const boolean = (v: any) => typeof v === 'boolean';
   if (!object(d) || ![1, 2].includes(d.version) || d.generatorVersion !== 1 || !integer(d.seed, -2147483648, 2147483647) || !point(d.spawn)) fail('versione, seed o spawn');
   if (d.painting !== undefined && !validWorldPainting(d.painting)) fail('world painting');
+  if (d.geometry !== undefined && !validGeometry(d.geometry)) fail('geometria dei livelli');
+  if (d.spawnElevation !== undefined && !validElevation(d.spawnElevation)) fail('quota spawn');
   list(d.assets, 4096, 'catalogo asset'); list(d.placements, 100_000, 'piazzamenti'); list(d.tiles, 500_000, 'terreno');
   list(d.zones, 10_000, 'zone'); list(d.npcs, 100_000, 'NPC'); list(d.dungeons, 4096, 'dungeon');
   if (d.version === 2 && (!Array.isArray(d.tileChunks) || d.tiles.length)) fail('versione 2: terreno in chunk');
   for (const a of d.assets) {
+    if (!object(a)) fail('definizione asset');
+    if (a.geometry !== undefined && (!validGeometry(a.geometry) || [...a.geometry.surfaces, ...a.geometry.solids, ...a.geometry.stairs].some(r => r.x < 0 || r.y < 0 || r.x + r.width > a.columns || r.y + r.height > a.rows))) fail('geometria asset fuori griglia');
     if (!object(a) || !id(a.id) || !name(a.name) || !validWorldAssetImage(a.image)
       || !finite(a.width, .25, 32) || !finite(a.height, .25, 32) || a.columns !== Math.ceil(a.width) || a.rows !== Math.ceil(a.height)
       || !['ground', 'object'].includes(a.layer) || !object(a.pivot) || !finite(a.pivot.x, 0, 1) || !finite(a.pivot.y, 0, 1)) fail('definizione asset');
-    list(a.cells, 1024, 'celle asset');
+    if (a.cellSubdivision !== undefined && !ASSET_CELL_SUBDIVISIONS.includes(a.cellSubdivision)) fail(`suddivisione di ${a.id}`);
+    list(a.cells, 65536, 'celle asset');
     if (a.group !== undefined && (!name(a.group) || a.group.length > 80)) fail(`gruppo di ${a.id}`);
     if (a.imageTransform !== undefined && (!object(a.imageTransform) || !finite(a.imageTransform.x, -32, 32)
       || !finite(a.imageTransform.y, -32, 32) || !finite(a.imageTransform.scale, .1, 8))) fail(`trasformazione immagine di ${a.id}`);
     if (a.visual !== undefined && (!object(a.visual) || (a.visual.kind !== 'image' && (a.visual.kind !== 'fire' || !['brazier', 'campfire'].includes(a.visual.style))))) fail(`aspetto di ${a.id}`);
-    if (a.cells.length !== a.columns * a.rows || !a.cells.every((c: any) => object(c) && boolean(c.blocked) && ['normal', 'hide', 'fade', 'hide-fade'].includes(c.visibility))) fail(`celle di ${a.id}`);
+    if (a.cells.length !== assetCellColumns(a) * assetCellRows(a) || !a.cells.every((c: any) => object(c) && boolean(c.blocked) && ['normal', 'hide', 'fade', 'hide-fade'].includes(c.visibility) && (c.elevation===undefined||validElevation(c.elevation)))) fail(`celle di ${a.id}`);
     if (a.fade !== undefined && (!object(a.fade) || !finite(a.fade.opacity, 0, 1) || !finite(a.fade.feather, 0, 1) || !integer(a.fade.durationMs, 0, 2000))) fail(`sfumatura di ${a.id}`);
     const g = a.generation;
     if (!object(g) || !boolean(g.enabled) || !id(g.category) || !range(g.temperature) || !range(g.moisture)
@@ -139,7 +176,15 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       || g.terrains.length > WORLD_TERRAINS.length || !g.terrains.every((t: any) => WORLD_TERRAINS.includes(t))) fail(`regole di ${a.id}`);
   }
   unique(d.assets, a => a.id, 'asset'); const assets = new Set(d.assets.map((a: any) => a.id));
-  for (const p of d.placements) if (!point(p) || !id(p.id) || !assets.has(p.assetId) || (p.pivotY !== undefined && !finite(p.pivotY,0,1))) fail('piazzamento asset o riferimento assente');
+  if (d.cliffAssets !== undefined && (!object(d.cliffAssets) || Object.entries(d.cliffAssets).some(([variant, assetId]) => !CLIFF_VARIANTS.includes(variant as CliffVariant) || !assets.has(assetId)))) fail('catalogo bordi cliff-grid');
+  const assetDefinitions = new Map<string, WorldAsset>(d.assets.map((a: WorldAsset) => [a.id, a]));
+  for (const p of d.placements) {
+    if (!point(p) || !id(p.id) || !assets.has(p.assetId) || (p.pivotY !== undefined && !finite(p.pivotY,0,1)) || (p.baseElevation !== undefined && !validElevation(p.baseElevation))) fail('piazzamento asset o riferimento assente');
+    const a = assetDefinitions.get(p.assetId)!;
+    const base = p.baseElevation ?? 0;
+    if(a.cells.some((c:AssetCell)=>c.elevation!==undefined&&!validElevation(base+c.elevation))) fail('quote sottocelle fuori intervallo');
+    if (a.geometry && (a.geometry.surfaces.some(s => !validElevation(s.elevation + base)) || a.geometry.stairs.some(s => !validElevation(s.from + base) || !validElevation(s.to + base)) || a.geometry.solids.some(s => !validElevation(s.base + base) || s.top + base > 128))) fail('quote asset fuori intervallo');
+  }
   unique(d.placements, p => p.id, 'piazzamenti');
   for (const t of d.tiles) if (!point(t) || (t.terrain === undefined && t.suppressAssets !== true)
     || (t.terrain !== undefined && !WORLD_TERRAINS.includes(t.terrain)) || (t.suppressAssets !== undefined && !boolean(t.suppressAssets))) fail('tile');
@@ -180,7 +225,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     }
   }
   unique(d.zones, z => z.id, 'zone');
-  for (const n of d.npcs) if (!point(n) || !id(n.id) || !Object.hasOwn(NPC_DEFINITIONS, n.npcKind) || !integer(n.level, 1, 100) || (n.settings !== undefined && !validNpcSettings(n.settings))) fail('NPC manuale');
+  for (const n of d.npcs) if (!point(n) || !id(n.id) || !Object.hasOwn(NPC_DEFINITIONS, n.npcKind) || !integer(n.level, 1, 100) || (n.elevation !== undefined && !validElevation(n.elevation)) || (n.settings !== undefined && !validNpcSettings(n.settings))) fail('NPC manuale');
   unique(d.npcs, n => n.id, 'NPC manuali');
   for (const p of d.dungeons) if (!point(p) || !id(p.dungeonId) || (p.enabled !== undefined && !boolean(p.enabled)) || (p.pvp !== undefined && !boolean(p.pvp))) fail('piazzamento dungeon');
   unique(d.dungeons, p => p.dungeonId, 'dungeon');
@@ -197,17 +242,19 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     list(d.warps, 4096, 'warp'); unique(d.warps, (w: any) => w.id, 'warp');
     const maps = new Set(['world', ...(d.interiors ?? []).map((m: any) => m.id)]);
     for (const w of d.warps) if (!object(w) || !id(w.id) || !name(w.name) || !maps.has(w.from) || !maps.has(w.to)
+      || (w.entryElevation !== undefined && !validElevation(w.entryElevation)) || (w.arrivalElevation !== undefined && !validElevation(w.arrivalElevation))
       || [w.entrySize,w.arrivalSize].some(size => size !== undefined && (!point(size) || !['1,1','2,1','1,2','1,3','3,1'].includes(`${size.x},${size.y}`)))
       || !point(w.entry) || !point(w.arrival) || !['walk', 'interact'].includes(w.activation)
       || (w.reverseId !== undefined && (!id(w.reverseId) || w.reverseId === w.id))) fail('collegamento warp');
   }
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
-  const result: WorldDocument = structuredClone({ ...(d.painting !== undefined ? { painting: d.painting } : {}), version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
+  const result: WorldDocument = structuredClone({ ...(d.cliffAssets !== undefined ? { cliffAssets: d.cliffAssets } : {}), ...(d.geometry !== undefined ? { geometry: d.geometry } : {}), ...(d.spawnElevation !== undefined ? { spawnElevation: d.spawnElevation } : {}), ...(d.painting !== undefined ? { painting: d.painting } : {}), version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
     placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons, ...(d.tileChunks !== undefined ? { tileChunks: d.tileChunks } : {}),
     ...(d.interiors !== undefined ? { interiors: d.interiors.map((m: WorldInterior) => ({ id: m.id, name: m.name, width: m.width, height: m.height,
       ...(m.pvp !== undefined ? { pvp: m.pvp } : {}), ...(m.kind !== undefined ? { kind: m.kind } : {}),
       document: { ...parseWorldDocument({ ...m.document, assets: d.assets, seed: d.seed }), assets: [] } })) } : {}),
     ...(d.warps !== undefined ? { warps: d.warps.map((w: WorldWarp) => ({ id: w.id, name: w.name, from: w.from, to: w.to, entry: w.entry, arrival: w.arrival, activation: w.activation,
+      ...(w.entryElevation !== undefined ? { entryElevation: w.entryElevation } : {}), ...(w.arrivalElevation !== undefined ? { arrivalElevation: w.arrivalElevation } : {}),
       ...(w.entrySize ? {entrySize:w.entrySize} : {}), ...(w.arrivalSize ? {arrivalSize:w.arrivalSize} : {}),
       ...(w.reverseId !== undefined ? { reverseId: w.reverseId } : {}) })) } : {}) });
   // Persist recovered animation before an export can rename the image again.

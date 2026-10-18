@@ -9,6 +9,7 @@ import { performanceLog as perf } from '../core/performance-log';
 /** Shared by the game and editor. Each source is decoded once; SVG is rasterized outside the frame loop.
  * Cache pressure is bounded by both pixels and entries, independent of catalog size. */
 export class WorldAssetArt {
+  revision = 0;
   performanceInfo(){return {entries:this.cache.size,pixels:this.pixels,pending:this.pending.size,failed:this.failed.size,
     dynamicPixels:(this.fireSurface?this.fireSurface.width*this.fireSurface.height:0)+(this.fadeSurface?this.fadeSurface.width*this.fadeSurface.height:0)};}
   private cache = new Map<string, HTMLCanvasElement>();
@@ -21,6 +22,7 @@ export class WorldAssetArt {
   constructor(private redraw: () => void = () => {}) {}
   fadeAmount(a: WorldAsset, p: AssetPlacement, active: boolean, time: number, channel = 'local'): number { return this.transitions.amount(`${p.id}:${channel}`, a, active, time); }
   private remember(key: string, bitmap: HTMLCanvasElement): HTMLCanvasElement {
+    this.revision++;
     this.cache.set(key, bitmap); this.pixels += bitmap.width * bitmap.height;
     while (this.cache.size > 256 || this.pixels > 16_000_000) { const first = this.cache.keys().next().value!, item = this.cache.get(first)!; this.pixels -= item.width * item.height; this.cache.delete(first); }
     return bitmap;
@@ -53,7 +55,7 @@ export class WorldAssetArt {
     const fade = a.fade ?? DEFAULT_ASSET_FADE, bucket = Math.round(Math.max(0, Math.min(1, strength)) * 16);
     const hidingBucket = Math.round(Math.max(0, Math.min(1, hidingStrength)) * 16);
     if (!bucket && !hidingBucket) return image;
-    const maskKey = `mask:${image.width}:${image.height}:${a.width}:${a.height}:${JSON.stringify(a.imageTransform)}:${a.cells.map(c => c.visibility).join(',')}:${fade.feather}`;
+    const maskKey = `mask:${image.width}:${image.height}:${a.width}:${a.height}:${a.cellSubdivision ?? 1}:${JSON.stringify(a.imageTransform)}:${a.cells.map(c => c.visibility).join(',')}:${fade.feather}`;
     const key = `${a.image}:${maskKey}:${fade.opacity}:${bucket}:${hidingBucket}`;
     const cached = !dynamic && this.cache.get(key); if (cached) return cached;
     const bitmap = dynamic ? (this.fadeSurface ??= document.createElement('canvas')) : document.createElement('canvas');

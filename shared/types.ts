@@ -20,6 +20,11 @@ export interface AbilityDef { targeting: 'directional' | 'self'; name: string; d
 export interface ClassDef { id: ClassId; name: string; subtitle: string; description: string; color: string; resource: 'mana' | 'rage'; maxHp: number; maxResource: number; speed: number; armor: number; abilities: Record<AbilitySlot, AbilityDef>; }
 export interface InputCommand { seq: number; dx: number; dy: number; aim: number; cast?: AbilitySlot; autoAim?: boolean; targetId?: string; analogMovement?: boolean; }
 export interface Actor { spriteRow?: number; spriteMoving?: boolean; }
+export interface Actor { elevation?: number; surfaceId?: string; }
+export interface Projectile { elevation?: number; }
+export interface Trap { elevation?: number; }
+export interface Pickup { elevation?: number; }
+export interface GameEvent { elevation?: number; }
 export interface Actor { loadout?: Loadout; }
 export interface Actor { bossAwakenedAt?: number; bossMeleeAt?: number; bossDiedAt?: number; }
 export interface StatusEffect { kind: 'haste' | 'power' | 'weakness' | 'slow' | 'shield' | 'root'; until: number; }

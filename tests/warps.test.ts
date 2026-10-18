@@ -133,7 +133,9 @@ test('internal location and progress survive disconnect, save and restart; a rem
   const returnTo = { ...reloaded.location!.returnTo };
   const recovery = new RoomManager(undefined, p.seed, m.global.now + 2000, removed);
   recovery.connect(reloaded, 'mage'); assert.equal(recovery.stateFor(a.id).id, 'world'); assert.equal(reloaded.location, undefined);
-  assert.deepEqual({ x: recovery.global.players.get(a.id)!.x, y: recovery.global.players.get(a.id)!.y }, returnTo);
+  const recovered = recovery.global.players.get(a.id)!;
+  assert.deepEqual({ x: recovered.x, y: recovered.y }, { x: returnTo.x, y: returnTo.y });
+  assert.equal(recovered.elevation ?? 0, returnTo.elevation ?? 0);
   advance(recovery); assert.equal(recovery.stateFor(a.id).id, 'world');
 });
 

@@ -9,6 +9,7 @@ import { noise } from './render-primitives';
 import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor } from './terrain-style';
 import type { RenderBounds, TerrainViewport } from './render-types';
 import { performanceLog as perf } from '../core/performance-log';
+import type { WorldSurface } from '../../shared/elevation';
 import type { CoastMotionArt } from './coast-motion';
 const DEFAULT_PAINTING = defaultWorldPainting();
 const DEFAULT_COAST_MOTION=defaultCoastMotion();
@@ -271,6 +272,16 @@ export class TerrainRenderer {
   drawCoastMotion(ctx:CanvasRenderingContext2D,bounds:RenderBounds,time:number):boolean {
     if(!perf.feature('sea'))return false;
     const start=perf.begin();try{return this.maskedTerrain.motion.draw(ctx,bounds,time);}finally{perf.end('sea-animation',start);}
+  }
+  drawElevatedGround(world: World, ctx: CanvasRenderingContext2D, surfaces: readonly WorldSurface[], time: number): void {
+    const ground = surfaces.filter(s => s.painted && s.ground); if (!ground.length) return;
+    ctx.save(); ctx.beginPath();
+    for (const s of ground) ctx.rect(s.x*TILE_SIZE, s.y*TILE_SIZE, s.width*TILE_SIZE, s.height*TILE_SIZE);
+    ctx.clip();
+    const cache = this.terrainCache;
+    if (cache?.world === world) ctx.drawImage(cache.canvas, cache.left, cache.top, cache.canvas.width/cache.scale, cache.canvas.height/cache.scale);
+    else this.drawTerrain(world, time, ctx, { left: Math.min(...ground.map(s=>s.x))*TILE_SIZE, top: Math.min(...ground.map(s=>s.y))*TILE_SIZE, right: Math.max(...ground.map(s=>s.x+s.width))*TILE_SIZE, bottom: Math.max(...ground.map(s=>s.y+s.height))*TILE_SIZE });
+    ctx.restore();
   }
   drawTerrain(world: World, time: number, ctx: CanvasRenderingContext2D, bounds: RenderBounds): void {
     const requestedBounds=bounds;

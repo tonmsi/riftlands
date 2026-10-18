@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { elevationOf } from '../shared/elevation';
 import { DT, WORLD_SEED, levelFromXp } from '../shared/config';
 import { characterFor } from './character-progress';
 import { ARENA_GATE, ARENA_DURATION_SECONDS } from '../shared/arena';
@@ -456,7 +457,7 @@ export class RoomManager {
     if (Math.max(sim.connections.get(id)?.combatUntil ?? 0, actor.pvpUntil ?? 0) > sim.now
       || [...sim.bosses.values()].some(b => b.participantIds.has(id) && b.ownerId)) throw new Error('Non puoi attraversare durante un combattimento.');
     const target = warp.to === 'world' ? this.global : this.interior(warp.to), arrival = warpPosition(warp.arrival);
-    if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world)) throw new Error('Arrivo del passaggio bloccato.');
+    if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world, warp.arrivalElevation ?? 0)) throw new Error('Arrivo del passaggio bloccato.');
     sim.checkpoint(); this.store?.flush();
     sim.interactions.close(id); sim.fishing.close(id); sim.connections.get(id)!.inputs.length = 0;
     const request = { warp, readyAt: this.global.now + WARP_FADE_MS + 80, epoch: member.epoch, saved: !this.store };
@@ -495,11 +496,11 @@ export class RoomManager {
       const target = warp.to === 'world' ? this.global : this.interior(warp.to), arrival = warpPosition(warp.arrival);
       const oldBody = structuredClone(actor), oldLocation = member.account.location;
       try {
-        if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world)) throw new Error('Arrivo bloccato.');
+        if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world, warp.arrivalElevation ?? 0)) throw new Error('Arrivo bloccato.');
         source.detachPlayer(id);
-        Object.assign(member.account.body!, arrival);
+        Object.assign(member.account.body!, arrival, target.world.elevation.at(arrival.x, arrival.y, warp.arrivalElevation ?? 0));
         if (warp.to === 'world') delete member.account.location;
-        else member.account.location = { mapId: warp.to, returnTo: oldLocation?.returnTo ?? { x: oldBody.x, y: oldBody.y } };
+        else member.account.location = { mapId: warp.to, returnTo: oldLocation?.returnTo ?? { x: oldBody.x, y: oldBody.y, elevation: elevationOf(oldBody), surfaceId: oldBody.surfaceId } };
         target.addPlayer(member.account, member.classId);
         member.roomId = warp.to === 'world' ? 'world' : `interior:${warp.to}`; member.epoch++;
         if (warp.to === 'world') this.global.awayPlayers.delete(id); else this.global.awayPlayers.add(id);

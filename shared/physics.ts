@@ -1,25 +1,18 @@
 import { TILE_SIZE } from './config';
 import type { Actor, Vec2 } from './types';
 import { World } from './world';
+import { elevationOf, sameElevation, type Elevated } from './elevation';
+import { sweptWorldHit } from './projectiles';
 
 /** Circle vs solid terrain AABBs, also correct across negative chunk coordinates. */
-export function collidesWorld(x: number, y: number, radius: number, world: World): boolean {
+export function collidesWorld(x: number, y: number, radius: number, world: World, elevation = 0): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius) || radius < 0) return true;
-  const minX = Math.floor((x - radius) / TILE_SIZE), maxX = Math.floor((x + radius) / TILE_SIZE);
-  const minY = Math.floor((y - radius) / TILE_SIZE), maxY = Math.floor((y + radius) / TILE_SIZE);
-  const room = world.roomAt(x, y);
-  for (let ty = minY; ty <= maxY; ty++) for (let tx = minX; tx <= maxX; tx++) {
-    if (!world.isBlocked(tx, ty) && (world.roomTiles.get(`${tx},${ty}`) ?? '') === room) continue;
-    const nearestX = Math.max(tx * TILE_SIZE, Math.min(x, (tx + 1) * TILE_SIZE));
-    const nearestY = Math.max(ty * TILE_SIZE, Math.min(y, (ty + 1) * TILE_SIZE));
-    if ((x - nearestX) ** 2 + (y - nearestY) ** 2 < radius ** 2 + 1e-8) return true;
-  }
-  return false;
+  return world.elevation.blocked(x, y, radius, elevation);
 }
 
 /** Both peers run this exact fixed-step movement; small substeps prevent tunnelling. */
 /** Movimento a step discreti con scivolamento tangenziale a velocità conservata */
-export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number, dy: number, distance: number, world: World): Vec2 {
+export function moveWithCollisions(actor: Vec2 & Elevated & { radius: number }, dx: number, dy: number, distance: number, world: World): Vec2 & Elevated {
   const magnitude = Math.hypot(dx, dy);
   if (!Number.isFinite(magnitude) || !Number.isFinite(distance) || magnitude === 0 || distance <= 0) return { x: actor.x, y: actor.y };
   
@@ -31,16 +24,22 @@ export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number,
   const dirX = dx / magnitude;
   const dirY = dy / magnitude;
   
-  let x = actor.x, y = actor.y;
-  const blocked = (tx: number, ty: number) => !world.sameRoom(actor, { x: tx, y: ty }) || collidesWorld(tx, ty, actor.radius, world);
+  let x = actor.x, y = actor.y, elevation = elevationOf(actor), surfaceId = actor.surfaceId;
+  const attempt = (tx: number, ty: number) => world.sameRoom(actor, { x: tx, y: ty })
+    ? world.elevation.transition({ x, y, elevation, surfaceId }, { x: tx, y: ty }, actor.radius) : null;
+  const blocked = (tx: number, ty: number) => !attempt(tx, ty);
+  const accept = (tx: number, ty: number) => {
+    const state = attempt(tx, ty);
+    if (!state) return;
+    x = tx; y = ty; elevation = state.elevation!; surfaceId = state.surfaceId;
+  };
   for (let i = 0; i < steps; i++) {
     const targetX = x + dirX * stepDist;
     const targetY = y + dirY * stepDist;
     
     // Prova il movimento diagonale diretto
     if (!blocked(targetX, targetY)) {
-      x = targetX;
-      y = targetY;
+      accept(targetX, targetY);
       continue;
     }
 
@@ -50,17 +49,17 @@ export function moveWithCollisions(actor: Vec2 & { radius: number }, dx: number,
 
     if (canMoveX && !canMoveY) {
       // Parete orizzontale: scivola orizzontalmente a piena velocità
-      x += Math.sign(dirX) * stepDist;
+      accept(x + Math.sign(dirX) * stepDist, y);
     } else if (canMoveY && !canMoveX) {
       // Parete verticale: scivola verticalmente a piena velocità
-      y += Math.sign(dirY) * stepDist;
+      accept(x, y + Math.sign(dirY) * stepDist);
     } else {
       // Tentativo standard a componenti ridotte se entrambi o nessuno sono completamente liberi
-      if (!blocked(x + dirX * stepDist, y)) x += dirX * stepDist;
-      if (!blocked(x, y + dirY * stepDist)) y += dirY * stepDist;
+      accept(x + dirX * stepDist, y);
+      accept(x, y + dirY * stepDist);
     }
   }
-  return { x, y };
+  return { x, y, ...(actor.elevation !== undefined || elevation !== 0 ? { elevation, surfaceId } : {}) };
 }
 export function movementSpeed(actor: Actor, time: number): number {
   if (actor.hp <= 0 || actor.deadUntil > time) return 0;
@@ -73,34 +72,15 @@ export function movementSpeed(actor: Actor, time: number): number {
   return speed;
 }
 
-export function terrainSpeed(actor: Vec2, world: World): number {
-  return world.getTile(Math.floor(actor.x / TILE_SIZE), Math.floor(actor.y / TILE_SIZE)) === 'mud' ? 0.65 : 1;
+export function terrainSpeed(actor: Vec2 & Elevated, world: World): number {
+  const x = actor.x / TILE_SIZE, y = actor.y / TILE_SIZE;
+  const s = world.elevation.geometry({ left: x, top: y, right: x + 1e-6, bottom: y + 1e-6 }).surfaces.find(s => s.elevation === elevationOf(actor) && x >= s.x && y >= s.y && x < s.x + s.width && y < s.y + s.height);
+  return (s?.terrain ?? world.getTile(Math.floor(x), Math.floor(y))) === 'mud' ? 0.65 : 1;
 }
 
-/** Grid traversal checks every crossed tile, including diagonal corner cracks. */
-export function hasLineOfSight(a: Vec2, b: Vec2, world: World): boolean {
-  if (!world.sameRoom(a, b)) return false;
-  const room = world.roomAt(a.x, a.y);
-  const blocked = (tx: number, ty: number) => world.isBlocked(tx, ty) || (world.roomTiles.get(`${tx},${ty}`) ?? '') !== room;
-  const dx = b.x - a.x, dy = b.y - a.y;
-  // Grid DDA checks every crossed tile, including the two corner-adjacent cells.
-  let tx = Math.floor(a.x / TILE_SIZE), ty = Math.floor(a.y / TILE_SIZE);
-  const endX = Math.floor(b.x / TILE_SIZE), endY = Math.floor(b.y / TILE_SIZE);
-  if (blocked(tx, ty)) return false;
-  const stepX = Math.sign(dx), stepY = Math.sign(dy);
-  const deltaX = dx === 0 ? Infinity : Math.abs(TILE_SIZE / dx), deltaY = dy === 0 ? Infinity : Math.abs(TILE_SIZE / dy);
-  let nextX = dx === 0 ? Infinity : ((tx + (stepX > 0 ? 1 : 0)) * TILE_SIZE - a.x) / dx;
-  let nextY = dy === 0 ? Infinity : ((ty + (stepY > 0 ? 1 : 0)) * TILE_SIZE - a.y) / dy;
-  const max = Math.abs(endX - tx) + Math.abs(endY - ty) + 2;
-  for (let i = 0; i < max && (tx !== endX || ty !== endY); i++) {
-    if (Math.abs(nextX - nextY) < 1e-10) {
-      if (blocked(tx + stepX, ty) || blocked(tx, ty + stepY)) return false;
-      tx += stepX; ty += stepY; nextX += deltaX; nextY += deltaY;
-    } else if (nextX < nextY) { tx += stepX; nextX += deltaX; }
-    else { ty += stepY; nextY += deltaY; }
-    if (blocked(tx, ty)) return false;
-  }
-  return true;
+/** Exact geometry sweep at the source floor, including subtile walls. */
+export function hasLineOfSight(a: Vec2 & Elevated, b: Vec2 & Elevated, world: World): boolean {
+  return world.sameRoom(a, b) && sameElevation(a, b) && sweptWorldHit(a, b, 0, world, elevationOf(a)) === null;
 }
 
 /** Earliest hit fraction [0,1] for a swept point against a circle. */
@@ -124,16 +104,16 @@ export function resolveActorCollisions(actors: Actor[], world: World): void {
     for (const a of living) {
       const bx = Math.floor(a.x / 80), by = Math.floor(a.y / 80);
       for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) for (const b of buckets.get(`${bx + ox},${by + oy}`) ?? []) {
-        if (!world.sameRoom(a, b)) continue;
+        if (!world.sameRoom(a, b) || !sameElevation(a, b)) continue;
         const dx = a.x - b.x, dy = a.y - b.y, dist = Math.hypot(dx, dy), minimum = a.radius + b.radius;
         if (dist >= minimum) continue;
         const nx = dist > 0.0001 ? dx / dist : 1, ny = dist > 0.0001 ? dy / dist : 0;
         const push = (minimum - dist + 0.05) / 2;
         const pa = moveWithCollisions(a, nx, ny, push, world);
         const movedA = Math.hypot(pa.x - a.x, pa.y - a.y);
-        a.x = pa.x; a.y = pa.y;
+        Object.assign(a, pa);
         const pb = moveWithCollisions(b, -nx, -ny, push * 2 - movedA, world);
-        b.x = pb.x; b.y = pb.y;
+        Object.assign(b, pb);
       }
       const key = `${Math.floor(a.x / 80)},${Math.floor(a.y / 80)}`;
       const bucket = buckets.get(key) ?? []; bucket.push(a); buckets.set(key, bucket);

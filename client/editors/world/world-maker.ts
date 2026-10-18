@@ -1,5 +1,14 @@
 import { installWorldPaintingPanel } from './world-painting-panel';
+import { installElevationEditor } from './elevation-editor';
+import { validElevation } from '../../../shared/elevation';
+import { TerrainElevationBrush } from '../../../shared/terrain-elevation-editing';
+import { ensureTerrainAccess } from '../../../shared/terrain-access';
+import { installCliffAssets } from '../../../shared/cliff-assets';
+import { subdivideWorldAsset, assetCellColumns, assetCellRows, assetCellSubdivision, ASSET_CELL_SUBDIVISIONS } from '../../../shared/world-schema';
+import { CLIFF_VARIANTS, type CliffVariant } from '../../../shared/terrain-cliffs';
+import { floorVisible, assetVisible } from './elevation-visibility';
 import { syncWorldAssetFiles } from './world-asset-sync';
+import { repairWorldAssetPaths } from '../../../shared/world-asset-paths';
 import { organizeWorldPanels } from './world-panels';
 import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../npc-properties';
 import { newDungeonInterior } from '../../../shared/warps';
@@ -68,10 +77,11 @@ function surface(): WorldDocument {
     if (activeMap === 'world') return draft;
     const m = draft.interiors?.find(m => m.id === activeMap);
     if (!m) return draft;
-    m.document.assets = draft.assets; m.document.seed = draft.seed;
+    m.document.assets = draft.assets; m.document.seed = draft.seed; m.document.cliffAssets = draft.cliffAssets;
     return m.document;
 }
 const warpEditor = installWarpEditor(root, {
+    isElevationVisible: e => floorVisible(elevationEditor.visibility(), e),
     rooms: id => { const doc = mapDocument(draft, id); return worldDungeons(doc, catalog).flatMap(d => (d.rooms ?? []).map(room => ({ ...room, id: `${d.id}:${room.id}` }))); },
     catalog: () => catalog,
     project: () => draft, mapId: () => activeMap, tool: () => tool, selectTool,
@@ -86,6 +96,38 @@ const warpEditor = installWarpEditor(root, {
     },
 });
 const refreshPainting = installWorldPaintingPanel(root, surface, change);
+const elevationEditor = installElevationEditor(root, canvas, assetCanvas, {
+    document: surface, asset: active, tool: () => tool,
+    selectTool: next => { selected = null; selectTool(next); refresh(); }, change, schedule, panHeld: () => keys.has('Space'),
+    visibilityChanged: () => { selected = null; selectedGenerated = undefined; warpEditor.clearSelection(); refresh(); schedule(); },
+    mapPoint: e => { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left - view.x) / view.scale, y: (e.clientY - r.top - view.y) / view.scale }; },
+    assetPoint: e => { const v = assetView(); if (!v) return; const r = assetCanvas.getBoundingClientRect(); return { x: (e.clientX - r.left - v.x) / v.s, y: (e.clientY - r.top - v.y) / v.s }; },
+});
+const cliffPanel = document.createElement('details'); cliffPanel.id = 'cliff-asset-controls'; cliffPanel.open = true;
+cliffPanel.innerHTML = `<summary>Bordi automatici · cliff-grid</summary><label>Pezzo di bordo<select id="cliff-variant">${CLIFF_VARIANTS.map(v=>`<option value="${v}">${v.startsWith('90corner') ? `Corner basso ${v.slice(9)}°` : v}</option>`).join('')}</select></label><button id="cliff-edit" class="wide">Modifica immagine e collisioni</button><p class="hint">Le modifiche valgono per tutti i bordi automatici di questo tipo. Ogni bordo occupa un tile: la griglia dell’asset permette di suddividerne le collisioni. Sfondo passa dietro ai personaggi; Oggetto può coprirli.</p>`;
+root.querySelector('.inspector')!.insertBefore(cliffPanel, el('asset-inspector'));
+function openCliffAsset(variant: CliffVariant): void {
+    if (!draft.cliffAssets?.[variant]) change(() => { installCliffAssets(draft); });
+    const id = draft.cliffAssets?.[variant]; if (!id) return;
+    activeAsset = id; selected = null; selectedGenerated = undefined; warpEditor.clearSelection();
+    set('cliff-variant',variant); selectTool('asset'); refresh(); schedule();
+    el('asset-inspector').scrollIntoView({ block: 'start' });
+}
+on('cliff-edit', () => openCliffAsset(val('cliff-variant') as CliffVariant));
+el('asset-update').insertAdjacentHTML('beforebegin', `<div class="fields"><label>Suddivisione di ogni tile<select id="asset-cell-subdivision">${ASSET_CELL_SUBDIVISIONS.map(n=>`<option value="${n}">${n} × ${n} · ${n*n} ${n===1?'cella':'sottocelle'} per tile</option>`).join('')}</select></label><p id="asset-cell-info" class="hint"></p><p class="hint">Divide solo le celle di collisione e visibilità. Le dimensioni del PNG, la scala e la posizione dell’oggetto restano le stesse. Aumentando la suddivisione, le sottocelle ereditano le proprietà; riducendola si conservano blocchi e nascondigli presenti.</p></div>`);
+for (const [id,label] of [['asset-width','Larghezza oggetto · tile'],['asset-height','Altezza oggetto · tile']]) input(id).closest('label')!.firstChild!.textContent=label;
+input('asset-cell-subdivision').addEventListener('change',()=>{
+    const division=num('asset-cell-subdivision'); void settleGesture().then(()=>change(()=>subdivideWorldAsset(active()!,division))).catch(report);
+});
+input('cell-blocked').closest('.pair')!.insertAdjacentHTML('afterend','<label>Piano delle sottocelle che dipingi<select id="cell-floor"><option value="keep">Mantieni quota esistente</option><option value="0">0 · stessa quota della base</option><option value="1">+1 · un piano sopra la base</option><option value="-1">−1 · un piano sotto la base</option><option value="custom">Quota relativa personalizzata…</option><option value="inherit">Rimuovi quota personalizzata</option></select></label><label id="cell-floor-custom-label" hidden>Offset dalla base dell’asset<input id="cell-floor-custom" type="number" min="-128" max="127" step="1" value="1"></label><p class="hint">Calpestabile + quota +1 crea il pavimento superiore solo nelle sottocelle dipinte. Nei cliff-grid la base è il terreno inferiore. Per cambiare piano configura una scala o un passaggio sul terreno o su un PNG.</p>');
+input('cell-floor').addEventListener('change',()=>{el('cell-floor-custom-label').hidden=val('cell-floor')!=='custom';});
+input('cell-floor-custom').addEventListener('change',()=>set('cell-floor-custom',Math.max(-128,Math.min(127,Math.round(num('cell-floor-custom'))||0))));
+function paintedAssetCell(previous:AssetCell):AssetCell {
+    const cell:AssetCell={blocked:val('cell-blocked')==='true',visibility:val('cell-visibility') as AssetCell['visibility'],...(previous.elevation!==undefined?{elevation:previous.elevation}:{})};
+    const mode=val('cell-floor');if(mode==='inherit')delete cell.elevation;
+    else if(mode!=='keep') {const elevation=mode==='custom'?num('cell-floor-custom'):Number(mode);if(!validElevation(elevation))throw new Error('La quota della sottocella deve essere intera da -128 a 127.');cell.elevation=elevation;}
+    return cell;
+}
 let gesture: {
     pointer: number;
     before: WorldDocument;
@@ -96,20 +138,23 @@ let gesture: {
     warpMove?: { id: string; side: 'entry' | 'arrival'; x: number; y: number };
     move?: { kind: 'placement' | 'npc' | 'dungeon' | 'zone'; id: string; x: number; y: number };
     cell?: boolean;
+    cellLast?: Vec2;
     image?: { x: number; y: number; scale: number; unit: number };
     tool: string;
     mass: boolean;
     brush?: WorldBrush;
+    terrainBrush?: TerrainElevationBrush;
     pending?: Vec2[];
     cursor?: number;
     ending?: boolean;
-    settings?: { radius: number; density: number; terrain: TileKind; asset?: WorldAsset };
+    settings?: { radius: number; density: number; terrain: TileKind; asset?: WorldAsset; elevation?: number };
 } | null = null;
 const keys = new Set<string>();
 let selectedGenerated: AssetPlacement | undefined;
 set('brush-radius', 1);
 set('brush-density', 100);
 function ensureWorld(): void {
+  if (gesture?.terrainBrush?.flush()) worldDirty = true;
   const updated = gesture?.brush?.flushTiles() ?? [];
   if (updated.length && world && !worldDirty) world.updateAuthoredTiles(mapDocument(draft, activeMap), updated);
   if (worldDirty) {
@@ -191,8 +236,14 @@ function change(action: () => void): void {
         report(e);
     }
 }
-function selectTool(next: string): void { tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === next))); el('tool-label').textContent = tools.find(t => t[0] === next)?.[2] ?? (next === 'warp' ? 'Passaggio' : next); schedule(); }
+function selectTool(next: string): void { tool = next; root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === next))); el('tool-label').textContent = tools.find(t => t[0] === next)?.[2] ?? (next === 'warp' ? 'Passaggio' : next === 'elevation-configure' ? 'Nuovo terreno' : root.querySelector(`[data-elevation-tool="${next.replace('elevation-', '')}"]`)?.textContent ?? next); schedule(); }
 root.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(b => b.onclick = () => { warpEditor.clearSelection(); selectTool(b.dataset.tool!); refresh(); });
+input('terrain').addEventListener('change', () => { selected = null; warpEditor.clearSelection(); selectTool('terrain'); refresh(); });
+input('terrain-elevation').addEventListener('change', () => {
+    const elevation = elevationEditor.terrainElevation();
+    if (elevation !== undefined && !validElevation(elevation)) { set('terrain-elevation', ''); status('Usa una quota intera da -128 a 127.'); }
+    schedule();
+});
 function active(): WorldAsset | undefined { return draft.assets.find(a => a.id === activeAsset); }
 function palette(): void {
     assetCatalog.update(draft.assets, activeAsset, val('asset-search'));
@@ -209,6 +260,7 @@ function showValidation(): string[] {
 }
 function refresh(): void {
     refreshPainting();
+    elevationEditor.refresh();
     if (validationActive && validatedDraft !== draft) showValidation();
     if (activeMap !== 'world' && !draft.interiors?.some(m => m.id === activeMap)) activeMap = 'world';
     warpEditor.refresh();
@@ -231,13 +283,16 @@ function refresh(): void {
     el('selection-inspector').hidden = !selected || selected.kind === 'zone';
     if (selected && selected.kind !== 'zone')
         refreshSelection();
-    el('asset-inspector').hidden = !!selected || !active() || tool !== 'asset' || warpEditor.hasSelection();
-    el('inspector-empty').hidden = !!selected || warpEditor.hasSelection() || (tool === 'asset' && !!active());
+    el('asset-inspector').hidden = !!selected || !active() || (tool !== 'asset' && !(tool.startsWith('elevation-') && elevationEditor.editsAsset())) || warpEditor.hasSelection();
+    el('elevation-inspector').hidden = !!selected || warpEditor.hasSelection() || (tool === 'asset');
+    el('inspector-empty').hidden = !!selected || warpEditor.hasSelection() || !el('elevation-inspector').hidden || ((tool === 'asset' || tool.startsWith('elevation-')) && !!active());
     if (!selected && active())
         refreshAsset(active()!);
     el('zone-list').replaceChildren(...surface().zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
 }
 function refreshAsset(a: WorldAsset): void {
+    set('asset-cell-subdivision',assetCellSubdivision(a));
+    el('asset-cell-info').textContent=`Griglia: ${assetCellColumns(a)} × ${assetCellRows(a)} celle. Ogni cella: 1/${assetCellSubdivision(a)} di tile (${48/assetCellSubdivision(a)} unità).`;
     const visual = worldAssetVisual(a);
     set('asset-visual', visual.kind === 'fire' ? visual.style : 'image');
     const fade = a.fade ?? DEFAULT_ASSET_FADE;
@@ -318,6 +373,10 @@ function refreshSelection(): void {
         el('selection-title').textContent = NPC_DEFINITIONS[e.npcKind as keyof typeof NPC_DEFINITIONS].disposition === 'neutral' ? 'NPC' : 'Mob';
     }
     set('entity-y', e.y);
+    if (selected?.kind === 'placement' || selected?.kind === 'npc') {
+        el('selection-fields').insertAdjacentHTML('beforeend', field('entity-elevation', selected.kind === 'placement' ? 'Quota base' : 'Quota'));
+        set('entity-elevation', e.baseElevation ?? e.elevation ?? 0);
+    }
     if (selected?.kind === 'dungeon') set('entity-pvp', e.pvp === undefined ? '' : String(e.pvp));
     if (selected?.kind === 'npc')
         set('entity-level', e.level);
@@ -333,16 +392,24 @@ function refreshSelection(): void {
 function draw(): void {
     ensureWorld();
     const animated = drawWorldEditorMap(canvas, world, mapDocument(draft, activeMap), view, art, { painting: input('show-painting').checked, grid: input('show-grid').checked, cells: input('show-cells').checked,
-        zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, gesture, pointerTile, tool, activeAsset: active() });
+        zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, gesture, pointerTile, tool, activeAsset: active(), activeElevation: elevationEditor.elevation(), visibleElevations: elevationEditor.visibility() });
     if ((animated || (!el('asset-inspector').hidden && active() && worldAssetVisual(active()!).kind === 'fire')) && animationTimer === undefined)
         animationTimer = setTimeout(() => { animationTimer = undefined; schedule(); }, 33);
-    warpEditor.draw(canvas, view);
+    warpEditor.draw(canvas, view, elevationEditor.visibility());
+    const ctx = canvas.getContext('2d')!, dpr = canvas.width / Math.max(1, canvas.getBoundingClientRect().width);
+    ctx.save(); ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, dpr * view.x, dpr * view.y);
+    elevationEditor.draw(ctx, false); ctx.restore();
     el('zoom-label').textContent = Math.round(view.scale / 24 * 100) + '%';
 }
 function drawAssetGrid(): void {
     if (el('asset-inspector').hidden) return;
     assetView();
-    renderAssetGrid(assetCanvas, art, active(), input('preview-fade').checked, assetCamera, input('edit-asset-image').checked);
+    renderAssetGrid(assetCanvas, art, active(), input('preview-fade').checked, assetCamera, input('edit-asset-image').checked, elevationEditor.visibility());
+    const v = assetView(); if (v) {
+        const ctx = assetCanvas.getContext('2d')!, dpr = assetCanvas.width / Math.max(1, assetCanvas.getBoundingClientRect().width);
+        ctx.save(); ctx.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
+        elevationEditor.draw(ctx, true); ctx.restore();
+    }
     el('asset-zoom-label').textContent = `${Math.round(assetCamera.zoom * 100)}%`;
 }
 function assetView() {
@@ -358,13 +425,22 @@ function zoomAsset(factor: number, x?: number, y?: number): void {
 function position(event: PointerEvent): Vec2 { const r = canvas.getBoundingClientRect(); return { x: Math.floor((event.clientX - r.left - view.x) / view.scale), y: Math.floor((event.clientY - r.top - view.y) / view.scale) }; }
 function centerAt(x: number, y: number): void { const r = canvas.getBoundingClientRect(); view.x = r.width / 2 - x * view.scale; view.y = r.height / 2 - y * view.scale; schedule(); }
 function zoom(factor: number, x?: number, y?: number): void { const r = canvas.getBoundingClientRect(); x ??= r.width / 2; y ??= r.height / 2; const next = Math.max(.75, Math.min(96, view.scale * factor)); view.x = x - (x - view.x) * next / view.scale; view.y = y - (y - view.y) * next / view.scale; view.scale = next; schedule(); }
-function selectAt(p: Vec2): void {
+function selectAt(p: Vec2, precise?: Vec2): void {
     ensureWorld();
-    const n = surface().npcs.find(n => n.x === p.x && n.y === p.y);
-    const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 });
-    const asset = placements.filter(p => surface().placements.some(a => a.id === p.id)).at(-1), dungeon = world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
-    const zone = world.authoring.zonesAt(p.x + .5, p.y + .5)[0];
+    const n = surface().npcs.find(n => n.x === p.x && n.y === p.y && floorVisible(elevationEditor.visibility(), n.elevation ?? 0) && (n.elevation ?? 0) === elevationEditor.elevation());
+    const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 }).filter(p => {
+      const base = p.baseElevation ?? world.elevation.terrainElevationAt(p.x + .5, p.y + .5);
+      const a = world.authoring.assets.get(p.assetId)!;
+      return assetVisible(a, base, elevationEditor.visibility()) && (base === elevationEditor.elevation() || a.geometry?.surfaces.some(s => s.elevation + base === elevationEditor.elevation()));
+    });
+    const asset = placements.filter(p => surface().placements.some(a => a.id === p.id)).at(-1), dungeon = floorVisible(elevationEditor.visibility(), 0) ? world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy) : undefined;
+    const zone = floorVisible(elevationEditor.visibility(), 0) ? world.authoring.zonesAt(p.x + .5, p.y + .5)[0] : undefined;
     selectedGenerated = placements.filter(a => a.id.startsWith('generated:')).at(-1);
+    if (!n && !asset && !selectedGenerated && elevationEditor.selectMapAt(precise ?? { x: p.x + .5, y: p.y + .5 })) return;
+    if (!n && !asset && !selectedGenerated) {
+        const cliff = world.elevation.cliffs({ left: p.x, top: p.y, right: p.x+1, bottom: p.y+1 }).find(c=>floorVisible(elevationEditor.visibility(),c.elevation));
+        if (cliff) { openCliffAsset(cliff.parts[0].variant); return; }
+    }
     selected = n ? { kind: 'npc', id: n.id } : asset ? { kind: 'placement', id: asset.id } : dungeon ? { kind: 'dungeon', id: dungeon.id }
         : selectedGenerated ? { kind: 'placement', id: selectedGenerated.id } : zone ? { kind: 'zone', id: zone.id } : null;
     refresh();
@@ -402,20 +478,29 @@ function paint(p: Vec2): void {
         const dungeon = world.dungeons.some(d => q.x >= d.layout.bounds.minTx && q.x <= d.layout.bounds.maxTx && q.y >= d.layout.bounds.minTy && q.y <= d.layout.bounds.maxTy);
         if (dungeon && ['terrain', 'restore', 'asset', 'erase'].includes(gesture.tool))
             continue;
-        if (gesture.tool === 'terrain')
-            gesture.brush!.tile(q, { terrain: gesture.settings!.terrain, suppressAssets: true });
-        else if (gesture.tool === 'restore')
+        if (gesture.tool === 'terrain') {
+            const terrain = gesture.settings!.terrain;
+            const current = world.elevation.terrainElevationAt(q.x + .5, q.y + .5);
+            const base = terrain === 'water' ? -1 : 0;
+            const elevation = gesture.settings!.elevation ?? (current === world.elevation.baseAt(q.x, q.y) ? base : current);
+            if (!floorVisible(elevationEditor.visibility(), elevation)) continue;
+            gesture.terrainBrush!.paint(q, terrain, elevation, base);
+            gesture.brush!.tile(q, { terrain, suppressAssets: true });
+        } else if (gesture.tool === 'restore') {
+            gesture.terrainBrush!.paint(q, undefined, 0, 0);
             gesture.brush!.tile(q);
+        }
         else if (gesture.tool === 'erase')
-            gesture.brush!.erase(q);
+            gesture.brush!.erase(q, elevationEditor.elevation());
         else if (gesture.tool === 'asset' && asset)
-            gesture.brush!.stamp(asset, q, uid('asset'));
+            gesture.brush!.stamp(asset, q, uid('asset'), elevationEditor.elevation());
     }
     schedule(gesture.tool === 'asset' || gesture.tool === 'erase');
 }
 canvas.addEventListener('pointerdown', event => {
     if (!ready || gesture)
         return;
+    if (event.button === 0 && !keys.has('Space') && !floorVisible(elevationEditor.visibility(), elevationEditor.elevation())) { status('Scegli una quota attiva visibile prima di modificare la mappa.'); return; }
     canvas.focus();
     const p = position(event);
     ensureWorld();
@@ -436,7 +521,7 @@ canvas.addEventListener('pointerdown', event => {
         const offset = mapDocument(draft, activeMap).interiorBounds ? .5 : 0;
         const x = rect.left + view.x + (spawn.x + offset) * view.scale;
         const y = rect.top + view.y + (spawn.y + offset) * view.scale;
-        if (Math.hypot(event.clientX - x, event.clientY - y) <= Math.max(10, view.scale * .35)) {
+        if (floorVisible(elevationEditor.visibility(), surface().spawnElevation ?? 0) && Math.hypot(event.clientX - x, event.clientY - y) <= Math.max(10, view.scale * .35)) {
             const before = draft; draft = forkWorldDocument(draft);
             warpEditor.clearSelection(); selected = null; selectedGenerated = undefined;
             gesture = { pointer: event.pointerId, before, start: p, last: p, tool: 'move-spawn', mass: false, spawnMove: { ...spawn } };
@@ -444,7 +529,7 @@ canvas.addEventListener('pointerdown', event => {
         }
     }
     if (event.button === 0 && tool === 'select' && !keys.has('Space')) {
-        if (!selectionContains(p)) { selectAt(p); return; }
+        if (!selectionContains(p)) { const r = canvas.getBoundingClientRect(); selectAt(p, { x: (event.clientX - r.left - view.x) / view.scale, y: (event.clientY - r.top - view.y) / view.scale }); return; }
         if (selected) {
             const before = draft;
             draft = forkWorldDocument(draft);
@@ -472,14 +557,15 @@ canvas.addEventListener('pointerdown', event => {
         return;
     }
     const before = draft;
-    const tilesOnly = tool === 'terrain' || tool === 'restore';
+    const tilesOnly = (tool === 'terrain' || tool === 'restore') && !surface().geometry && elevationEditor.terrainElevation() === undefined;
     draft = forkWorldDocument(draft, tilesOnly && activeMap === 'world');
     gesture = { pointer: event.pointerId, before, start: p, last: p, tool, mass: event.ctrlKey || input('mass').checked, brush: new WorldBrush(surface(), tilesOnly) };
-    gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, asset: active() };
+    if (tool === 'terrain' || tool === 'restore') gesture.terrainBrush = new TerrainElevationBrush(surface());
+    gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, asset: active(), elevation: elevationEditor.terrainElevation() };
     canvas.setPointerCapture(event.pointerId);
     if (tool === 'npc') {
-        if (!surface().npcs.some(n => n.x === p.x && n.y === p.y))
-            surface().npcs.push({ ...p, id: uid('npc'), npcKind: val('npc') as import('../../../shared/npcs').NpcTemplateId, level: 1 });
+        if (!surface().npcs.some(n => n.x === p.x && n.y === p.y && (n.elevation ?? 0) === elevationEditor.elevation()))
+            surface().npcs.push({ ...p, id: uid('npc'), npcKind: val('npc') as import('../../../shared/npcs').NpcTemplateId, level: 1, elevation: elevationEditor.elevation() });
     }
     else if (tool === 'dungeon') {
         const dungeonId = val('dungeon');
@@ -492,8 +578,9 @@ canvas.addEventListener('pointerdown', event => {
             selected = { kind: 'dungeon', id: dungeonId };
         }
     }
-    else if (tool === 'spawn')
-        surface().spawn = p;
+    else if (tool === 'spawn') {
+        surface().spawn = p; surface().spawnElevation = elevationEditor.elevation();
+    }
     else if (tool !== 'zone')
         paint(p);
     schedule(true);
@@ -548,12 +635,18 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
     const g = gesture;
     if (!cancel && g.pending && (g.cursor ?? 0) < g.pending.length) { g.ending = true; schedule(); return; }
     g.brush?.flushTiles();
+    g.terrainBrush?.flush(true);
     if (cancel) {
         draft = g.before;
         gesture = null;
         refresh();
         schedule(true);
         return;
+    }
+    if (g.terrainBrush) {
+        worldDirty = true; ensureWorld();
+        const access = ensureTerrainAccess(surface(), world, elevationEditor.autoStair() ? g.terrainBrush.raisedPoints : []);
+        if (access.missing) status(`${access.missing} rialzi senza accesso: manca spazio libero per la scala automatica. Usa Scala per posizionarla manualmente.`);
     }
     if (g.tool === 'zone' && !g.pan) {
         const shape = { kind: 'rect' as const, x: Math.min(g.start.x, g.last.x), y: Math.min(g.start.y, g.last.y), width: Math.abs(g.start.x - g.last.x) + 1, height: Math.abs(g.start.y - g.last.y) + 1 };
@@ -575,7 +668,7 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
     }
     gesture = null;
     if (!g.pan)
-        commit(g.before, !!surface().tileChunks && (g.tool === 'terrain' || g.tool === 'restore'));
+        commit(g.before, !!surface().tileChunks && !surface().geometry && (g.tool === 'terrain' || g.tool === 'restore'));
     else
         schedule();
 }
@@ -591,14 +684,20 @@ canvas.addEventListener('pointerleave', () => { pointerTile = null; schedule(); 
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('wheel', event => { event.preventDefault(); if (gesture && !gesture.pan) return; const r = canvas.getBoundingClientRect(); zoom(Math.exp(-event.deltaY * .0015), event.clientX - r.left, event.clientY - r.top); }, { passive: false });
 function paintCell(event: PointerEvent): void { const v = assetView(); if (!v || !gesture?.cell || gesture.pan || gesture.image || gesture.pointer !== event.pointerId)
-    return; const r = assetCanvas.getBoundingClientRect(), col = Math.floor((event.clientX - r.left - v.x) / v.s), row = Math.floor((event.clientY - r.top - v.y) / v.s); if (col < 0 || row < 0 || col >= v.a.columns || row >= v.a.rows)
-    return; v.a.cells[row * v.a.columns + col] = { blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as AssetCell['visibility'] }; schedule(true); }
+    return; const r = assetCanvas.getBoundingClientRect(), step=v.s/assetCellSubdivision(v.a), columns=assetCellColumns(v.a), rows=assetCellRows(v.a), col = Math.floor((event.clientX - r.left - v.x) / step), row = Math.floor((event.clientY - r.top - v.y) / step); if (col < 0 || row < 0 || col >= columns || row >= rows)
+    { if (gesture) gesture.cellLast=undefined; return; }
+    for(const point of strokeTiles(gesture.cellLast ?? {x:col,y:row},{x:col,y:row})) {const i=point.y*columns+point.x;v.a.cells[i]=paintedAssetCell(v.a.cells[i]);}
+    gesture.cellLast={x:col,y:row}; schedule(true); }
 assetCanvas.addEventListener('pointerdown', e => {
     if (!ready || gesture) return;
     assetCanvas.focus();
     const before = draft, pan = e.button === 1 || e.button === 2 || keys.has('Space');
     const v = assetView(); if (!v) return;
     const image = input('edit-asset-image').checked && !pan;
+    if (!pan && !image) {
+        const box=assetCanvas.getBoundingClientRect(),step=v.s/assetCellSubdivision(v.a),col=Math.floor((e.clientX-box.left-v.x)/step),row=Math.floor((e.clientY-box.top-v.y)/step),cell=col>=0&&row>=0&&col<assetCellColumns(v.a)&&row<assetCellRows(v.a)?v.a.cells[row*assetCellColumns(v.a)+col]:undefined;
+        if(!floorVisible(elevationEditor.visibility(),cell?.elevation??0))return;
+    }
     if (image) {
         const r = assetCanvas.getBoundingClientRect(), b = worldAssetImageBounds(v.a);
         const x = (e.clientX - r.left - v.x) / v.s, y = (e.clientY - r.top - v.y) / v.s;
@@ -649,10 +748,11 @@ input('asset-width').addEventListener('input', () => { const a = active(); if (a
     set('asset-height', Math.round(num('asset-width') * a.height / a.width * 1000) / 1000); });
 input('asset-height').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
     set('asset-width', Math.round(num('asset-height') * a.width / a.height * 1000) / 1000); });
-on('fill-cells', () => change(() => { const a = active()!; a.cells = a.cells.map(() => ({ blocked: val('cell-blocked') === 'true', visibility: val('cell-visibility') as AssetCell['visibility'] })); }));
+on('fill-cells', () => change(() => { const a = active()!; a.cells = a.cells.map(paintedAssetCell); }));
 on('asset-fade-update', () => change(() => { active()!.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') }; }));
 on('gen-update', () => change(() => { const a = active()!; a.generation = { enabled: input('gen-enabled').checked, category: val('gen-category').trim(), temperature: [num('gen-temp-min'), num('gen-temp-max')], moisture: [num('gen-moist-min'), num('gen-moist-max')], density: num('gen-density') / 100, spacing: num('gen-spacing'), terrains: [...el('gen-terrains').querySelectorAll<HTMLInputElement>('input:checked')].map(c => c.value as TileKind) }; }));
 on('asset-delete', () => change(() => { const a = active()!;
+    if (Object.values(draft.cliffAssets ?? {}).includes(a.id)) throw new Error('Questo asset definisce un bordo automatico: modifica immagine, celle o disegno dal pannello Asset.');
     const users = catalog.filter(d => d.assetPlacements?.some(p => p.assetId === a.id));
     if (users.length) throw new Error(`Asset usato in ${users.map(d => d.name).join(', ')}. Usa “Sostituisci immagine” oppure rimuovi prima le istanze dai dungeon.`);
     for (const doc of [draft, ...(draft.interiors ?? []).map(m => m.document)]) doc.placements = doc.placements.filter(p => p.assetId !== a.id);
@@ -693,7 +793,10 @@ input('zone-music-file').addEventListener('change', () => { void (async () => {
     status('Traccia importata. Premi Aggiorna zona per associarla.');
 })().catch(report).finally(() => { input('zone-music-file').value = ''; }); });
 on('selection-update', () => change(() => { materializeSelection(); const e = selectionEntity(); if (!e)
-    return; if (selected?.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id))
+    return; if (selected?.kind === 'placement' || selected?.kind === 'npc') {
+        const elevation = num('entity-elevation'); if (!validElevation(elevation)) throw new Error('Quota: intero da -128 a 127.');
+        if (selected.kind === 'placement') e.baseElevation = elevation; else e.elevation = elevation;
+    } if (selected?.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id))
     surface().dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'placement') { if (val('entity-pivot').trim()==='') delete e.pivotY; else {const pivot=num('entity-pivot');if(!Number.isFinite(pivot)||pivot<0||pivot>1)throw new Error('La base deve essere fra 0 e 1.');e.pivotY=pivot;} } if (selected?.kind === 'npc')
     { e.level = num('entity-level'); const properties = readNpcProperties(root, 'selected-npc'); e.npcKind = properties.kind; e.settings = properties.settings; } if (selected?.kind === 'dungeon') { if (val('entity-pvp') === '') delete e.pvp; else e.pvp = val('entity-pvp') === 'true'; } }));
 on('selection-delete', () => change(() => { materializeSelection(); if (selected?.kind === 'placement')
@@ -794,7 +897,15 @@ on('apply-world', async () => { if (gesture)
 finally {
     el<HTMLButtonElement>('apply-world').disabled = false;
 } });
-on('export-world', async () => { status('Preparazione esportazione con immagini e musica…'); const music: Record<string, string> = {};
+async function repairMovedAssets(): Promise<number> {
+    if (!token) return 0;
+    const { files } = await api('/__world/asset-files', {});
+    const copy = forkWorldDocument(draft);
+    const repaired = repairWorldAssetPaths(copy, files);
+    if (repaired) { const before = draft; draft = copy; commit(before); }
+    return repaired;
+}
+on('export-world', async () => { await repairMovedAssets(); status('Preparazione esportazione con immagini e musica…'); const music: Record<string, string> = {};
 for (const src of new Set(musicZones(draft).map(z => z.music!.src))) {
     const response = await fetch(src); if (!response.ok) throw new Error(`Traccia mancante: ${src}`);
     music[src] = await fileData(await response.blob());
@@ -808,18 +919,22 @@ const images: Record<string, string> = {}; for (const src of new Set(draft.asset
 } const blob = new Blob([JSON.stringify({ format: 'riftlands-world-project', version: 1, document: parseWorldDocument(draft), images, music })], { type: 'application/json' }); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'riftlands-world.project.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); status('Progetto esportato con immagini e musica. I dungeon fanno riferimento al catalogo installato.'); });
 on('import-world', () => input('world-file').click());
 input('world-file').addEventListener('change', () => { void (async () => { const file = input('world-file').files?.[0]; if (!file)
-    return; if (file.size > 50000000)
-    throw new Error('Progetto oltre 50 MB.'); const payload = JSON.parse(await file.text()); const document = compactWorldTiles(parseWorldDocument(payload.format === 'riftlands-world-project' ? payload.document : payload)); if (payload.images) {
+    return; if (file.size > 512000000)
+    throw new Error('Progetto oltre 512 MB.'); status('Lettura progetto e ripristino immagini…'); const payload = JSON.parse(await file.text()); const document = compactWorldTiles(parseWorldDocument(payload.format === 'riftlands-world-project' ? payload.document : payload)); if (payload.images) {
     if (!token)
         throw new Error('Importa il progetto da World Studio per ripristinare le immagini.');
+    const restored = new Map<string, string>();
     for (const a of document.assets) {
+        const existing = restored.get(a.image); if (existing) { a.image = existing; continue; }
         const data = payload.images[a.image];
         if (typeof data !== 'string')
             throw new Error(`Immagine assente nell’archivio: ${a.name}`);
         const match = /^data:(image\/(?:png|svg\+xml));base64,(.+)$/.exec(data);
         if (!match)
             throw new Error('Immagine esportata non valida.');
-        a.image = (await api('/__world/images', { mime: match[1], base64: match[2], filename: a.image.split('/').at(-1) ?? a.name })).image;
+        const source = a.image;
+        a.image = (await api('/__world/images', { mime: match[1], base64: match[2], filename: decodeURIComponent(a.image.split('/').at(-1) ?? a.name) })).image;
+        restored.set(source, a.image);
     }
 } if (payload.music) {
     if (!token) throw new Error('Importa da World Studio per ripristinare la musica.');
@@ -881,6 +996,7 @@ async function load(reload = false): Promise<void> {
     }
     finally {
         ready = true;
+        try { const repaired = await repairMovedAssets(); if (repaired) status(`Riparati automaticamente ${repaired} percorsi di immagini spostate. Premi Applica al gioco per salvarli.`); } catch (e) { report(e); }
         const requested = new URLSearchParams(location.search);
         const dungeonId = requested.get('dungeon');
         const requestedAsset = requested.get('asset');

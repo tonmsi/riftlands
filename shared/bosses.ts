@@ -40,7 +40,7 @@ export interface BossDefinition {
   reward: { gold: number; lootMs: number };
   respawnMs: number;
 }
-export interface BossDrop extends Vec2 { id: string; bossId: string; ownerId: string; amount: number; availableAt: number; expiresAt: number; }
+export interface BossDrop extends Vec2 { id: string; bossId: string; ownerId: string; amount: number; availableAt: number; expiresAt: number; elevation?: number; }
 export interface BossState { respawnAt: number; corpse: Vec2; drops: BossDrop[]; }
 export interface BossWindup extends Vec2 {
   bossId: string;

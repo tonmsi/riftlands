@@ -1,4 +1,5 @@
 import { DT } from '../../shared/config';
+import { sameElevation } from '../../shared/elevation';
 import { movementSpeed, moveWithCollisions, terrainSpeed } from '../../shared/physics';
 import type { Actor, InputCommand } from '../../shared/types';
 import { World } from '../../shared/world';
@@ -21,7 +22,7 @@ export function reconcile(authoritative: Actor, acknowledged: number, pending: I
 
 export function interpolateActor(old: Actor | undefined, actor: Actor, alpha: number): Actor {
   const t = Math.max(0, Math.min(1, alpha));
-  if (!old || old.hp <= 0 || actor.hp <= 0 || Math.hypot(actor.x - old.x, actor.y - old.y) > 250) return { ...actor };
+  if (!old || !sameElevation(old, actor) || old.hp <= 0 || actor.hp <= 0 || Math.hypot(actor.x - old.x, actor.y - old.y) > 250) return { ...actor };
   const angle = Math.atan2(Math.sin(actor.aim - old.aim), Math.cos(actor.aim - old.aim));
   return { ...actor, x: old.x + (actor.x - old.x) * t, y: old.y + (actor.y - old.y) * t, aim: old.aim + angle * t };
 }

@@ -7,6 +7,9 @@ import { collidesWorld } from './physics';
 import type { WorldDocument } from './world-schema';
 import { QUEST_DEFINITIONS } from './narrative';
 import { atWarp, mapDocument, warpPosition } from './warps';
+import { validElevation, rectBounds, placedGeometry, type WorldSurface } from './elevation';
+import { overlaps, SpatialIndex } from './world-authoring';
+import { stairEndpoints } from './terrain-access';
 
 export function worldDungeons(document: WorldDocument, catalog: readonly DungeonDefinition[]): DungeonDefinition[] {
   const indoor = new Set((document.interiors ?? []).flatMap(m => m.document.dungeons.filter(p => p.enabled !== false).map(p => p.dungeonId)));
@@ -32,6 +35,26 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
       issues.push(`Dungeon sovrapposti o troppo vicini: ${d.name}, ${other.name}.`);
   }
   const world = new World(document.seed, 16, 'world', document, dungeons);
+  const geometry = structuredClone(document.geometry ?? { surfaces: [], solids: [], stairs: [] });
+  for (const p of document.placements) {
+    const a = assets.get(p.assetId);
+    if (!a?.geometry) continue;
+    const base = p.baseElevation ?? world.elevation.terrainElevationAt(p.x + .5, p.y + .5);
+    const g = placedGeometry(a.geometry, p.x, p.y, base, p.id);
+    if (g.surfaces.some(s => !validElevation(s.elevation)) || g.stairs.some(s => !validElevation(s.from) || !validElevation(s.to)) || g.solids.some(s => !validElevation(s.base) || s.top > 128)) issues.push(`Asset ${a.name}: quote risultanti fuori intervallo.`);
+    geometry.surfaces.push(...g.surfaces); geometry.solids.push(...g.solids); geometry.stairs.push(...g.stairs);
+  }
+  const surfaceIndex = new SpatialIndex<WorldSurface>(rectBounds);
+  for (const s of geometry.surfaces) {
+    for (const other of surfaceIndex.query(rectBounds(s))) if (s.elevation === other.elevation && overlaps(rectBounds(s), rectBounds(other)))
+      issues.push(`Superfici sovrapposte alla quota ${s.elevation}: ${s.id}, ${other.id}.`);
+    surfaceIndex.add(s);
+  }
+  for (const s of geometry.stairs) {
+    const endpoints = stairEndpoints(s);
+    if (endpoints.some(p => collidesWorld(p.x * TILE_SIZE, p.y * TILE_SIZE, PLAYER_RADIUS, world, p.elevation)))
+      issues.push(`Scala ${s.id}: estremità bloccata o superficie di arrivo assente.`);
+  }
   const bounds = document.interiorBounds;
   if (bounds) {
     for (const p of document.placements) {
@@ -46,11 +69,11 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
     }
   }
   const spawn = { x: (document.spawn.x + (bounds ? .5 : 0)) * TILE_SIZE, y: (document.spawn.y + (bounds ? .5 : 0)) * TILE_SIZE };
-  if (collidesWorld(spawn.x, spawn.y, PLAYER_RADIUS + 2, world)) issues.push('Spawn del giocatore bloccato: libera anche le celle vicine.');
+  if (collidesWorld(spawn.x, spawn.y, PLAYER_RADIUS + 2, world, document.spawnElevation ?? 0)) issues.push('Spawn del giocatore bloccato: libera anche le celle vicine.');
   if (!bounds && configuredDungeonTile(Math.floor(spawn.x / TILE_SIZE), Math.floor(spawn.y / TILE_SIZE), dungeons) !== undefined) issues.push('Spawn globale dentro un dungeon: scegli una posizione nel mondo.');
   if (world.arenaAt(spawn.x, spawn.y)) issues.push('Lo spawn del giocatore si trova dentro un ingresso arena.');
   for (const n of document.npcs) {
-    if (collidesWorld((n.x + .5) * TILE_SIZE, (n.y + .5) * TILE_SIZE, 19, world)) issues.push(`NPC ${n.id} su un ostacolo.`);
+    if (collidesWorld((n.x + .5) * TILE_SIZE, (n.y + .5) * TILE_SIZE, 19, world, n.elevation ?? 0)) issues.push(`NPC ${n.id} su un ostacolo.`);
     if (configuredDungeonTile(n.x, n.y, dungeons) !== undefined) issues.push(`NPC ${n.id} dentro un dungeon: usa il Dungeon Maker.`);
   }
   for (const p of document.placements) {
@@ -81,11 +104,11 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
         const anchor=warpPosition(p);
         for(let y=0;y<size.y;y++)for(let x=0;x<size.x;x++){
           const cell=warpPosition({x:p.x+x,y:p.y+y});
-          if(collidesWorld(cell.x,cell.y,PLAYER_RADIUS+2,map)) issues.push(`${w.name}: ${label} su un ostacolo alla casella ${p.x+x}, ${p.y+y}.`);
+          if(collidesWorld(cell.x,cell.y,PLAYER_RADIUS+2,map,label === 'ingresso' ? w.entryElevation ?? 0 : w.arrivalElevation ?? 0)) issues.push(`${w.name}: ${label} su un ostacolo alla casella ${p.x+x}, ${p.y+y}.`);
           if(!map.sameRoom(anchor,cell)) issues.push(`${w.name}: ${label} attraversa il confine di una stanza.`);
         }
         const pos = warpPosition(p);
-        if (collidesWorld(pos.x, pos.y, PLAYER_RADIUS + 2, map)) issues.push(`${w.name}: ${label} su un ostacolo.`);
+        if (collidesWorld(pos.x, pos.y, PLAYER_RADIUS + 2, map, label === 'ingresso' ? w.entryElevation ?? 0 : w.arrivalElevation ?? 0)) issues.push(`${w.name}: ${label} su un ostacolo.`);
         if (map.arenaAt(pos.x, pos.y)) issues.push(`${w.name}: ${label} sovrapposto a un ingresso arena.`);
       }
       if (w.reverseId) {

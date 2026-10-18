@@ -9,6 +9,8 @@ import { worldDungeons } from '../shared/world-validation';
 import { mapDocument } from '../shared/warps';
 import { compactWorldTiles, serializeWorldDocument } from '../shared/world-tiles';
 import { readCatalog } from './dungeon-removal';
+import { repairWorldAssetPaths } from '../shared/world-asset-paths';
+import { listWorldAssetFiles } from './world-asset-files';
 
 export const worldRevision = (text: string): string => createHash('sha256').update(text).digest('hex');
 async function formatCompatibleRevisions(path: string, revision: string): Promise<string[]> {
@@ -35,6 +37,7 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     const currentRevision = worldRevision(current);
     if (currentRevision !== revision && !(await formatCompatibleRevisions(options.documentPath, currentRevision)).includes(revision)) throw new Error('Il progetto è stato modificato da un’altra finestra. Esporta la bozza e ricarica prima di applicare.');
     const next = compactWorldTiles(parseWorldDocument(document)), catalog = await readWorldDungeonCatalog(options.dungeonPath);
+    repairWorldAssetPaths(next, await listWorldAssetFiles(options.root));
     const issues = validateWorld(next, catalog);
     if (issues.length) throw new Error(issues.slice(0, 12).join('\n'));
     for (const a of next.assets) {
@@ -80,7 +83,7 @@ export async function saveWorldProject(options: { root: string; documentPath: st
   }
 }
 
-/** Readable filenames; existing images can be reused but never silently overwritten. */
+/** Readable filenames; collisions receive a stable content suffix without overwrites. */
 export async function importWorldImage(root: string, mime: string, base64: string, folder: 'world-assets' | 'actor-assets' = 'world-assets', filename: string = 'asset'): Promise<string> {
   if (typeof base64 !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length > 7_000_000) throw new Error('Immagine non valida o oltre 5 MB.');
   const bytes = Buffer.from(base64, 'base64');
@@ -102,12 +105,17 @@ export async function importWorldImage(root: string, mime: string, base64: strin
   const stem = filename.replace(/\.(png|svg)$/i, '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120);
   if (!stem) throw new Error('Il nome file deve contenere lettere o numeri.');
-  const name = `${stem}.${ext}`, directory = resolve(root, 'public', folder), path = resolve(directory, name);
+  const directory = resolve(root, 'public', folder);
   await mkdir(directory, { recursive: true });
-  try { await writeFile(path, bytes, { flag: 'wx' }); }
-  catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
-    if (!(await readFile(path)).equals(bytes)) throw new Error(`Esiste già un asset diverso chiamato ${name}. Rinomina il file prima di importarlo.`);
+  const suffix = createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const name = `${stem}${attempt ? `-${suffix}${attempt > 1 ? `-${attempt - 1}` : ''}` : ''}.${ext}`;
+    const path = resolve(directory, name);
+    try { await writeFile(path, bytes, { flag: 'wx' }); return `/${folder}/${name}`; }
+    catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      if ((await readFile(path)).equals(bytes)) return `/${folder}/${name}`;
+    }
   }
-  return `/${folder}/${name}`;
+  throw new Error('Troppi file con lo stesso nome: scegli un altro nome per l’immagine.');
 }

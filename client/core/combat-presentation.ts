@@ -1,4 +1,5 @@
 import { CLASSES, INTEREST_RADIUS } from '../../shared/config';
+import { elevationOf } from '../../shared/elevation';
 import { equippedAbility } from '../../shared/progression';
 import { hasLineOfSight } from '../../shared/physics';
 import { sweptWorldHit } from '../../shared/projectiles';
@@ -66,12 +67,12 @@ export class LocalCombatPresentation {
             if (target)
                 aim = Math.atan2(target.y - actor.y, target.x - actor.x);
         }
-        const event: GameEvent = { id: `local-cast:${actor.id}:${input.seq}`, inputSeq: input.seq, kind: 'cast', actorId: actor.id,
+        const event: GameEvent = { id: `local-cast:${actor.id}:${input.seq}`, inputSeq: input.seq, kind: 'cast', actorId: actor.id, elevation: elevationOf(actor),
             x: actor.x, y: actor.y, aim, at: now, duration: 380, radius: ability.radius, color: ability.color, abilityKind: ability.kind, text: ability.name };
         const cast: Cast = { seq: input.seq, slot: input.cast, ability, requestedAt: executionTime, event, confirmed: false, rejected: false };
         if (ability.kind === 'projectile') {
             const speed = ability.speed ?? 400;
-            cast.shot = { visual: { id: `local-shot:${actor.id}:${input.seq}`, inputSeq: input.seq, ownerId: actor.id, x: actor.x, y: actor.y,
+            cast.shot = { visual: { id: `local-shot:${actor.id}:${input.seq}`, inputSeq: input.seq, ownerId: actor.id, elevation: elevationOf(actor), x: actor.x, y: actor.y,
                     vx: Math.cos(aim) * speed, vy: Math.sin(aim) * speed, radius: ability.radius, color: ability.color, damage: 0, expiresAt: now + ability.range / speed * 1000 }, fresh: true, hidden: false, lastAt: now };
         }
         this.casts.set(input.seq, cast);
@@ -171,7 +172,7 @@ export class LocalCombatPresentation {
                     // Bounded owner-only extrapolation. Remote players retain the shared interpolation buffer.
                     const ahead = Math.max(0, Math.min(100, now - auth.time)) / 1000, weight = 1 - Math.exp(-dt / 0.08);
                     const target = { x: auth.projectile.x + auth.projectile.vx * ahead, y: auth.projectile.y + auth.projectile.vy * ahead };
-                    const wall = sweptWorldHit(auth.projectile, target, p.radius, world);
+                    const wall = sweptWorldHit(auth.projectile, target, p.radius, world, elevationOf(p));
                     if (wall !== null) {
                         target.x = auth.projectile.x + (target.x - auth.projectile.x) * wall;
                         target.y = auth.projectile.y + (target.y - auth.projectile.y) * wall;
@@ -181,7 +182,7 @@ export class LocalCombatPresentation {
                     p.vx = auth.projectile.vx;
                     p.vy = auth.projectile.vy;
                 }
-                if (sweptWorldHit(p, { x, y }, p.radius, world) !== null) {
+                if (sweptWorldHit(p, { x, y }, p.radius, world, elevationOf(p)) !== null) {
                     shot.hidden = true;
                     continue;
                 }

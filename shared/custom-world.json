@@ -1,4 +1,96 @@
 {
+  "cliffAssets": {
+    "alto-sinistra": "cliff-grid-alto-sinistra",
+    "alto-centro": "cliff-grid-alto-centro",
+    "alto-destra": "cliff-grid-alto-destra",
+    "centro-sinistra": "cliff-grid-centro-sinistra",
+    "centro-destra": "cliff-grid-centro-destra",
+    "basso-sinistra": "cliff-grid-basso-sinistra",
+    "basso-centro": "cliff-grid-basso-centro",
+    "basso-destra": "cliff-grid-basso-destra",
+    "90corner-180": "cliff-grid-90corner-180",
+    "90corner-270": "cliff-grid-90corner-270"
+  },
+  "geometry": {
+    "surfaces": [
+      {
+        "id": "paint-240c0eb0-e1d7-4916-9597-8a0c70654db5-0",
+        "x": -4,
+        "y": 120,
+        "width": 1,
+        "height": 1,
+        "elevation": 1,
+        "terrain": "grass",
+        "ground": true,
+        "painted": true
+      },
+      {
+        "id": "paint-240c0eb0-e1d7-4916-9597-8a0c70654db5-1",
+        "x": -5,
+        "y": 121,
+        "width": 3,
+        "height": 1,
+        "elevation": 1,
+        "terrain": "grass",
+        "ground": true,
+        "painted": true
+      },
+      {
+        "id": "paint-240c0eb0-e1d7-4916-9597-8a0c70654db5-4",
+        "x": -4,
+        "y": 122,
+        "width": 1,
+        "height": 1,
+        "elevation": 1,
+        "terrain": "grass",
+        "ground": true,
+        "painted": true
+      }
+    ],
+    "solids": [
+      {
+        "x": -4,
+        "y": 120,
+        "width": 1,
+        "height": 1,
+        "id": "paint-240c0eb0-e1d7-4916-9597-8a0c70654db5-0-mass",
+        "base": 0,
+        "top": 1
+      },
+      {
+        "x": -5,
+        "y": 121,
+        "width": 3,
+        "height": 1,
+        "id": "paint-240c0eb0-e1d7-4916-9597-8a0c70654db5-1-mass",
+        "base": 0,
+        "top": 1
+      },
+      {
+        "x": -4,
+        "y": 122,
+        "width": 1,
+        "height": 1,
+        "id": "paint-240c0eb0-e1d7-4916-9597-8a0c70654db5-4-mass",
+        "base": 0,
+        "top": 1
+      }
+    ],
+    "stairs": [
+      {
+        "id": "shape-27f5a664-2aac-4a60-82e3-f91c02593a32",
+        "x": -4,
+        "y": 123,
+        "width": 1,
+        "height": 2,
+        "from": 1,
+        "to": 0,
+        "axis": "y",
+        "appearance": "stone",
+        "tiled": true
+      }
+    ]
+  },
   "painting": {
     "edges": "masks",
     "curve": 0.55,
@@ -9766,7 +9858,7 @@
     {
       "id": "asset-4cb9b499-2db0-4270-9238-d4faf659c314",
       "name": "roccia-tile",
-      "image": "/world-assets/Piattaforma-rocciosa-in-pietra-sfaccettata.png",
+      "image": "/world-assets/montagna/Piattaforma-rocciosa-in-pietra-sfaccettata.png",
       "width": 1,
       "height": 1,
       "columns": 1,
@@ -10137,6 +10229,940 @@
       },
       "visual": {
         "kind": "image"
+      }
+    },
+    {
+      "id": "cliff-grid-alto-sinistra",
+      "name": "cliff-grid alto-sinistra",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-alto-sinistra.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici",
+      "cellSubdivision": 4,
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "cliff-grid-alto-centro",
+      "name": "cliff-grid alto-centro",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-alto-centro.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici",
+      "cellSubdivision": 4,
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "cliff-grid-alto-destra",
+      "name": "cliff-grid alto-destra",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-alto-destra.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici",
+      "cellSubdivision": 4,
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "cliff-grid-centro-sinistra",
+      "name": "cliff-grid centro-sinistra",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-centro-sinistra.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici",
+      "cellSubdivision": 4,
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "visual": {
+        "kind": "image"
+      },
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "cliff-grid-centro-destra",
+      "name": "cliff-grid centro-destra",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-centro-destra.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici",
+      "cellSubdivision": 4,
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "cliff-grid-basso-sinistra",
+      "name": "cliff-grid basso-sinistra",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-basso-sinistra.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici"
+    },
+    {
+      "id": "cliff-grid-basso-centro",
+      "name": "cliff-grid basso-centro",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-basso-centro.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici"
+    },
+    {
+      "id": "cliff-grid-basso-destra",
+      "name": "cliff-grid basso-destra",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-basso-destra.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici"
+    },
+    {
+      "id": "cliff-grid-90corner-180",
+      "name": "cliff-grid 90corner-180",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-90corner-180.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici",
+      "cellSubdivision": 4,
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "cliff-grid-90corner-270",
+      "name": "cliff-grid 90corner-270",
+      "image": "/world-assets/montagna/cliff-grid/cliff-grid-90corner-270.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": false,
+          "visibility": "normal",
+          "elevation": 1
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Terreni automatici",
+      "cellSubdivision": 4,
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
       }
     }
   ],

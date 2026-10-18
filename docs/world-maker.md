@@ -1,5 +1,8 @@
 # World Maker locale
 
+Per rialzi, ponti, collisioni parziali e scale vedere
+[Quote, terreni sopraelevati e scale](livelli-terreno-scale.md).
+
 Avvia `npm run world:studio` e apri `http://127.0.0.1:3002/world-maker.html`. `WORLD_STUDIO_PORT` cambia la porta. L’editor è un processo locale separato dal server del gioco: non aggiunge API di amministrazione al gioco e non apre il server multiplayer.
 
 Lo stesso Studio include il Dungeon Maker: **Dungeon Maker ↗** apre una scheda dedicata, mentre **Modifica dungeon ↗** apre il dungeon selezionato. `npm run dungeon:studio` è un accesso allo stesso World Studio (`STUDIO_PORT` resta supportata). Catalogo installato, backup e API locali sono condivisi nello stesso processo.
@@ -7,6 +10,35 @@ Lo stesso Studio include il Dungeon Maker: **Dungeon Maker ↗** apre una scheda
 Per applicare il progetto, ferma il server del gioco. La stessa esclusione usata dal Dungeon Studio impedisce modifiche mentre il salvataggio è in uso. Dopo **Applica al gioco**, esegui `npm run build` e riavvia il gioco. Se il gioco usa `DATA_FILE`, avvia lo Studio con lo stesso `DATA_FILE`. `Ctrl+C` chiude lo Studio, compresi i suoi socket.
 
 ## Asset e griglia
+
+**Dimensione dell’oggetto e suddivisione delle celle sono indipendenti**, per tutti
+i PNG/SVG del catalogo, compresi i bordi automatici. **Larghezza/Altezza oggetto · tile**
+cambiano l’ingombro. **Suddivisione di ogni tile** cambia solo la precisione delle
+collisioni e della visibilità: scegli 1×1, 2×2, 4×4 o 8×8 nel pannello destro.
+Un PNG grande 1×1 tile a 4×4 ha 16 sottocelle da ¼ di tile (12 unità), mantenendo
+la stessa immagine, scala, posizione e geometria delle quote.
+
+La scelta si applica subito nella bozza ed è annullabile. Le sottocelle ereditano
+le proprietà delle celle originali; poi dipingi i singoli quadratini come prima.
+Riducendo la suddivisione, le celle riunite conservano eventuali blocchi, nascondigli
+e trasparenze. **Applica al gioco** salva le modifiche; la suddivisione è inclusa
+anche nell’export del mondo e viene condivisa con Dungeon Maker e client.
+
+**Piano delle sottocelle che dipingi** assegna alle celle una quota relativa alla
+base dell’asset: **0**, **+1**, **−1** oppure un intero personalizzato. Scegli
+**Calpestabile** e **+1**, poi dipingi solo la parte del bordo che deve sostenere
+il PG sul piano superiore. Per i cliff-grid la base è il terreno inferiore.
+**Mantieni quota esistente** permette di cambiare le altre proprietà senza spostare
+il pavimento. Scale e passaggi collegano i piani; una cella rialzata non crea una salita
+automatica. Il filtro **Livelli visibili** mostra anche queste sottocelle alla loro
+quota. Per ridurre la suddivisione devi prima uniformare eventuali quote diverse
+nelle celle che verranno riunite.
+
+Per un PNG che deve collegare due piani usa **Usa questo asset come scala / passaggio**,
+imposta le quote relative e l'asse, poi **Aggiorna selezione** e piazza l'asset.
+Per un passaggio sul terreno usa **Scala / passaggio · sali e scendi** con grafica
+**Passaggio · conserva terreno / PNG**. La scala in pietra è una scelta grafica;
+le scale automatiche dei rialzi si attivano solo spuntando l'apposita casella.
 
 Importa uno o più PNG/SVG. Le immagini vengono conservate in `public/world-assets` con un nome derivato dal contenuto: importare la stessa immagine non crea una seconda copia. Il catalogo può contenere più definizioni della stessa immagine, con scale e comportamenti diversi.
 

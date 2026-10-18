@@ -1,15 +1,8 @@
 import { newWorldAsset, type WorldDocument } from '../../../shared/world-schema';
+import { repairWorldAssetPaths, assetFilePath as path } from '../../../shared/world-asset-paths';
 
 export function syncWorldAssetFiles(document: WorldDocument, files: readonly { name: string; image: string }[]): { added: number; repaired: number } {
-  const path = (image: string) => { try { return decodeURIComponent(image.split(/[?#]/)[0]); } catch { return image; } };
-  const available = new Set(files.map(f=>path(f.image)));
-  const basename = (image: string) => path(image).split('/').at(-1)!;
-  let repaired=0;
-  for (const asset of document.assets) {
-    if (available.has(path(asset.image))) continue;
-    const matches=files.filter(f=>basename(f.image)===basename(asset.image));
-    if (matches.length===1) {asset.image=matches[0].image;repaired++;}
-  }
+  const repaired = repairWorldAssetPaths(document, files);
   const known = new Set(document.assets.map(a => path(a.image)));
   const added = [];
   for (const file of files) {

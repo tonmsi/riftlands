@@ -2,7 +2,7 @@ import { CHUNK_TILES } from './config';
 import { coordinateHash } from './coordinate-random';
 import type { TileKind } from './types';
 import type { AssetCell, AssetPlacement, TileOverride, WorldAsset, WorldDocument, WorldZone, ZoneShape } from './world-schema';
-import { worldAssetImageBounds } from './world-schema';
+import { worldAssetImageBounds, assetCellColumns, assetCellRows, assetCellSubdivision } from './world-schema';
 import { WorldTiles } from './world-tiles';
 
 export interface TileBounds { left: number; top: number; right: number; bottom: number; }
@@ -97,8 +97,9 @@ export class WorldAuthoring {
   }
   cell(p: AssetPlacement, x: number, y: number): AssetCell | undefined {
     const a = this.assets.get(p.assetId)!;
-    const col = Math.floor(x) - p.x, row = Math.floor(y) - p.y;
-    return col >= 0 && col < a.columns && row >= 0 && row < a.rows ? a.cells[row * a.columns + col] : undefined;
+    const division=assetCellSubdivision(a),columns=assetCellColumns(a),rows=assetCellRows(a);
+    const col = Math.floor((x-p.x)*division), row = Math.floor((y-p.y)*division);
+    return col >= 0 && col < columns && row >= 0 && row < rows ? a.cells[row * columns + col] : undefined;
   }
   private proposal(band: GenerationBand, sx: number, sy: number, env: GenerationEnvironment, seed: number): Proposal | null {
     const key = `${band.stride}:${sx},${sy}`, cached = this.proposals.get(key);

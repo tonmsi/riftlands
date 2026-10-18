@@ -1,6 +1,7 @@
 import type { Actor } from '../shared/types';
 import { randomUUID } from '../shared/id';
 import { hasLineOfSight, collidesWorld } from '../shared/physics';
+import { elevationOf } from '../shared/elevation';
 import type { World } from '../shared/world';
 import { TILE_SIZE } from '../shared/config';
 import { insideShape } from '../shared/world-authoring';
@@ -211,9 +212,9 @@ export class InteractionSystem {
       const reach = avoid ? [radius, 40, 72, 24, 88, 104][Math.floor(i / 12)] : radius;
       const candidate = { x: origin.x + Math.cos(angle) * reach, y: origin.y + Math.sin(angle) * reach };
       if (avoid && distance(candidate, avoid) <= avoid.radius + 26) continue;
-      if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world) && hasLineOfSight(origin, candidate, this.host.world)) { point = candidate; break; }
+      if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world, elevationOf(origin)) && hasLineOfSight(origin, { ...candidate, elevation: elevationOf(origin) }, this.host.world)) { point = candidate; break; }
     }
-    const drop: GroundItem = { id: randomUUID(), ...point, stack: { ...stack }, ownerId, availableAt: now + delay, expiresAt: now + LOOT_ITEM_TTL,
+    const drop: GroundItem = { id: randomUUID(), ...point, elevation: elevationOf(origin), stack: { ...stack }, ownerId, availableAt: now + delay, expiresAt: now + LOOT_ITEM_TTL,
       ...(avoid && distance(point, avoid) <= avoid.radius + 10 ? { requireOwnerExit: true } : {}) };
     this.drops.set(drop.id, drop);
     return drop;
@@ -236,9 +237,9 @@ export class InteractionSystem {
     let point = { x: player.x, y: player.y };
     for (let i = 0; i < 12; i++) {
       const angle = player.aim + i * Math.PI / 6, candidate = { x: player.x + Math.cos(angle) * 42, y: player.y + Math.sin(angle) * 42 };
-      if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world) && hasLineOfSight(player, candidate, this.host.world)) { point = candidate; break; }
+      if (!collidesWorld(candidate.x, candidate.y, 10, this.host.world, elevationOf(player)) && hasLineOfSight(player, { ...candidate, elevation: elevationOf(player) }, this.host.world)) { point = candidate; break; }
     }
-    const drop: GroundItem = { id: randomUUID(), ...point, stack: { ...stack, itemId, quantity }, expiresAt: now + GROUND_ITEM_TTL, droppedBy: id, ownerPickupAt: now + 1000 };
+    const drop: GroundItem = { id: randomUUID(), ...point, elevation: elevationOf(player), stack: { ...stack, itemId, quantity }, expiresAt: now + GROUND_ITEM_TTL, droppedBy: id, ownerPickupAt: now + 1000 };
     stack.quantity -= quantity; if (!stack.quantity) account.inventory!.slots[slot] = null;
     this.action(id, 'drop', { itemId, quantity }, now, slot);
     this.drops.set(drop.id, drop); this.host.changed(id);

@@ -15,7 +15,7 @@ test('asset masks and clips have no tile seams at fractional sizes and game zoom
     await page.route('**/seam-review', route => route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#1f2924"></body>' }));
     await page.goto(`${server.resolvedUrls!.local[0]}seam-review`);
     const result = await page.evaluate(async () => {
-      const { newWorldAsset, resizeWorldAsset } = await import('/shared/world-schema.ts' as string);
+      const { newWorldAsset, resizeWorldAsset, subdivideWorldAsset } = await import('/shared/world-schema.ts' as string);
       const { makeAssetFadeMask } = await import('/client/render/world-asset-fade.ts' as string);
       const { assetCellRegions, clipAssetCells } = await import('/client/render/asset-cell-regions.ts' as string);
       const a = newWorldAsset('roof', 'Copertura', '/world-assets/test.svg'); resizeWorldAsset(a, 12, 12);
@@ -93,9 +93,13 @@ test('asset masks and clips have no tile seams at fractional sizes and game zoom
         bridgeDifferences.push({ count, maximum });
         if (scale === .95) window.document.body.append(sample);
       }
-      return { gaps, differences, mixedGaps, splitDifferences, bridgeDifferences };
+      const fine=newWorldAsset('fine','Fine','/world-assets/test.png');subdivideWorldAsset(fine,4);fine.cells[5].visibility='fade';fine.fade={opacity:.28,feather:0,durationMs:0};
+      const fineMask=makeAssetFadeMask(fine,64,64,'fade').getContext('2d')!;
+      const fineAlpha=[fineMask.getImageData(24,24,1,1).data[3],fineMask.getImageData(40,24,1,1).data[3]];
+      return { gaps, differences, mixedGaps, splitDifferences, bridgeDifferences, fineAlpha };
     });
     assert.equal(result.gaps, 0); assert.equal(result.mixedGaps, 0);
+    assert.deepEqual(result.fineAlpha,[255,0]);
     assert.deepEqual(result.differences, [0, 0, 0]);
     assert.equal(result.splitDifferences, 0);
     // Canvas texture sampling can round premultiplied colors by one unit when a clip is active.

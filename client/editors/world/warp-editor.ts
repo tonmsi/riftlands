@@ -3,8 +3,10 @@ import { mapDocument, newInterior, newDungeonInterior, setWarpReturn } from '../
 import type { DungeonDefinition } from '../../../shared/dungeons';
 import type { Vec2 } from '../../../shared/types';
 import type { WorldDocument, WorldWarp } from '../../../shared/world-schema';
+import { floorVisible, type ElevationVisibility } from './elevation-visibility';
 
 interface WarpEditorHost {
+  isElevationVisible?(elevation: number): boolean;
   rooms?(mapId: string): { id: string; name: string; tiles: Vec2[] }[];
   project(): WorldDocument; mapId(): string; switchMap(id: string): void;
   change(action: () => void): void; tool(): string; selectTool(tool: string): void; center(p: Vec2): void;
@@ -46,6 +48,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   inspector.innerHTML = `<h2>Collegamento warp</h2><div class="fields"><label>Nome<input id="warp-name" maxlength="160"></label>
     <label>Mappa del primo lato<select id="warp-from"></select></label><div class="pair"><label>Porta X<input id="warp-x" type="number"></label><label>Porta Y<input id="warp-y" type="number"></label></div>
     <label>Destinazione<select id="warp-to"></select></label><div class="pair"><label>Arrivo X<input id="warp-arrival-x" type="number"></label><label>Arrivo Y<input id="warp-arrival-y" type="number"></label></div>
+    <div class="pair"><label>Quota ingresso<input id="warp-entry-elevation" type="number" min="-128" max="127" step="1" value="0"></label><label>Quota arrivo<input id="warp-arrival-elevation" type="number" min="-128" max="127" step="1" value="0"></label></div>
     <div class="pair"><label>Dimensione A<select id="warp-entry-size"><option value="1,1">1 × 1</option><option value="2,1">2 × 1</option><option value="1,2">1 × 2</option><option value="1,3">1 × 3</option><option value="3,1">3 × 1</option></select></label><label>Dimensione B<select id="warp-arrival-size"><option value="1,1">1 × 1</option><option value="2,1">2 × 1</option><option value="1,2">1 × 2</option><option value="1,3">1 × 3</option><option value="3,1">3 × 1</option></select></label></div><p class="hint">La casella posizionata × l�angolo in alto a sinistra. L’ingresso si estende a destra o verso il basso; il punto di arrivo resta su quella casella.</p>
     <label>Attivazione<select id="warp-activation"><option value="walk">Attraversamento automatico</option><option value="interact">Interazione · F / pulsante</option></select></label>
     <label><input id="warp-one-way" type="checkbox"> Solo andata (nessun ritorno da questa porta)</label></div>
@@ -129,7 +132,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     el('warp-cancel').hidden = host.tool() !== 'warp';
     if (w) {
       for (const [id, v] of Object.entries({ 'warp-name': displayName(w), 'warp-from': w.from, 'warp-to': w.to, 'warp-x': w.entry.x,
-        'warp-y': w.entry.y, 'warp-arrival-x': w.arrival.x, 'warp-arrival-y': w.arrival.y, 'warp-entry-size': `${w.entrySize?.x ?? 1},${w.entrySize?.y ?? 1}`, 'warp-arrival-size': `${w.arrivalSize?.x ?? 1},${w.arrivalSize?.y ?? 1}`, 'warp-activation': w.activation })) el(id).value = String(v);
+        'warp-y': w.entry.y, 'warp-entry-elevation': w.entryElevation ?? 0, 'warp-arrival-elevation': w.arrivalElevation ?? 0, 'warp-arrival-x': w.arrival.x, 'warp-arrival-y': w.arrival.y, 'warp-entry-size': `${w.entrySize?.x ?? 1},${w.entrySize?.y ?? 1}`, 'warp-arrival-size': `${w.arrivalSize?.x ?? 1},${w.arrivalSize?.y ?? 1}`, 'warp-activation': w.activation })) el(id).value = String(v);
       el('warp-one-way').checked = !w.reverseId;
       document.getElementById('warp-current-side')!.textContent = `Lato visualizzato: ${options.find(([id]) => id === host.mapId())?.[1] ?? host.mapId()}`;
     }
@@ -217,7 +220,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   function saveSelected(): void {
     const w = warp(); if (!w) return;
     const size=(id:string)=>{const [x,y]=value(id).split(',').map(Number);return {x,y};};
-    const next = { entrySize:size('warp-entry-size'), arrivalSize:size('warp-arrival-size'), name: displayName({ ...w, name: value('warp-name') }).slice(0, 160), from: value('warp-from'), to: value('warp-to'), entry: { x: num('warp-x'), y: num('warp-y') },
+    const next = { entryElevation:num('warp-entry-elevation'), arrivalElevation:num('warp-arrival-elevation'), entrySize:size('warp-entry-size'), arrivalSize:size('warp-arrival-size'), name: displayName({ ...w, name: value('warp-name') }).slice(0, 160), from: value('warp-from'), to: value('warp-to'), entry: { x: num('warp-x'), y: num('warp-y') },
       arrival: { x: num('warp-arrival-x'), y: num('warp-arrival-y') }, activation: value('warp-activation') as WorldWarp['activation'] };
     // Changing maps must not reuse a coordinate belonging to the previous destination.
     if (next.to !== w.to && next.arrival.x === w.arrival.x && next.arrival.y === w.arrival.y) next.arrival = { ...mapDocument(host.project(), next.to).spawn };
@@ -230,6 +233,8 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   click('warp-update', saveSelected);
   el('warp-entry-size').onchange = saveSelected;
   el('warp-arrival-size').onchange = saveSelected;
+  el('warp-entry-elevation').onchange = saveSelected;
+  el('warp-arrival-elevation').onchange = saveSelected;
   el('warp-one-way').onchange = saveSelected;
   el('warp-to').onchange = saveSelected;
   el('warp-from').onchange = saveSelected;
@@ -251,8 +256,8 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   click('warp-delete', () => host.change(() => { const reverseId = warp()?.reverseId; host.project().warps = host.project().warps?.filter(w => w.id !== selected && w.id !== reverseId); selected = ''; }));
   function dragTarget(p: Vec2): { id: string; side: 'entry' | 'arrival'; x: number; y: number } | undefined {
     const w = warp(); if (!w) return;
-    if (w.from === host.mapId() && p.x>=w.entry.x && p.y>=w.entry.y && p.x<w.entry.x+(w.entrySize?.x??1) && p.y<w.entry.y+(w.entrySize?.y??1)) return { id: w.id, side: 'entry', ...w.entry };
-    if (w.to === host.mapId() && p.x>=w.arrival.x && p.y>=w.arrival.y && p.x<w.arrival.x+(w.arrivalSize?.x??1) && p.y<w.arrival.y+(w.arrivalSize?.y??1)) return { id: w.id, side: 'arrival', ...w.arrival };
+    if ((host.isElevationVisible?.(w.entryElevation ?? 0) ?? true) && w.from === host.mapId() && p.x>=w.entry.x && p.y>=w.entry.y && p.x<w.entry.x+(w.entrySize?.x??1) && p.y<w.entry.y+(w.entrySize?.y??1)) return { id: w.id, side: 'entry', ...w.entry };
+    if ((host.isElevationVisible?.(w.arrivalElevation ?? 0) ?? true) && w.to === host.mapId() && p.x>=w.arrival.x && p.y>=w.arrival.y && p.x<w.arrival.x+(w.arrivalSize?.x??1) && p.y<w.arrival.y+(w.arrivalSize?.y??1)) return { id: w.id, side: 'arrival', ...w.arrival };
   }
   function moveEndpoint(endpoint: { id: string; side: 'entry' | 'arrival' }, p: Vec2): void {
     const w = host.project().warps?.find(item => item.id === endpoint.id); if (!w) return;
@@ -263,14 +268,19 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     if (w.reverseId) setWarpReturn(host.project(), w, true, `warp-${crypto.randomUUID()}`);
   }
   function place(p: Vec2): boolean {
+    const hit = (w: WorldWarp, side: 'entry' | 'arrival') => {
+      const point = w[side], size = (side === 'entry' ? w.entrySize : w.arrivalSize) ?? { x: 1, y: 1 };
+      const elevation = (side === 'entry' ? w.entryElevation : w.arrivalElevation) ?? 0;
+      return (side === 'entry' ? w.from : w.to) === host.mapId() && (host.isElevationVisible?.(elevation) ?? true)
+        && p.x >= point.x && p.y >= point.y && p.x < point.x + size.x && p.y < point.y + size.y;
+    };
     if (host.tool() === 'erase') {
-      const w = host.project().warps?.find(w => (w.from === host.mapId() && p.x>=w.entry.x && p.y>=w.entry.y && p.x<w.entry.x+(w.entrySize?.x??1) && p.y<w.entry.y+(w.entrySize?.y??1)) || (w.to === host.mapId() && p.x>=w.arrival.x && p.y>=w.arrival.y && p.x<w.arrival.x+(w.arrivalSize?.x??1) && p.y<w.arrival.y+(w.arrivalSize?.y??1)));
+      const w = host.project().warps?.find(w => hit(w, 'entry') || hit(w, 'arrival'));
       if (w) { host.change(() => { host.project().warps = host.project().warps?.filter(item => item.id !== w.id && item.id !== w.reverseId); selected = ''; }); host.inspect(); return true; }
     }
     if (host.tool() !== 'warp') {
       if (host.tool() === 'select') {
-        const w = host.project().warps?.find(w => w.from === host.mapId() && p.x>=w.entry.x && p.y>=w.entry.y && p.x<w.entry.x+(w.entrySize?.x??1) && p.y<w.entry.y+(w.entrySize?.y??1))
-          ?? host.project().warps?.find(w => w.to === host.mapId() && p.x>=w.arrival.x && p.y>=w.arrival.y && p.x<w.arrival.x+(w.arrivalSize?.x??1) && p.y<w.arrival.y+(w.arrivalSize?.y??1));
+        const w = host.project().warps?.find(w => hit(w, 'entry')) ?? host.project().warps?.find(w => hit(w, 'arrival'));
         if (w) { editingNew = false; ownerId = host.mapId() !== 'world' ? host.mapId() : w.to !== 'world' ? w.to : w.from; if (owner()) el('area-kind').value = owner()?.kind ?? 'building'; selected = w.id; host.inspect(); refresh(); return true; }
       }
       selected = ''; inspector.hidden = true;
@@ -305,31 +315,31 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     pending = undefined; host.selectTool('select'); host.switchMap(connection.from); host.center(connection.entry); host.inspect(); refresh(); return true;
   }
 
-  function draw(canvas: HTMLCanvasElement, view: { x: number; y: number; scale: number }) {
+  function draw(canvas: HTMLCanvasElement, view: { x: number; y: number; scale: number }, visible?: ElevationVisibility) {
     const ctx = canvas.getContext('2d')!, dpr = canvas.width / Math.max(1, canvas.getBoundingClientRect().width), s = view.scale;
     ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, view.x * dpr, view.y * dpr);
     for (const w of host.project().warps ?? []) {
-      if (w.from === host.mapId()) {
+      if (w.from === host.mapId() && floorVisible(visible, w.entryElevation ?? 0)) {
         ctx.fillStyle = w.id === selected ? '#a770d799' : '#82bce777'; ctx.strokeStyle = w.id === selected ? '#c592f0' : '#a5d8fa'; ctx.lineWidth = 2;
         ctx.fillRect(w.entry.x * s, w.entry.y * s, s*(w.entrySize?.x??1), s*(w.entrySize?.y??1)); ctx.strokeRect(w.entry.x * s, w.entry.y * s, s*(w.entrySize?.x??1), s*(w.entrySize?.y??1));
         ctx.fillStyle = '#fff'; ctx.font = '12px system-ui'; ctx.fillText(`${w.id === selected ? 'Partenza · ' : ''}${displayName(w)}`, w.entry.x * s, w.entry.y * s - 4);
       }
-      if (w.to === host.mapId() && !w.reverseId) { ctx.strokeStyle = '#e8cf80'; ctx.lineWidth = w.id === selected ? 3 : 2; ctx.beginPath(); ctx.arc((w.arrival.x + .5) * s, (w.arrival.y + .5) * s, Math.max(3, s * .2), 0, Math.PI * 2); ctx.stroke();
+      if (w.to === host.mapId() && !w.reverseId && floorVisible(visible, w.arrivalElevation ?? 0)) { ctx.strokeStyle = '#e8cf80'; ctx.lineWidth = w.id === selected ? 3 : 2; ctx.beginPath(); ctx.arc((w.arrival.x + .5) * s, (w.arrival.y + .5) * s, Math.max(3, s * .2), 0, Math.PI * 2); ctx.stroke();
         ctx.fillStyle = '#e8cf80'; ctx.font = '12px system-ui'; ctx.fillText(`Arrivo · ${displayName(w)}`, w.arrival.x * s, w.arrival.y * s - 4); }
     }
-    if (pending?.from === host.mapId()) {
+    if (pending?.from === host.mapId() && floorVisible(visible, 0)) {
       ctx.strokeStyle = '#c592f0'; ctx.fillStyle = '#a770d755'; ctx.lineWidth = 3;
       ctx.fillRect(pending.entry.x * s, pending.entry.y * s, s, s); ctx.strokeRect(pending.entry.x * s, pending.entry.y * s, s, s);
       ctx.fillStyle = '#e7c9ff'; ctx.font = '12px system-ui'; ctx.fillText('A · in attesa di B', pending.entry.x * s, pending.entry.y * s - 5);
     }
     const current = warp();
-    if (current?.to === host.mapId()) {
+    if (current?.to === host.mapId() && floorVisible(visible, current.arrivalElevation ?? 0)) {
       ctx.strokeStyle = '#77ddf5'; ctx.lineWidth = 3;
       ctx.strokeRect(current.arrival.x * s, current.arrival.y * s, s, s);
       ctx.fillStyle = '#77ddf5'; ctx.font = '12px system-ui';
       ctx.fillText('Arrivo / ritorno', current.arrival.x * s, (current.arrival.y + 1) * s + 14);
     }
-    if (current?.from === host.mapId() && current.to === host.mapId()) {
+    if (current?.from === host.mapId() && current.to === host.mapId() && floorVisible(visible, current.entryElevation ?? 0) && floorVisible(visible, current.arrivalElevation ?? 0)) {
       ctx.strokeStyle = '#c592f0'; ctx.setLineDash([5, 5]); ctx.beginPath();
       ctx.moveTo((current.entry.x + .5) * s, (current.entry.y + .5) * s);
       ctx.lineTo((current.arrival.x + .5) * s, (current.arrival.y + .5) * s); ctx.stroke();

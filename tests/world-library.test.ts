@@ -18,14 +18,20 @@ test('image import preserves readable names, prevents overwrites, and rejects ac
     const path = await importWorldImage(root, 'image/svg+xml', encoded, 'world-assets', 'Cespuglio estivo.svg');
     assert.equal(path, '/world-assets/Cespuglio-estivo.svg');
     assert.equal(await importWorldImage(root, 'image/svg+xml', encoded, 'world-assets', 'Cespuglio estivo.svg'), path);
-    await assert.rejects(importWorldImage(root, 'image/svg+xml', Buffer.from('<svg/>').toString('base64'), 'world-assets', 'Cespuglio estivo.svg'), /Esiste già un asset diverso/);
+    const different = Buffer.from('<svg/>').toString('base64');
+    const alternate = await importWorldImage(root, 'image/svg+xml', different, 'world-assets', 'Cespuglio estivo.svg');
+    assert.match(alternate, /^\/world-assets\/Cespuglio-estivo-[a-f0-9]{16}\.svg$/);
+    assert.notEqual(alternate, path);
+    assert.equal(await importWorldImage(root, 'image/svg+xml', different, 'world-assets', 'Cespuglio estivo.svg'), alternate);
+    assert.equal((await readFile(join(root, 'public', path.slice(1)))).toString('base64'), encoded);
+    assert.equal((await readFile(join(root, 'public', alternate.slice(1)))).toString('base64'), different);
     await assert.rejects(importWorldImage(root, 'image/svg+xml', encoded, 'world-assets', '../escape.svg'), /Nome file/);
     assert.equal(await readFile(join(root, 'public', path), 'utf8'), svg);
     for (const bad of ['<svg onload="alert(1)"/>', '<svg><script/></svg>', '<svg><image href="https://example.com/a.png"/></svg>', '<svg><foreignObject/></svg>', '<!DOCTYPE svg><svg/>', '<svg><style>x{fill:url(https://example.com/a)}</style></svg>', '<svg><animate attributeName="href" values="javascript:alert(1)"/></svg>']) {
       await assert.rejects(importWorldImage(root, 'image/svg+xml', Buffer.from(bad).toString('base64')), /SVG/);
     }
     await assert.rejects(importWorldImage(root, 'image/png', encoded), /PNG/);
-    assert.equal((await readdir(join(root, 'public/world-assets'))).length, 1);
+    assert.equal((await readdir(join(root, 'public/world-assets'))).length, 2);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
