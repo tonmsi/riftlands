@@ -37,4 +37,6 @@ export interface TerrainViewport {
   height: number;
   dpr: number;
   zoom: number;
+  /** Stable bitmap resolution while the displayed zoom animates. */
+  rasterZoom?: number;
 }

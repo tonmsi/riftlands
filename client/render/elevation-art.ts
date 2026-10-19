@@ -1,8 +1,9 @@
 import { TILE_SIZE } from '../../shared/config';
-import { elevationOf, type Elevated, type ElevationGeometry, type WorldSurface, type WorldStair } from '../../shared/elevation';
+import { type Elevated, type ElevationGeometry, type WorldSurface, type WorldStair } from '../../shared/elevation';
 import type { Vec2 } from '../../shared/types';
 import { newWorldAsset, resizeWorldAsset } from '../../shared/world-schema';
 import { WorldAssetArt } from './world-asset-art';
+import { surfaceOpacity } from './bridge-visibility';
 
 const stairSprite = newWorldAsset('terrain-stair-art', 'Scala in pietra', '/world-assets/dungeon/Piastrella%20di%20Scale%20in%20Pietra%20con%20Muschio.png');
 resizeWorldAsset(stairSprite, 2, 1);
@@ -28,10 +29,9 @@ function drawStairSprite(ctx: CanvasRenderingContext2D, s: WorldStair, art: Worl
 const colors = { grass: '#73865a', path: '#b6a17b', water: '#507d91', rock: '#77716a', bush: '#486b42', mud: '#796b51', snow: '#d1dcd5', ice: '#a0c7ce' };
 export function drawElevationSurface(ctx: CanvasRenderingContext2D, s: WorldSurface, self?: Vec2 & Elevated | null): void {
   // Painted ground already uses the terrain renderer's material and texture.
-  if (s.painted && s.ground) return;
+  if (s.transparent || (s.painted && s.ground)) return;
   ctx.save();
-  if (self && elevationOf(self) < s.elevation && self.x >= s.x * TILE_SIZE && self.x <= (s.x + s.width) * TILE_SIZE
-    && self.y >= s.y * TILE_SIZE && self.y <= (s.y + s.height) * TILE_SIZE) ctx.globalAlpha = .35;
+  ctx.globalAlpha *= surfaceOpacity(s, self);
   ctx.fillStyle = colors[s.terrain ?? 'grass'];
   ctx.fillRect(s.x * TILE_SIZE, s.y * TILE_SIZE, s.width * TILE_SIZE, s.height * TILE_SIZE);
   if (!s.painted) {

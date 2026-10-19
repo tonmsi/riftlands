@@ -7,6 +7,10 @@ export interface WorldSurface extends ElevationRect {
   /** Terrain painted with the material brush; generates an exterior cliff ring. */
   painted?: boolean;
   terrain?: import('./types').TileKind;
+  /** Invisible artwork only; support and collision rules stay unchanged. */
+  transparent?: boolean;
+  /** Suspended decks fade their supported asset instances when viewed from below. Defaults to true. */
+  inheritAssetVisuals?: boolean;
 }
 export interface WorldSolid extends ElevationRect { base: number; top: number; }
 export interface WorldStair extends ElevationRect {
@@ -39,6 +43,7 @@ export function validGeometry(v: unknown): v is ElevationGeometry {
   const all = [...g.surfaces, ...g.solids, ...g.stairs];
   return all.every(rect) && new Set(all.map(r => r.id)).size === all.length
     && g.surfaces.every(s => validElevation(s.elevation) && (s.ground === undefined || typeof s.ground === 'boolean') && (s.painted === undefined || (typeof s.painted === 'boolean' && (!s.painted || s.ground === true))) && (s.terrain === undefined || ['grass', 'path', 'water', 'rock', 'bush', 'mud', 'snow', 'ice'].includes(s.terrain)))
+    && g.surfaces.every(s => (s.transparent === undefined || typeof s.transparent === 'boolean') && (s.inheritAssetVisuals === undefined || typeof s.inheritAssetVisuals === 'boolean'))
     && g.solids.every(s => validElevation(s.base) && Number.isInteger(s.top) && s.top > s.base && s.top <= 128)
     && g.stairs.every(s => validElevation(s.from) && validElevation(s.to) && s.from !== s.to && ['x', 'y'].includes(s.axis) && (s.automatic === undefined || typeof s.automatic === 'boolean') && (s.appearance === undefined || ['stone','passage'].includes(s.appearance))
       && (s.tiled === undefined || (typeof s.tiled === 'boolean' && (!s.tiled || ([s.x,s.y,s.width,s.height].every(Number.isInteger) && s.width >= 1 && s.height >= 1 && (s.axis === 'x' ? s.width : s.height) >= 2)))));

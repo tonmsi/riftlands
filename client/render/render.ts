@@ -1,6 +1,8 @@
 import { PICKUP_COLORS, circle, noise, polygon } from './render-primitives';
 import { elevationOf, placedGeometry } from '../../shared/elevation';
 import { drawElevationSurface, drawElevationStair } from './elevation-art';
+import { bridgeAssetOpacity, surfaceOpacity } from './bridge-visibility';
+import { cameraElevation, elevationCameraZoom } from './elevation-camera';
 import { drawTerrainCliff } from './cliff-art';
 import { cliffLevels } from '../../shared/cliff-assets';
 import { worldAssetImageBounds } from '../../shared/world-schema';
@@ -58,6 +60,7 @@ export class Renderer {
   private zoom = 1;
   private baseZoom = 1;
   private fishingZoom = 1;
+  private elevationZoom = 1;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   private cameraSettings = parseCameraSettings(null);
   private viewSign = 1;
@@ -134,7 +137,7 @@ export class Renderer {
       this.canvas.height = Math.round(this.height * this.dpr);
     }
     this.baseZoom = cameraZoom(this.width, this.height, this.touchQuery.matches, this.cameraSettings);
-    this.zoom = this.baseZoom * this.fishingZoom;
+    this.zoom = this.baseZoom * this.fishingZoom * this.elevationZoom;
   }
 
   render(frame: RenderFrame): void {
@@ -146,7 +149,18 @@ export class Renderer {
     if (this.dpr !== renderDpr(window.devicePixelRatio, this.width, this.height)) this.resize();
     const fishingTargetZoom = !this.reducedMotion.matches && frame.fishing?.phase === 'fight' ? 1.12 : 1;
     this.fishingZoom += (fishingTargetZoom - this.fishingZoom) * (1 - Math.exp(-delta / 240));
-    this.zoom = this.baseZoom * this.fishingZoom;
+    if(this.reducedMotion.matches)this.elevationZoom=1;
+    else if(!frame.holdCamera||!this.hasCamera) {
+      let elevationTarget=1;
+      if(frame.playing&&!frame.spectating&&frame.self) {
+        const x=frame.self.x/TILE_SIZE,y=frame.self.y/TILE_SIZE;
+        const stairs=this.world.elevation.stairsIn({left:x,top:y,right:x+1e-8,bottom:y+1e-8});
+        elevationTarget=elevationCameraZoom(cameraElevation(frame.self,stairs));
+      }
+      this.elevationZoom=!this.hasCamera||(frame.playing&&!this.wasPlaying)?elevationTarget
+        :this.elevationZoom+(elevationTarget-this.elevationZoom)*(1-Math.exp(-delta/200));
+    }
+    this.zoom = this.baseZoom * this.fishingZoom * this.elevationZoom;
     if (frame.spectating) this.zoom = Math.min(this.zoom, this.width / 1000, this.height / 850);
 
     this.viewSign = arenaViewSign(this.world.mode, frame.playing && !frame.spectating ? frame.self?.teamId : null);
@@ -190,7 +204,7 @@ export class Renderer {
 
     perf.end('camera-canvas-setup',setupStart);
     const terrainStart=perf.begin();
-    if(perf.feature('terrain'))this.terrain.drawCachedTerrain(this.world, { camera: this.camera, width: this.width, height: this.height, dpr: this.dpr, zoom: this.zoom }, frame.time);
+    if(perf.feature('terrain'))this.terrain.drawCachedTerrain(this.world, { camera: this.camera, width: this.width, height: this.height, dpr: this.dpr, zoom: this.zoom, rasterZoom:this.baseZoom }, frame.time);
     perf.end('terrain',terrainStart);
     const assetsStart=perf.begin();let assetDraws=0,spriteDraws=0;
     this.drawDungeonEntry(frame, false);
@@ -214,6 +228,11 @@ export class Renderer {
     const cliffs = this.world.elevation.cliffs(elevationBounds);
     const cliffFloors=new Map(cliffs.map(c=>[c,cliffLevels(this.world.authoring.document,c)]));
     const mapSurfaces = surfaceGeometry.surfaces.filter(s => !s.id.includes('/'));
+    const fadingBridges = surfaceGeometry.surfaces.filter(s => !s.ground && s.inheritAssetVisuals !== false && surfaceOpacity(s, frame.self) < 1);
+    const inheritedOpacity = (p: typeof worldAssets[number], floor = assetElevation(p)) => {
+      const a = this.world.authoring.assets.get(p.assetId)!;
+      return bridgeAssetOpacity({ x: p.x, y: p.y, width: a.columns, height: a.rows }, floor, fadingBridges);
+    };
     const deckParts = worldAssets.flatMap(p => {
       const a = this.world.authoring.assets.get(p.assetId)!;
       return placedGeometry(this.world.elevation.assetGeometry(a), p.x, p.y, assetElevation(p), p.id).surfaces.map(s => ({ p, s }));
@@ -235,6 +254,7 @@ export class Renderer {
       if (overhead && !fade.annotated) return;
       const start=perf.begin();assetDraws++;
       ctx.save();
+      ctx.globalAlpha *= inheritedOpacity(p);
       // Draw the upper surfaces in their own floor pass, leaving the rest at the asset base.
       const localSurfaces=this.world.elevation.assetGeometry(a).surfaces;
       if (localSurfaces.length) {
@@ -260,7 +280,7 @@ export class Renderer {
       if(overhead&&(!fade.annotated||a.layer==='ground'))return;
       ctx.save();ctx.beginPath();ctx.rect(s.x*TILE_SIZE,s.y*TILE_SIZE,s.width*TILE_SIZE,s.height*TILE_SIZE);ctx.clip();
       if(fade.annotated&&a.layer!=='ground')clipAssetCells(ctx,a,p,TILE_SIZE,cell=>(cell.visibility!=='normal')===overhead);
-      if(frame.self&&elevationOf(frame.self)<s.elevation&&frame.self.x>=s.x*TILE_SIZE&&frame.self.x<(s.x+s.width)*TILE_SIZE&&frame.self.y>=s.y*TILE_SIZE&&frame.self.y<(s.y+s.height)*TILE_SIZE)ctx.globalAlpha=.35;
+      ctx.globalAlpha *= Math.min(surfaceOpacity(s, frame.self), inheritedOpacity(p, s.elevation));
       this.worldAssetArt.draw(ctx,a,p,1,TILE_SIZE,frame.time,fade.traversable,fade.hiding);ctx.restore();
     };
     perf.end('map-assets-setup',assetsStart);
@@ -410,7 +430,10 @@ export class Renderer {
     const floors = [...new Set([0, ...actors.map(elevationOf), ...events.map(elevationOf), ...worldAssets.map(assetElevation), ...mapSurfaces.map(s => s.elevation), ...surfaceGeometry.stairs.flatMap(s => [s.from, s.to]), ...deckParts.map(d => d.s.elevation), ...frame.projectiles.map(elevationOf), ...pickups.map(elevationOf), ...(frame.groundItems ?? []).map(elevationOf), ...(frame.traps ?? []).map(elevationOf)])].sort((a, b) => a - b);
     for (const floor of [...new Set([...floors, ...cliffs.flatMap(c => cliffFloors.get(c)!)])].sort((a,b) => a-b)) {
     for (const cliff of cliffs) if (cliffFloors.get(cliff)!.includes(floor)) drawTerrainCliff(ctx, cliff, this.worldAssetArt, surfaceGeometry.stairs, { document: this.world.authoring.document, floor, self: frame.self, publicPlayers, time: frame.time, version:this.world });
-    for (const s of mapSurfaces.filter(s => s.elevation === floor)) drawElevationSurface(ctx, s, frame.self);
+    for (const s of mapSurfaces.filter(s => s.elevation === floor)) {
+      if (!s.ground) this.terrain.drawSurfaceMaterial(this.world, ctx, s, frame.time, frame.self);
+      else drawElevationSurface(ctx, s, frame.self);
+    }
     this.terrain.drawElevatedGround(this.world, ctx, mapSurfaces.filter(s => s.elevation === floor), frame.time);
     for (const s of surfaceGeometry.stairs.filter(s => !s.id.includes('/') && (s.from === floor || s.to === floor))) drawElevationStair(ctx, s, floor, this.worldAssetArt);
     for (const part of deckParts.filter(d => d.s.elevation === floor)) paintDeck(part);

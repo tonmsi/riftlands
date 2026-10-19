@@ -11,6 +11,9 @@ import type { RenderBounds, TerrainViewport } from './render-types';
 import { performanceLog as perf } from '../core/performance-log';
 import type { WorldSurface } from '../../shared/elevation';
 import type { CoastMotionArt } from './coast-motion';
+import { surfaceOpacity } from './bridge-visibility';
+import type { Elevated } from '../../shared/elevation';
+import type { Vec2 } from '../../shared/types';
 const DEFAULT_PAINTING = defaultWorldPainting();
 const DEFAULT_COAST_MOTION=defaultCoastMotion();
 type SurfaceKind='grass'|'path'|'mud'|'stone'|'water'|'snow'|'ice';
@@ -62,6 +65,11 @@ export class TerrainRenderer {
   private sampleRevision=-1;
   private sampleLock=-1;
   private samplePainting?:WorldPainting;
+  private sampleMaterial?: TileKind;
+  private surfacePainter?: TerrainRenderer;
+  private surfaceMaterialWorld?: World;
+  private surfaceMaterialPainting?: WorldPainting;
+  private readonly surfaceMaterialCache = new Map<string, { canvas: HTMLCanvasElement; left: number; top: number; scale: number }>();
   private readonly surfaceSamples=new Map<string,SurfaceKind|null>();
   private readonly colorSamples=new Map<string,string>();
   private readonly temperatureSamples=new Map<string,number>();
@@ -76,11 +84,12 @@ export class TerrainRenderer {
     this.spritesReady = Promise.resolve();
   }
   invalidate(): void {
+    this.surfaceMaterialCache.clear(); this.surfacePainter?.invalidate();
     for(const canvas of [this.terrainCache?.canvas,this.preparation?.cache.canvas,this.spareCanvas])if(canvas){canvas.width=canvas.height=0;}
     this.terrainCache=undefined;this.preparation=undefined;this.spareCanvas=undefined;this.previousCamera=undefined;
     this.maskedTerrain.motion.clear();this.cacheReason='explicit-invalidation';
   }
-  dispose():void {this.invalidate();this.clearSamples();this.sampleWorld=undefined;}
+  dispose():void {this.invalidate();this.surfacePainter?.dispose();this.surfacePainter=undefined;this.clearSamples();this.sampleWorld=undefined;this.surfaceMaterialWorld=undefined;this.surfaceMaterialPainting=undefined;}
   private clearSamples():void {this.surfaceSamples.clear();this.colorSamples.clear();this.temperatureSamples.clear();}
   private outsideLocalMap(tx: number, ty: number): boolean {
     const interior = this.activeWorld?.authoring.document.interiorBounds;
@@ -162,7 +171,7 @@ export class TerrainRenderer {
       this.lockRevision = world.lockRevision;
       this.cacheReason='boss-lock-revision';
     }
-    const scale = view.dpr * view.zoom;
+    const scale = view.dpr * (view.rasterZoom ?? view.zoom);
     const left = view.camera.x - view.width / (2 * view.zoom);
     const top = view.camera.y - view.height / (2 * view.zoom);
     const right = left + view.width / view.zoom, bottom = top + view.height / view.zoom;
@@ -213,8 +222,10 @@ export class TerrainRenderer {
       const x = Math.floor((left - margin) * scale) / scale;
       const y = Math.floor((top - margin) * scale) / scale;
       const canvas = cache?.canvas ?? document.createElement('canvas');
-      const width = Math.ceil((view.width / view.zoom + margin * 2) * scale) + 1;
-      const height = Math.ceil((view.height / view.zoom + margin * 2) * scale) + 1;
+      // Reserve the widest elevation view so animated zoom also preserves scroll reuse.
+      const cacheZoom=view.rasterZoom?Math.min(view.rasterZoom*.88,view.zoom):view.zoom;
+      const width = Math.ceil((view.width / cacheZoom + margin * 2) * scale) + 1;
+      const height = Math.ceil((view.height / cacheZoom + margin * 2) * scale) + 1;
       const dx = cache ? Math.round((cache.left - x) * scale) : 0;
       const dy = cache ? Math.round((cache.top - y) * scale) : 0;
       const reuse = cache?.world === world && cache.scale === scale &&
@@ -283,12 +294,45 @@ export class TerrainRenderer {
     else this.drawTerrain(world, time, ctx, { left: Math.min(...ground.map(s=>s.x))*TILE_SIZE, top: Math.min(...ground.map(s=>s.y))*TILE_SIZE, right: Math.max(...ground.map(s=>s.x+s.width))*TILE_SIZE, bottom: Math.max(...ground.map(s=>s.y+s.height))*TILE_SIZE });
     ctx.restore();
   }
-  drawTerrain(world: World, time: number, ctx: CanvasRenderingContext2D, bounds: RenderBounds): void {
+  /** Render deck artwork with the same palette, climate and textures as ordinary terrain. */
+  drawSurfaceMaterial(world: World, ctx: CanvasRenderingContext2D, surface: WorldSurface, time: number, viewer?: (Vec2 & Elevated) | null): void {
+    if (surface.transparent) return;
+    if (this.surfaceMaterialWorld !== world || this.surfaceMaterialPainting !== world.authoring.document.painting) {
+      this.surfaceMaterialCache.clear(); this.surfaceMaterialWorld = world; this.surfaceMaterialPainting = world.authoring.document.painting;
+    }
+    const transform = ctx.getTransform(), inverse = transform.inverse();
+    const corners = [[0,0],[ctx.canvas.width,0],[0,ctx.canvas.height],[ctx.canvas.width,ctx.canvas.height]]
+      .map(([x,y]) => ({ x: inverse.a*x+inverse.c*y+inverse.e, y: inverse.b*x+inverse.d*y+inverse.f }));
+    const left = Math.max(surface.x*TILE_SIZE, Math.min(...corners.map(p=>p.x)));
+    const top = Math.max(surface.y*TILE_SIZE, Math.min(...corners.map(p=>p.y)));
+    const right = Math.min((surface.x+surface.width)*TILE_SIZE, Math.max(...corners.map(p=>p.x)));
+    const bottom = Math.min((surface.y+surface.height)*TILE_SIZE, Math.max(...corners.map(p=>p.y)));
+    if (right <= left || bottom <= top) return;
+    const bounds = { left: Math.floor(left/TILE_SIZE)*TILE_SIZE, top: Math.floor(top/TILE_SIZE)*TILE_SIZE,
+      right: Math.ceil(right/TILE_SIZE)*TILE_SIZE, bottom: Math.ceil(bottom/TILE_SIZE)*TILE_SIZE };
+    const scale = Math.max(1, Math.min(2, Math.ceil(Math.hypot(transform.a, transform.b)))), material = surface.terrain ?? 'grass';
+    const key = `${world.authoringRevision}:${world.lockRevision}:${material}:${scale}:${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}`;
+    let cached = this.surfaceMaterialCache.get(key);
+    if (!cached) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.ceil((bounds.right-bounds.left)*scale)); canvas.height = Math.max(1, Math.ceil((bounds.bottom-bounds.top)*scale));
+      const paint = canvas.getContext('2d')!; paint.setTransform(scale,0,0,scale,-bounds.left*scale,-bounds.top*scale);
+      this.surfacePainter ??= new TerrainRenderer(paint, this.localDungeons);
+      this.surfacePainter.drawTerrain(world, time, paint, bounds, material);
+      cached = { canvas, left: bounds.left, top: bounds.top, scale };
+      remember(this.surfaceMaterialCache, key, cached, 8);
+    }
+    ctx.save(); ctx.globalAlpha *= surfaceOpacity(surface, viewer);
+    ctx.beginPath(); ctx.rect(surface.x*TILE_SIZE, surface.y*TILE_SIZE, surface.width*TILE_SIZE, surface.height*TILE_SIZE); ctx.clip();
+    ctx.drawImage(cached.canvas, cached.left, cached.top, cached.canvas.width/cached.scale, cached.canvas.height/cached.scale);
+    ctx.restore();
+  }
+  drawTerrain(world: World, time: number, ctx: CanvasRenderingContext2D, bounds: RenderBounds, material?: TileKind): void {
     const requestedBounds=bounds;
     this.activeWorld = world;
     this.painting = world.authoring.document.painting ?? DEFAULT_PAINTING;
-    if(this.sampleWorld!==world||this.sampleRevision!==world.authoringRevision||this.sampleLock!==world.lockRevision||this.samplePainting!==this.painting){
-      this.clearSamples();this.sampleWorld=world;this.sampleRevision=world.authoringRevision;this.sampleLock=world.lockRevision;this.samplePainting=this.painting;
+    if(this.sampleWorld!==world||this.sampleRevision!==world.authoringRevision||this.sampleLock!==world.lockRevision||this.samplePainting!==this.painting||this.sampleMaterial!==material){
+      this.clearSamples();this.sampleWorld=world;this.sampleRevision=world.authoringRevision;this.sampleLock=world.lockRevision;this.samplePainting=this.painting;this.sampleMaterial=material;
     }
     this.maskedTerrain.motion.configure(world,this.painting);
     const coast=this.painting.waterCoast??DEFAULT_WATER_COAST,motion=coast.motion??DEFAULT_COAST_MOTION;
@@ -309,14 +353,15 @@ export class TerrainRenderer {
       return cached??remember(this.temperatureSamples,key,world.getTemperature(tx,ty),4096);
     };
     const scenery = (tile: TileKind) => tile === 'rock' || tile === 'bush';
+    const tileAt = (tx: number, ty: number) => material ?? world.getTile(tx, ty);
 
     const rawSurfaceAt = (tx: number, ty: number): SurfaceKind | null => {
       if (this.outsideLocalMap(tx, ty)) return null;
       if (world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return null;
-      const tile = world.getTile(tx, ty);
+      const tile = tileAt(tx, ty);
       if (scenery(tile)) return null;
       const dungeon = world.mode === 'world' ? this.dungeonAt(tx, ty) : undefined;
-      if (dungeon && tile === dungeon.layout.floor) return 'stone';
+      if (!material && dungeon && tile === dungeon.layout.floor) return 'stone';
       return tile === 'path' || tile === 'mud' || tile === 'water' || tile === 'snow' || tile === 'ice'
         ? tile
         : 'grass';
@@ -357,7 +402,7 @@ export class TerrainRenderer {
       const cached=surfaces.get(key);if(cached!==undefined)return cached;
       if (this.outsideLocalMap(tx, ty)) return remember(surfaces,key,null);
       const raw = rawSurfaceAt(tx, ty);
-      const surface = raw ?? (scenery(world.getTile(tx, ty)) ? inferredScenerySurface(tx, ty) : null);
+      const surface = raw ?? (scenery(tileAt(tx, ty)) ? inferredScenerySurface(tx, ty) : null);
       return remember(surfaces,key,surface);
     };
 
@@ -469,7 +514,7 @@ export class TerrainRenderer {
           ctx.fillRect(tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE + 0.4, TILE_SIZE + 0.4);
           continue;
         }
-        const tile = world.getTile(tx, ty);
+        const tile = tileAt(tx, ty);
         const x = tx * TILE_SIZE, y = ty * TILE_SIZE;
         const dungeon = world.mode === 'world' ? this.dungeonAt(tx, ty) : undefined;
         const variation = noise(tx, ty);
@@ -629,7 +674,7 @@ export class TerrainRenderer {
     const getScenery = (tx: number, ty: number): TileKind => {
       if (this.outsideLocalMap(tx, ty)) return 'grass';
       if (world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7)) return 'grass';
-      return world.getTile(tx, ty);
+      return tileAt(tx, ty);
     };
 
     for (let ty = Math.floor(bounds.top / TILE_SIZE / 2) * 2; ty <= Math.floor(bounds.bottom / TILE_SIZE); ty += 2) {

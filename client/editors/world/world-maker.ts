@@ -68,7 +68,7 @@ const assetCanvas = el<HTMLCanvasElement>('asset-grid');
 const assetCamera = new AssetGridCamera();
 let cameraAsset = '';
 const assetCatalog = new WorldAssetCatalog(el('asset-list'), id => {
-    void settleGesture().then(() => { activeAsset = id; selected = null; selectTool('asset'); refresh(); }).catch(report);
+    void settleGesture().then(() => { activeAsset = id; selected = null; selectedGenerated = undefined; warpEditor.clearSelection(); selectTool('asset'); refresh(); el('asset-inspector').scrollIntoView({ block: 'start' }); }).catch(report);
 });
 const art = new WorldAssetArt(() => schedule());
 let view = { x: 0, y: 0, scale: 24 }, pointerTile: Vec2 | null = null;
@@ -284,6 +284,9 @@ function refresh(): void {
     if (selected && selected.kind !== 'zone')
         refreshSelection();
     el('asset-inspector').hidden = !!selected || !active() || (tool !== 'asset' && !(tool.startsWith('elevation-') && elevationEditor.editsAsset())) || warpEditor.hasSelection();
+    const cliffVariant = CLIFF_VARIANTS.find(variant => draft.cliffAssets?.[variant] === activeAsset);
+    cliffPanel.hidden = el('asset-inspector').hidden || !cliffVariant;
+    if (cliffVariant) set('cliff-variant', cliffVariant);
     el('elevation-inspector').hidden = !!selected || warpEditor.hasSelection() || (tool === 'asset');
     el('inspector-empty').hidden = !!selected || warpEditor.hasSelection() || !el('elevation-inspector').hidden || ((tool === 'asset' || tool.startsWith('elevation-')) && !!active());
     if (!selected && active())
@@ -385,7 +388,7 @@ function refreshSelection(): void {
         set('entity-pivot', e.pivotY);
         const b = document.createElement('button');
         b.textContent = 'Modifica asset nel catalogo';
-        b.onclick = () => { activeAsset = e.assetId; selected = null; refresh(); schedule(); };
+        b.onclick = () => { activeAsset = e.assetId; selected = null; selectedGenerated = undefined; warpEditor.clearSelection(); selectTool('asset'); refresh(); el('asset-inspector').scrollIntoView({ block: 'start' }); schedule(); };
         el('selection-fields').append(b);
     }
 }

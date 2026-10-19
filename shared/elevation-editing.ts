@@ -14,6 +14,19 @@ export type GeometryOwner = Pick<WorldDocument, 'geometry'> | Pick<WorldAsset, '
 export type GeometryKind = 'surfaces' | 'solids' | 'stairs';
 export type GeometryShape = WorldSurface | WorldSolid | WorldStair;
 export function editGeometry(owner: GeometryOwner): ElevationGeometry { return owner.geometry ??= emptyGeometry(); }
+/** Keep existing floors intact and fill only the missing parts of a suspended deck. */
+export function addSuspendedSurface(owner: GeometryOwner, surface: WorldSurface): WorldSurface[] {
+  const g = editGeometry(owner);
+  let parts = [surface];
+  for (const existing of g.surfaces) {
+    if (existing.id === surface.id || existing.elevation !== surface.elevation) continue;
+    parts = parts.flatMap(part => subtractRect(part, existing));
+    if (!parts.length) break;
+  }
+  const fragments = parts.map((part, i) => ({ ...part, id: i === 0 ? surface.id : `bridge-fragment-${crypto.randomUUID()}` }));
+  g.surfaces.push(...fragments);
+  return fragments;
+}
 /** The chosen PNG supplies the graphics; its two halves belong to the linked floors. */
 export function setAssetPassage(asset: WorldAsset, stair: WorldStair): void {
   const g=editGeometry(asset),half=stair.axis==='x'?stair.width/2:stair.height/2;
@@ -34,6 +47,11 @@ export function removeGeometry(owner: GeometryOwner, kind: GeometryKind, id: str
 export function updateGeometry(owner: GeometryOwner, kind: GeometryKind, shape: GeometryShape): void {
   const g = editGeometry(owner), list = g[kind] as GeometryShape[];
   const i = list.findIndex(s => s.id === shape.id); if (i < 0) return;
+  if (kind === 'surfaces' && 'elevation' in shape && !shape.ground) {
+    g.surfaces.splice(i, 1);
+    addSuspendedSurface(owner, shape);
+    return;
+  }
   list[i] = shape;
   if (kind === 'surfaces') {
     const mass = g.solids.find(s => s.id === `${shape.id}-mass`);

@@ -117,6 +117,10 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
                 if (part.painted && part.ground && groundBitmap) {
                     paint.save(); paint.beginPath(); paint.rect(part.x*TILE_SIZE,part.y*TILE_SIZE,part.width*TILE_SIZE,part.height*TILE_SIZE); paint.clip();
                     paint.setTransform(1,0,0,1,0,0); paint.drawImage(groundBitmap,0,0); paint.restore();
+                } else if (!part.ground) {
+                    let painter = terrainPainters.get(canvas);
+                    if (!painter) { painter = new TerrainRenderer(paint); terrainPainters.set(canvas, painter); }
+                    painter.drawSurfaceMaterial(world, paint, part, time);
                 } else drawElevationSurface(paint, part);
             }
         for (const stair of geometry.stairs.filter(stair => !stair.id.includes('/'))) {

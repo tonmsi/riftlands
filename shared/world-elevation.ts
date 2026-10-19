@@ -16,17 +16,36 @@ export class WorldElevation {
   private solids = new SpatialIndex<WorldSolid>(rectBounds);
   private stairs = new SpatialIndex<WorldStair>(rectBounds);
   private assetGeometryCache=new Map<string,ElevationGeometry>();
+  private readonly generatedStairs: boolean;
   assetGeometry(asset: WorldAsset): ElevationGeometry {
     let g=this.assetGeometryCache.get(asset.id);
     if(!g){g=assetCellElevationGeometry(asset);this.assetGeometryCache.set(asset.id,g);}return g;
   }
   constructor(private world: World) {
+    this.generatedStairs=world.authoring.document.assets.some(a=>a.generation.enabled&&!!a.geometry?.stairs.length);
     const g = world.authoring.document.geometry;
     for (const s of g?.surfaces ?? []) this.surfaces.add(s);
     for (const s of g?.solids ?? []) this.solids.add(s);
     for (const s of g?.stairs ?? []) this.stairs.add(s);
   }
   baseAt(tx: number, ty: number): number { return this.world.getTile(tx, ty) === 'water' ? -1 : 0; }
+  /** Camera queries must not construct cliff meshes, solids or cell geometry. */
+  stairsIn(bounds: TileBounds): WorldStair[] {
+    const result=this.stairs.query(bounds);
+    if(this.world.mode!=='world')return result;
+    const placements=this.generatedStairs?this.world.assetsIn(bounds,false):this.world.authoring.placements.query(bounds);
+    for(const p of placements) {
+      const stairs=this.world.authoring.assets.get(p.assetId)?.geometry?.stairs;
+      if(!stairs?.length)continue;
+      const base=p.baseElevation??this.terrainElevationAt(p.x+.5,p.y+.5);
+      for(const s of stairs) {
+        const x=p.x+s.x,y=p.y+s.y;
+        if(x<bounds.right&&x+s.width>bounds.left&&y<bounds.bottom&&y+s.height>bounds.top)
+          result.push({...s,id:`${p.id}/${s.id}`,x,y,from:base+s.from,to:base+s.to});
+      }
+    }
+    return result;
+  }
   authoredGeometry(bounds: TileBounds): ElevationGeometry {
     const result:ElevationGeometry={surfaces:this.surfaces.query(bounds),solids:this.solids.query(bounds),stairs:this.stairs.query(bounds)};
     for(const c of this.cliffs(bounds))for(const part of c.parts) {

@@ -1,5 +1,5 @@
 import { emptyGeometry, validElevation, validGeometry } from '../../../shared/elevation';
-import { editGeometry, removeGeometry, updateGeometry, setAssetPassage, tiledStairRect, type GeometryKind, type GeometryOwner, type GeometryShape } from '../../../shared/elevation-editing';
+import { addSuspendedSurface, editGeometry, removeGeometry, updateGeometry, setAssetPassage, tiledStairRect, type GeometryKind, type GeometryOwner, type GeometryShape } from '../../../shared/elevation-editing';
 import type { WorldAsset, WorldDocument } from '../../../shared/world-schema';
 import type { TileKind, Vec2 } from '../../../shared/types';
 import { drawGeometryOverlay } from '../../render/elevation-art';
@@ -42,7 +42,7 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
     <div id="elevation-material-slot"></div>
     <button id="elevation-draw-terrain" class="primary wide">Disegna terreno</button>
     <ol class="elevation-steps"><li>Scegli le quote e il materiale.</li><li>Premi «Disegna terreno».</li><li>Trascina sulla mappa per creare l’area.</li></ol>
-    <p class="hint">Il terreno viene aggiunto quando rilasci il mouse. Per raggiungerlo, collega i due piani con una scala.</p>
+    <p id="elevation-create-hint" class="hint">Il terreno viene aggiunto quando rilasci il mouse. Per raggiungerlo, collega i due piani con una scala.</p>
   </div>
   <p id="elevation-action-guide" class="elevation-action-guide" role="status"></p>
   <div id="elevation-draw-settings" class="fields"></div>
@@ -62,11 +62,15 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
   panel.querySelector('#elevation-status')!.remove(); panel.querySelector('#elevation-rules-hint')!.remove();
   const advanced = document.createElement('details'); advanced.id = 'elevation-advanced';
   advanced.innerHTML = '<summary>Ponti, scale e forme avanzate</summary>';
+  advanced.open = true;
   advanced.append(panel.querySelector('#elevation-new-terrain')!, panel.querySelector('.tool-grid')!, panel.querySelector('#elevation-drag-hint')!);
   panel.append(advanced);
   const stairTool = advanced.querySelector<HTMLButtonElement>('[data-elevation-tool="stair"]')!;
   stairTool.textContent = '▤ Scala / passaggio · sali e scendi'; stairTool.classList.add('wide');
   panel.insertBefore(stairTool, advanced);
+  const bridgeTool = advanced.querySelector<HTMLButtonElement>('[data-elevation-tool="bridge"]')!;
+  bridgeTool.textContent = 'Ponte / passaggio sospeso'; bridgeTool.classList.add('wide');
+  panel.insertBefore(bridgeTool, stairTool);
   const viewSelect = panel.querySelector<HTMLSelectElement>('#elevation-view')!;
   viewSelect.add(new Option('Solo quota 0 · terra', 'floor:0'), 1);
   viewSelect.add(new Option('Solo quota 1', 'floor:1'), 2);
@@ -84,6 +88,9 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
   const quotaLabel = panel.querySelector('#elevation-active')!.closest('label')!;
   quotaLabel.classList.add('elevation-toolbar'); root.querySelector('.map-toolbar')!.insertBefore(quotaLabel, root.querySelector('#tool-label'));
   const get = (id: string) => root.querySelector<HTMLInputElement | HTMLSelectElement>(`#elevation-${id}`)!;
+  (get('material') as HTMLSelectElement).add(new Option('Trasparente · pavimento invisibile', 'transparent'));
+  inspector.querySelector('#elevation-material-slot')!.insertAdjacentHTML('afterend', '<label id="elevation-inherit-label" class="check"><input id="elevation-inherit-assets" type="checkbox" checked>Gli asset sopra ereditano la dissolvenza del ponte</label><p id="elevation-inherit-hint" class="hint">Vale solo per le istanze alla quota del ponte e nella sua area. Disattiva per conservare il comportamento visivo dei singoli asset. Il materiale Trasparente nasconde solo il pavimento.</p>');
+  const inheritAssets = get('inherit-assets') as HTMLInputElement;
   const n = (id: string) => Number(get(id).value);
   const set = (id: string, value: unknown) => { get(id).value = String(value); };
   inspector.querySelector('#elevation-stair-size-hint')!.insertAdjacentHTML('afterend','<label id="elevation-stair-appearance-label">Grafica del collegamento<select id="elevation-stair-appearance"><option value="passage">Passaggio · conserva terreno / PNG</option><option value="stone">Scala in pietra</option></select></label>');
@@ -140,7 +147,8 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
     if (!shape) return;
     for (const field of ['x', 'y', 'width', 'height'] as const) set(field, shape[field]);
     if ('elevation' in shape) {
-      set('active', shape.elevation); set('target', shape.elevation); set('material', shape.terrain ?? 'grass');
+      set('active', shape.elevation); set('target', shape.elevation); set('material', shape.transparent ? 'transparent' : shape.terrain ?? 'grass');
+      inheritAssets.checked = shape.inheritAssetVisuals !== false;
       set('create-base', owner().geometry?.solids.find(s => s.id === `${shape!.id}-mass`)?.base ?? 0);
     }
     if ('base' in shape) { set('from', shape.base); set('to', shape.top); }
@@ -165,6 +173,20 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
     list.value = selection; selection = list.value;
     const current = selection ? selected().shape : undefined, tool = mode();
     const isSurface = current && 'elevation' in current;
+    const suspended = isSurface ? !current.ground : tool === 'bridge' || tool === 'surface';
+    inspector.querySelector<HTMLElement>('#elevation-inherit-label')!.hidden = !suspended;
+    inspector.querySelector<HTMLElement>('#elevation-inherit-hint')!.hidden = !suspended;
+    get('material').querySelector<HTMLOptionElement>('[value="transparent"]')!.disabled = !suspended;
+    if (!suspended && get('material').value === 'transparent') set('material', 'grass');
+    get('create-base').closest('label')!.hidden = suspended;
+    get('target').closest('label')!.firstChild!.textContent = suspended ? 'Quota del pavimento sospeso' : 'Quota del nuovo terreno';
+    inspector.querySelector('#elevation-create-card > p')!.textContent = suspended
+      ? 'Scegli la quota del ponte. Il pavimento si raccorda alle superfici esistenti alla stessa quota, lasciando libero lo spazio sotto.'
+      : 'Per creare il primo rialzo usa base 0 e quota 1.';
+    inspector.querySelector<HTMLElement>('.elevation-steps')!.hidden = suspended;
+    inspector.querySelector('#elevation-create-hint')!.textContent = suspended
+      ? 'Disegna anche sopra gli imbocchi: le parti già coperte da un pavimento alla stessa quota vengono escluse automaticamente. Per raccordare un ponte esistente premi «Aggiorna selezione».'
+      : 'Il terreno viene aggiunto quando rilasci il mouse. Per raggiungerlo, collega i due piani con una scala.';
     const parameters = inspector.querySelector<HTMLElement>('#elevation-draw-settings')!;
     parameters.hidden = current ? 'elevation' in current : !['solid', 'stair'].includes(tool);
     inspector.querySelector<HTMLElement>('#elevation-create-card')!.hidden = !parameters.hidden;
@@ -183,7 +205,7 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
     details.hidden = !g.surfaces.length && !g.solids.length && !g.stairs.length;
     if (propertiesSelection !== selection) { details.open = !!selection; propertiesSelection = selection; }
     inspector.querySelector('#elevation-selection-summary')!.textContent = current
-      ? `${'elevation' in current ? `Terreno a quota ${current.elevation}` : 'axis' in current ? `Scala ${current.from} → ${current.to}` : `Ostacolo da ${current.base} a ${current.top}`} · ${current.width} × ${current.height} caselle. Per cambiarlo usa «Aggiorna selezione».`
+      ? `${'elevation' in current ? `${current.ground ? 'Terreno' : 'Pavimento sospeso'} a quota ${current.elevation}` : 'axis' in current ? `Scala ${current.from} → ${current.to}` : `Ostacolo da ${current.base} a ${current.top}`} · ${current.width} × ${current.height} caselle. Per cambiarlo usa «Aggiorna selezione».`
       : 'Nessuna area selezionata. Puoi crearne una nuova oppure usare «Seleziona forma».';
     const terrainButton = inspector.querySelector<HTMLButtonElement>('#elevation-draw-terrain')!;
     terrainButton.textContent = tool === 'bridge' ? 'Disegna passaggio sospeso' : tool === 'surface' ? 'Disegna superficie' : 'Disegna terreno';
@@ -192,7 +214,7 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
       : tool === 'solid' ? `Trascina l’ingombro dell’ostacolo. Bloccherà i livelli da ${n('from')} fino a ${n('to') - 1}.`
       : tool === 'configure' || needsPrepare ? 'Imposta il terreno qui sopra, poi premi «Disegna terreno» e trascina sulla mappa.'
       : tool === 'raise' ? `Pronto: trascina ${isAsset() ? 'nell’anteprima dell’oggetto' : 'sulla mappa'} per creare terreno a quota ${n('active')}, con base ${n('from')}.`
-      : tool === 'bridge' ? `Trascina il passaggio a quota ${n('active')}. Lo spazio sotto resta libero.`
+      : tool === 'bridge' ? `Trascina il ponte a quota ${n('active')} includendo i bordi dei rilievi. Il ponte si ritaglia sulle superfici già presenti; lo spazio sotto resta libero.`
       : tool === 'surface' ? `Trascina una superficie calpestabile a quota ${n('active')}.`
       : 'Per iniziare: imposta quota 1, base 0 ed erba, poi premi «Disegna terreno».';
     inspector.querySelector<HTMLButtonElement>('#elevation-add-stair')!.hidden = !isSurface || current.elevation === (owner().geometry?.solids.find(s => s.id === `${current.id}-mass`)?.base ?? 0);
@@ -247,7 +269,7 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
   inspector.querySelector<HTMLButtonElement>('#elevation-update')!.onclick = () => run(() => {
     const { kind, shape } = selected(); if (!shape) return;
     const r = { id: shape.id, x: n('x'), y: n('y'), width: n('width'), height: n('height') };
-    const next = 'elevation' in shape ? { ...r, elevation: n('target'), terrain: get('material').value as TileKind, ground: shape.ground, painted: shape.painted }
+    const next = 'elevation' in shape ? { ...shape, ...r, elevation: n('target'), terrain: get('material').value === 'transparent' ? shape.terrain ?? 'grass' : get('material').value as TileKind, transparent: get('material').value === 'transparent', ...(!shape.ground ? { inheritAssetVisuals: inheritAssets.checked } : {}) }
       : 'base' in shape ? { ...r, base: n('from'), top: n('to') }
       : { ...r, x: Math.floor(r.x), y: Math.floor(r.y), width: Math.max(get('axis').value === 'x' && shape.id!=='asset-passage' ? 2 : 1, Math.round(r.width)), height: Math.max(get('axis').value === 'y' && shape.id!=='asset-passage' ? 2 : 1, Math.round(r.height)), from: n('from'), to: n('to'), axis: get('axis').value as 'x' | 'y', appearance:get('stair-appearance').value as 'stone'|'passage', tiled: shape.id==='asset-passage'?undefined:true };
     const copy = structuredClone(owner()); updateGeometry(copy, kind, next);
@@ -332,7 +354,10 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
         if (!validElevation(n('active'))) throw new Error('Quota non valida.');
         const g = editGeometry(owner()), m = mode();
         if (m === 'raise' || m === 'bridge' || m === 'surface') {
-          g.surfaces.push({ ...r, elevation: n('active'), ground: m === 'raise', terrain: get('material').value as TileKind });
+          const surface = { ...r, elevation: n('active'), ground: m === 'raise', terrain: (get('material').value === 'transparent' ? 'grass' : get('material').value) as TileKind,
+            ...(m !== 'raise' ? { transparent: get('material').value === 'transparent', inheritAssetVisuals: inheritAssets.checked } : {}) };
+          if (m === 'raise') g.surfaces.push(surface);
+          else addSuspendedSurface(owner(), surface);
           if (m === 'raise') g.solids.push({ ...r, id: `${r.id}-mass`, base: n('from'), top: n('active') });
           selection = `surfaces|${r.id}`;
         } else if (m === 'solid') { g.solids.push({ ...r, base: n('from'), top: n('to') }); selection = `solids|${r.id}`; }
@@ -358,7 +383,16 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
     draw(ctx: CanvasRenderingContext2D, asset: boolean) {
       if (!host.tool().startsWith('elevation-') && !root.querySelector<HTMLInputElement>('#show-cells')?.checked) return;
       const o = asset ? host.asset() : host.document();
-      if (o?.geometry) drawGeometryOverlay(ctx, filterGeometry(o.geometry, visibility()), n('active'), true, selection.split('|')[1], !!root.querySelector<HTMLInputElement>('#show-cells')?.checked);
+      if (o?.geometry) {
+        const showCells = !!root.querySelector<HTMLInputElement>('#show-cells')?.checked;
+        const geometry = { ...filterGeometry(o.geometry, visibility()) }, selectedId = selection.split('|')[1];
+        if (!showCells) {
+          geometry.surfaces = geometry.surfaces.filter(s => s.id === selectedId);
+          geometry.solids = geometry.solids.filter(s => s.id === selectedId);
+          geometry.stairs = geometry.stairs.filter(s => s.id === selectedId);
+        }
+        drawGeometryOverlay(ctx, geometry, n('active'), true, selectedId, showCells);
+      }
       if (dragging && (dragging.target === assetCanvas) === asset) {
         const a = dragging.start, b = dragging.end;
         const r = mode() === 'stair' ? tiledStairRect(a, b, get('axis').value as 'x' | 'y', n('stair-width'), n('stair-length'))

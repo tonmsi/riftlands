@@ -128,6 +128,33 @@ L'aggancio è a ¼ di tile e i campi numerici permettono correzioni più fini.
 | Ostacolo | Rettangolo solido tra Base inclusa e Sommità esclusa |
 | Scala | Corridoio bidirezionale tra Quota A e Quota B |
 
+I pulsanti **Ponte / passaggio sospeso** e **Scala / passaggio** sono sempre esposti
+nel pannello Costruisci; **Ponti, scale e forme avanzate** parte aperto.
+Per un ponte imposta soltanto la quota del pavimento sospeso, per esempio 1, e
+trascina l'area includendo i bordi dei rilievi. Le parti già occupate da superfici
+alla stessa quota vengono escluse automaticamente, conservando i pavimenti
+esistenti e il passaggio sotto la campata. Gli imbocchi irregolari possono produrre
+più rettangoli selezionabili. Per correggere un ponte già sovrapposto a un rilievo,
+selezionalo e premi **Aggiorna selezione**, poi **Applica al gioco**.
+Il pannello **Bordi automatici · cliff-grid** appare soltanto quando si modifica
+un asset associato a un bordo automatico; selezionare un altro asset apre subito
+le sue proprietà.
+
+Il materiale **Trasparente · pavimento invisibile** nasconde la grafica del ponte,
+lasciando intatti quota, appoggio e sottopassaggio. Puoi sovrapporre PNG alla quota
+del ponte oppure lasciarlo invisibile per un passaggio segreto. Erba, strada, neve
+e gli altri materiali dei ponti usano lo stesso renderer, palette e texture del
+terreno normale, senza il vecchio riempimento piatto.
+La spunta **Gli asset sopra ereditano la dissolvenza del ponte**, attiva di default,
+riduce al 35% l'opacità delle istanze alla quota del ponte e sovrapposte alla sua
+area quando il PG passa sotto. Il PNG rimane visibile anche se il pavimento è
+Trasparente. Disattivando la spunta sul ponte, le istanze conservano le proprie
+regole visive. Le istanze sotto il ponte o fuori dall'area non ereditano l'effetto;
+il catalogo non viene modificato. Le opzioni sono conservate nel salvataggio/export.
+I numeri delle quote e le maschere di tutte le forme compaiono soltanto con
+**Collisioni / visibilità**. Durante la modifica resta il contorno della forma
+selezionata e l'anteprima del trascinamento.
+
 Le scale seguono X da sinistra a destra oppure Y dall'alto verso il basso;
 invertire A e B inverte salita e discesa. La quota cambia sulla linea centrale.
 La larghezza deve consentire il passaggio dell'intero ingombro del PG.
@@ -203,6 +230,16 @@ Il rendering procede per quota e poi per profondità Y. Le regioni di superficie
 degli asset vengono ritagliate dall'immagine e disegnate al proprio piano, fra chi
 passa sotto e chi sta sopra. La regione che copre il PG locale diventa trasparente.
 Il numero di quota non sposta automaticamente lo sprite sullo schermo.
+
+La camera allarga la vista salendo e la riavvicina scendendo: circa il 3% per il primo
+piano, con un limite del 12% anche sulle montagne molto alte. Nei collegamenti
+scala/passaggio, anche dentro un PNG, interpola la quota lungo la lunghezza e
+l'asse configurati, poi ammorbidisce la variazione nel tempo. Il cambio discreto
+di piano al centro non produce scatti. L'effetto è solo visivo e viene disattivato
+con la preferenza di sistema per ridurre le animazioni.
+La risoluzione della cache del terreno resta stabile durante lo zoom: la bitmap
+viene riutilizzata e non ridisegnata per ogni variazione della camera. La camera
+interroga solo le scale vicine, senza generare bordi o collisioni dell'intero asset.
 
 Le forme sono rettangolari. Per immagini con ringhiere o parti che devono coprire
 il PG sul piano superiore usare asset separati con pivot appropriato. Non viene

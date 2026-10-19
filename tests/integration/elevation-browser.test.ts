@@ -7,6 +7,7 @@ import { chromium, expect } from '@playwright/test';
 import { createServer } from 'vite';
 import { startWorldStudio } from '../../scripts/world-studio-server';
 import { newWorldDocument, newWorldAsset, resizeWorldAsset, parseWorldDocument } from '../../shared/world-schema';
+import { installCliffAssets } from '../../shared/cliff-assets';
 
 test('World Maker authors fractional elevated terrain and stairs, preserves undo and applies the geometry', { timeout: 90_000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'riftlands-elevation-')), root = resolve('.');
@@ -14,6 +15,7 @@ test('World Maker authors fractional elevated terrain and stairs, preserves undo
   const document = newWorldDocument();
   for (let y = -10; y <= 10; y++) for (let x = -10; x <= 10; x++) document.tiles.push({ x, y, terrain: 'grass' });
   const asset = newWorldAsset('bridge', 'Ponte', '/world-assets/bridge.svg'); resizeWorldAsset(asset, 4, 4); document.assets.push(asset);
+  installCliffAssets(document);
   await Promise.all([cp(join(root, 'client'), join(directory, 'client'), { recursive: true }), cp(join(root, 'shared'), join(directory, 'shared'), { recursive: true }),
     cp(join(root, 'world-maker.html'), join(directory, 'world-maker.html')), cp(join(root, 'public/world-assets/montagna/cliff-grid'), join(directory, 'public/world-assets/montagna/cliff-grid'), { recursive: true }),
     cp(join(root, 'public/world-assets/dungeon'), join(directory, 'public/world-assets/dungeon'), { recursive: true }),
@@ -64,7 +66,7 @@ test('World Maker authors fractional elevated terrain and stairs, preserves undo
     await page.screenshot({ path: join(root, 'artifacts/elevation-material-brush.png') });
     await page.locator('#undo').click(); await page.locator('#undo').click();
     await page.locator('#elevation-active').fill('0'); await page.locator('#elevation-active').press('Tab');
-    await page.locator('#elevation-advanced > summary').click();
+    await expect(page.locator('#elevation-advanced')).toHaveAttribute('open', '');
     await page.locator('#elevation-new-terrain').click();
     await page.locator('#elevation-target').fill('0');
     await page.locator('#elevation-draw-terrain').click();
@@ -136,7 +138,7 @@ test('World Maker authors fractional elevated terrain and stairs, preserves undo
     await page.locator('#elevation-view').selectOption('all');
     await page.locator('#elevation-active').fill('1'); await page.locator('#elevation-active').press('Tab');
     await page.locator('#elevation-owner').selectOption('asset');
-    await page.locator('#asset-list [data-asset]').first().click();
+    await page.locator('#asset-list [data-asset="bridge"]').click();
     await page.locator('[data-elevation-tool="bridge"]').click();
     await page.locator('#asset-grid').scrollIntoViewIfNeeded();
     const grid = (await page.locator('#asset-grid').boundingBox())!;
@@ -151,6 +153,9 @@ test('World Maker authors fractional elevated terrain and stairs, preserves undo
     // Large archives are read locally; individual images are uploaded separately.
     await page.locator('#world-file').setInputFiles({ name: 'large-world.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(withAsset) + ' '.repeat(50_000_001)) });
     await expect(page.locator('#status')).toContainText('Progetto importato', { timeout: 30_000 });
+    await expect(page.locator('#cliff-asset-controls')).toBeHidden();
+    await page.locator(`#asset-list [data-asset="${document.cliffAssets!['centro-sinistra']}"]`).click();
+    await expect(page.locator('#cliff-asset-controls')).toBeVisible();
     await page.locator('#cliff-variant').selectOption('centro-sinistra'); await page.locator('#cliff-edit').click();
     await expect(page.locator('#asset-inspector')).toBeVisible();
     await expect(page.locator('#asset-name')).toHaveValue('cliff-grid centro-sinistra');
@@ -161,6 +166,7 @@ test('World Maker authors fractional elevated terrain and stairs, preserves undo
     const leftCliff = cliffConfigured.assets.find(a=>a.id===cliffConfigured.cliffAssets!['centro-sinistra'])!;
     assert.equal(leftCliff.cells[0].blocked,false); assert.equal(leftCliff.cells[0].visibility,'hide-fade'); assert.equal(leftCliff.layer,'ground');
     await page.reload(); await expect(page.locator('#status')).toContainText('World Studio pronto');
+    await page.locator(`#asset-list [data-asset="${leftCliff.id}"]`).click();
     await page.locator('#cliff-variant').selectOption('centro-sinistra'); await page.locator('#cliff-edit').click();
     await expect(page.locator('#asset-layer')).toHaveValue('ground');
     await page.locator('#asset-cell-subdivision').selectOption('4');
@@ -312,12 +318,36 @@ test('rendering interleaves underpass actors and shots, bridge deck and upper ac
       const actor = { id: 'under', kind: 'player', name: 'Under', classId: 'mage', x: 0, y: 0, elevation: 0, radius: 15, hp: 100, maxHp: 100, resource: 100, maxResource: 100, aim: 0, speed: 190, level: 1, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: { basic: 0, q: 0, e: 0, r: 0 } };
       const upper = { ...actor, id: 'upper', elevation: 2 };
       renderer.render({ playing: true, self: actor, actors: [actor, upper], projectiles: [{ id: 'shot-under', x: 0, y: 0, elevation: 0 }, { id: 'shot-upper', x: 0, y: 0, elevation: 2 }], pickups: [], events: [], time: 1000, previewClass: 'mage', moveDirection: null, selectedId: null, aimPreview: null });
-      renderer.destroy(); return log;
+      const firstDraw=log.slice();
+      document.geometry={surfaces:[],solids:[],stairs:[{id:'camera-passage',x:0,y:0,width:4,height:1,axis:'x',from:0,to:1,appearance:'passage'}]};
+      renderer.world=new World(1,16,'world',document,[]);renderer.world.getTile=()=>'grass';
+      const frame={playing:true,self:actor,actors:[],projectiles:[],pickups:[],traps:[],events:[],time:1000,previewClass:'mage',selectedId:null};
+      const zoomAt=(x:number,elevation:number)=>{
+        actor.x=x*48;actor.y=24;actor.elevation=elevation;renderer.resetCamera();renderer.render(frame);return renderer.performanceInfo().zoom;
+      };
+      const start=zoomAt(0,0),middleLow=zoomAt(2,0),middleHigh=zoomAt(2,1),end=zoomAt(4,1);
+      const box=renderer.canvas.getBoundingClientRect(),center=renderer.screenToWorld(box.left+box.width/2,box.top+box.height/2);
+      actor.x=0;actor.elevation=0;renderer.render({...frame,holdCamera:true});const held=renderer.performanceInfo().zoom;
+      let terrainPaints=0;const drawTerrain=renderer.terrain.drawTerrain.bind(renderer.terrain);
+      renderer.terrain.drawTerrain=(...args:any[])=>{terrainPaints++;return drawTerrain(...args);};
+      renderer.terrain.invalidate();zoomAt(0,0);const initialPaints=terrainPaints;
+      const cache=renderer.terrain.terrainCache,cacheWidth=cache.canvas.width;
+      for(let i=1;i<=24;i++) {
+        actor.x=i/6*48;actor.elevation=i<12?0:1;renderer.lastTime=performance.now()-16;renderer.render(frame);
+      }
+      const animationPaints=terrainPaints-initialPaints,cacheReused=renderer.terrain.terrainCache===cache&&cache.canvas.width===cacheWidth;
+      renderer.destroy(); return {log:firstDraw,zoom:{start,middleLow,middleHigh,end,held},center,animationPaints,cacheReused};
     });
-    const index = (id: string) => result.findIndex(r => r.id === id);
-    const deckIndex = result.findIndex(r => r.id === 'bridge-instance' && r.opacity === .35);
+    const index = (id: string) => result.log.findIndex(r => r.id === id);
+    const deckIndex = result.log.findIndex(r => r.id === 'bridge-instance' && r.opacity === .35);
     assert.ok(index('under') < deckIndex); assert.ok(index('shot-under') < deckIndex);
     assert.ok(deckIndex < index('upper')); assert.ok(deckIndex < index('shot-upper'));
+    assert.ok(result.zoom.start>result.zoom.middleLow&&result.zoom.middleLow>result.zoom.end);
+    assert.equal(result.zoom.middleLow,result.zoom.middleHigh,'the discrete floor switch must not jump the camera');
+    assert.equal(result.zoom.held,result.zoom.end);
+    assert.deepEqual(result.center,{x:192,y:24},'screen targeting uses the actual zoom');
+    assert.equal(result.animationPaints,0,'animated elevation zoom must reuse terrain, without repaints per frame');
+    assert.equal(result.cacheReused,true);
   } finally { await browser?.close(); await server.close(); }
 });
 
