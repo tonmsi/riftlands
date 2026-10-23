@@ -25,9 +25,10 @@ export function organizeWorldPanels(root: HTMLElement): void {
   build.append(zoneLabel, contents.querySelector('.hint')!);
   populate.append(populationTools, ...contents.childNodes);
   const dungeon = original[3]; dungeon.querySelector('h2')!.remove();
+  const dungeonButton = dungeon.querySelector<HTMLButtonElement>('[data-tool="dungeon"]')!;
   dungeon.querySelector('.dungeon-control-group + .dungeon-control-group')!.remove();
   const dungeonTools = document.createElement('div'); dungeonTools.className = 'tool-grid';
-  dungeonTools.append(root.querySelector('[data-tool="dungeon"]')!);
+  dungeonTools.append(dungeonButton);
   const resources = document.createElement('details'); resources.id = 'dungeon-resources';
   const resourcesTitle = document.createElement('summary'); resourcesTitle.textContent = 'Dungeon Maker e boss';
   resources.append(resourcesTitle, dungeonTools, dungeon); areas.append(resources);

@@ -86,14 +86,15 @@ test('multiple doors share an interior and exits lead to their explicit destinat
   const p = warpProject(), m = new RoomManager(undefined, p.seed, 1_000_000, p), a = account('traveller'), b = account('friend');
   m.connect(a, 'warrior'); m.connect(b, 'warrior'); advance(m, .1);
   const original = m.global.players.get(a.id)!; original.hp = 100; original.resource = 30; original.cooldowns.q = m.global.now + 5000;
-  const inventory = JSON.stringify(a.inventory), narrative = JSON.stringify(a.narrative), maxHp = original.maxHp;
+  const inventory = JSON.stringify(a.inventory), quests = structuredClone(a.narrative!.quests), maxHp = original.maxHp;
   const oldState = m.stateFor(a.id);
   enter(m, a.id, 'door-a');
   assert.equal(m.stateFor(a.id).mapId, 'house'); assert.equal(m.global.players.has(a.id), false);
   const indoor = m.simulationFor(a.id).players.get(a.id)!;
   assert.deepEqual({ x: indoor.x, y: indoor.y }, warpPosition(p.warps![0].arrival));
   assert.equal(indoor.maxHp, maxHp); assert.equal(indoor.hp, 100); assert.equal(indoor.cooldowns.q, original.cooldowns.q);
-  assert.equal(JSON.stringify(a.inventory), inventory); assert.equal(JSON.stringify(a.narrative), narrative);
+  assert.equal(JSON.stringify(a.inventory), inventory); assert.deepEqual(a.narrative!.quests, quests);
+  assert.ok(Object.keys(a.narrative!.exploration!).some(key => key.startsWith('house:')));
   assert.equal(m.enqueueInput(a.id, { seq: 1, dx: 1, dy: 0, aim: 0 }, oldState.id, oldState.epoch), true);
   assert.equal(m.simulationFor(a.id).connections.get(a.id)!.inputs.length, 0);
   enter(m, b.id, 'door-b'); assert.equal(m.simulationFor(a.id), m.simulationFor(b.id));

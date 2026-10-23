@@ -6,7 +6,7 @@ import { World } from './world';
 import { collidesWorld } from './physics';
 import type { WorldDocument } from './world-schema';
 import { QUEST_DEFINITIONS } from './narrative';
-import { atWarp, mapDocument, warpPosition } from './warps';
+import { mapDocument, warpPosition } from './warps';
 import { validElevation, rectBounds, placedGeometry, type WorldSurface } from './elevation';
 import { overlaps, SpatialIndex } from './world-authoring';
 import { stairEndpoints } from './terrain-access';
@@ -96,8 +96,15 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
       }
     }
     for (const w of document.warps ?? []) {
-      if ((document.warps ?? []).some(other => other.id !== w.id && other.from === w.from && atWarp(warpPosition(w.entry), other))) issues.push(`${w.name}: ingresso sovrapposto a un altro warp.`);
       const source = maps.get(w.from), target = maps.get(w.to);
+      if ((document.warps ?? []).some(other => {
+        if (other.id === w.id || other.from !== w.from || (other.entryElevation ?? 0) !== (w.entryElevation ?? 0)) return false;
+        if (source && !source.sameRoom(warpPosition(w.entry), warpPosition(other.entry))) return false;
+        const a = w.entrySize ?? { x: 1, y: 1 }, b = other.entrySize ?? { x: 1, y: 1 };
+        const dx = Math.max(w.entry.x - (other.entry.x + b.x - 1), other.entry.x - (w.entry.x + a.x - 1), 0);
+        const dy = Math.max(w.entry.y - (other.entry.y + b.y - 1), other.entry.y - (w.entry.y + a.y - 1), 0);
+        return dx === 0 && dy === 0;
+      })) issues.push(`${w.name}: ingresso sovrapposto a un altro warp.`);
       if (!source || !target) { issues.push(`${w.name}: destinazione assente.`); continue; }
       for (const [label, map, p] of [['ingresso', source, w.entry], ['arrivo', target, w.arrival]] as const) {
         const size=(label==='ingresso' ? w.entrySize : w.arrivalSize) ?? {x:1,y:1};
@@ -114,6 +121,7 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
       if (w.reverseId) {
         const reverse = document.warps?.find(other => other.id === w.reverseId);
         if (!reverse || reverse.reverseId !== w.id || reverse.from !== w.to || reverse.to !== w.from
+          || (reverse.entryElevation ?? 0) !== (w.arrivalElevation ?? 0) || (reverse.arrivalElevation ?? 0) !== (w.entryElevation ?? 0)
           || reverse.entry.x !== w.arrival.x || reverse.entry.y !== w.arrival.y || reverse.arrival.x !== w.entry.x || reverse.arrival.y !== w.entry.y
           || JSON.stringify(reverse.entrySize ?? {x:1,y:1}) !== JSON.stringify(w.arrivalSize ?? {x:1,y:1})
           || JSON.stringify(reverse.arrivalSize ?? {x:1,y:1}) !== JSON.stringify(w.entrySize ?? {x:1,y:1}))

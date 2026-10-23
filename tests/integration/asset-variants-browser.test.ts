@@ -1,0 +1,71 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { chromium, expect } from '@playwright/test';
+import { startWorldStudio } from '../../scripts/world-studio-server';
+import { newWorldDocument, newWorldAsset, parseWorldDocument } from '../../shared/world-schema';
+
+test('expanded asset catalog, random groups, manual brush and persistence work together', { timeout: 90_000 }, async () => {
+  const fixture = newWorldDocument(42), bush = newWorldAsset('bush', 'Cespuglio', '/world-assets/test-bush.svg');
+  bush.cells[0].visibility = 'hide-fade'; bush.generation.spacing = 0; fixture.assets.push(bush);
+  for (let i = 0; i < 60; i++) fixture.assets.push(newWorldAsset(`prop-${i}`, `Decorazione ${String(i).padStart(2, '0')}`, '/world-assets/test-prop.svg'));
+  for (let y = -20; y < 20; y++) for (let x = -20; x < 20; x++) fixture.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
+  const directory = await mkdtemp(join(tmpdir(), 'riftlands-variants-'));
+  await writeFile(join(directory, 'world.json'), JSON.stringify(fixture)); await writeFile(join(directory, 'dungeons.json'), '[]');
+  const studio = await startWorldStudio({ root: resolve('.'), documentPath: join(directory, 'world.json'), dungeonPath: join(directory, 'dungeons.json'), dataPath: join(directory, 'accounts.json'), port: 0 });
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  try {
+    browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } }), errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.route('**/world-assets/test-*.svg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><circle cx="24" cy="24" r="20" fill="#558844"/></svg>' }));
+    await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
+    const exported = async () => {
+      const downloading = page.waitForEvent('download'); await page.locator('#export-world').click();
+      await (await downloading).saveAs(join(directory, 'export.json'));
+      return parseWorldDocument(JSON.parse(await readFile(join(directory, 'export.json'), 'utf8')).document);
+    };
+    await page.locator('#asset-catalog-expand').click();
+    await expect(page.locator('#asset-catalog-dialog')).toBeVisible();
+    const dialog = (await page.locator('#asset-catalog-dialog').boundingBox())!;
+    assert.ok(dialog.width > 1200 && dialog.height > 800);
+    await page.locator('.asset-more').click();
+    await expect(page.locator('#asset-list [data-asset]')).toHaveCount(61);
+    await page.locator('#asset-search').fill('Cespuglio');
+    await page.locator('#asset-list [data-asset="bush"]').click();
+    await expect(page.locator('#asset-catalog-dialog')).not.toBeVisible();
+    await page.locator('#asset-create-variant').click();
+    await expect(page.locator('#asset-variant-of')).toHaveValue('bush');
+    await page.locator('#asset-name').fill('Cespuglio rosso'); await page.locator('#asset-update').click();
+    await expect(page.locator('#gen-density')).toBeDisabled();
+    await page.locator('#asset-catalog-expand').click();
+    await expect(page.locator('.asset-group[data-group="Cespuglio"] [data-asset]')).toHaveCount(2);
+    await page.locator('#asset-search').fill('');
+    await page.keyboard.press('Escape'); await expect(page.locator('#asset-catalog-dialog')).not.toBeVisible();
+    await page.locator('#asset-catalog-expand').click(); await page.locator('#asset-list [data-asset="prop-0"]').click();
+    await page.locator('#asset-variant-of').selectOption('bush'); await page.locator('#asset-update').click();
+    await expect(page.locator('.asset-group[data-group="Cespuglio"] [data-asset]')).toHaveCount(3);
+    await page.locator('#undo').click();
+    await expect(page.locator('.asset-group[data-group="Cespuglio"] [data-asset]')).toHaveCount(2);
+    await page.locator('#redo').click();
+    await expect(page.locator('.asset-group[data-group="Cespuglio"] [data-asset]')).toHaveCount(3);
+    await page.locator('#asset-list [data-asset="bush"]').click();
+    await page.locator('#mass').check(); await page.locator('#brush-radius').fill('3');
+    const box = (await page.locator('#map').boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2 + 24, box.y + box.height / 2 + 24);
+    let doc = await exported();
+    assert.equal(new Set(doc.placements.map(p => p.assetId)).size, 3);
+    assert.ok(doc.assets.some(a => a.variantOf === 'bush' && a.name === 'Cespuglio rosso'));
+    await expect.poll(() => page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('riftlands.world-maker.v1', 2); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      return new Promise<number>(resolve => { const transaction = db.transaction('drafts'); const request = transaction.objectStore('drafts').get('project'); transaction.oncomplete = () => { db.close(); resolve(request.result?.document.assets.filter((a: { variantOf?: string }) => a.variantOf === 'bush').length ?? 0); }; });
+    })).toBe(2);
+    await page.reload(); await expect(page.locator('#status')).toContainText('Bozza locale recuperata');
+    doc = await exported(); assert.equal(doc.assets.filter(a => a.variantOf === 'bush').length, 2);
+    await page.locator('#asset-catalog-expand').click();
+    await page.screenshot({ path: join(directory, 'asset-catalog-preview.png') });
+    assert.deepEqual(errors, []);
+  } finally { await browser?.close(); await studio.close(); await rm(directory, { recursive: true, force: true }); }
+});

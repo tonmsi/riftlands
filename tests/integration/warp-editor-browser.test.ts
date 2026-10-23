@@ -168,6 +168,9 @@ test('opening another side shows the selected destination terrain and moving aff
   try {
     browser = await chromium.launch({ channel: 'chrome', headless: true }); const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
     await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
+    // This assertion inspects the destination tile, independently of animated painting.
+    await page.locator('#world-painting-panel > summary').click();
+    await page.locator('#show-painting').uncheck();
     await page.locator('#maps-passages > summary').click(); await page.locator('#warp-list button').click();
     // Choose a different destination, without needing a separate Update before navigating.
     await page.locator('#warp-to').selectOption('painted'); await page.locator('#warp-return').click();

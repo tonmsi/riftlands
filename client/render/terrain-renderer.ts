@@ -5,6 +5,8 @@ import type { TileKind } from '../../shared/types';
 import type { World } from '../../shared/world';
 import { dungeonAtTile, type DungeonDefinition } from '../../shared/dungeons';
 import { EnvironmentArt } from './environment-art';
+import { WorldAssetArt } from './world-asset-art';
+import { terrainBushAsset } from '../../shared/bush';
 import { noise } from './render-primitives';
 import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor } from './terrain-style';
 import type { RenderBounds, TerrainViewport } from './render-types';
@@ -51,6 +53,11 @@ export class TerrainRenderer {
   private readonly maskedTerrain = new PaintedTerrain();
   private paintingRevision = -1;
   private readonly environmentArt = new EnvironmentArt();
+  private readonly bushArt = new WorldAssetArt(() => { this.bushRevision++; this.invalidate(); });
+  private bushRevision = 0;
+  private bushReady = false;
+  get spriteRevision(): number { return this.bushRevision + (this.surfacePainter?.spriteRevision ?? 0); }
+  get spritesPending(): boolean { return !this.bushReady || (this.surfacePainter?.spritesPending ?? false); }
   private terrainCache?:TerrainCache;
   private preparation?:TerrainPreparation;
   private spareCanvas?:HTMLCanvasElement;
@@ -81,7 +88,7 @@ export class TerrainRenderer {
   readonly spritesReady: Promise<void>;
   constructor(private readonly ctx: CanvasRenderingContext2D, private readonly localDungeons?: readonly DungeonDefinition[],
     private readonly preparationPolicy:'adaptive'|'always'='adaptive') {
-    this.spritesReady = Promise.resolve();
+    this.spritesReady = this.bushArt.ready(terrainBushAsset).then(() => { this.bushReady = true; });
   }
   invalidate(): void {
     this.surfaceMaterialCache.clear(); this.surfacePainter?.invalidate();
@@ -311,7 +318,7 @@ export class TerrainRenderer {
     const bounds = { left: Math.floor(left/TILE_SIZE)*TILE_SIZE, top: Math.floor(top/TILE_SIZE)*TILE_SIZE,
       right: Math.ceil(right/TILE_SIZE)*TILE_SIZE, bottom: Math.ceil(bottom/TILE_SIZE)*TILE_SIZE };
     const scale = Math.max(1, Math.min(2, Math.ceil(Math.hypot(transform.a, transform.b)))), material = surface.terrain ?? 'grass';
-    const key = `${world.authoringRevision}:${world.lockRevision}:${material}:${scale}:${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}`;
+    const key = `${this.spriteRevision}:${world.authoringRevision}:${world.lockRevision}:${material}:${scale}:${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}`;
     let cached = this.surfaceMaterialCache.get(key);
     if (!cached) {
       const canvas = document.createElement('canvas');
@@ -681,8 +688,11 @@ export class TerrainRenderer {
       for (let tx = Math.floor(bounds.left / TILE_SIZE / 2) * 2; tx <= Math.floor(bounds.right / TILE_SIZE); tx += 2) {
         for (const group of sceneryGroups(getScenery, tx, ty)) {
           const isSnowy = surfaceAt(group.x, group.y) === 'snow' || surfaceAt(group.x, group.y) === 'ice';
-          this.environmentArt.draw(ctx, group.tile, group.x * TILE_SIZE, group.y * TILE_SIZE,
-            noise(group.x, group.y), 0, group.width, group.height, isSnowy);
+          if (group.tile === 'bush' && world.authoring.tiles.at(group.x, group.y)?.bushStyle !== 'js') {
+            const asset = world.authoring.terrainBushAt(group.x, group.y);
+            this.bushArt.draw(ctx, asset, { id: `terrain-bush:${group.x},${group.y}`, assetId: asset.id, x: group.x, y: group.y });
+          } else this.environmentArt.draw(ctx, group.tile, group.x * TILE_SIZE, group.y * TILE_SIZE,
+              noise(group.x, group.y), 0, group.width, group.height, isSnowy);
         }
       }
     }

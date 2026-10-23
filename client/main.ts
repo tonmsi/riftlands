@@ -448,9 +448,9 @@ function frame(now: number): void {
   respawnUI.rendered();
   perf.end('render',renderStart);
   const minimapStart=perf.begin();
-  if (self && playing && ui.mapUnlocked && now - lastMinimap > 250) {
-    drawMinimap(ui.compactMinimap, renderer.world, self, actors, latest?.pickups ?? [], 1600, renderer.orientation, questProgress);
-    if (ui.minimapVisible) drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? [], 4800, renderer.orientation, questProgress);
+  if (self && playing && now - lastMinimap > 250) {
+    drawMinimap(ui.compactMinimap, renderer.world, self, actors, latest?.pickups ?? [], 1600, renderer.orientation, questProgress, activeMapId);
+    if (ui.minimapVisible) drawMinimap(ui.minimap, renderer.world, self, actors, latest?.pickups ?? [], 4800, renderer.orientation, questProgress, activeMapId);
     lastMinimap = now;
   }
   perf.end('minimap',minimapStart);

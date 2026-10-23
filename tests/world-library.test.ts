@@ -4,11 +4,41 @@ import { mkdtemp, mkdir, readFile, writeFile, rm, readdir } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { importWorldImage, readWorldProject, saveWorldProject } from '../scripts/world-library';
-import { newWorldDocument } from '../shared/world-schema';
+import { newWorldDocument, newWorldAsset } from '../shared/world-schema';
 import { acquireDataLease } from '../server/data-lease';
 import { engineBundle } from './fixtures/dungeon-engine';
 import { worldDungeons } from '../shared/world-validation';
 import { compactWorldFile } from '../scripts/compact-world';
+import { ACTOR_CATALOG } from '../shared/actor-catalog';
+
+test('permanent asset deletion saves the world and removes only an unshared image', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'riftlands-delete-asset-'));
+  const options = { root, documentPath: join(root, 'world.json'), dungeonPath: join(root, 'dungeons.json'), dataPath: join(root, 'accounts.json') };
+  try {
+    const image = await importWorldImage(root, 'image/svg+xml', Buffer.from('<svg/>').toString('base64'), 'world-assets', 'delete.svg');
+    const document = newWorldDocument();
+    document.assets.push(newWorldAsset('delete', 'Delete', image));
+    document.placements.push({ id: 'instance', assetId: 'delete', x: 10, y: 10 });
+    await writeFile(options.documentPath, JSON.stringify(document)); await writeFile(options.dungeonPath, '[]');
+    const current = await readWorldProject(options.documentPath);
+    const shared = structuredClone(document); shared.assets.push(newWorldAsset('keep', 'Keep', image));
+    await assert.rejects(saveWorldProject(options, shared, current.revision, 'delete'), /asset “Keep” \(keep\)/);
+    assert.equal(await readFile(join(root, 'public', image.slice(1)), 'utf8'), '<svg/>');
+    assert.equal((await readWorldProject(options.documentPath)).revision, current.revision);
+    await assert.rejects(saveWorldProject(options, document, 'stale', 'delete'), /altra.*finestra/);
+    await assert.rejects(saveWorldProject(options, document, current.revision, 'missing'), /non più presente/);
+    const actors = structuredClone(ACTOR_CATALOG);
+    Object.values(actors.skins)[0].animations.idle.asset = image;
+    await writeFile(join(root, 'actor-catalog.json'), JSON.stringify(actors));
+    await assert.rejects(saveWorldProject(options, document, current.revision, 'delete'), /aspetto personaggio/);
+    await rm(join(root, 'actor-catalog.json'));
+    const result = await saveWorldProject(options, document, current.revision, 'delete');
+    const saved = await readWorldProject(options.documentPath);
+    assert.equal(saved.revision, result.revision); assert.equal(saved.document.assets.length, 0); assert.equal(saved.document.placements.length, 0);
+    await assert.rejects(readFile(join(root, 'public', image.slice(1))), { code: 'ENOENT' });
+    assert.equal(JSON.parse(await readFile(result.backup, 'utf8')).assets[0].id, 'delete');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test('image import preserves readable names, prevents overwrites, and rejects active or external SVG content', async () => {
   const root = await mkdtemp(join(tmpdir(), 'riftlands-world-images-'));

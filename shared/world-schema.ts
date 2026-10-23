@@ -27,6 +27,8 @@ export interface WorldAsset {
   fade?: { opacity: number; feather: number; durationMs: number };
   /** Catalog organization only; independent of procedural generation categories. */
   group?: string;
+  /** Alternative in the referenced asset's random pool; inherits its generation rules. */
+  variantOf?: string;
   /** Artwork moves and scales independently of the annotated tile grid. */
   imageTransform?: { x: number; y: number; scale: number };
 }
@@ -34,8 +36,12 @@ export function worldAssetImageBounds(asset: WorldAsset) {
   const { x = 0, y = 0, scale = 1 } = asset.imageTransform ?? {};
   return { x, y, width: asset.width * scale, height: asset.height * scale };
 }
-export interface AssetPlacement extends Vec2 { id: string; assetId: string; pivotY?: number; baseElevation?: number; }
-export interface TileOverride extends Vec2 { terrain?: TileKind; suppressAssets?: boolean; }
+export interface AssetPlacement extends Vec2 { id: string; assetId: string; pivotY?: number; baseElevation?: number; bushJs?: boolean; }
+export interface TileOverride extends Vec2 {
+  terrain?: TileKind; suppressAssets?: boolean;
+  /** Painted grass allows scattered bushes in this style while suppressing other generated assets. */
+  bushStyle?: 'png' | 'js';
+}
 export type ZoneShape = { kind: 'rect'; x: number; y: number; width: number; height: number }
   | { kind: 'circle'; x: number; y: number; radius: number };
 export interface NpcRule { density: number; maxPerChunk: number; weights: Record<NpcKind, number>; }
@@ -178,8 +184,12 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   unique(d.assets, a => a.id, 'asset'); const assets = new Set(d.assets.map((a: any) => a.id));
   if (d.cliffAssets !== undefined && (!object(d.cliffAssets) || Object.entries(d.cliffAssets).some(([variant, assetId]) => !CLIFF_VARIANTS.includes(variant as CliffVariant) || !assets.has(assetId)))) fail('catalogo bordi cliff-grid');
   const assetDefinitions = new Map<string, WorldAsset>(d.assets.map((a: WorldAsset) => [a.id, a]));
+  for (const a of d.assets) if (a.variantOf !== undefined) {
+    const parent = assetDefinitions.get(a.variantOf);
+    if (!id(a.variantOf) || !parent || parent.id === a.id || parent.variantOf !== undefined) fail(`gruppo varianti di ${a.id}: scegli un asset principale esistente`);
+  }
   for (const p of d.placements) {
-    if (!point(p) || !id(p.id) || !assets.has(p.assetId) || (p.pivotY !== undefined && !finite(p.pivotY,0,1)) || (p.baseElevation !== undefined && !validElevation(p.baseElevation))) fail('piazzamento asset o riferimento assente');
+    if (!point(p) || !id(p.id) || !assets.has(p.assetId) || (p.pivotY !== undefined && !finite(p.pivotY,0,1)) || (p.baseElevation !== undefined && !validElevation(p.baseElevation)) || (p.bushJs !== undefined && !boolean(p.bushJs))) fail('piazzamento asset o riferimento assente');
     const a = assetDefinitions.get(p.assetId)!;
     const base = p.baseElevation ?? 0;
     if(a.cells.some((c:AssetCell)=>c.elevation!==undefined&&!validElevation(base+c.elevation))) fail('quote sottocelle fuori intervallo');
@@ -187,7 +197,8 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   }
   unique(d.placements, p => p.id, 'piazzamenti');
   for (const t of d.tiles) if (!point(t) || (t.terrain === undefined && t.suppressAssets !== true)
-    || (t.terrain !== undefined && !WORLD_TERRAINS.includes(t.terrain)) || (t.suppressAssets !== undefined && !boolean(t.suppressAssets))) fail('tile');
+    || (t.terrain !== undefined && !WORLD_TERRAINS.includes(t.terrain)) || (t.suppressAssets !== undefined && !boolean(t.suppressAssets))
+    || (t.bushStyle !== undefined && (!['png', 'js'].includes(t.bushStyle) || !['grass', 'bush'].includes(t.terrain!)))) fail('tile');
   unique(d.tiles, t => `${t.x},${t.y}`, 'tile');
   if (d.tileChunks !== undefined) {
     list(d.tileChunks, 100_000, 'chunk terreno');
@@ -196,7 +207,9 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       if (!Array.isArray(c) || c.length < 5 || (c.length - 2) % 3 || !integer(c[0], -312500, 312500) || !integer(c[1], -312500, 312500)) fail('chunk terreno');
       let end = 0;
       for (let i = 2; i < c.length; i += 3) {
-        if (!integer(c[i], end, 1023) || !integer(c[i + 1], 1, 1024 - c[i]) || !integer(c[i + 2], 1, 17)) fail('intervallo terreno');
+        const code = c[i + 2], base = code & 31, style = code & 96;
+        if (!integer(c[i], end, 1023) || !integer(c[i + 1], 1, 1024 - c[i]) || !integer(code, 1, 81)
+          || base < 1 || base > 17 || style === 96 || (style && ![2, 3, 10, 11].includes(base))) fail('intervallo terreno');
         end = c[i] + c[i + 1]; cells += c[i + 1]; runs++;
       }
     }

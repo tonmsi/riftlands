@@ -38,6 +38,20 @@ export function mapDocument(project: WorldDocument, id = 'world'): WorldDocument
   if (!map) throw new Error(`Interno non disponibile: ${id}`);
   return { ...map.document, seed: project.seed, assets: project.assets, cliffAssets: project.cliffAssets, interiorBounds: { id, name: map.name, width: map.width, height: map.height, pvp: map.pvp ?? false } };
 }
+/** Remove the whole map and every endpoint that references it, without reviving legacy world dungeons. */
+export function removeInterior(project: WorldDocument, id: string): void {
+  const interior = project.interiors?.find(m => m.id === id);
+  if (id === 'world' || !interior) throw new Error('Seleziona una mappa interna da eliminare.');
+  for (const dungeon of interior.document.dungeons) {
+    const outside = project.dungeons.find(p => p.dungeonId === dungeon.dungeonId);
+    if (outside) outside.enabled = false;
+    else project.dungeons.push({ dungeonId: dungeon.dungeonId, x: dungeon.x, y: dungeon.y, enabled: false });
+  }
+  project.interiors = project.interiors!.filter(m => m.id !== id);
+  const removed = new Set((project.warps ?? []).filter(w => w.from === id || w.to === id).map(w => w.id));
+  project.warps = project.warps?.filter(w => !removed.has(w.id));
+  for (const warp of project.warps ?? []) if (warp.reverseId && removed.has(warp.reverseId)) delete warp.reverseId;
+}
 export function newDungeonInterior(id: string, dungeon: DungeonDefinition, pvp = false, seed = 734291): WorldInterior {
   const bounds = dungeon.layout.bounds;
   const width = bounds.maxTx - bounds.minTx + 5, height = bounds.maxTy - bounds.minTy + 5;

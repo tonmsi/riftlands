@@ -17,6 +17,7 @@ import { placedGeometry } from '../../../shared/elevation';
 import { drawElevationSurface, drawElevationStair } from '../../render/elevation-art';
 import { drawTerrainCliff } from '../../render/cliff-art';
 import { assetVisible, drawVisibleAsset, exposedSurfaceParts, floorVisible, type ElevationVisibility } from './elevation-visibility';
+import { compareAssetDrawOrder } from './world-picking';
 const terrainPainters = new WeakMap<HTMLCanvasElement, TerrainRenderer>();
 const terrainViews = new WeakMap<HTMLCanvasElement, { key: string; world: World; canvas: HTMLCanvasElement; placements: AssetPlacement[] }>();
 export interface EditorView {
@@ -73,7 +74,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
     // At distant zoom, bounded sampling shows landforms rather than generating millions of tiles.
     const step = Math.max(1, Math.ceil(Math.sqrt((b.right - b.left) * (b.bottom - b.top) / 16000)));
     const visible = options.visibleElevations ?? null;
-    const key = `${art.revision}:${JSON.stringify(visible)}:${options.painting}:${world.authoringRevision}:${world.lockRevision}:${view.x}:${view.y}:${s}:${width}:${height}:${dpr}`;
+    const key = `${terrainPainters.get(canvas)?.spriteRevision ?? 0}:${art.revision}:${JSON.stringify(visible)}:${options.painting}:${world.authoringRevision}:${world.lockRevision}:${view.x}:${view.y}:${s}:${width}:${height}:${dpr}`;
     let cached = terrainViews.get(canvas);
     if (!cached || cached.world !== world || cached.key !== key) {
         const bitmap = cached?.canvas ?? document.createElement('canvas'); bitmap.width = canvas.width; bitmap.height = canvas.height;
@@ -128,7 +129,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
             if (floorVisible(visible, stair.to)) drawElevationStair(paint, stair, stair.to, art);
         }
         paint.restore();
-        placements.sort((p, q) => { const a = world.authoring.assets.get(p.assetId)!, c = world.authoring.assets.get(q.assetId)!; return (a.layer === 'ground' ? -1 : 1) - (c.layer === 'ground' ? -1 : 1) || p.y + a.height * (p.pivotY ?? a.pivot.y) - q.y - c.height * (q.pivotY ?? c.pivot.y) || p.id.localeCompare(q.id); });
+        placements.sort((p, q) => compareAssetDrawOrder(p, q, world.authoring.assets));
         cached = { key, world, canvas: bitmap, placements }; terrainViews.set(canvas, cached);
     }
     ctx.drawImage(cached.canvas, -view.x, -view.y, width, height);
@@ -137,6 +138,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         animated=terrainPainters.get(canvas)?.drawCoastMotion(ctx,{left:b.left*TILE_SIZE,top:b.top*TILE_SIZE,right:b.right*TILE_SIZE,bottom:b.bottom*TILE_SIZE},time)??false;
         ctx.restore();
     }
+    animated ||= terrainPainters.get(canvas)?.spritesPending ?? false;
     const placements = cached.placements;
     for (const p of placements) {
         const a = world.authoring.assets.get(p.assetId)!;

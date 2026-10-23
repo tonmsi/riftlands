@@ -6,7 +6,7 @@ import { GameDisplay } from '../game-display';
 import { InteractionUI } from '../interactions/interaction-ui';
 import { PopupManager } from '../popups';
 import { QuestJournalUI } from './quest-journal';
-import { hasWorldMap, type NarrativeProgress } from '../../../shared/narrative';
+import type { NarrativeProgress } from '../../../shared/narrative';
 import type { AbilitySlot, Actor, ClassId, Snapshot, SocialState } from '../../../shared/types';
 
 import { SocialUI } from './social-ui';
@@ -40,15 +40,12 @@ export class HudUI {
   private readonly exitDialog = document.createElement('dialog');
   private readonly mapToggle = document.createElement('button');
   private mapVisible = true;
-  private mapOwned = false;
-  get mapUnlocked(): boolean { return this.mapOwned; }
   dismissLevelUp(): void { this.xpFeedback?.dismiss(); }
 
   private readonly refs: UIRefs;
   private readonly social: SocialUI;
   constructor(private readonly root: HTMLElement, private readonly actions: HudActions, popups: PopupManager, private readonly hooks: HudHooks) {
     this.refs = new UIRefs(root.querySelector('.game-hud')!, root.querySelector('.toast-stack')!);
-    root.classList.add('map-locked');
     this.social = new SocialUI(root.querySelector('.game-hud')!, actions, {
       selected: () => this.selected,
       refreshTarget: () => { if (this.selected) this.setSelected(this.selected); },
@@ -140,6 +137,7 @@ export class HudUI {
       this.setMapVisible(false);
     });
     this.ref('map-close').addEventListener('click', () => { this.setMapVisible(false); this.canvas.focus({ preventScroll: true }); });
+    this.minimap.setAttribute('aria-label', 'Mappa estesa · esplora per rivelare il mondo');
     this.updateMap();
     this.ref('leave').setAttribute('aria-label', 'Torna al menu');
     this.ref('social-toggle').setAttribute('aria-label', 'Compagni');
@@ -182,15 +180,10 @@ export class HudUI {
   dismissPopups(): void { this.popups.dismiss(); }
   get touch(): boolean { return this.display.touch; }
   enterFullscreen(): void { if (this.display.touch) void this.display.enterFullscreen(); }
-  resetJournal(): void { this.journal.reset(); this.updateMapOwnership(); }
+  resetJournal(): void { this.journal.reset(); }
   updateJournal(progress: NarrativeProgress): void {
     // Lobby previews load saved history; they are not gameplay completion events.
-    this.journal.resetFeedback(); this.journal.update(progress); this.updateMapOwnership(progress);
-  }
-  private updateMapOwnership(progress?: NarrativeProgress): void {
-    this.mapOwned = hasWorldMap(progress); this.root.classList.toggle('map-locked', !this.mapOwned);
-    this.minimap.setAttribute('aria-label', this.mapOwned ? 'Mappa estesa' : 'Mappa non ancora ottenuta');
-    this.compactMinimap.setAttribute('aria-label', this.mapOwned ? 'Mappa' : 'Mappa non ancora ottenuta');
+    this.journal.resetFeedback(); this.journal.update(progress);
   }
   private ref(name: string): HTMLElement { return this.refs.get(name); }
   private write(name: string, value: string): void { this.refs.write(name, value); }
@@ -349,7 +342,6 @@ export class HudUI {
   setSnapshot(snapshot: Snapshot, ping: number): void {
     this.interactions.update(snapshot);
     this.journal.update(snapshot.narrative, snapshot.inventory, snapshot.self.id + ':' + snapshot.self.classId);
-    if (snapshot.narrative) this.updateMapOwnership(snapshot.narrative);
     this.latest = snapshot;
     const player = snapshot.self;
     const definition = CLASSES[player.classId];

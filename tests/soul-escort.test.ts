@@ -37,11 +37,11 @@ test('fallen soldier is stationary, has static artwork, and only accepts an esco
   assert.equal(visual.animations.idle.columns, 1); assert.equal(visual.animations.idle.loop, false);
 });
 
-test('acceptance closes dialogue, grants map and applies one health bonus without healing away damage or stacking', () => {
+test('acceptance closes dialogue and applies one health bonus without healing away damage or stacking', () => {
   const f = fixture(); f.player.hp = f.player.maxHp / 2;
   const accepted = f.accept();
   assert.equal(f.sim.interactions.view(f.player.id, f.sim.now), null);
-  assert.ok(f.account.narrative!.flags!.includes('world-map'));
+  assert.ok(!f.account.narrative!.flags?.includes('world-map'));
   const maxHp = Math.round(CLASSES.mage.maxHp * SOUL_HEALTH_MULTIPLIER);
   assert.equal(f.player.maxHp, maxHp); assert.equal(f.player.hp, maxHp / 2);
   assert.equal(f.sim.snapshotFor(f.player.id)!.self.soulEscort, true);

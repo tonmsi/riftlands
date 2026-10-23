@@ -38,7 +38,7 @@ test('bridge editor trims joints, exposes tools and shows cliff controls only fo
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
     await expect(page.locator('#cliff-asset-controls')).toBeHidden();
-    await expect(page.locator('#elevation-advanced')).toHaveAttribute('open', '');
+    await expect(page.locator('#elevation-advanced')).not.toHaveAttribute('open', '');
     await page.locator('[data-elevation-tool="bridge"]').click();
     await expect(page.locator('#elevation-create-base')).toBeHidden();
     await expect(page.locator('#elevation-target')).toBeVisible();
@@ -87,6 +87,7 @@ test('bridge editor trims joints, exposes tools and shows cliff controls only fo
     await expect(page.locator('#asset-name')).toHaveValue('Ponte di prova');
     await expect(page.locator('#elevation-inspector')).toBeHidden();
     await page.locator('[data-elevation-tool="bridge"]').click();
+    await page.locator('#elevation-advanced > summary').click();
     await page.locator('#elevation-new-terrain').scrollIntoViewIfNeeded();
     await mkdir(join(root, 'artifacts'), { recursive: true });
     await page.screenshot({ path: join(root, 'artifacts/bridge-editor.png') });

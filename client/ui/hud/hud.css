@@ -35,11 +35,6 @@
 .rift-app .soul-farewell small { color:#bce9ff; letter-spacing:3px; font-size:10px; }
 .rift-app .soul-farewell p { margin:12px 0 0; color:#f6f1e4; font-family:Georgia,serif; font-size:clamp(17px,2.5vw,24px); line-height:1.5; }
 @media (orientation:landscape) and (max-height:600px) { .rift-app .soul-farewell { bottom:18%; width:calc(100% - 240px); padding:12px; } .rift-app .soul-farewell small { letter-spacing:1.5px; font-size:8px; } }
-.rift-app.map-locked .compact-minimap,.rift-app.map-locked .minimap { opacity:0; }
-.rift-app.map-locked .compact-map { background:radial-gradient(circle at 35% 30%,#23313b,#0b131b 70%); }
-.rift-app.map-locked .compact-map::after { visibility:hidden; }
-.rift-app.map-locked .minimap-panel { background:#111b25; }
-.rift-app.map-locked .minimap-panel .map-heading,.rift-app.map-locked .minimap-panel>div:not(.map-actions) { visibility:hidden; }
 .rift-app .arena-watch-launcher[hidden],.bet-watch[hidden] { display:none!important; }
 .rift-app .quest-completion-feedback { position:absolute; top:calc(var(--safe-top) + 112px); left:calc(var(--safe-left) + 18px); z-index:120; width:260px; max-width:calc(100vw - 28px); box-sizing:border-box; padding:10px 12px; border:1px solid #ffe597; border-radius:10px; background:linear-gradient(130deg,#35462af5,#142c30fa); color:#ffe5a0; font-size:12px; line-height:1.4; box-shadow:0 0 20px #ffd77970,0 6px 18px #04101e80; animation:quest-completion-arrive .55s ease-out,quest-completion-pulse 1s .55s ease-in-out 5 alternate; pointer-events:auto; }
 .rift-app .quest-completion-feedback>small { display:block; color:#fff3bd; margin:0 0 8px; font-size:11px; line-height:1.4; }

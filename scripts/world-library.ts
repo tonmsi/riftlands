@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, writeFile, rename, mkdir, access, unlink } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import { parseWorldDocument, type WorldDocument } from '../shared/world-schema';
+import { readFile, writeFile, rename, mkdir, access, unlink, realpath, lstat } from 'node:fs/promises';
+import { dirname, resolve, relative, isAbsolute, join } from 'node:path';
+import { parseWorldDocument, validWorldAssetImage, type WorldDocument } from '../shared/world-schema';
+import { readActorProject } from './actor-library';
+import { assetFilePath } from '../shared/world-asset-paths';
 import { validateWorld } from '../shared/world-validation';
 import type { DungeonDefinition } from '../shared/dungeons';
 import { acquireDataLease } from '../server/data-lease';
@@ -27,10 +29,11 @@ export async function readWorldDungeonCatalog(path: string): Promise<DungeonDefi
   const { bundles } = await readCatalog(path);
   return bundles.map(b => b.definition);
 }
-export async function saveWorldProject(options: { root: string; documentPath: string; dungeonPath: string; dataPath: string }, document: unknown, revision: string) {
+export async function saveWorldProject(options: { root: string; documentPath: string; dungeonPath: string; dataPath: string }, document: unknown, revision: string, deleteAssetId?: string) {
   const releaseData = acquireDataLease(options.dataPath);
   let releaseWorld: (() => void) | undefined;
   const temp = `${options.documentPath}.${randomUUID()}.tmp`;
+  let removedImage: { path: string; staged: string } | undefined;
   try {
     releaseWorld = acquireDataLease(options.documentPath);
     const current = await readFile(options.documentPath, 'utf8');
@@ -38,6 +41,35 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     if (currentRevision !== revision && !(await formatCompatibleRevisions(options.documentPath, currentRevision)).includes(revision)) throw new Error('Il progetto è stato modificato da un’altra finestra. Esporta la bozza e ricarica prima di applicare.');
     const next = compactWorldTiles(parseWorldDocument(document)), catalog = await readWorldDungeonCatalog(options.dungeonPath);
     repairWorldAssetPaths(next, await listWorldAssetFiles(options.root));
+    if (deleteAssetId !== undefined) {
+      const asset = next.assets.find(a => a.id === deleteAssetId);
+      if (!asset) throw new Error('Asset non più presente.');
+      if (next.assets.some(a => a.variantOf === asset.id)) throw new Error('Rendi autonome le varianti prima di eliminare il principale.');
+      if (Object.values(next.cliffAssets ?? {}).includes(asset.id)) throw new Error('Questo asset definisce un bordo automatico.');
+      if (catalog.some(d => d.assetPlacements?.some(p => p.assetId === asset.id))) throw new Error('Rimuovi prima le istanze dai dungeon.');
+      next.assets = next.assets.filter(a => a.id !== asset.id);
+      for (const doc of [next, ...(next.interiors ?? []).map(m => m.document)]) doc.placements = doc.placements.filter(p => p.assetId !== asset.id);
+      const image = assetFilePath(asset.image);
+      const referencesImage = (value: unknown): boolean => typeof value === 'string' ? assetFilePath(value) === image
+        : !!value && typeof value === 'object' && Object.values(value).some(referencesImage);
+      const actors = await readActorProject(join(dirname(options.documentPath), 'actor-catalog.json'));
+      const dungeons = await readCatalog(options.dungeonPath);
+      const owners = [
+        ...next.assets.filter(a => assetFilePath(a.image) === image).map(a => `asset “${a.name}” (${a.id})`),
+        ...Object.entries(actors.catalog.skins).filter(([, skin]) => referencesImage(skin)).map(([id]) => `aspetto personaggio “${id}”`),
+        ...dungeons.bundles.filter(bundle => referencesImage(bundle)).map(bundle => `dungeon “${bundle.definition.name}”`),
+      ];
+      if (owners.length) throw new Error(`Immagine condivisa: ${decodeURIComponent(asset.image)} è usata anche da ${owners.slice(0, 5).join(', ')}${owners.length > 5 ? ` e altre ${owners.length - 5} voci` : ''}. Per eliminare solo questa voce usa “Rimuovi dal catalogo · conserva file”.`);
+      if (!validWorldAssetImage(asset.image)) throw new Error('Percorso immagine non valido.');
+      const publicDirectory = await realpath(resolve(options.root, 'public'));
+      const directory = await realpath(resolve(options.root, 'public/world-assets'));
+      const folderWithin = relative(publicDirectory, directory);
+      if (!folderWithin || folderWithin.startsWith('..') || isAbsolute(folderWithin)) throw new Error('La cartella world-assets deve trovarsi nel progetto.');
+      const path = resolve(options.root, 'public', decodeURIComponent(asset.image.slice(1)));
+      const actual = await realpath(path), within = relative(directory, actual);
+      if (!within || within.startsWith('..') || isAbsolute(within) || !(await lstat(path)).isFile()) throw new Error('Il file deve trovarsi nella cartella world-assets.');
+      removedImage = { path, staged: `${path}.${randomUUID()}.tmp` };
+    }
     const issues = validateWorld(next, catalog);
     if (issues.length) throw new Error(issues.slice(0, 12).join('\n'));
     for (const a of next.assets) {
@@ -76,8 +108,19 @@ export async function saveWorldProject(options: { root: string; documentPath: st
       }
     }
     const text = serializeWorldDocument(next);
-    await writeFile(temp, text, { flag: 'wx' }); await rename(temp, options.documentPath);
-    return { revision: worldRevision(text), backup, backups };
+    await writeFile(temp, text, { flag: 'wx' });
+    if (removedImage) await rename(removedImage.path, removedImage.staged);
+    try { await rename(temp, options.documentPath); }
+    catch (e) { if (removedImage) await rename(removedImage.staged, removedImage.path); throw e; }
+    if (removedImage) {
+      try { await unlink(removedImage.staged); }
+      catch (e) {
+        await rename(removedImage.staged, removedImage.path);
+        await writeFile(temp, current, { flag: 'wx' }); await rename(temp, options.documentPath);
+        throw e;
+      }
+    }
+    return { revision: worldRevision(text), backup, backups, ...(deleteAssetId !== undefined ? { document: next } : {}) };
   } finally {
     await unlink(temp).catch(() => {}); releaseWorld?.(); releaseData();
   }

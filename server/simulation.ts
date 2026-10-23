@@ -16,6 +16,7 @@ import { FishingSystem } from './fishing/fishing-system';
 import { validInteractionCommand, type InteractionCommand } from '../shared/interactions';
 import { newInventory } from '../shared/items';
 import { newNarrativeProgress } from '../shared/narrative';
+import { revealExploration } from '../shared/exploration';
 import { syncSoulEscort, clearSoulFarewell, SOUL_FAREWELL_MS } from '../shared/soul-escort';
 import { BossEncounter } from './boss-encounter';
 import type { Account } from './store';
@@ -45,6 +46,7 @@ export type SocialAction = Extract<ClientMessage, { type: 'social' }>['action'];
 /** Single authoritative simulation. Time fields are milliseconds; step delta is seconds. */
 export class WorldSimulation {
   private readonly snapshots = new SnapshotBuilder(this);
+  private readonly explorationPositions = new WeakMap<Actor, { progress: object; tile: string }>();
   readonly interactions: InteractionSystem;
   readonly fishing: FishingSystem;
   readonly bosses = new Map<string, BossEncounter>();
@@ -163,6 +165,7 @@ export class WorldSimulation {
       connection.ack = 0;
       connection.highestSeq = 0;
       syncSoulEscort(current, account.narrative, this.mode === 'world');
+      this.explore(current);
       return current;
     }
     if (this.players.size + this.awayPlayers.size - Number(this.awayPlayers.has(account.id)) >= 128) throw new Error('Il mondo ha raggiunto il limite di 128 giocatori.');
@@ -196,6 +199,7 @@ export class WorldSimulation {
     syncSoulEscort(player, account.narrative, this.mode === 'world');
     this.players.set(player.id, player);
     this.connections.set(player.id, { account, connected: true, removeAt: 0, inputs: [], ack: 0, highestSeq: 0, combatAt: this.now });
+    this.explore(player);
     this.updateChunks();
     this.rebuildCells();
     return player;
@@ -311,6 +315,7 @@ export class WorldSimulation {
     this.stepPickups();
     if (this.mode === 'world') this.interactions.step(this.now);
     this.fishing.step(this.now);
+    for (const actor of this.players.values()) this.explore(actor);
     for (const encounter of this.bosses.values()) for (const player of this.players.values()) encounter.collect(player, this.accounts.get(player.id)!, !!this.connections.get(player.id)?.connected, this.now, this.world);
     while (this.events.length && this.events[0].at + 1800 < this.now) this.events.shift();
     if (this.tick % 150 === 0) {
@@ -320,6 +325,20 @@ export class WorldSimulation {
   }
 
   private readonly pendingCasts = new Map<string, InputCommand>();
+
+  private explore(actor: Actor): void {
+    if (this.mode !== 'world' || actor.hp <= 0 || !this.connections.get(actor.id)?.connected) return;
+    const account = this.accounts.get(actor.id)!, progress = account.narrative!;
+    const mapId = account.location?.mapId ?? 'world';
+    const tile = `${mapId}:${Math.floor(actor.x / TILE_SIZE)},${Math.floor(actor.y / TILE_SIZE)}`;
+    const previous = this.explorationPositions.get(actor);
+    if (previous?.progress === progress && previous.tile === tile) return;
+    this.explorationPositions.set(actor, { progress, tile });
+    if (revealExploration(progress, mapId, actor.x, actor.y)) {
+      this.snapshots.invalidate();
+      this.persistPlayer(actor.id);
+    }
+  }
 
   private safeSpawn(id: string): Vec2 & Elevated {
     if (this.environment) return { ...this.environment.spawn };

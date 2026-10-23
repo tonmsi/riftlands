@@ -29,7 +29,7 @@ test('World Maker authors fractional elevated terrain and stairs, preserves undo
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
     await expect(page.locator('#elevation-view')).toHaveValue('all');
-    await expect(page.locator('#elevation-inspector')).toBeVisible();
+    await expect(page.locator('#elevation-inspector')).toBeHidden();
     // Material + optional quota: no area selection or preparatory rectangle.
     await page.locator('#terrain').selectOption('snow');
     await expect(page.locator('#terrain-brush-settings')).toBeVisible();
@@ -66,7 +66,8 @@ test('World Maker authors fractional elevated terrain and stairs, preserves undo
     await page.screenshot({ path: join(root, 'artifacts/elevation-material-brush.png') });
     await page.locator('#undo').click(); await page.locator('#undo').click();
     await page.locator('#elevation-active').fill('0'); await page.locator('#elevation-active').press('Tab');
-    await expect(page.locator('#elevation-advanced')).toHaveAttribute('open', '');
+    await expect(page.locator('#elevation-advanced')).not.toHaveAttribute('open', '');
+    await page.locator('#elevation-advanced > summary').click();
     await page.locator('#elevation-new-terrain').click();
     await page.locator('#elevation-target').fill('0');
     await page.locator('#elevation-draw-terrain').click();

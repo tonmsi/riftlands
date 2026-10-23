@@ -1,5 +1,70 @@
 # World Maker locale
 
+In **Mappe**, seleziona una mappa interna e premi **Elimina completamente questa
+mappa interna**. Dopo conferma vengono rimossi l’intera mappa con terreno, oggetti,
+NPC, zone e dungeon, e tutti i passaggi da e verso quella mappa, anche dagli altri
+interni. I dungeon contenuti non ricompaiono automaticamente nel mondo principale.
+La cancellazione supporta Undo e diventa effettiva nel progetto con **Applica al gioco**.
+Per vederla nel gioco già aperto, ricompila e riavvia il server. Il mondo principale
+non può essere eliminato. Un edificio disegnato all’esterno è un oggetto separato:
+si rimuove selezionandolo sulla mappa del mondo, senza eliminare il suo asset condiviso.
+
+Nel catalogo ingrandito, **Mantieni aperto** affianca il catalogo alla scheda proprietà:
+selezionare un asset non lo chiude. **Torna a finestra singola** ripristina la selezione
+con chiusura automatica. Il catalogo fissato e la scheda ingrandita vengono ricordati
+anche dopo un ricaricamento. **Ripristina layout** torna alla disposizione iniziale.
+
+La scheda asset mostra il file immagine e gli altri asset che lo condividono.
+**Rimuovi dal catalogo · conserva file** elimina solo la definizione e le sue copie
+manuali, mantenendo il file per gli altri asset. Supporta Undo e si salva con
+**Applica al gioco**; **Sincronizza cartelle** può reimportare il file rimasto.
+Il blocco dell’eliminazione definitiva indica i nomi degli asset o aspetti personaggio
+che usano ancora la stessa immagine.
+
+**Rimuovi tutte le istanze** rimuove i posizionamenti dell’asset selezionato nel mondo
+e negli interni, conservando catalogo e immagine. La modifica è annullabile e si salva
+con **Applica al gioco**; le regole di generazione restano invariate.
+
+**Elimina asset definitivamente** richiede conferma, applica la bozza corrente e
+rimuove catalogo, istanze e file immagine da `public/world-assets/`. L’operazione
+non è annullabile con Undo. Viene bloccata se il file è condiviso con altri asset
+o personaggi, se l’asset è usato nei dungeon, da varianti o dai bordi automatici.
+Lo storico Git dei file già committati resta disponibile.
+
+## Area di lavoro e selezione
+
+Le due colonne laterali si ridimensionano trascinando il separatore; con il separatore
+selezionato funzionano anche le frecce della tastiera. La scheda a destra può essere
+ingrandita con **⤢**, chiusa con **×** e riaperta selezionando un oggetto.
+**Ripristina layout** recupera le dimensioni iniziali.
+
+Il box **Terreno** riunisce materiale e **Livello terreno**, con pulsanti **− / ＋**.
+**Mantieni livello** cambia soltanto il materiale. Il terreno ordinario cambia di un
+solo livello per volta: dipingere quota 2 su terreno 0 viene escluso con un messaggio;
+sono consentiti 0 → 1 e poi 1 → 2. Ponti, scale e geometrie configurate dentro un asset
+mantengono le loro quote specifiche. Le vecchie mappe non vengono modificate da questa
+regola di authoring.
+
+In **Seleziona**, il click usa il punto preciso, l'ordine di disegno e la trasparenza
+dell'immagine, comprese le sottocelle rialzate. La scheda dell'elemento appare subito
+a destra. **Alt + click** passa agli altri elementi sovrapposti. Un piccolo movimento
+del mouse non sposta l'oggetto; Escape annulla anche il disegno di rialzi e ponti.
+Le proprietà della copia sono separate dalla definizione condivisa: **Crea variante
+per questa copia** permette di modificarne il modello senza cambiare le altre istanze.
+La quota base vuota eredita il terreno e mostra il valore effettivo nel campo.
+
+**Esplora** elenca mappe, asset, NPC, zone, passaggi, dungeon e geometrie con ricerca.
+Selezionando una voce si centra la mappa e si apre la scheda relativa. I problemi
+identificabili del controllo progetto sono cliccabili e aprono mappa, quota e scheda.
+
+I campi non ancora confermati restano in compilazione durante gli aggiornamenti della
+vista e sono evidenziati. **Salva scheda asset** conferma insieme aspetto, trasformazione
+dell'immagine, trasparenza e regole di generazione in una sola operazione annullabile.
+La bozza condivisa ha una revisione locale: se due schede
+modificano la stessa bozza, una scrittura obsoleta viene rifiutata senza sovrascrivere
+l'altra. La versione in conflitto rimane in memoria, esportabile; **Recupera bozza
+condivisa** ricarica invece l'ultima versione salvata.
+
 Per rialzi, ponti, collisioni parziali e scale vedere
 [Quote, terreni sopraelevati e scale](livelli-terreno-scale.md).
 
@@ -58,6 +123,26 @@ La vista delle celle ha uno zoom indipendente dalla scala dell’asset: rotella 
 
 Aggiornare un asset aggiorna tutte le sue istanze. **Verifica ingombri e riferimenti** segnala, tra l’altro, spawn bloccati e asset dentro dungeon. La validazione è ripetuta sul server locale prima dell’applicazione.
 
+**Ingrandisci catalogo** apre solo il catalogo asset in una finestra ampia, con ricerca,
+gruppi e miniature su più colonne. **Chiudi** o Escape ripristinano il pannello laterale;
+selezionare un asset chiude la finestra e apre la sua scheda per modificarlo o piazzarlo.
+
+Per usare PNG diversi come alternative dello stesso oggetto, seleziona l'asset principale
+(per esempio **Cespuglio**) e premi **Crea variante di questo asset**. La copia conserva
+dimensioni, celle e proprietà; **Sostituisci immagine** assegna il nuovo PNG. Per un asset
+già importato, scegli il principale in **Gruppo varianti** e premi **Salva scheda asset**.
+Il catalogo riunisce principale e varianti sotto il nome del principale.
+
+Il generatore sceglie con uguale probabilità tra principale e varianti e usa le regole
+del principale, contando una sola volta la frequenza del gruppo. Dimensioni, collisioni,
+nascondigli e trasparenze rimangono specifici di ogni variante. La scelta è deterministica
+per coordinate e seed, anche dopo salvataggio, esportazione e ricaricamento. I cespugli
+PNG su erba e terreno cespuglio usano il gruppo; **Usa bush JS** mantiene il disegno canvas.
+Piazzando il principale con **Disegna varianti casuali del gruppo**, anche il pennello
+sceglie fra i membri. Selezionando una variante si piazza esattamente quella; disattivando
+la casella si piazza esattamente il principale. Le copie manuali già presenti conservano
+il proprio asset. Per rimuovere un principale, rendi prima autonome le sue varianti.
+
 **Aspetto** sceglie l’immagine importata oppure il disegno animato di un braciere/fuoco da campo. Questi due disegni conservano fiamme, bagliore e scintille originali, scalano con l’asset e funzionano sia nel gioco sia nell’editor. La scelta è salvata nei dati dell’asset e non dipende dal suo nome o dalla posizione. Le vecchie bozze che referenziano le immagini iniziali di fuoco e braciere ricevono lo stesso disegno animato; scegli esplicitamente **Immagine importata** per mantenerle statiche.
 
 Il recupero delle vecchie animazioni riconosce anche le copie delle immagini originali rinominate con il loro hash durante esportazione/importazione. La lettura del documento rende esplicito l’aspetto animato, così le esportazioni successive conservano la scelta anche cambiando il percorso dell’immagine.
@@ -87,7 +172,9 @@ Temperatura e umidità sono normalizzate tra 0 e 1. Le regole vengono controllat
 
 La frequenza è la probabilità/peso di proposta negli slot della propria fascia di dimensioni. Dimensioni e distanza determinano fasce da 1 a 64 celle; introdurre un asset grande non cambia la griglia di tutta la vegetazione piccola. Le proposte tra fasce risolvono sovrapposizioni e distanze tramite priorità determinate da coordinate e seed. Nessuna decisione dipende dall’ordine di esplorazione o dai chunk presenti in cache.
 
-Le celle lasciate senza interventi restano procedurali. Le zone possono modificare solo temperatura e/o umidità: la temperatura controlla neve e ghiaccio, mentre l’umidità controlla bioma e fango. Strade manuali e interni dei dungeon mantengono il proprio terreno. Il cespuglio iniziale è ora una definizione del catalogo usata dal generatore; la vecchia tile `bush` resta compatibile con i dungeon e i terreni dipinti.
+Le celle lasciate senza interventi restano procedurali. Le zone possono modificare solo temperatura e/o umidità: la temperatura controlla neve e ghiaccio, mentre l’umidità controlla bioma e fango. Strade manuali e interni dei dungeon mantengono il proprio terreno. Il cespuglio iniziale è una definizione del catalogo usata dal generatore; anche la vecchia tile `bush` usa ora `bush.png` per impostazione predefinita.
+
+Nel pennello terreno, **Usa bush JS** sceglie il disegno canvas per i cespugli dell’erba dipinta o del terreno Cespuglio; senza spunta si usa il PNG. La scelta viene salvata sulle celle dipinte, con annulla/ripeti ed esportazione, e non modifica le altre zone. Sull’erba i cespugli restano sparsi secondo densità, clima, esclusioni e regole del catalogo, mentre gli altri asset procedurali restano soppressi. Cancella rimuove i cespugli generati dall’erba; Procedurale elimina anche la scelta locale.
 
 ## Zone, NPC e arene
 

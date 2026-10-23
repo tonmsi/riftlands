@@ -1,4 +1,6 @@
 import { CHUNK_TILES } from './config';
+import { isBushAsset, terrainBushAsset } from './bush';
+import { pickAssetVariant } from './asset-variants';
 import { coordinateHash } from './coordinate-random';
 import type { TileKind } from './types';
 import type { AssetCell, AssetPlacement, TileOverride, WorldAsset, WorldDocument, WorldZone, ZoneShape } from './world-schema';
@@ -60,28 +62,45 @@ export class WorldAuthoring {
   private visiblePlacements: SpatialIndex<AssetPlacement>;
   readonly zones = new SpatialIndex<WorldZone>(z => shapeBounds(z.shape));
   private bands: GenerationBand[];
+  private variants = new Map<string, WorldAsset[]>();
+  private terrainBushVariants: WorldAsset[];
   private proposals = new Map<string, Proposal | null>();
   private generated = new Map<string, AssetPlacement | null>();
   private zoneCache = new Map<string, WorldZone[]>();
   constructor(public document: WorldDocument) {
-    this.assets = new Map(document.assets.map(a => [a.id, a]));
+    const definitions = new Map(document.assets.map(a => [a.id, a]));
+    this.assets = new Map(document.assets.map(a => [a.id, a.variantOf ? { ...a, generation: definitions.get(a.variantOf)!.generation } : a]));
+    for (const a of this.assets.values()) {
+      const root = a.variantOf ?? a.id;
+      const pool = this.variants.get(root) ?? [];
+      pool.push(a); this.variants.set(root, pool);
+    }
+    for (const pool of this.variants.values()) pool.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const bush = document.assets.find(a => !a.variantOf && isBushAsset(a));
+    this.terrainBushVariants = bush ? this.variants.get(bush.id)! : [terrainBushAsset];
     this.tiles = new WorldTiles(document);
     this.placements = new SpatialIndex(p => placementBounds(p, this.assets.get(p.assetId)!));
     this.visiblePlacements = new SpatialIndex(p => placementVisualBounds(p, this.assets.get(p.assetId)!));
     for (const p of document.placements) this.addPlacement(p);
     for (const z of document.zones) this.zones.add(z);
     const bands = new Map<number, GenerationBand>();
-    for (const a of document.assets.filter(a => a.generation.enabled && a.generation.density > 0).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
-      const stride = 2 ** Math.ceil(Math.log2(Math.max(a.columns, a.rows) + 2 * a.generation.spacing));
+    for (const a of document.assets.filter(a => !a.variantOf && a.generation.enabled && a.generation.density > 0).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
+      const variants = this.variants.get(a.id)!;
+      const stride = 2 ** Math.ceil(Math.log2(Math.max(...variants.map(v => Math.max(v.columns, v.rows))) + 2 * a.generation.spacing));
       const band = bands.get(stride) ?? { stride, assets: [], density: 0, maxSpacing: 0, overhang: 0 };
-      const b = placementVisualBounds({ x: 0, y: 0, id: '', assetId: a.id }, a);
-      band.overhang = Math.max(band.overhang, -b.left, -b.top, b.right - a.columns, b.bottom - a.rows);
+      for (const v of variants) {
+        const b = placementVisualBounds({ x: 0, y: 0, id: '', assetId: v.id }, v);
+        band.overhang = Math.max(band.overhang, -b.left, -b.top, b.right - v.columns, b.bottom - v.rows);
+      }
       band.assets.push(a); band.density += a.generation.density; band.maxSpacing = Math.max(band.maxSpacing, a.generation.spacing); bands.set(stride, band);
     }
     // Size bands keep small vegetation dense when a large asset is added to the catalog.
     this.bands = [...bands.values()].sort((a, b) => a.stride - b.stride);
   }
   addPlacement(p: AssetPlacement): void { this.placements.add(p); this.visiblePlacements.add(p); }
+  terrainBushAt(x: number, y: number): WorldAsset {
+    return pickAssetVariant(this.terrainBushVariants, x, y, this.document.seed);
+  }
   visibleAssetsIn(bounds: TileBounds): AssetPlacement[] { return this.visiblePlacements.query(bounds); }
   zonesAt(x: number, y: number): WorldZone[] {
     const key = `${x},${y}`, cached = this.zoneCache.get(key);
@@ -108,7 +127,8 @@ export class WorldAuthoring {
     {
       const salt = seed + band.stride * 7919;
       let weight = coordinateHash(sx, sy, salt + 1709) * band.density;
-      const a = band.assets.find(a => (weight -= a.generation.density) < 0)!;
+      const root = band.assets.find(a => (weight -= a.generation.density) < 0)!;
+      const a = pickAssetVariant(this.variants.get(root.id)!, sx, sy, salt);
       if (coordinateHash(sx, sy, salt + 1711) < Math.min(1, band.density)) {
         const gap = a.generation.spacing;
         const x = sx * band.stride + gap + Math.floor(coordinateHash(sx, sy, salt + 1721) * (band.stride - a.columns - 2 * gap + 1));
@@ -117,7 +137,9 @@ export class WorldAuthoring {
         let allowed = !this.placements.query({ left: x - gap, top: y - gap, right: x + a.columns + gap, bottom: y + a.rows + gap }).length;
         for (let row = 0; allowed && row < a.rows; row++) for (let col = 0; allowed && col < a.columns; col++) {
           const tx = x + col, ty = y + row, temp = env.temperature(tx, ty), moisture = env.moisture(tx, ty), g = a.generation;
-          allowed = !env.reserved(tx, ty) && !this.tiles.get(`${tx},${ty}`)?.suppressAssets && this.rule(tx + .5, ty + .5, 'generateAssets') !== false
+          const tile = this.tiles.at(tx, ty), bush = isBushAsset(root);
+          if (bush && tile?.bushStyle === 'js') p.bushJs = true;
+          allowed = !env.reserved(tx, ty) && (!tile?.suppressAssets || (bush && tile.terrain === 'grass' && tile.bushStyle !== undefined)) && this.rule(tx + .5, ty + .5, 'generateAssets') !== false
             && g.terrains.includes(env.tile(tx, ty)) && temp >= g.temperature[0] && temp <= g.temperature[1] && moisture >= g.moisture[0] && moisture <= g.moisture[1];
         }
         if (allowed) result = { placement: p, priority: coordinateHash(sx, sy, salt + 1727), band };

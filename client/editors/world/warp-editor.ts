@@ -1,11 +1,13 @@
 import { compactWorldTiles } from '../../../shared/world-tiles';
-import { mapDocument, newInterior, newDungeonInterior, setWarpReturn } from '../../../shared/warps';
+import { mapDocument, newInterior, newDungeonInterior, removeInterior, setWarpReturn } from '../../../shared/warps';
 import type { DungeonDefinition } from '../../../shared/dungeons';
 import type { Vec2 } from '../../../shared/types';
 import type { WorldDocument, WorldWarp } from '../../../shared/world-schema';
 import { floorVisible, type ElevationVisibility } from './elevation-visibility';
+import { WorldInspectorDrafts } from './world-inspector-drafts';
 
 interface WarpEditorHost {
+  elevation?(): number;
   isElevationVisible?(elevation: number): boolean;
   rooms?(mapId: string): { id: string; name: string; tiles: Vec2[] }[];
   project(): WorldDocument; mapId(): string; switchMap(id: string): void;
@@ -25,6 +27,9 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     <button id="interior-create" class="wide">＋ Crea interno</button><button id="interior-update" class="wide">Aggiorna interno</button><button id="interior-delete" class="wide danger">Elimina interno e collegamenti</button></div></details>`;
   const selectorLabel = section.querySelector('#surface-map')!.closest('label')!;
   root.querySelector('#map-controls-panel > summary')!.after(selectorLabel);
+  const deleteMap = document.createElement('button'); deleteMap.id = 'map-delete'; deleteMap.className = 'wide danger'; deleteMap.textContent = 'Elimina completamente questa mappa interna';
+  const deleteHint = document.createElement('p'); deleteHint.id = 'map-delete-hint'; deleteHint.className = 'hint';
+  selectorLabel.after(deleteMap, deleteHint);
   root.querySelector('#areas-controls-panel')!.append(section);
   const chooser = document.createElement('div'); chooser.className = 'map-controls';
   chooser.innerHTML = `<label>Tipo di area<select id="area-kind"><option value="building">Interni</option><option value="dungeon">Dungeon</option></select></label>
@@ -60,8 +65,9 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
   const value = (id: string) => el(id).value, num = (id: string) => Number(value(id));
   let selected = '', pickingArrival = false, pickingEntry = false;
   let newWarpDirection: 'both' | 'one-way' = 'both';
-  let pending: { from: string; to: string; entry: Vec2; owner: string; bidirectional: boolean } | undefined;
+  let pending: { from: string; to: string; entry: Vec2; entryElevation: number; owner: string; bidirectional: boolean } | undefined;
   let ownerId = '', editingNew = false, preferredDestination = '';
+  const formDrafts = new WorldInspectorDrafts(root, () => `warp:${selected}`, ['warp-inspector']);
   const owner = () => host.project().interiors?.find(m => m.id === ownerId);
   const displayName = (w: WorldWarp) => {
     const name = owner() && (w.from === ownerId || w.to === ownerId) ? owner()!.name : host.project().interiors?.find(m => m.id === w.to)?.name ?? host.project().interiors?.find(m => m.id === w.from)?.name;
@@ -112,6 +118,8 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     root.querySelector('#current-map')!.textContent = host.mapId() === 'world' ? 'Mondo' : `Interno · ${options.find(([id]) => id === host.mapId())?.[1]}`;
 
     const visibleInterior = project.interiors?.find(m => m.id === host.mapId());
+    deleteMap.disabled = !visibleInterior;
+    deleteHint.textContent = visibleInterior ? `Elimina “${visibleInterior.name}”, tutti i contenuti e i collegamenti da ogni mappa. Poi premi Applica al gioco.` : 'Il mondo principale non può essere eliminato. Seleziona una mappa interna.';
     const interior = editingNew ? undefined : owner();
     el('edit-map-dungeon').hidden = !interior?.document.dungeons.some(d => d.enabled !== false && host.catalog().some(item => item.id === d.dungeonId));
     const dungeonSelect = el('interior-dungeon') as unknown as HTMLSelectElement, oldDungeon = dungeonSelect.value;
@@ -160,6 +168,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
       }
     }
     root.querySelector('.map-note')!.textContent = visibleInterior ? `${visibleInterior.name} · ${visibleInterior.width} × ${visibleInterior.height} · ${visibleInterior.pvp ? 'PvP' : 'Senza PvP'}` : 'MONDO PROCEDURALE';
+    formDrafts.restore();
   }
   function openMap(id: string): void {
     if (pending) {
@@ -207,12 +216,20 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     m.pvp = value('interior-pvp') === 'true'; m.kind = value('interior-kind') as 'building' | 'dungeon';
     for (const w of host.project().warps ?? []) if (w.from === m.id || w.to === m.id) w.name = (w.name.includes(previousName) ? w.name.replace(previousName, m.name) : `${m.name} · ${w.name}`).slice(0, 160);
   }));
-  click('interior-delete', () => {
-    const id = ownerId; if (!owner()) return;
-    host.change(() => { host.project().interiors = host.project().interiors?.filter(m => m.id !== id);
-      host.project().warps = host.project().warps?.filter(w => w.from !== id && w.to !== id); selected = ''; });
-    host.switchMap('world');
-  });
+  function deleteInterior(id: string): void {
+    const interior = host.project().interiors?.find(m => m.id === id); if (!interior) return;
+    const links = (host.project().warps ?? []).filter(w => w.from === id || w.to === id).length;
+    if (!confirm(`Eliminare completamente “${interior.name}”? Saranno rimossi terreno, oggetti, NPC, zone, dungeon e tutti i ${links} collegamenti da e verso questa mappa. I dungeon contenuti non ricompariranno nel mondo. Puoi annullare con Undo. Premi Applica al gioco per salvare.`)) return;
+    host.change(() => removeInterior(host.project(), id));
+    if (host.project().interiors?.some(m => m.id === id)) return;
+    pending = undefined; preferredDestination = ''; selected = ''; ownerId = ''; editingNew = false;
+    pickingArrival = pickingEntry = false; formDrafts.clear(); host.selectTool('select');
+    if (host.mapId() === id || !host.project().interiors?.some(m => m.id === host.mapId())) host.switchMap('world');
+    host.inspect(); refresh();
+    document.getElementById('status')!.textContent = `Mappa “${interior.name}” e collegamenti eliminati dalla bozza. Premi Applica al gioco per salvare.`;
+  }
+  click('interior-delete', () => deleteInterior(ownerId));
+  click('map-delete', () => deleteInterior(host.mapId()));
   function startConnection(direction: 'both' | 'one-way'): void { newWarpDirection = direction; pending = undefined; selected = ''; pickingArrival = pickingEntry = false; host.selectTool('warp'); host.inspect(); refresh(); }
   click('warp-tool', () => startConnection('both'));
   click('warp-oneway-tool', () => startConnection('one-way'));
@@ -229,6 +246,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     if (Object.entries(next).every(([key, v]) => JSON.stringify(w[key as keyof WorldWarp]) === JSON.stringify(v)) && !!w.reverseId === returnEnabled) return;
     host.change(() => { const current = warp(); if (!current) return; Object.assign(current, next);
       setWarpReturn(host.project(), current, returnEnabled, `warp-${crypto.randomUUID()}`); });
+    formDrafts.accept('warp-inspector'); formDrafts.restore();
   }
   click('warp-update', saveSelected);
   el('warp-entry-size').onchange = saveSelected;
@@ -271,7 +289,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     const hit = (w: WorldWarp, side: 'entry' | 'arrival') => {
       const point = w[side], size = (side === 'entry' ? w.entrySize : w.arrivalSize) ?? { x: 1, y: 1 };
       const elevation = (side === 'entry' ? w.entryElevation : w.arrivalElevation) ?? 0;
-      return (side === 'entry' ? w.from : w.to) === host.mapId() && (host.isElevationVisible?.(elevation) ?? true)
+      return (side === 'entry' ? w.from : w.to) === host.mapId() && elevation === (host.elevation?.() ?? elevation) && (host.isElevationVisible?.(elevation) ?? true)
         && p.x >= point.x && p.y >= point.y && p.x < point.x + size.x && p.y < point.y + size.y;
     };
     if (host.tool() === 'erase') {
@@ -294,7 +312,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     if (!pending) {
       const destination = value('warp-destination');
       if (!destination) throw new Error('Scegli la mappa per B.');
-      pending = { from: host.mapId(), to: destination, entry: { ...p }, owner: host.mapId() !== 'world' ? host.mapId() : destination !== 'world' ? destination : 'world', bidirectional: newWarpDirection !== 'one-way' };
+      pending = { from: host.mapId(), to: destination, entry: { ...p }, entryElevation: host.elevation?.() ?? 0, owner: host.mapId() !== 'world' ? host.mapId() : destination !== 'world' ? destination : 'world', bidirectional: newWarpDirection !== 'one-way' };
       if (destination !== host.mapId()) host.switchMap(destination); host.selectTool('warp'); refresh(); return true;
     }
     if (host.mapId() === pending.from && p.x === pending.entry.x && p.y === pending.entry.y) throw new Error('Scegli per B un punto diverso da A.');
@@ -304,7 +322,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     selected = `warp-${crypto.randomUUID()}`;
     host.change(() => {
       (host.project().warps ??= []).push({ id: selected, name: `${host.project().interiors?.find(m => m.id === connection.owner)?.name ?? 'Mondo'} · Passaggio ${(host.project().warps ?? []).filter(w => w.from === connection.owner).length + 1}`.slice(0, 160), from: connection.from, to: connection.to,
-        entry: connection.entry, arrival: { ...p }, activation: 'walk' });
+        entry: connection.entry, arrival: { ...p }, entryElevation: connection.entryElevation, arrivalElevation: host.elevation?.() ?? 0, activation: 'walk' });
       if (connection.bidirectional) setWarpReturn(host.project(), warp()!, true, `warp-${crypto.randomUUID()}`);
       const roomAt = (id: string, point: Vec2) => host.rooms?.(id).find(room => room.tiles.some(tile => tile.x === point.x && tile.y === point.y));
       if (connection.from === connection.to && (roomAt(connection.from, connection.entry) || roomAt(connection.to, p))) {
@@ -346,5 +364,7 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     }
     ctx.restore();
   }
-  return { refresh, place, draw, dragTarget, moveEndpoint, hasSelection: () => !!warp(), clearSelection: () => { pending = undefined; selected = ''; pickingArrival = pickingEntry = false; inspector.hidden = true; } };
+  return { refresh, place, draw, dragTarget, moveEndpoint, hasSelection: () => !!warp(), isPlacing: () => !!pending, selectedId: () => selected,
+    select: (id: string) => { selected = id; pending = undefined; host.selectTool('select'); host.inspect(); refresh(); },
+    clearSelection: () => { pending = undefined; selected = ''; pickingArrival = pickingEntry = false; inspector.hidden = true; } };
 }

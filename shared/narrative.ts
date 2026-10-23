@@ -1,11 +1,7 @@
+import { validExploration, type Exploration } from './exploration';
 export interface QuestProgress { status: 'active' | 'completed'; objectives: Record<string, number>; completions?: number; completedAt?: number; }
-export interface NarrativeProgress { version: 1; quests: Record<string, QuestProgress>; revision?: number; gifts?: string[]; flags?: string[]; }
+export interface NarrativeProgress { version: 1; quests: Record<string, QuestProgress>; revision?: number; gifts?: string[]; flags?: string[]; exploration?: Exploration; }
 export const newNarrativeProgress = (): NarrativeProgress => ({ version: 1, quests: {} });
-export function hasWorldMap(progress?: NarrativeProgress): boolean { return !!progress?.flags?.includes('world-map'); }
-export function grantWorldMap(progress: NarrativeProgress): void {
-  if (hasWorldMap(progress)) return;
-  (progress.flags ??= []).push('world-map'); progress.revision = (progress.revision ?? 0) + 1;
-}
 export type NarrativeCondition = { kind: 'quest-status'; questId: string; status: 'available' | 'active' | 'completed' } | { kind: 'quest-completed'; questId: string } | { kind: 'flag'; id: string; value: boolean } | { kind: 'gift-unclaimed'; id: string };
 export type NarrativeAction = { kind: 'accept-quest'; questId: string } | { kind: 'give-item'; itemId: string; giftId: string };
 export type QuestObjective = { kind?: 'deliver-item'; id: string; itemId: string; quantity: number }
@@ -155,6 +151,7 @@ export function validNarrativeProgress(value: unknown): value is NarrativeProgre
   const progress = value as NarrativeProgress;
   const id = (text: string) => /^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(text);
   return !!progress && progress.version === 1 && !!progress.quests && typeof progress.quests === 'object' && !Array.isArray(progress.quests)
+    && (progress.exploration === undefined || validExploration(progress.exploration))
     && (progress.gifts === undefined || Array.isArray(progress.gifts) && progress.gifts.length <= 512 && progress.gifts.every(gift => typeof gift === 'string' && id(gift)))
     && (progress.flags === undefined || Array.isArray(progress.flags) && progress.flags.length <= 512 && progress.flags.every(flag => typeof flag === 'string' && id(flag)))
     && (progress.revision === undefined || Number.isSafeInteger(progress.revision) && progress.revision >= 0)

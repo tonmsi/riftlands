@@ -24,7 +24,7 @@ test('exploration journal, map target and completion glow work for Paladin and N
         const { CLASSES } = await import('/shared/config.ts' as string);
         const { NPC_DEFINITIONS } = await import('/shared/npcs.ts' as string);
         const root = document.querySelector<HTMLElement>('#app')!, noop = () => {};
-        const ui = new GameUI(root, { join: noop, leave: noop, social: noop });
+        const ui = new GameUI(root, { join: noop, leave: noop, social: noop, select: noop });
         ui.setAssetProgress(1, 1, 0); ui.setPlaying(true);
         const self = { id: 'review', kind: 'player', name: 'Leggenda', classId: 'paladin', ...CLASSES.paladin,
           x: 24, y: 504, aim: 0, radius: 15, level: 2, xp: 100, kills: 0, deaths: 0, teamId: null,
@@ -65,7 +65,8 @@ test('exploration journal, map target and completion glow work for Paladin and N
         f.renderer.render(f.frame);
       });
       await expect(page.locator('.player-panel')).toHaveClass(/quest-completed/);
-      await expect(page.locator('.quest-completion-feedback')).toContainText('Missione completata · Pietre che camminano');
+      await expect(page.locator('.quest-completion-feedback')).toContainText('Missione completata!');
+      await expect(page.locator('.quest-completion-feedback')).toContainText('Pietre che camminano');
       await page.waitForTimeout(300);
       await page.evaluate(() => { const f = (window as any).questReview; f.renderer.render(f.frame); });
       await page.screenshot({ path: `.tmp/quest-review/arrival-${width}.png` });
@@ -78,9 +79,10 @@ test('exploration journal, map target and completion glow work for Paladin and N
         return targets;
       });
       assert.equal(cleared, '0');
-      await expect(page.locator('.quest-completion-feedback')).toContainText('Missione completata · Esche puzzolenti');
+      await expect(page.locator('.quest-completion-feedback')).toContainText('Missione completata!');
+      await expect(page.locator('.quest-completion-feedback')).toContainText('Esche puzzolenti');
       await page.evaluate(() => { const f = (window as any).questReview; f.ui.setSnapshot({ ...f.snapshot, narrative: undefined }, 24); });
-      await expect(page.locator('.quest-completion-feedback')).toBeHidden({ timeout: 6000 });
+      await expect(page.locator('.quest-completion-feedback')).toBeHidden({ timeout: 8000 });
       await page.evaluate(() => {
         const f = (window as any).questReview; f.ui.setSnapshot(structuredClone(f.snapshot), 24);
         f.ui.setPlaying(false); f.ui.setPlaying(true); f.ui.setSnapshot(structuredClone(f.snapshot), 24);

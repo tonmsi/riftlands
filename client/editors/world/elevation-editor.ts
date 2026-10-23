@@ -12,6 +12,7 @@ interface Host {
   panHeld(): boolean;
   visibilityChanged(): void;
   mapPoint(event: PointerEvent): Vec2;
+  terrainAt?(x: number, y: number): number;
   assetPoint(event: PointerEvent): Vec2 | undefined;
 }
 /** Geometry uses normal draft transactions; it never writes directly to the applied project. */
@@ -83,7 +84,7 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
   inspector.append(brushSettings, advancedInspector);
   brushSettings.insertAdjacentHTML('beforeend', '<label class="check"><input id="terrain-auto-stair" type="checkbox">Crea una scala di accesso al rialzo</label><button id="terrain-stair-tool" class="wide">Disegna scala / passaggio</button><p class="hint">Puoi collegare i piani con un PNG configurato come scala o con un passaggio sul terreno. La scala automatica in pietra è facoltativa.</p>');
   brushSettings.querySelector<HTMLButtonElement>('#terrain-stair-tool')!.onclick = () => stairTool.click();
-  brushSettings.querySelector<HTMLButtonElement>('#terrain-elevation-auto')!.onclick = () => { (brushSettings.querySelector('#terrain-elevation') as HTMLInputElement).value = ''; host.schedule(); };
+  brushSettings.querySelector<HTMLButtonElement>('#terrain-elevation-auto')!.onclick = () => { (root.querySelector('#terrain-elevation') as HTMLInputElement).value = ''; host.schedule(); };
   panel.querySelector('#elevation-view')!.closest('label')!.classList.add('elevation-view-label');
   const quotaLabel = panel.querySelector('#elevation-active')!.closest('label')!;
   quotaLabel.classList.add('elevation-toolbar'); root.querySelector('.map-toolbar')!.insertBefore(quotaLabel, root.querySelector('#tool-label'));
@@ -136,6 +137,13 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
     refresh(); host.schedule();
   }
   let dragging: { start: Vec2; end: Vec2; target: HTMLCanvasElement; id: number } | undefined;
+  function cancelGesture() {
+    const d = dragging; dragging = undefined;
+    if (d?.target.hasPointerCapture(d.id)) d.target.releasePointerCapture(d.id);
+    host.schedule();
+  }
+  document.addEventListener('keydown', e => { if (e.code === 'Escape') cancelGesture(); });
+  window.addEventListener('blur', cancelGesture);
   const mode = () => host.tool().replace('elevation-', '');
   const selected = () => {
     const [kind, id] = selection.split('|') as [GeometryKind, string];
@@ -268,6 +276,7 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
   inspector.querySelector<HTMLButtonElement>('#elevation-legacy')!.onclick = () => run(() => { if (isAsset()) delete owner().geometry; });
   inspector.querySelector<HTMLButtonElement>('#elevation-update')!.onclick = () => run(() => {
     const { kind, shape } = selected(); if (!shape) return;
+    if(!isAsset()&&'elevation'in shape&&shape.ground&&Math.abs(n('target')-shape.elevation)>1)throw new Error('Non possibile: modifica il terreno di un solo livello per volta.');
     const r = { id: shape.id, x: n('x'), y: n('y'), width: n('width'), height: n('height') };
     const next = 'elevation' in shape ? { ...shape, ...r, elevation: n('target'), terrain: get('material').value === 'transparent' ? shape.terrain ?? 'grass' : get('material').value as TileKind, transparent: get('material').value === 'transparent', ...(!shape.ground ? { inheritAssetVisuals: inheritAssets.checked } : {}) }
       : 'base' in shape ? { ...r, base: n('from'), top: n('to') }
@@ -328,6 +337,7 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
       if (isAsset() !== (target === assetCanvas)) { e.stopImmediatePropagation(); return; }
       const p = point(e, target); if (!p) return;
       e.stopImmediatePropagation(); e.preventDefault();
+      target.focus();
       if (mode() === 'configure' || needsPrepare) { inspector.querySelector('#elevation-status')!.textContent = 'Premi «Disegna terreno» nel pannello a destra, poi trascina l’area.'; return; }
       if (mode() === 'select') {
         if (target === canvas && selectMapAt(p)) return;
@@ -345,6 +355,7 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
       e.stopImmediatePropagation(); const p = point(e, target); if (p) dragging.end = p; host.schedule();
     }, true);
     target.addEventListener('pointercancel', e => { if (dragging?.target === target) { e.stopImmediatePropagation(); dragging = undefined; host.schedule(); } }, true);
+    target.addEventListener('lostpointercapture', () => { if (dragging?.target === target) cancelGesture(); });
     target.addEventListener('pointerup', e => {
       if (!dragging || dragging.target !== target || dragging.id !== e.pointerId) return;
       e.stopImmediatePropagation(); const d = dragging; dragging = undefined;
@@ -352,6 +363,10 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
       const r = { id: `shape-${crypto.randomUUID()}`, x: Math.min(d.start.x, d.end.x), y: Math.min(d.start.y, d.end.y), width: Math.abs(d.start.x - d.end.x) + .25, height: Math.abs(d.start.y - d.end.y) + .25 };
       run(() => {
         if (!validElevation(n('active'))) throw new Error('Quota non valida.');
+        if (mode() === 'raise' && !isAsset() && host.terrainAt) {
+          for (let y=Math.floor(r.y);y<Math.ceil(r.y+r.height);y++) for(let x=Math.floor(r.x);x<Math.ceil(r.x+r.width);x++)
+            if(Math.abs(host.terrainAt(x+.5,y+.5)-n('active'))>1) throw new Error('Non possibile: il terreno può cambiare di un solo livello per volta. Usa un oggetto specifico per un salto maggiore.');
+        }
         const g = editGeometry(owner()), m = mode();
         if (m === 'raise' || m === 'bridge' || m === 'surface') {
           const surface = { ...r, elevation: n('active'), ground: m === 'raise', terrain: (get('material').value === 'transparent' ? 'grass' : get('material').value) as TileKind,
@@ -377,6 +392,8 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
     fill(); host.selectTool('elevation-select'); refresh(); host.schedule(); return true;
   }
   return {
+    cancelGesture,
+    selectShape(kind: GeometryKind, id: string) { cancelGesture(); set('owner','map'); selection=`${kind}|${id}`; needsPrepare=false; host.selectTool('elevation-select'); fill(); refresh(); host.schedule(); },
     refresh, elevation: () => n('active'), visibility, editsAsset: isAsset, selectMapAt,
     terrainElevation: () => { const value = root.querySelector<HTMLInputElement>('#terrain-elevation')!.value; return value === '' ? undefined : Number(value); },
     autoStair: () => root.querySelector<HTMLInputElement>('#terrain-auto-stair')!.checked,

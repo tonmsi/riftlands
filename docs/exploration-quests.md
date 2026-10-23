@@ -14,6 +14,10 @@ Tre sentinel esistenti, con sprite e comportamento già disponibili, sono alle c
 
 ## World Maker e mappa
 
+La mappa è disponibile dall'inizio per tutti i personaggi: non si compra e le missioni non la sbloccano. Il terreno sconosciuto è oscurato. Camminando si rivela un disco di 6 caselle attorno alla posizione confermata dal server, sia nella minimappa sia nella mappa estesa. Le scoperte restano salvate per personaggio, con progressi separati per mondo e interni. Aprire la mappa o un teletrasporto non rivela il percorso intermedio. Morti e personaggi disconnessi non esplorano.
+
+Dungeon, personaggi, oggetti e contorni delle arene compaiono solo nel territorio scoperto. Gli obiettivi delle missioni attive restano indicati anche nelle zone sconosciute per consentire di raggiungerli. I vecchi salvataggi mantengono missioni e inventario; la cartografia inizia a registrare le scoperte dalla posizione corrente, perché gli spostamenti precedenti non erano salvati.
+
 Seleziona una zona e usa **Obiettivo missione → Pietre che camminano**. Spostare o ridimensionare quella zona sposta anche il trigger server e l’indicatore. Scegli **Nessuno** per rimuovere il collegamento. Puoi collegare più zone alla stessa quest: basta raggiungerne una.
 
 La zona iniziale è `zone-north-road`, rettangolo alle celle `(-4, 4)`, largo 8 e alto 7. `WorldZone.questId` è salvato e validato dal parser; il World Maker segnala collegamenti a missioni inesistenti o non di esplorazione. Non è un editor di dialoghi o ricompense: quelle restano in `shared/narrative.ts`.

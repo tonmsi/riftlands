@@ -36,7 +36,7 @@ export async function startWorldStudio(options: { root: string; documentPath: st
         response.writeHead(200, { 'Content-Type': /\.png$/i.test(relative) ? 'image/png' : 'image/svg+xml', 'X-Content-Type-Options': 'nosniff', 'Cache-Control':'no-cache' }); response.end(bytes);
       }).catch(() => { response.writeHead(404); response.end(); }); return;
     }
-    if (!['/__world/project', '/__world/asset-files', '/__world/music', '/__world/images', '/__world/actor-images', '/__world/actors', '/api/actor-catalog'].includes(path)) { vite.middlewares(request, response, () => { response.writeHead(404); response.end(); }); return; }
+    if (!['/__world/project', '/__world/delete-asset', '/__world/asset-files', '/__world/music', '/__world/images', '/__world/actor-images', '/__world/actors', '/api/actor-catalog'].includes(path)) { vite.middlewares(request, response, () => { response.writeHead(404); response.end(); }); return; }
     void (async () => {
       if (request.method === 'GET' && path === '/__world/music') { reply(200, { files: await listWorldMusic(options.root) }); return; }
       if (request.method === 'GET' && (path === '/__world/actors' || path === '/api/actor-catalog')) {
@@ -57,6 +57,11 @@ export async function startWorldStudio(options: { root: string; documentPath: st
         else if (path === '/__world/music') reply(200, { src: await importWorldMusic(options.root, payload.filename, payload.base64) });
         else if (path === '/__world/actors') { const result = await saveActorProject(options, payload.catalog, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
         else if (path === '/__world/images' || path === '/__world/actor-images') reply(200, { image: await importWorldImage(options.root, payload.mime, payload.base64, path === '/__world/actor-images' ? 'actor-assets' : 'world-assets', payload.filename) });
+        else if (path === '/__world/delete-asset') {
+          if (typeof payload.assetId !== 'string' || !payload.assetId) throw new Error('Asset non valido.');
+          const result = await saveWorldProject(options, payload.document, payload.revision, payload.assetId);
+          vite.moduleGraph.invalidateAll(); reply(200, result);
+        }
         else { const result = await saveWorldProject(options, payload.document, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
       } finally { busy = false; }
     })().catch(e => { if (!response.headersSent) reply(400, { error: e instanceof Error ? e.message : String(e) }); });

@@ -10,7 +10,7 @@ import { SOUL_QUEST_ID } from '../shared/soul-escort';
 import type { Account } from './store';
 import { canCollectItem, collectItem, ITEM_DEFINITIONS, newInventory, type ItemStack } from '../shared/items';
 import { VENDOR_DEFINITIONS, type VendorOffer } from '../shared/vendors';
-import { acceptQuest, advanceQuest, conditionMatches, DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS, newNarrativeProgress, questStatus, questReward, questCompletions, hasWorldMap, grantWorldMap } from '../shared/narrative';
+import { acceptQuest, advanceQuest, conditionMatches, DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS, newNarrativeProgress, questStatus, questReward, questCompletions } from '../shared/narrative';
 import { NPC_LOOT_TABLES } from '../shared/loot';
 import { GROUND_ITEM_TTL, LOOT_ITEM_TTL, INTERACTION_RANGE, type GroundItem, type DialogueView, type InteractionCommand, type InventoryAction } from '../shared/interactions';
 
@@ -83,10 +83,6 @@ export class InteractionSystem {
       const offer = VENDOR_DEFINITIONS[session.dialogueId]?.offers.find(offer => offer.id === command.offerId);
       if (!offer) throw new Error('Offerta non disponibile.');
       const reason = this.purchaseBlocked(account, offer); if (reason) throw new Error(reason);
-      if (offer.unlock === 'world-map') {
-        grantWorldMap(account.narrative!); account.gold = (account.gold ?? 0) - offer.price;
-        this.advance(session, 'shop', now); this.host.changed(id); return;
-      }
       const inventory = structuredClone(account.inventory!);
       if (!collectItem(inventory, offer.itemId, offer.quantity, false)) throw new Error('Zaino pieno.');
       Object.assign(account.inventory!, inventory); account.gold = (account.gold ?? 0) - offer.price;
@@ -104,9 +100,6 @@ export class InteractionSystem {
         if (quest.id === SOUL_QUEST_ID && !this.host.world.authoring.document.zones.some(zone => zone.questId === quest.id)) throw new Error('Le anime non riescono ancora a ritrovare il loro luogo di riposo. Torna più tardi.');
         acceptQuest(account.narrative!, quest, now);
         if (quest.id === SOUL_QUEST_ID) account.narrative!.quests[quest.id].objectives['eren-released'] = 1;
-        if (quest.objective.kind === 'reach-area') {
-          grantWorldMap(account.narrative!);
-        }
         this.host.changed(id);
         this.sessions.delete(id);
         return;
@@ -177,7 +170,6 @@ export class InteractionSystem {
       ...(rewardQuest ? { rewards, rewardGold: questReward(rewardQuest, completions).gold, rewardXp: questReward(rewardQuest, completions).xp } : {}) };
   }
   private purchaseBlocked(account: Account, offer: VendorOffer): string | undefined {
-    if (offer.unlock === 'world-map') return hasWorldMap(account.narrative!) ? 'Possiedi già la mappa.' : (account.gold ?? 0) < offer.price ? 'Gold insufficienti.' : undefined;
     const size = ITEM_DEFINITIONS[offer.itemId]?.backpackSlots;
     if (size && size <= account.inventory!.capacity) return 'Hai già uno zaino uguale o più grande.';
     if ((account.gold ?? 0) < offer.price) return 'Gold insufficienti.';

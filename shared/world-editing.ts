@@ -91,9 +91,10 @@ export class WorldBrush {
   erase(point: Vec2, elevation?: number): void {
     const current = this.tileIndices.get(`${point.x},${point.y}`);
     const chunk = this.document.tileChunks ? this.chunk(point) : undefined;
-    const terrain = chunk ? tileFromCode(chunk.cells[(point.y - chunk.y * EDIT_CHUNK_SIZE) * EDIT_CHUNK_SIZE + point.x - chunk.x * EDIT_CHUNK_SIZE], point.x, point.y)?.terrain
-      : current !== undefined ? this.document.tiles[current].terrain : undefined;
-    this.tile(point, { suppressAssets: true, ...(terrain ? { terrain } : {}) });
+    const tile = chunk ? tileFromCode(chunk.cells[(point.y - chunk.y * EDIT_CHUNK_SIZE) * EDIT_CHUNK_SIZE + point.x - chunk.x * EDIT_CHUNK_SIZE], point.x, point.y)
+      : current !== undefined ? this.document.tiles[current] : undefined;
+    const terrain = tile?.terrain;
+    this.tile(point, { suppressAssets: true, ...(terrain ? { terrain } : {}), ...(terrain === 'bush' && tile?.bushStyle ? { bushStyle: tile.bushStyle } : {}) });
     for (const p of this.placements.query({ left: point.x, top: point.y, right: point.x + 1, bottom: point.y + 1 })) {
       if (elevation !== undefined && (p.baseElevation ?? 0) !== elevation) continue;
       const index = this.placementIndices.get(p.id); if (index === undefined) continue;

@@ -6,6 +6,26 @@ import { forkWorldDocument, WorldBrush } from '../shared/world-editing';
 import { WorldEditorHistory } from '../client/editors/world/world-editor-history';
 import { World } from '../shared/world';
 
+test('bush styles survive compact storage, undo and erase without changing legacy codes', () => {
+  const original = compactWorldTiles(newWorldDocument()), next = forkWorldDocument(original), brush = new WorldBrush(next);
+  for (const [x, terrain, bushStyle] of [[-1, 'grass', 'png'], [0, 'grass', 'js'], [1, 'bush', 'js']] as const)
+    brush.tile({ x, y: -1 }, { terrain, bushStyle, suppressAssets: true });
+  brush.flushTiles();
+  const restored = parseWorldDocument(serializeWorldDocument(next)), tiles = new WorldTiles(restored);
+  assert.equal(tiles.at(-1, -1)?.bushStyle, 'png'); assert.equal(tiles.at(0, -1)?.bushStyle, 'js');
+  assert.equal(tiles.at(1, -1)?.terrain, 'bush'); assert.equal(tileCode({ terrain: 'bush', suppressAssets: true }), 11);
+  const history = new WorldEditorHistory(); history.commit(original, restored);
+  assert.equal(new WorldTiles(history.undo(restored)).at(0, -1), undefined);
+  assert.equal(new WorldTiles(history.redo(original)).at(0, -1)?.bushStyle, 'js');
+  const erase = new WorldBrush(restored); erase.erase({ x: 0, y: -1 }); erase.erase({ x: 1, y: -1 }); erase.flushTiles();
+  assert.equal(new WorldTiles(restored).at(0, -1)?.bushStyle, undefined);
+  assert.equal(new WorldTiles(restored).at(1, -1)?.bushStyle, 'js');
+  for (const code of [18, 32, 33, 36, 64, 80, 98]) {
+    const bad = structuredClone(original); bad.tileChunks = [[0, 0, 0, 1, code]];
+    assert.throws(() => parseWorldDocument(bad), /intervallo/);
+  }
+});
+
 test('RLE preserves terrain and suppression at negative coordinates, validates runs and decodes only bounded chunks', () => {
   const document = newWorldDocument();
   for (let y = -64; y < 64; y++) for (let x = -64; x < 64; x++) document.tiles.push({ x, y, terrain: x < 0 ? 'water' : 'path', suppressAssets: true });

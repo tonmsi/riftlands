@@ -1,7 +1,9 @@
 import type { WorldAsset } from '../../../shared/world-schema';
 
-/** Catalog groups follow the image's public folder instead of manual tags. */
-export const assetGroup = (asset: WorldAsset): string => {
+/** Random pools stay together; independent assets follow their public folder. */
+export const assetGroup = (asset: WorldAsset, assets: readonly WorldAsset[] = []): string => {
+  const root = asset.variantOf ? assets.find(a => a.id === asset.variantOf) : asset;
+  if (root && (asset.variantOf || assets.some(a => a.variantOf === root.id))) return root.name;
   let path = asset.image.split(/[?#]/)[0].replaceAll('\\', '/');
   try { path = decodeURIComponent(path); } catch { /* Preserve malformed legacy URLs. */ }
   const match = /(?:^|\/)world-assets\/(.*)/.exec(path);
@@ -29,21 +31,27 @@ export class WorldAssetCatalog {
     try { localStorage.setItem('riftlands.asset-groups', JSON.stringify([...this.open])); } catch { /* Catalog editing still works without preferences. */ }
   }
   expandAll(open: boolean): void {
-    for (const asset of this.assets) (this.search.trim() ? this.searchOpen : this.open).set(assetGroup(asset), open);
+    for (const group of this.groupLabels().values()) (this.search.trim() ? this.searchOpen : this.open).set(group, open);
     this.save(); this.signature = ''; this.render();
   }
-  reveal(asset: WorldAsset): void { this.open.set(assetGroup(asset), true); this.signature = ''; this.save(); }
+  reveal(asset: WorldAsset): void { this.open.set(assetGroup(asset, this.assets), true); this.signature = ''; this.save(); }
   update(assets: readonly WorldAsset[], active: string, search: string): void {
     this.assets = assets; this.active = active;
     if (this.search !== search) { this.limits.clear(); this.searchOpen.clear(); }
     this.search = search; this.render();
   }
+  private groupLabels(): Map<string, string> {
+    const definitions = new Map(this.assets.map(a => [a.id, a]));
+    const roots = new Set(this.assets.flatMap(a => a.variantOf ? [a.variantOf] : []));
+    return new Map(this.assets.map(a => [a.id, roots.has(a.variantOf ?? a.id) ? definitions.get(a.variantOf ?? a.id)!.name : assetGroup(a)]));
+  }
   private render(): void {
     const search = this.search.trim().toLocaleLowerCase();
     const expansion = search ? this.searchOpen : this.open;
     const groups = new Map<string, WorldAsset[]>();
-    for (const asset of [...this.assets].sort((a,b) => assetGroup(a).localeCompare(assetGroup(b), 'it') || a.name.localeCompare(b.name, 'it'))) {
-      const group = assetGroup(asset);
+    const labels = this.groupLabels();
+    for (const asset of [...this.assets].sort((a,b) => labels.get(a.id)!.localeCompare(labels.get(b.id)!, 'it') || a.name.localeCompare(b.name, 'it'))) {
+      const group = labels.get(asset.id)!;
       if (search && !`${asset.name} ${group} ${asset.generation.category}`.toLocaleLowerCase().includes(search)) continue;
       if (!groups.has(group)) groups.set(group, []);
       groups.get(group)!.push(asset);
@@ -70,6 +78,7 @@ export class WorldAssetCatalog {
           const image = document.createElement('img'); image.loading = 'lazy'; image.decoding = 'async'; image.src = asset.image; image.alt = '';
           const info = document.createElement('div'), name = document.createElement('span'), detail = document.createElement('small');
           name.textContent = asset.name; detail.textContent = `${asset.width} × ${asset.height} · ${asset.generation.enabled ? 'genera + manuale' : 'manuale'}`;
+          if (asset.variantOf) detail.textContent = `${asset.width} × ${asset.height} · variante casuale`;
           info.append(name, detail); button.append(image, info); button.onclick = () => this.select(asset.id); items.append(button);
         }
         if (assets.length > limit) {

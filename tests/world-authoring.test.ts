@@ -19,6 +19,28 @@ function grass(document: WorldDocument, x = -4, y = -4, width = 16, height = 16)
 }
 const environment: GenerationEnvironment = { tile: () => 'grass', temperature: () => .5, moisture: () => .5, reserved: () => false };
 
+test('painted grass generates only opted-in bushes with local artwork and unchanged hiding rules', () => {
+  const make = (style: 'png' | 'js') => {
+    const d = newWorldDocument(), bush = newWorldAsset('bush', 'Cespuglio', '/world-assets/bush.png');
+    bush.generation = { ...bush.generation, enabled: true, density: 1, spacing: 0, terrains: ['grass'] };
+    bush.cells[0].visibility = 'hide-fade'; d.assets.push(bush);
+    for (let y = 1; y < 12; y++) for (let x = 1; x < 12; x++) d.tiles.push({ x, y, terrain: 'grass', suppressAssets: true, bushStyle: style });
+    return d;
+  };
+  const bounds = { left: 1, top: 1, right: 12, bottom: 12 }, png = make('png'), js = make('js');
+  const a = new WorldAuthoring(png).assetsIn(bounds, environment, 42), b = new WorldAuthoring(js).assetsIn(bounds, environment, 42);
+  assert.equal(a.length, 121); assert.equal(b.length, a.length);
+  assert.ok(a.every(p => !p.bushJs)); assert.ok(b.every(p => p.bushJs));
+  assert.deepEqual(a.map(p => [p.x, p.y]), b.map(p => [p.x, p.y]));
+  const world = new World(42, 16, 'world', js, []);
+  assert.equal(world.isHiding(72, 72), true); assert.equal(world.isBlocked(1, 1), false);
+  const erase = new WorldBrush(js); erase.erase({ x: 1, y: 1 }); erase.flushTiles();
+  assert.equal(new World(42, 16, 'world', js, []).isHiding(72, 72), false);
+  assert.equal(new WorldAuthoring(js).assetsIn(bounds, { ...environment, reserved: () => true }, 42).length, 0);
+  png.assets[0].id = 'other'; png.assets[0].image = '/world-assets/other.png';
+  assert.equal(new WorldAuthoring(png).assetsIn(bounds, environment, 42).length, 0);
+});
+
 test('artwork overflow survives serialization and viewport culling without extending collisions or hiding', () => {
   const d = newWorldDocument(); grass(d);
   const a = newWorldAsset('overflow', 'Ciuffo', '/world-assets/bush.svg');

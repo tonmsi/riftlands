@@ -2,6 +2,14 @@
 
 Data: 20 ottobre 2026. Analisi del codice e riproduzioni browser con Chrome headless, su documenti temporanei. Nessuna modifica ai contenuti del progetto o al comportamento dell'editor.
 
+Aggiornamento dopo l'audit: i sette difetti qui descritti sono stati affrontati nella
+prima implementazione del workspace, insieme alla selezione precisa dei PNG, ai box
+compatti, alle colonne ridimensionabili, all'esploratore e al limite di un livello
+per volta nel disegno del terreno. È stato inoltre ripristinato il pulsante di
+posizionamento dungeon, rimosso per errore dal riordino dei pannelli. Questa prima
+implementazione non comprende un authoring generale delle missioni o finestre
+indipendenti staccabili. Il testo seguente conserva i risultati dell'audit iniziale.
+
 Il problema principale è la sovrapposizione dei contesti: mappa aperta, area selezionata nel pannello, quota attiva, quote visibili, istanza selezionata, asset di catalogo e destinazione della geometria. L'utente deve ricordare questi stati mentre passa fra controlli distanti. I pannelli ridimensionabili aiuterebbero, ma serve prima rendere esplicito e coerente il destinatario delle operazioni.
 
 ## Difetti riprodotti

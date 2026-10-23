@@ -5,7 +5,7 @@ import { chromium, expect } from '@playwright/test';
 import { createServer } from 'vite';
 import type { AbilitySlot } from '../../shared/types';
 
-test('onboarding feedback, locked map, ability progression and arena controls fit desktop and mobile landscape', { timeout: 60_000 }, async () => {
+test('onboarding feedback, available map, ability progression and arena controls fit desktop and mobile landscape', { timeout: 60_000 }, async () => {
   const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' });
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
@@ -39,15 +39,15 @@ test('onboarding feedback, locked map, ability progression and arena controls fi
       });
       await expect(page.locator('.ability-button')).toHaveCount(1);
       await expect(page.locator('.arena-watch-launcher')).toBeHidden();
-      assert.equal(await page.locator('.compact-minimap').evaluate(e => getComputedStyle(e).opacity), '0');
+      assert.equal(await page.locator('.compact-minimap').evaluate(e => getComputedStyle(e).opacity), '1');
       await page.locator('.compact-map').click();
       await expect(page.locator('.minimap-panel')).toBeVisible();
-      assert.equal(await page.locator('.minimap').evaluate(e => getComputedStyle(e).opacity), '0');
+      assert.equal(await page.locator('.minimap').evaluate(e => getComputedStyle(e).opacity), '1');
       await expect(page.locator('.map-actions [data-ref="leave"]')).toBeVisible();
       await expect(page.locator('.map-actions .fullscreen-toggle')).toBeVisible();
-      await page.screenshot({ path: `test-results/onboarding-locked-map-${width}x${height}.png` });
+      await page.screenshot({ path: `test-results/onboarding-map-${width}x${height}.png` });
       await page.locator('[data-ref="map-close"]').click();
-      await page.evaluate(() => { const f = (window as any).onboarding; f.snapshot.narrative.quests['north-road'] = { status: 'active', objectives: {} }; f.snapshot.narrative.flags.push('world-map'); f.snapshot.dialogue = null; f.update(); });
+      await page.evaluate(() => { const f = (window as any).onboarding; f.snapshot.narrative.quests['north-road'] = { status: 'active', objectives: {} }; f.snapshot.dialogue = null; f.update(); });
       await page.clock.runFor(300);
       await expect(page.locator('.quest-acceptance-feedback')).toBeVisible();
       await expect(page.locator('.quest-acceptance-feedback')).toContainText('Missione accettata: Pietre che camminano');

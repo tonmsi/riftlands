@@ -11,9 +11,9 @@ import { studioDraft } from '../fixtures/studio-draft';
 test('one Studio shares assets, installs unplaced dungeons, preserves world edits across tabs and moves every selection with left drag after selection', { timeout: 120_000 }, async () => {
     const directory = await mkdtemp(join(tmpdir(), 'riftlands-unified-studio-'));
     const options = { root: resolve('.'), port: 0, documentPath: join(directory, 'world.json'), dungeonPath: join(directory, 'dungeons.json'), dataPath: join(directory, 'accounts.json') };
-    const document = newWorldDocument(), asset = newWorldAsset('shared-fixture', 'Asset condiviso di prova', '/world-assets/bush.svg');
+    const document = newWorldDocument(), asset = newWorldAsset('shared-fixture', 'Asset condiviso di prova', '/world-assets/waystone.svg');
     asset.group = 'Test condivisi'; resizeWorldAsset(asset, 2, 2); asset.cells[0].blocked = true;
-    const generatedAsset = newWorldAsset('generated-fixture', 'Asset procedurale di prova', '/world-assets/bush.svg');
+    const generatedAsset = newWorldAsset('generated-fixture', 'Asset procedurale di prova', '/world-assets/waystone.svg');
     generatedAsset.generation.enabled = true; generatedAsset.generation.density = 1;
     document.assets = [asset, generatedAsset]; document.placements = [{ id: 'manual', assetId: asset.id, x: 100, y: 100 }];
     document.npcs = [{ id: 'npc', npcKind: 'slime', level: 2, x: 106, y: 100 }];
@@ -31,6 +31,8 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
         const context = await browser.newContext({ viewport: { width: 1640, height: 1100 } }), world = await context.newPage(), errors: string[] = [];
         context.on('page', page => page.on('pageerror', e => errors.push(e.message))); world.on('pageerror', e => errors.push(e.message));
         await world.goto(studio.url); await expect(world.locator('#status')).toContainText('World Studio pronto');
+        await world.locator('#area-kind').selectOption('dungeon');
+        await world.locator('#dungeon-resources > summary').click();
         const popup = world.waitForEvent('popup'); await world.locator('#open-dungeon-maker').click(); const dungeon = await popup;
         dungeon.on('dialog', dialog => dialog.accept());
         await expect(dungeon.locator('#dungeon-library')).toBeVisible();
@@ -98,7 +100,8 @@ test('one Studio shares assets, installs unplaced dungeons, preserves world edit
         await dungeon.evaluate('window.__name = (func) => func;');
         const entry = await dungeon.evaluate(async () => {
             const { Renderer } = await import('/client/render/render.ts' as string), { createDungeonPlaytest } = await import('/client/editors/dungeon/dungeon-playtest.ts' as string);
-            const draft = JSON.parse(localStorage.getItem('riftlands.dungeon-draft.v2')!);
+            const { parseDungeonDraft } = await import('/shared/dungeon-draft.ts' as string);
+            const draft = parseDungeonDraft(localStorage.getItem('riftlands.dungeon-draft.v2')!);
             const { WORLD_DOCUMENT } = await import('/shared/world-content.ts' as string);
             const assets = WORLD_DOCUMENT.assets;
             // This visual probe does not need the authored decoration to exercise entry UI.

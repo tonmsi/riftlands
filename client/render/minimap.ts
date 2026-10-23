@@ -8,10 +8,11 @@ import { renderDpr } from '../core/frame-budget';
 import { PICKUP_COLORS, circle, noise } from './render-primitives';
 import { activeQuestAreas } from '../../shared/quest-areas';
 import type { NarrativeProgress } from '../../shared/narrative';
+import { tileExplored, type Exploration } from '../../shared/exploration';
 
 /** Mappa locale limitata del terreno procedurale noto. */
-const minimapTerrainViews = new WeakMap<HTMLCanvasElement, { world: World; key: string; canvas: HTMLCanvasElement; width: number; height: number }>();
-export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600, viewSign = 1, narrative?: NarrativeProgress): void {
+const minimapTerrainViews = new WeakMap<HTMLCanvasElement, { world: World; exploration?: Exploration; key: string; canvas: HTMLCanvasElement; width: number; height: number }>();
+export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600, viewSign = 1, narrative?: NarrativeProgress, mapId = 'world'): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const rect = canvas.getBoundingClientRect(), dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
@@ -32,19 +33,22 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   const left = center.x - width / (2 * scale), top = center.y - height / (2 * scale);
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#525f46';
+  ctx.fillStyle = '#111b25';
   ctx.fillRect(0, 0, width, height);
 
   const startX = Math.floor(left / TILE_SIZE), startY = Math.floor(top / TILE_SIZE);
   const cols = Math.ceil(width / scale / TILE_SIZE) + 2, rows = Math.ceil(height / scale / TILE_SIZE) + 2;
-  const terrainKey = `${world.lockRevision}:${world.authoringRevision}:${startX}:${startY}:${width}:${height}:${visibleSpan}:${dpr}`;
+  const known = (tx: number, ty: number) => world.mode !== 'world' || tileExplored(narrative?.exploration, mapId, tx, ty);
+  const knownPoint = (point: { x: number; y: number }) => known(Math.floor(point.x / TILE_SIZE), Math.floor(point.y / TILE_SIZE));
+  const terrainKey = `${mapId}:${narrative?.revision ?? 0}:${world.lockRevision}:${world.authoringRevision}:${startX}:${startY}:${width}:${height}:${visibleSpan}:${dpr}`;
   let cached = minimapTerrainViews.get(canvas);
-  if (!cached || cached.world !== world || cached.key !== terrainKey) {
+  if (!cached || cached.world !== world || cached.exploration !== narrative?.exploration || cached.key !== terrainKey) {
     const bitmap = document.createElement('canvas'), bitmapWidth = cols * TILE_SIZE * scale, bitmapHeight = rows * TILE_SIZE * scale;
     bitmap.width = Math.ceil(bitmapWidth * dpr); bitmap.height = Math.ceil(bitmapHeight * dpr);
     const paint = bitmap.getContext('2d')!; paint.setTransform(dpr, 0, 0, dpr, 0, 0);
     for (let ty = startY; ty < startY + rows; ty++) {
       for (let tx = startX; tx < startX + cols; tx++) {
+      if (!known(tx, ty)) continue;
       const tile = world.getTile(tx, ty);
       const dungeon = world.mode === 'world' ? world.dungeons.find(d => tx >= d.layout.bounds.minTx && tx <= d.layout.bounds.maxTx && ty >= d.layout.bounds.minTy && ty <= d.layout.bounds.maxTy) : undefined;
       paint.fillStyle = dungeon && tile === 'rock' ? dungeon.theme.wallTop
@@ -53,7 +57,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
       paint.fillRect((tx - startX) * TILE_SIZE * scale, (ty - startY) * TILE_SIZE * scale, TILE_SIZE * scale + 0.5, TILE_SIZE * scale + 0.5);
       }
     }
-    cached = { world, key: terrainKey, canvas: bitmap, width: bitmap.width / dpr, height: bitmap.height / dpr }; minimapTerrainViews.set(canvas, cached);
+    cached = { world, exploration: narrative?.exploration, key: terrainKey, canvas: bitmap, width: bitmap.width / dpr, height: bitmap.height / dpr }; minimapTerrainViews.set(canvas, cached);
   }
   ctx.drawImage(cached.canvas, (startX * TILE_SIZE - left) * scale, (startY * TILE_SIZE - top) * scale, cached.width, cached.height);
 
@@ -65,12 +69,14 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   ctx.stroke();
 
   for (const pickup of pickups) {
+    if (!knownPoint(pickup)) continue;
     ctx.fillStyle = PICKUP_COLORS[pickup.kind];
     ctx.fillRect((pickup.x - left) * scale - 1, (pickup.y - top) * scale - 1, 2, 2);
   }
 
   if (world.mode === 'world') {
     for (const dungeon of world.dungeons) {
+      if (!knownPoint(dungeon.area)) continue;
       const dx = Math.max(10, Math.min(width - 10, (dungeon.area.x - left) * scale));
       const dy = Math.max(10, Math.min(height - 10, (dungeon.area.y - top) * scale));
       ctx.save();
@@ -83,6 +89,11 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
       ctx.strokeRect(-5, -5, 10, 10);
       ctx.restore();
     }
+    ctx.save(); ctx.beginPath();
+    for (let ty = startY; ty < startY + rows; ty++) for (let tx = startX; tx < startX + cols; tx++) {
+      if (known(tx, ty)) ctx.rect((tx * TILE_SIZE - left) * scale, (ty * TILE_SIZE - top) * scale, TILE_SIZE * scale, TILE_SIZE * scale);
+    }
+    ctx.clip();
     for (const zone of world.authoring.document.zones) {
       if (!zone.arenaId) continue;
       const b = shapeBounds(zone.shape); ctx.beginPath();
@@ -90,6 +101,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
       else ctx.rect((b.left * TILE_SIZE - left) * scale, (b.top * TILE_SIZE - top) * scale, (b.right-b.left)*TILE_SIZE*scale, (b.bottom-b.top)*TILE_SIZE*scale);
       ctx.strokeStyle=zone.arenaId?'#a5d9e8':zone.pvp?'#dc7a65':'#b6d9b0';ctx.lineWidth=1;ctx.stroke();
     }
+    ctx.restore();
   }
 
   const questAreas = world.mode === 'world' ? activeQuestAreas(world.authoring.document.zones, narrative) : [];
@@ -115,7 +127,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
     ctx.restore();
   }
   for (const actor of actors) {
-    if (actor.id === self?.id || actor.hp <= 0) continue;
+    if (actor.id === self?.id || actor.hp <= 0 || !knownPoint(actor)) continue;
     ctx.fillStyle = actor.kind === 'npc' ? '#ccbb8d' : actor.teamId && actor.teamId === self?.teamId ? '#a6dcb4' : '#e6a08c';
     circle(ctx, (actor.x - left) * scale, (actor.y - top) * scale, actor.kind === 'npc' ? 1.6 : 2.5);
     ctx.fill();
@@ -124,7 +136,8 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   const originX = (spawn.x * TILE_SIZE - left) * scale, originY = (spawn.y * TILE_SIZE - top) * scale;
   ctx.strokeStyle = 'rgba(242,229,181,0.7)';
   ctx.lineWidth = 1;
-  circle(ctx, originX, originY, 4);
+  ctx.beginPath();
+  if (knownPoint({ x: spawn.x * TILE_SIZE, y: spawn.y * TILE_SIZE })) circle(ctx, originX, originY, 4);
   ctx.stroke();
 
   if (self) {
