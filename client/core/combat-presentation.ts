@@ -167,20 +167,30 @@ export class LocalCombatPresentation {
             const dt = Math.max(0, Math.min(.1, (now - shot.lastAt) / 1000));
             shot.lastAt = now;
             if (!shot.fresh) {
+                if (auth) { p.vx = auth.projectile.vx; p.vy = auth.projectile.vy; }
                 let x = p.x + p.vx * dt, y = p.y + p.vy * dt;
                 if (auth) {
-                    // Bounded owner-only extrapolation. Remote players retain the shared interpolation buffer.
-                    const ahead = Math.max(0, Math.min(100, now - auth.time)) / 1000, weight = 1 - Math.exp(-dt / 0.08);
+                    // Owner shots have constant authoritative velocity. Keep their trajectory moving
+                    // between packets; clamping its age freezes the correction target and brakes flight.
+                    // Lifetime, confirmed disappearance and wall sweeps still bound cosmetic prediction.
+                    const ahead = Math.max(0, now - auth.time) / 1000, weight = 1 - Math.exp(-dt / 0.08);
                     const target = { x: auth.projectile.x + auth.projectile.vx * ahead, y: auth.projectile.y + auth.projectile.vy * ahead };
                     const wall = sweptWorldHit(auth.projectile, target, p.radius, world, elevationOf(p));
                     if (wall !== null) {
                         target.x = auth.projectile.x + (target.x - auth.projectile.x) * wall;
                         target.y = auth.projectile.y + (target.y - auth.projectile.y) * wall;
                     }
-                    x += (target.x - x) * weight;
-                    y += (target.y - y) * weight;
-                    p.vx = auth.projectile.vx;
-                    p.vy = auth.projectile.vy;
+                    const speed = Math.hypot(p.vx, p.vy);
+                    if (speed > 0) {
+                        const dx = p.vx / speed, dy = p.vy / speed;
+                        const errorX = (target.x - x) * weight, errorY = (target.y - y) * weight;
+                        const along = errorX * dx + errorY * dy;
+                        // Adopt aim corrections promptly, but reconcile launch timing gradually:
+                        // an ACK must never stop or reverse a projectile that already left the body.
+                        const limit = speed * dt * .15, correction = Math.max(-limit, Math.min(limit, along));
+                        x += errorX + dx * (correction - along);
+                        y += errorY + dy * (correction - along);
+                    }
                 }
                 if (sweptWorldHit(p, { x, y }, p.radius, world, elevationOf(p)) !== null) {
                     shot.hidden = true;

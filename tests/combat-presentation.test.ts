@@ -125,6 +125,38 @@ test('owner shots bypass the remote buffer; remote shots retain their interpolat
     assert.ok(frame.projectiles.find(p => p.id === 'owner')!.x > 50);
     assert.equal(frame.projectiles.find(p => p.id === 'other')!.x, 3);
 });
+
+test('an owner projectile keeps flying at its speed while an authoritative snapshot is delayed', () => {
+    const { world, actor, command, view, snapshot } = fixture();
+    view.predict(command, actor, null, world, 1000);
+    const first = view.sample(actor, [], [], world, 1000), speed = first.projectiles[0].vx;
+    const projectile = { ...first.projectiles[0], id: 'server', x: speed * .1 };
+    view.receive({ ...snapshot(1, [projectile], first.events), time: 1100 }, 1100);
+    let previous = view.sample(actor, [], [], world, 1100).projectiles[0];
+    for (let time = 1116; time <= 1500; time += 16) {
+        const current = view.sample(actor, [], [], world, time).projectiles[0];
+        const velocity = (current.x - previous.x) / .016;
+        assert.ok(velocity >= speed * .85 - .001, `shot slowed to ${velocity.toFixed(1)} at ${time}`);
+        previous = current;
+    }
+});
+
+test('a later authoritative launch corrects local prediction without braking or reversing the shot', () => {
+    const { world, actor, command, view, snapshot } = fixture();
+    view.predict(command, actor, null, world, 1000);
+    const first = view.sample(actor, [], [], world, 1000), speed = first.projectiles[0].vx;
+    let previous = first.projectiles[0];
+    for (let time = 1016; time < 1400; time += 16) previous = view.sample(actor, [], [], world, time).projectiles[0];
+    const time = 1400, projectile = { ...first.projectiles[0], id: 'server', x: speed * .32 };
+    view.receive({ ...snapshot(1, [projectile], [{ ...first.events[0], at: 1080 }]), time }, time);
+    const current = view.sample(actor, [], [], world, 1400).projectiles[0];
+    const velocity = (current.x - previous.x) / .016;
+    assert.ok(velocity >= speed * .85 - .001, `confirmation slowed the shot to ${velocity.toFixed(1)}`);
+    for (let next = 1416; next < 1600; next += 16) {
+        const shot = view.sample(actor, [], [], world, next).projectiles[0];
+        assert.ok(shot.x > current.x, 'the shot must keep moving forward');
+    }
+});
 test('a later server-accepted command also starts on the body when local cooldown prediction skipped it', () => {
     const { world, actor, view, snapshot } = fixture();
     const p: Projectile = { id: 'owner', inputSeq: 7, ownerId: actor.id, x: 70, y: 0, vx: 480, vy: 0, radius: 6, damage: 16, expiresAt: 2000, color: '#fff' };

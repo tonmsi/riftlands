@@ -9,11 +9,30 @@ import { once } from 'node:events';
 import { chromium, expect, type Browser } from '@playwright/test';
 import { AccountStore, publicAccount } from '../../server/store';
 import { WorldSimulation } from '../../server/simulation';
-test('moving casts originate on the rendered player at 30/150/300 ms RTT without duplicate shots', { timeout: 90000 }, async () => {
+import { collidesWorld } from '../../shared/physics';
+test('moving casts originate on the rendered player and fly without braking at 30/150/300 ms RTT', { timeout: 90000 }, async () => {
     const directory = mkdtempSync(join(tmpdir(), 'riftlands-combat-view-'));
     const store = new AccountStore(join(directory, 'accounts.json'));
     const sim = new WorldSimulation(734291, Date.now(), store);
-    const users = [30, 150, 300].map((rtt, index) => { const user = store.register(`CombatView${rtt}`, 'test-password'); const player = sim.addPlayer(user.account, 'mage'); Object.assign(player, { x: 0, y: 1000 + index * 3000, aim: Math.PI / 2 }); return user; });
+    const spawns: { x: number; y: number }[] = [];
+    const users = [30, 150, 300].map(rtt => {
+        // Saved worlds change: find an actually clear firing/movement corridor instead
+        // of assuming the old hard-coded coordinates still contain a road.
+        let spawn: { x: number; y: number } | undefined;
+        search: for (let y = 1000; y < 6000; y += 192) {
+          candidate: for (let x = -4000; x <= 4000; x += 96) {
+            if (spawns.some(point => Math.abs(point.x - x) < 96 && Math.abs(point.y - y) < 1400)) continue;
+            for (let offset = 0; offset <= 1200; offset += 16) {
+                if (collidesWorld(x, y + offset, 20, sim.world) || !sim.world.pvpAt(x, y + offset)) continue candidate;
+            }
+            spawn = { x, y }; break search;
+          }
+        }
+        assert.ok(spawn, `RTT ${rtt}: no clear test corridor`);
+        spawns.push(spawn);
+        const user = store.register(`CombatView${rtt}`, 'test-password'), player = sim.addPlayer(user.account, 'mage');
+        Object.assign(player, spawn, { aim: Math.PI / 2 }); return user;
+    });
     sim.checkpoint();
     store.flush();
     const probe = createServer();
@@ -55,7 +74,7 @@ test('moving casts originate on the rendered player at 30/150/300 ms RTT without
                     const probe = window as any;
                     probe.combatFrames = [];
                     Renderer.prototype.render = function (frame: any) { original.call(this, frame); if (frame.playing && frame.self)
-                        probe.combatFrames.push({ at: performance.now(), self: { x: frame.self.x, y: frame.self.y }, shots: frame.projectiles.filter((p: any) => p.ownerId === frame.self.id).map((p: any) => ({ id: p.id, seq: p.inputSeq, x: p.x, y: p.y })), events: frame.events.filter((e: any) => e.actorId === frame.self.id && e.kind === 'cast').map((e: any) => ({ id: e.id, seq: e.inputSeq, x: e.x, y: e.y })) }); };
+                        probe.combatFrames.push({ at: performance.now(), time: frame.time, self: { x: frame.self.x, y: frame.self.y }, shots: frame.projectiles.filter((p: any) => p.ownerId === frame.self.id).map((p: any) => ({ id: p.id, seq: p.inputSeq, x: p.x, y: p.y, vx: p.vx, vy: p.vy })), events: frame.events.filter((e: any) => e.actorId === frame.self.id && e.kind === 'cast').map((e: any) => ({ id: e.id, seq: e.inputSeq, x: e.x, y: e.y })) }); };
                 });
                 // Face south manually and move down the clear world road while firing.
                 await page.mouse.move(640, 730);
@@ -64,16 +83,26 @@ test('moving casts originate on the rendered player at 30/150/300 ms RTT without
                 await page.waitForTimeout(150);
                 const start = await page.evaluate(() => performance.now());
                 await page.keyboard.down('Space');
-                await page.waitForTimeout(1350);
+                await page.waitForTimeout(1800);
                 await page.keyboard.up('Space');
                 await page.keyboard.up('KeyS');
                 await page.mouse.up();
                 await page.waitForTimeout(rtt + 150);
                 const frames: any[] = await page.evaluate(() => (window as any).combatFrames);
                 const seen = new Set<string>(), origins: number[] = [], onsets: number[] = [], sequences: number[] = [];
+                const previousShots = new Map<string, { time: number; x: number; y: number }>(), speedRatios: number[] = [];
                 for (const f of frames) {
                     const seqs = f.shots.map((p: any) => p.seq).filter((s: any) => s !== undefined);
                     assert.equal(new Set(seqs).size, seqs.length, 'one rendered projectile per command');
+                    for (const p of f.shots) {
+                        const previous = previousShots.get(p.id), speed = Math.hypot(p.vx, p.vy);
+                        const dt = previous ? (f.time - previous.time) / 1000 : 0;
+                        if (previous && dt > .005 && dt < .08 && speed > 0) {
+                            const forward = ((p.x - previous.x) * p.vx + (p.y - previous.y) * p.vy) / speed;
+                            speedRatios.push(forward / dt / speed);
+                        }
+                        previousShots.set(p.id, { time: f.time, x: p.x, y: p.y });
+                    }
                     for (const p of f.shots)
                         if (!seen.has(p.id)) {
                             seen.add(p.id);
@@ -87,6 +116,8 @@ test('moving casts originate on the rendered player at 30/150/300 ms RTT without
                 assert.ok(Math.max(...origins) < .01, `RTT ${rtt}: launch offset ${Math.max(...origins)}`);
                 assert.ok(onsets[0] < 120, `RTT ${rtt}: local onset ${onsets[0]}`);
                 assert.ok(Math.abs(frames.at(-1).self.y - frames[0].self.y) > 100, 'the player must actually be moving');
+                assert.ok(speedRatios.length >= 10, `RTT ${rtt}: not enough flight samples`);
+                assert.ok(Math.min(...speedRatios) >= .84, `RTT ${rtt}: projectile slowed to ${(Math.min(...speedRatios) * 100).toFixed(1)}%`);
                 assert.deepEqual(errors, []);
                 console.log(JSON.stringify({ rttMs: rtt, shots: origins.length, maxLaunchOffset: Math.max(...origins), firstShotMs: +onsets[0].toFixed(1) }));
                 if (rtt === 150)

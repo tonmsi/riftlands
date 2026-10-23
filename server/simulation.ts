@@ -5,7 +5,7 @@ import { randomUUID } from '../shared/id';
 import { CLASSES, DT, INTEREST_RADIUS, PLAYER_RADIUS, TILE_SIZE, WORLD_SEED, levelFromXp } from '../shared/config';
 import { collidesWorld, hasLineOfSight, moveWithCollisions, movementSpeed, resolveActorCollisions, segmentCircleHit, terrainSpeed } from '../shared/physics';
 import { playerSpriteDirectionRow } from '../shared/sprite-direction';
-import type { AbilitySlot, Actor, ClassId, ClientMessage, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2, RoomMode } from '../shared/types';
+import type { AbilitySlot, Actor, ClassId, ClientMessage, CombatImpact, GameEvent, InputCommand, Pickup, Projectile, Snapshot, SocialState, Trap, Vec2, RoomMode } from '../shared/types';
 import { World, chunkCoords, chunkKey, coordinateHash } from '../shared/world';
 import { OUTPOST } from '../shared/outpost';
 import { BOSS_BY_ID, type BossDefinition } from '../shared/bosses';
@@ -483,7 +483,7 @@ export class WorldSimulation {
         if (owner && this.allied(owner, target)) continue;
         if (trap.teamId && target.teamId === trap.teamId) continue;
 
-        if (!this.damage(target, owner, trap.damage, elevationOf(trap))) continue;
+        if (!this.damage(target, owner, trap.damage, elevationOf(trap), this.contactImpact(target, trap, 'area', trap.color))) continue;
         triggered = true;
         this.effect(target, 'root', trap.duration);
         this.emit({
@@ -624,9 +624,11 @@ export class WorldSimulation {
       }
       actor.x = start.x + (end.x - start.x) * fraction;
       actor.y = start.y + (end.y - start.y) * fraction;
-      if (contact && !this.allied(actor, contact) && hasLineOfSight(actor, contact, this.world)) this.damage(contact, actor, ability.damage * this.damageMultiplier(actor));
+      if (contact && !this.allied(actor, contact) && hasLineOfSight(actor, contact, this.world)) this.damage(contact, actor, ability.damage * this.damageMultiplier(actor), elevationOf(actor), this.contactImpact(contact, start, 'melee', ability.color));
+      else if (fraction === 1 && distance(start, end) < distance(start, intended) - 1) this.wallImpact(actor, { x: end.x + Math.cos(actor.aim) * actor.radius, y: end.y + Math.sin(actor.aim) * actor.radius }, actor.aim, 'melee', ability.color);
       return true;
     }
+    let landed = false;
     for (const target of this.near(actor, ability.range || ability.radius)) {
       const ally = this.allied(actor, target);
       if (!hasLineOfSight(actor, target, this.world)) continue;
@@ -642,7 +644,13 @@ export class WorldSimulation {
         const angle = Math.atan2(target.y - actor.y, target.x - actor.x);
         if (Math.cos(angle - actor.aim) < Math.cos(Math.PI * 0.38)) continue;
       }
-      this.damage(target, actor, ability.damage * this.damageMultiplier(actor));
+      const kind = ability.kind === 'melee' ? 'melee' : 'area';
+      landed = this.damage(target, actor, ability.damage * this.damageMultiplier(actor), elevationOf(actor), this.contactImpact(target, actor, kind, ability.color)) || landed;
+    }
+    if (!landed && ability.kind === 'melee') {
+      const end = { x: actor.x + Math.cos(actor.aim) * ability.range, y: actor.y + Math.sin(actor.aim) * ability.range };
+      const wall = sweptWorldHit(actor, end, 2, this.world, elevationOf(actor));
+      if (wall !== null) this.wallImpact(actor, { x: actor.x + (end.x - actor.x) * wall + Math.cos(actor.aim) * 2, y: actor.y + (end.y - actor.y) * wall + Math.sin(actor.aim) * 2 }, actor.aim, 'melee', ability.color);
     }
     return true;
   }
@@ -651,7 +659,18 @@ export class WorldSimulation {
     return (actor.effects.some(effect => effect.kind === 'power' && effect.until > this.now) ? 1.3 : 1) * (actor.effects.some(effect => effect.kind === 'weakness' && effect.until > this.now) ? 0.7 : 1);
   }
 
-  private damage(target: Actor, attacker: Actor | undefined, amount: number, attackElevation = attacker ? elevationOf(attacker) : elevationOf(target)): boolean {
+  private contactImpact(target: Actor, source: Vec2 | undefined, kind: CombatImpact['kind'], color: string): Omit<CombatImpact, 'outcome'> {
+    const aim = source ? Math.atan2(target.y - source.y, target.x - source.x) : 0;
+    const offset = kind === 'area' ? 0 : target.radius;
+    return { kind, color, aim, x: target.x - Math.cos(aim) * offset, y: target.y - Math.sin(aim) * offset };
+  }
+
+  private wallImpact(source: Actor | Projectile, point: Vec2, aim: number, kind: CombatImpact['kind'], color: string): void {
+    this.emit({ kind: 'hit', ...point, elevation: elevationOf(source), actorId: 'ownerId' in source ? source.ownerId : source.id,
+      radius: 24, duration: 320, color, impact: { ...point, aim, kind, color, outcome: 'wall' } });
+  }
+
+  private damage(target: Actor, attacker: Actor | undefined, amount: number, attackElevation = attacker ? elevationOf(attacker) : elevationOf(target), impact?: Omit<CombatImpact, 'outcome'>): boolean {
     if (elevationOf(target) !== attackElevation) return false;
     if (attacker && !this.world.sameRoom(attacker, target)) return false;
     if (target.disposition === 'neutral' || target.hp <= 0 || target.spawnProtectedUntil > this.now || (attacker && this.allied(attacker, target))) return false;
@@ -676,7 +695,8 @@ export class WorldSimulation {
       if (source) { source.combatAt = this.now; source.combatUntil = this.now + 10_000; }
       if (CLASSES[attacker.classId].resource === 'rage') attacker.resource = Math.min(attacker.maxResource, attacker.resource + 12);
     }
-    this.emit({ kind: 'hit', x: target.x, y: target.y, actorId: attacker?.id, targetId: target.id, amount: applied, radius: 26, duration: 500, color: '#ffb8a2' });
+    this.emit({ kind: 'hit', x: target.x, y: target.y, elevation: attackElevation, actorId: attacker?.id, targetId: target.id, amount: applied, radius: 26, duration: 500, color: '#ffb8a2',
+      impact: { ...(impact ?? this.contactImpact(target, attacker, 'melee', '#ffd0a0')), outcome: shield < 1 ? 'shield' : 'hit' } });
     if (target.hp > 0) return true;
     if (target.kind === 'player') for (const boss of this.bosses.values()) boss.participantDied(target.id, this.world);
     target.deaths++;
@@ -747,8 +767,16 @@ export class WorldSimulation {
         if (t !== null && t < hitAt) { hitAt = t; hit = actor; }
       }
       if (hit) {
-        const applied = this.damage(hit, owner, projectile.damage, elevationOf(projectile));
+        const aim = Math.atan2(projectile.vy, projectile.vx);
+        const impact = { kind: 'projectile' as const, color: projectile.color, aim,
+          x: start.x + (end.x - start.x) * hitAt + Math.cos(aim) * projectile.radius,
+          y: start.y + (end.y - start.y) * hitAt + Math.sin(aim) * projectile.radius };
+        const applied = this.damage(hit, owner, projectile.damage, elevationOf(projectile), impact);
         if (applied && projectile.slow && hit.hp > 0) this.effect(hit, 'slow', projectile.slow);
+      } else if (wallAt <= 1) {
+        const aim = Math.atan2(projectile.vy, projectile.vx);
+        this.wallImpact(projectile, { x: start.x + (end.x - start.x) * wallAt + Math.cos(aim) * projectile.radius,
+          y: start.y + (end.y - start.y) * wallAt + Math.sin(aim) * projectile.radius }, aim, 'projectile', projectile.color);
       }
       if (hit || wallAt <= 1 || this.now >= projectile.expiresAt) {
         this.projectiles.delete(id);

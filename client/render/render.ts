@@ -33,6 +33,7 @@ import { arenaViewSign, cameraZoom, parseCameraSettings, viewVector, type Camera
 import { TerrainRenderer } from './terrain-renderer';
 import { drawFishingWorld } from '../fishing/world-art';
 import { ActorRenderer } from './actor-renderer';
+import { drawCombatImpact } from './combat-impact';
 import { AmbientSpeech } from '../core/ambient-speech';
 import { drawSpeechBubble } from './speech-bubble';
 import { hasLineOfSight } from '../../shared/physics';
@@ -474,7 +475,10 @@ export class Renderer {
     for (const p of [...groundAssets,...objectAssets]) if (!this.world.authoring.assets.get(p.assetId)!.geometry && assetElevation(p) === floor && assetFades.get(p.id)!.annotated) paintObject(p, true);
     for(const part of deckParts)if(part.s.elevation===floor)paintDeck(part,true);
     for (const projectile of frame.projectiles) if (elevationOf(projectile) === floor && this.visible(projectile)) this.drawProjectile(projectile, frame.time);
-    for (const event of events) if (elevationOf(event) === floor) this.drawFloatingEvent(event, frame.time);
+    for (const event of events) if (elevationOf(event) === floor) {
+      if (event.impact && this.visible(event.impact)) drawCombatImpact(ctx, event, frame.time, this.reducedMotion.matches);
+      this.drawFloatingEvent(event, frame.time);
+    }
     }
 
     const effectsStart=perf.begin();

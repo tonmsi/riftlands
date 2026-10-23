@@ -96,7 +96,7 @@ export class SnapshotBuilder {
       projectiles: [...s.projectiles.values()].filter(p => visible(p) && distance(self, p) < INTEREST_RADIUS).map(p => ({ ...p })),
       pickups: [...s.pickups.values()].filter(p => visible(p) && distance(self, p) < INTEREST_RADIUS).map(p => ({ ...p })),
       traps: [...s.traps.values()].filter(p => visible(p) && distance(self, p) < INTEREST_RADIUS).map(p => ({ ...p })),
-      events: s.events.filter(event => visible(event) && distance(self, event) < INTEREST_RADIUS && (!event.actorId || visibleIds.has(event.actorId)) && (!event.targetId || visibleIds.has(event.targetId))).map(event => ({ ...event })),
+      events: s.events.filter(event => visible(event) && distance(self, event) < INTEREST_RADIUS && (!event.actorId || visibleIds.has(event.actorId)) && (!event.targetId || visibleIds.has(event.targetId))).map(event => ({ ...event, ...(event.impact ? { impact: { ...event.impact } } : {}) })),
       online: [...s.connections.values()].filter(c => c.connected).length, activeChunks: s.activeChunks.size,
     };
   }

@@ -37,6 +37,9 @@ export interface Pickup extends Vec2 { id: string; kind: PickupKind; radius: num
 export interface Trap extends Vec2 { id: string; ownerId: string; teamId: string | null; radius: number; damage: number; duration: number; expiresAt: number; color: string; }
 export interface GameEvent extends Vec2 { id: string; kind: 'cast' | 'hit' | 'heal' | 'death' | 'pickup' | 'respawn'; at: number; duration: number; radius: number; color: string; actorId?: string; targetId?: string; aim?: number; abilityKind?: AbilityDef['kind']; amount?: number; text?: string; }
 export interface GameEvent { inputSeq?: number; }
+/** Confirmed contact; animation is drawn by the client, damage remains server-owned. */
+export interface CombatImpact extends Vec2 { kind: 'melee' | 'projectile' | 'area'; outcome: 'hit' | 'shield' | 'wall'; aim: number; color: string; }
+export interface GameEvent { impact?: CombatImpact; }
 export interface SocialPlayer { id: string; name: string; classId: ClassId; level: number; teamId: string | null; friend: boolean; }
 export interface SocialState { friends: { id: string; name: string; online: boolean }[]; requests: { id: string; name: string }[]; teamInvites: { id: string; name: string; teamId: string }[]; team: { id: string; leaderId: string; members: { id: string; name: string; online: boolean; hp?: number; maxHp?: number }[] } | null; nearby: SocialPlayer[]; }
 export interface PublicAccount { id: string; name: string; kills: number; deaths: number; xp: number; }
