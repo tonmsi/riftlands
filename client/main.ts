@@ -33,7 +33,7 @@ import { CameraOptions } from './controls/camera-options';
 import { DeviceOptions } from './controls/device-options';
 import { matchResultText } from './ui/transition-overlay';
 import { WarpUI } from './ui/warp-ui';
-import { WORLD_DOCUMENT } from '../shared/world-content';
+import { WORLD_DOCUMENT, installWorldDocument } from '../shared/world-content';
 import { BettingUI } from './ui/betting-ui';
 
 let playing = false;
@@ -162,7 +162,18 @@ const connection = new GameConnection({
     ui.toast('La sessione precedente è scaduta. Accedi con le tue credenziali.', 'error');
   },
   message: message => {
-    if (message.type === 'welcome') {
+    if (message.type === 'world') {
+      installWorldDocument(message.document);
+      if (!message.relocated) {
+        const mapId = activeMapId === 'world' || message.document.interiors?.some(m => m.id === activeMapId) ? activeMapId : 'world';
+        renderer.setSeed(renderer.world.mode === 'world' ? message.document.seed : renderer.world.seed, renderer.world.mode, mapId, true);
+      } else {
+        latest = null; predicted = null; pending = []; snapshotBuffer.clear(); renderedActors = [];
+        localMovement.reset(); localCombat.reset(); effects.clear(); releaseControls();
+        warpUI.cancel(); respawnUI.cancel(); fishingUI.reset(); ui.interactions.reset();
+      }
+      lastMinimap = 0;
+    } else if (message.type === 'welcome') {
       questProgress = undefined;
       lobbyToken = message.token;
       renderer.setSeed(message.seed);

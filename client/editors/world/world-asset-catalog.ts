@@ -43,7 +43,7 @@ export class WorldAssetCatalog {
   private groupLabels(): Map<string, string> {
     const definitions = new Map(this.assets.map(a => [a.id, a]));
     const roots = new Set(this.assets.flatMap(a => a.variantOf ? [a.variantOf] : []));
-    return new Map(this.assets.map(a => [a.id, roots.has(a.variantOf ?? a.id) ? definitions.get(a.variantOf ?? a.id)!.name : assetGroup(a)]));
+    return new Map(this.assets.map(a => [a.id, roots.has(a.variantOf ?? a.id) ? definitions.get(a.variantOf ?? a.id)?.name ?? a.name : assetGroup(a)]));
   }
   private render(): void {
     const search = this.search.trim().toLocaleLowerCase();

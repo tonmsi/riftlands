@@ -28,6 +28,12 @@ function noise(x: number, y: number, seed: number): number {
 
 /** Pure terrain plus a bounded LRU cache; neither client nor server retains infinity. */
 export class World {
+  /** Preserve the World identity held by gameplay systems, replacing all document indexes and caches. */
+  replaceWith(next: World): void {
+    Object.assign(this, next);
+    this.elevation.bindWorld(this);
+    this.generationEnvironment = this.createGenerationEnvironment();
+  }
   readonly elevation: WorldElevation;
   readonly roomTiles = new Map<string, string>();
   readonly rooms: { id: string; name: string; tiles: { x: number; y: number }[] }[] = [];
@@ -40,7 +46,7 @@ export class World {
   readonly authoring: WorldAuthoring;
   private readonly manualNpcs = new Map<string, NpcSpawn[]>();
   private readonly lockedTiles = new Map<string, ReadonlySet<string>>();
-  private readonly generationEnvironment: GenerationEnvironment;
+  private generationEnvironment: GenerationEnvironment;
   constructor(public readonly seed = WORLD_DOCUMENT.seed, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world',
     document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS) {
     this.authoring = new WorldAuthoring(document);
@@ -57,7 +63,11 @@ export class World {
       const bucket = this.manualNpcs.get(key) ?? []; bucket.push({ ...n, id: `authored:${n.id}`, x, y }); this.manualNpcs.set(key, bucket);
     }
     for (const d of dungeons.flatMap(dungeonEncounters)) this.lockedTiles.set(d.bossId, new Set(dungeonStoneTiles(d).map(t => `${t.x},${t.y}`)));
-    this.generationEnvironment = { tile: (x, y) => this.generateTile(x, y), temperature: (x, y) => this.getTemperature(x, y),
+    this.generationEnvironment = this.createGenerationEnvironment();
+  }
+  private createGenerationEnvironment(): GenerationEnvironment {
+    const document = this.authoring.document;
+    return { tile: (x, y) => this.generateTile(x, y), temperature: (x, y) => this.getTemperature(x, y),
       moisture: (x, y) => this.getMoisture((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE),
       reserved: (x, y) => !!document.interiorBounds || configuredDungeonTile(x, y, this.dungeons) !== undefined
         || this.dungeons.some(d => onDungeonApproach(d, { x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE }))

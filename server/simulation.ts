@@ -9,7 +9,7 @@ import type { AbilitySlot, Actor, ClassId, ClientMessage, CombatImpact, GameEven
 import { World, chunkCoords, chunkKey, coordinateHash } from '../shared/world';
 import { OUTPOST } from '../shared/outpost';
 import { BOSS_BY_ID, type BossDefinition } from '../shared/bosses';
-import { DUNGEON_BY_BOSS_ID, insideDungeon, type DungeonDefinition } from '../shared/dungeons';
+import { DUNGEON_BY_BOSS_ID, dungeonEncounters, insideDungeon, type DungeonDefinition } from '../shared/dungeons';
 import { NPC_COMBAT, NPC_DEFINITIONS, type NpcWanderBehavior } from '../shared/npcs';
 import { InteractionSystem } from './interactions';
 import { FishingSystem } from './fishing/fishing-system';
@@ -25,6 +25,7 @@ import { SnapshotBuilder } from './snapshot-builder';
 import { actorVisibleTo } from './actor-visibility';
 import { activateCharacter, characterFor } from './character-progress';
 import { DEVELOPER_XP, equippedAbility, normalizeLoadout } from '../shared/progression';
+import { relocateForWorldChange, worldSpawn } from './world-runtime';
 
 const EMPTY_COOLDOWNS = () => ({ basic: 0, q: 0, e: 0, r: 0 });
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -51,7 +52,7 @@ export class WorldSimulation {
   readonly fishing: FishingSystem;
   readonly bosses = new Map<string, BossEncounter>();
   readonly world: World;
-  readonly seed: number;
+  seed: number;
   readonly players = new Map<string, Actor>();
   readonly npcs = new Map<string, Actor>();
   readonly projectiles = new Map<string, Projectile>();
@@ -126,6 +127,54 @@ export class WorldSimulation {
   }
 
   get online(): number { return [...this.connections.values()].filter(connection => connection.connected).length; }
+  applyWorld(next: World): Set<string> {
+    const previous = this.world;
+    const relocated = new Set<string>();
+    for (const actor of this.players.values()) {
+      const before = { x: actor.x, y: actor.y, elevation: elevationOf(actor) };
+      relocateForWorldChange(actor, previous, next);
+      if (before.x !== actor.x || before.y !== actor.y || before.elevation !== elevationOf(actor)) {
+        relocated.add(actor.id);
+        const connection = this.connections.get(actor.id);
+        if (connection) { connection.inputs = []; connection.ack = 0; connection.highestSeq = 0; }
+        actor.spriteMoving = false;
+        this.fishing.close(actor.id); this.interactions.close(actor.id);
+      }
+    }
+    // Preserve encounters whose definition and placement did not change.
+    const definitions = next.dungeons.flatMap(dungeonEncounters);
+    for (const [id, encounter] of this.bosses) {
+      const definition = definitions.find(d => d.bossId === id);
+      if (JSON.stringify(definition) !== JSON.stringify(encounter.dungeon)) {
+        this.bosses.delete(id);
+        if (this.store?.bossStates[id] === encounter.state) delete this.store.bossStates[id];
+      }
+    }
+    this.world.replaceWith(next); this.seed = next.seed;
+    if (this.environment) Object.assign(this.environment, { spawn: worldSpawn(this.world), dungeons: definitions });
+    this.npcs.clear(); this.npcMeta.clear(); this.activeChunks.clear(); this.npcSleep.clear();
+    this.pickups.clear(); this.pickupReady.clear(); this.projectiles.clear(); this.projectileTeams.clear();
+    this.traps.clear(); this.events.length = 0; this.pendingCasts.clear(); this.queuedBursts.length = 0;
+    this.dungeonCorpses.clear(); this.dungeonResetVersions.clear();
+    for (const dungeon of definitions) if (!this.bosses.has(dungeon.bossId)) {
+      const definition = (this.environment?.bosses ?? BOSS_BY_ID).get(dungeon.bossId)!;
+      const encounter = new BossEncounter(definition, this.now, this.store?.bossStates[definition.id], this.store, dungeon);
+      Object.assign(encounter.boss, this.world.elevation.at(encounter.boss.x, encounter.boss.y, 0));
+      this.bosses.set(definition.id, encounter);
+      if (this.store) this.store.bossStates[definition.id] = encounter.state;
+    }
+    const groups = new Map<string, BossEncounter[]>();
+    for (const encounter of this.bosses.values()) {
+      this.npcs.set(encounter.boss.id, encounter.boss);
+      this.world.setBossLocked(encounter.definition.id, encounter.lockState().locked);
+      const id = encounter.dungeon.encounterGroupId;
+      if (id) { const key = `${encounter.dungeon.id}:${id}`, group = groups.get(key) ?? []; group.push(encounter); groups.set(key, group); }
+    }
+    for (const group of groups.values()) BossEncounter.linkGroup(group);
+    this.updateChunks(); this.rebuildCells(); this.snapshots.invalidate();
+    this.checkpoint();
+    return relocated;
+  }
   interact(id: string, command: InteractionCommand): void {
     if (this.mode !== 'world' || !validInteractionCommand(command)) throw new Error('Interazione non disponibile in questa istanza.');
     if (command.kind === 'fishing') { this.fishing.command(id, command.command, this.now); this.pendingCasts.delete(id); this.interactions.close(id); return; }

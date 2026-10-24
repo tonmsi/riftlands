@@ -229,8 +229,8 @@ export class TerrainRenderer {
       const x = Math.floor((left - margin) * scale) / scale;
       const y = Math.floor((top - margin) * scale) / scale;
       const canvas = cache?.canvas ?? document.createElement('canvas');
-      // Reserve the widest elevation view so animated zoom also preserves scroll reuse.
-      const cacheZoom=view.rasterZoom?Math.min(view.rasterZoom*.88,view.zoom):view.zoom;
+      // A separate raster scale lets temporary fishing zoom reuse the terrain.
+      const cacheZoom=view.rasterZoom?Math.min(view.rasterZoom,view.zoom):view.zoom;
       const width = Math.ceil((view.width / cacheZoom + margin * 2) * scale) + 1;
       const height = Math.ceil((view.height / cacheZoom + margin * 2) * scale) + 1;
       const dx = cache ? Math.round((cache.left - x) * scale) : 0;

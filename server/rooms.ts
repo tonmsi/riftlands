@@ -21,6 +21,7 @@ import { TILE_SIZE, PLAYER_RADIUS } from '../shared/config';
 import { atWarp, mapDocument, warpPosition, WARP_FADE_MS } from '../shared/warps';
 import { validInteractionCommand } from '../shared/interactions';
 import type { WorldDocument, WorldWarp } from '../shared/world-schema';
+import { relocateForWorldChange, worldSpawn } from './world-runtime';
 
 type Membership = { roomId: string; epoch: number; account: Account; classId: ClassId; connected: boolean; expiresAt?: number };
 export interface MatchRoom {
@@ -56,10 +57,70 @@ export class RoomManager {
   private readonly warpRequests = new Map<string, { warp: WorldWarp; readyAt: number; epoch: number; saved: boolean }>();
   private readonly warpMessages = new Map<string, Extract<import('../shared/types').ServerMessage, { type: 'warp-transition' }>>();
   private readonly warpRearm = new Set<string>();
-  constructor(private readonly store?: GameplayPersistence, seed = WORLD_SEED, now = Date.now(), readonly project: WorldDocument = WORLD_DOCUMENT) {
+  constructor(private readonly store?: GameplayPersistence, seed = WORLD_SEED, now = Date.now(), public project: WorldDocument = WORLD_DOCUMENT) {
     const world = new World(seed, 160, 'world', project, worldDungeons(project, DUNGEON_DEFINITIONS));
     this.global = new WorldSimulation(seed, now, store, 'world', { world, dungeons: world.dungeons.flatMap(dungeonEncounters), bosses: BOSS_BY_ID,
       spawn: { x: project.spawn.x * TILE_SIZE, y: project.spawn.y * TILE_SIZE } });
+  }
+
+  prepareProject(project: WorldDocument): Map<string, World> {
+    const worlds = new Map<string, World>();
+    for (const id of ['world', ...(project.interiors ?? []).map(m => m.id)]) {
+      const document = mapDocument(project, id);
+      const world = new World(project.seed, 160, 'world', document, worldDungeons(document, DUNGEON_DEFINITIONS));
+      const spawn = worldSpawn(world);
+      if (elevationOf(spawn) < 0 || collidesWorld(spawn.x, spawn.y, PLAYER_RADIUS + 2, world, elevationOf(spawn))) throw new Error(`Spawn non calpestabile: ${id}.`);
+      worlds.set(id, world);
+    }
+    return worlds;
+  }
+
+  applyProject(project: WorldDocument, worlds: Map<string, World>): Set<string> {
+    const relocated = new Set<string>();
+    this.warpRequests.clear(); this.warpMessages.clear();
+    this.gateEntries.clear(); this.gatePairs.clear();
+    // Removed maps return their occupants before the old map registry is replaced.
+    for (const [id, member] of this.memberships) if (member.roomId.startsWith('interior:') && !worlds.has(member.roomId.slice(9))) {
+      if (member.account.location) Object.assign(member.account.location.returnTo, worldSpawn(worlds.get('world')!));
+      this.returnToWorld(id);
+      const actor = this.global.players.get(id);
+      if (actor) Object.assign(actor, worldSpawn(worlds.get('world')!));
+      relocated.add(id);
+    }
+    const oldWorlds = new Map<string, World>([['world', this.global.world]]);
+    for (const map of this.project.interiors ?? []) oldWorlds.set(map.id, this.interiors.get(map.id)?.world
+      ?? new World(this.project.seed, 16, 'world', mapDocument(this.project, map.id), worldDungeons(mapDocument(this.project, map.id), DUNGEON_DEFINITIONS)));
+    if (this.store) for (const [mapId, old] of oldWorlds) for (const dungeon of old.dungeons.flatMap(dungeonEncounters)) {
+      const next = worlds.get(mapId)?.dungeons.flatMap(dungeonEncounters).find(d => d.bossId === dungeon.bossId);
+      if (JSON.stringify(next) !== JSON.stringify(dungeon)) delete this.store.bossStates[dungeon.bossId];
+    }
+    // Offline bodies and open-world return checkpoints must follow the same geometry rules.
+    for (const account of this.store?.accounts.values() ?? []) {
+      let id = account.location?.mapId ?? 'world';
+      if (!worlds.has(id)) {
+        if (account.body) Object.assign(account.body, worldSpawn(worlds.get('world')!));
+        delete account.location; id = 'world';
+      }
+      if (account.body) relocateForWorldChange(account.body, oldWorlds.get(id)!, worlds.get(id)!);
+      if (account.location) relocateForWorldChange(account.location.returnTo, this.global.world, worlds.get('world')!);
+    }
+    this.project = project;
+    for (const id of this.global.applyWorld(worlds.get('world')!)) relocated.add(id);
+    for (const [id, sim] of this.interiors) {
+      const world = worlds.get(id);
+      if (world) {
+        for (const playerId of sim.applyWorld(world)) relocated.add(playerId);
+      } else this.interiors.delete(id);
+    }
+    // Only relocated players need a movement reset. Others keep their inputs and room epoch.
+    for (const [id, member] of this.memberships) {
+      if (!relocated.has(id)) continue;
+      member.epoch++; this.warpRearm.add(id);
+      const connection = this.simulationFor(id).connections.get(id);
+      if (connection) { connection.inputs = []; connection.ack = 0; connection.highestSeq = 0; }
+    }
+    this.store?.touch(); this.store?.flush(); this.store?.flushBosses();
+    return relocated;
   }
 
   private interior(id: string): WorldSimulation {

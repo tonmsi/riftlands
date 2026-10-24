@@ -6,6 +6,7 @@ import { drawWorldFire } from './world-fire-art';
 import { EnvironmentArt } from './environment-art';
 import { coordinateHash } from '../../shared/coordinate-random';
 import { performanceLog as perf } from '../core/performance-log';
+import { rasterizeAssetShadow } from './world-asset-shadow';
 
 /** Shared by the game and editor. Each source is decoded once; SVG is rasterized outside the frame loop.
  * Cache pressure is bounded by both pixels and entries, independent of catalog size. */
@@ -30,7 +31,17 @@ export class WorldAssetArt {
     while (this.cache.size > 256 || this.pixels > 16_000_000) { const first = this.cache.keys().next().value!, item = this.cache.get(first)!; this.pixels -= item.width * item.height; this.cache.delete(first); }
     return bitmap;
   }
-  image(a: WorldAsset): HTMLCanvasElement | undefined {
+  image(a: WorldAsset, includeShadow = true): HTMLCanvasElement | undefined {
+    if (includeShadow && a.shadow && worldAssetVisual(a).kind === 'image') {
+      const source = this.image(a, false);
+      if (!source) return undefined;
+      const b = worldAssetImageBounds(a), key = `shadow:${a.image}:${b.width}:${b.height}:${JSON.stringify(a.shadow)}`;
+      const cached = this.cache.get(key);
+      if (cached) { this.cache.delete(key); this.cache.set(key, cached); return cached; }
+      const bitmap = rasterizeAssetShadow(source.width, source.height, a.shadow, source);
+      bitmap.getContext('2d')!.drawImage(source, 0, 0);
+      return this.remember(key, bitmap);
+    }
     const b = worldAssetImageBounds(a);
     const key = `${a.image}:${b.width}:${b.height}`, cached = this.cache.get(key);
     if (cached) { this.cache.delete(key); this.cache.set(key, cached); return cached; }
@@ -77,7 +88,7 @@ export class WorldAssetArt {
     const b = worldAssetImageBounds(a), u = (x - p.x - b.x) / b.width, v = (y - p.y - b.y) / b.height;
     if (u < 0 || v < 0 || u >= 1 || v >= 1) return false;
     if (worldAssetVisual(a).kind === 'fire') return true;
-    const bitmap = p.bushJs ? this.jsBush(a, p) : this.image(a);
+    const bitmap = p.bushJs ? this.jsBush(a, p) : this.image(a, false);
     if (!bitmap) return true;
     try { return bitmap.getContext('2d')!.getImageData(Math.floor(u * bitmap.width), Math.floor(v * bitmap.height), 1, 1).data[3] >= 16; }
     catch { return true; }
@@ -117,7 +128,7 @@ export class WorldAssetArt {
       const paint = image.getContext('2d')!; paint.scale(image.width / TILE_SIZE, image.height / TILE_SIZE); drawWorldFire(paint, visual.style, time, coordinateHash(p.x, p.y, 941) * 100);
     } else image = p.bushJs ? this.jsBush(a, p) : this.image(a);
     if (image && (fade > 0 || hidingFade > 0)) image = this.faded(a, image, fade, visual.kind === 'fire', hidingFade,
-      p.bushJs ? `js-bush:${Math.floor(coordinateHash(p.x, p.y, 99127) * 4)}` : a.image);
+      p.bushJs ? `js-bush:${Math.floor(coordinateHash(p.x, p.y, 99127) * 4)}` : `${a.image}:${JSON.stringify(a.shadow)}`);
     ctx.save(); ctx.globalAlpha *= opacity;
     if (image) ctx.drawImage(image, (p.x + b.x) * unit, (p.y + b.y) * unit, b.width * unit, b.height * unit);
     else { ctx.fillStyle = '#86ab8544'; ctx.fillRect((p.x + b.x) * unit, (p.y + b.y) * unit, b.width * unit, b.height * unit); }

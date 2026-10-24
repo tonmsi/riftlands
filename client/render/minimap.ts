@@ -6,7 +6,7 @@ import { shapeBounds } from '../../shared/world-authoring';
 import { mapTerrainColor } from './terrain-style';
 import { renderDpr } from '../core/frame-budget';
 import { PICKUP_COLORS, circle, noise } from './render-primitives';
-import { activeQuestAreas } from '../../shared/quest-areas';
+import { activeQuestAreas, questMapNpcs } from '../../shared/quest-areas';
 import type { NarrativeProgress } from '../../shared/narrative';
 import { tileExplored, type Exploration } from '../../shared/exploration';
 
@@ -131,6 +131,24 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
     ctx.fillStyle = actor.kind === 'npc' ? '#ccbb8d' : actor.teamId && actor.teamId === self?.teamId ? '#a6dcb4' : '#e6a08c';
     circle(ctx, (actor.x - left) * scale, (actor.y - top) * scale, actor.kind === 'npc' ? 1.6 : 2.5);
     ctx.fill();
+  }
+
+  // Quest pins are drawn above the fog, without revealing terrain or other NPCs.
+  const questNpcs = world.mode === 'world' ? questMapNpcs(world.authoring.document.npcs, narrative) : [];
+  canvas.dataset.questNpcCount = String(questNpcs.length);
+  const visibleActors = new Map(actors.map(actor => [actor.id, actor]));
+  for (const { npc, marker } of questNpcs) {
+    const actor = visibleActors.get(`authored:${npc.id}`);
+    if (actor && actor.hp <= 0) continue;
+    const x = ((actor?.x ?? (npc.x + .5) * TILE_SIZE) - left) * scale;
+    const y = ((actor?.y ?? (npc.y + .5) * TILE_SIZE) - top) * scale;
+    if (x < 8 || x > width - 8 || y < 10 || y > height - 10) continue;
+    ctx.save();ctx.translate(x,y);ctx.scale(1,viewSign);
+    ctx.fillStyle = marker === 'available' ? '#ffe087' : '#8ac6bf';
+    ctx.strokeStyle = '#302919';ctx.lineWidth = 1.5;
+    ctx.beginPath();circle(ctx,0,0,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#302919';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(marker === 'available' ? '!' : '?',0,.5);ctx.restore();
   }
 
   const originX = (spawn.x * TILE_SIZE - left) * scale, originY = (spawn.y * TILE_SIZE - top) * scale;

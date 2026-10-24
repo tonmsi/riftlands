@@ -343,11 +343,12 @@ test('rendering interleaves underpass actors and shots, bridge deck and upper ac
     const deckIndex = result.log.findIndex(r => r.id === 'bridge-instance' && r.opacity === .35);
     assert.ok(index('under') < deckIndex); assert.ok(index('shot-under') < deckIndex);
     assert.ok(deckIndex < index('upper')); assert.ok(deckIndex < index('shot-upper'));
-    assert.ok(result.zoom.start>result.zoom.middleLow&&result.zoom.middleLow>result.zoom.end);
+    assert.equal(result.zoom.start,result.zoom.middleLow,'entering a stair must not change zoom');
+    assert.equal(result.zoom.start,result.zoom.end,'climbing to another floor must not change zoom');
     assert.equal(result.zoom.middleLow,result.zoom.middleHigh,'the discrete floor switch must not jump the camera');
     assert.equal(result.zoom.held,result.zoom.end);
     assert.deepEqual(result.center,{x:192,y:24},'screen targeting uses the actual zoom');
-    assert.equal(result.animationPaints,0,'animated elevation zoom must reuse terrain, without repaints per frame');
+    assert.equal(result.animationPaints,0,'crossing a stair must reuse the cached terrain');
     assert.equal(result.cacheReused,true);
   } finally { await browser?.close(); await server.close(); }
 });

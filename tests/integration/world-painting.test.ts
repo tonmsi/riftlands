@@ -169,7 +169,7 @@ test('World Painting previews, undoes, exports, installs and reloads its palette
     await page.locator('#show-grid').uncheck();
     await mkdir(join(root,'artifacts'),{recursive:true});
     await page.screenshot({path:join(root,'artifacts/world-painting.png')});
-    await page.locator('#apply-world').click();await expect(page.locator('#status')).toContainText('Progetto applicato');
+    await page.locator('#apply-world').click();await expect(page.locator('#status')).toContainText('Progetto salvato con backup.');
     const saved = JSON.parse(await readFile(options.documentPath,'utf8'));
     assert.equal(saved.painting.materials.grass.color,'#aabb66');assert.equal(saved.painting.materials.water.size,1.5);
     assert.equal(saved.painting.seaEnabled,false);assert.equal(saved.painting.masksEnabled,false);

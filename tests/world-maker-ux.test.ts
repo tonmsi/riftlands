@@ -2,21 +2,40 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { newWorldDocument, newWorldAsset } from '../shared/world-schema';
 import { validateWorld } from '../shared/world-validation';
-import { assetAtFloor, canPaintTerrainLevel } from '../client/editors/world/world-picking';
+import { assetAtFloor, assetInSelection, selectionRect, canPaintTerrainLevel } from '../client/editors/world/world-picking';
 import { locateWorldIssue } from '../client/editors/world/world-problems';
 import { newInterior } from '../shared/warps';
 
-test('terrain painting permits one level at a time and asset picking includes derived cell floors', () => {
+test('terrain painting raises one level at a time, lowers freely and picks derived cell floors', () => {
   assert.equal(canPaintTerrainLevel(0, 2), false);
   assert.equal(canPaintTerrainLevel(0, 1), true);
   assert.equal(canPaintTerrainLevel(1, 2), true);
-  assert.equal(canPaintTerrainLevel(0, -2), false);
+  assert.equal(canPaintTerrainLevel(0, -2), true);
   assert.equal(canPaintTerrainLevel(2, 2), true);
+  assert.equal(canPaintTerrainLevel(2, 0), true);
+  assert.equal(canPaintTerrainLevel(12, 0), true);
+  assert.equal(canPaintTerrainLevel(2, -1), true);
+  assert.equal(canPaintTerrainLevel(2, -129), false);
+  assert.equal(canPaintTerrainLevel(2, .5), false);
   const asset = newWorldAsset('a', 'a', '/world-assets/a.svg'); asset.cells[0].elevation=1;
   assert.equal(assetAtFloor(asset,0,1,{x:.5,y:.5}),true);
   assert.equal(assetAtFloor(asset,0,0,{x:.5,y:.5}),false);
   asset.cells[0].elevation=2;
   assert.equal(assetAtFloor(asset,0,2,{x:.5,y:.5}),true,'specific object floors can span multiple levels');
+});
+
+test('marquee uses image bounds, supports reverse drags and excludes hidden asset regions', () => {
+  const asset = newWorldAsset('a', 'a', '/world-assets/a.svg');
+  const p = { id: 'p', assetId: 'a', x: 5, y: 5 };
+  const box = selectionRect({ x: 7, y: 7 }, { x: 4, y: 4 });
+  assert.equal(assetInSelection(asset, p, 0, null, box), true);
+  assert.equal(assetInSelection(asset, p, 0, [1], box), false);
+  asset.cells[0].elevation = 1;
+  assert.equal(assetInSelection(asset, p, 0, [1], box), true);
+  assert.equal(assetInSelection(asset, p, 0, [0], box), false);
+  assert.equal(assetInSelection(asset, p, 0, null, selectionRect({ x: 0, y: 0 }, { x: 1, y: 1 })), false);
+  asset.imageTransform = { x: -2, y: 0, scale: 1 };
+  assert.equal(assetInSelection(asset, p, 0, null, selectionRect({ x: 3, y: 5 }, { x: 4, y: 6 })), true);
 });
 
 test('diagnostics navigate to the correct map, floor and entity without guessing duplicate names',()=>{

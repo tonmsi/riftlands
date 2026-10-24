@@ -45,7 +45,7 @@ export function installWorldWorkspace(root: HTMLElement, host: Host): void {
   reset.onclick=()=>{ resize('left',250);resize('right',330);saveWidths();inspector.classList.remove('collapsed','dock-expanded');root.classList.remove('inspector-hidden');root.dispatchEvent(new Event('workspace-reset-layout')); };
   root.querySelector('.top-actions')!.prepend(reset);
   const conflict=document.createElement('div');conflict.id='draft-conflict';conflict.hidden=true;conflict.className='workspace-alert';
-  conflict.innerHTML='<span>Bozza modificata in un’altra scheda. Questa versione è conservata in memoria.</span><button id="draft-export">Esporta questa versione</button><button id="draft-recover">Recupera bozza condivisa</button>';
+  conflict.innerHTML='<span>Bozza modificata in un’altra scheda. Questa versione è conservata in memoria.</span><button id="draft-export">Esporta questa versione</button><button id="draft-recover">Ricarica progetto applicato</button>';
   conflict.querySelector('#draft-export')!.addEventListener('click',()=>root.querySelector<HTMLButtonElement>('#export-world')!.click());
   conflict.querySelector('#draft-recover')!.addEventListener('click',()=>location.reload());
   root.querySelector('.workspace')!.prepend(conflict);

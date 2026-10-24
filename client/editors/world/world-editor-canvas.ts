@@ -38,11 +38,14 @@ export interface MapOptions {
     zones: boolean;
     npcs: boolean;
     selected: EditorSelection | null;
+    selectedObjects?: readonly EditorSelection[];
     gesture: {
         tool: string;
         start: Vec2;
         last: Vec2;
         pan?: Vec2;
+        marquee?: { start: Vec2; end: Vec2 };
+        moved?: boolean;
     } | null;
     pointerTile: Vec2 | null;
     tool: string;
@@ -65,6 +68,8 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
     const time = performance.now();
     let animated = false;
     const ctx = canvas.getContext('2d')!, selected = options.selected, gesture = options.gesture, pointerTile = options.pointerTile;
+    const selectedIds = new Set(options.selectedObjects?.map(item => `${item.kind}:${item.id}`));
+    if (selected) selectedIds.add(`${selected.kind}:${selected.id}`);
     const bounds = () => { const r = canvas.getBoundingClientRect(); return { left: -view.x / view.scale, top: -view.y / view.scale, right: (r.width - view.x) / view.scale, bottom: (r.height - view.y) / view.scale }; };
     const { width, height, dpr } = sizeCanvas(canvas), b = bounds(), s = view.scale;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -146,10 +151,11 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         if (!assetVisible(a, base, visible)) continue;
         drawVisibleAsset(ctx, art, a, p, base, visible, s, time);
         animated ||= worldAssetVisual(a).kind === 'fire';
-        if (selected?.kind === 'placement' && selected.id === p.id) {
+        if (selectedIds.has(`placement:${p.id}`)) {
             ctx.strokeStyle = '#f0df9d';
             ctx.lineWidth = 2;
-            ctx.strokeRect(p.x * s, p.y * s, a.columns * s, a.rows * s);
+            const bounds = worldAssetImageBounds(a);
+            ctx.strokeRect((p.x + bounds.x) * s, (p.y + bounds.y) * s, bounds.width * s, bounds.height * s);
         }
         if (floorVisible(visible, base) && options.cells && s/assetCellSubdivision(a) >= 2)
             for (let y = 0; y < assetCellRows(a); y++)
@@ -185,7 +191,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         ctx.font = '11px system-ui';
         ctx.fillText(d.name, t.minTx * s + 5, t.minTy * s - 7);
     }
-    if (options.zones && floorVisible(visible, 0))
+    if (options.zones)
         for (const z of world.authoring.zones.query(b))
             drawZone(ctx, z, view, selected);
     const npcs = [...draft.npcs.map(n => ({ ...n, manual: true }))];
@@ -203,6 +209,10 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         ctx.beginPath();
         ctx.arc((n.x + .5) * s, (n.y + .5) * s, Math.max(2, s * .24), 0, Math.PI * 2);
         ctx.fill();
+        if (selectedIds.has(`npc:${n.id}`)) {
+            ctx.strokeStyle = '#f0df9d'; ctx.lineWidth = 2;
+            ctx.strokeRect((n.x + .15) * s, (n.y + .15) * s, .7 * s, .7 * s);
+        }
         if (n.manual) {
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 1;
@@ -223,6 +233,13 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
     ctx.moveTo(spawnX, spawnY - 8);
     ctx.lineTo(spawnX, spawnY + 8);
     ctx.stroke();
+    }
+    if (gesture?.marquee && gesture.moved) {
+        const { start, end } = gesture.marquee;
+        const x = Math.min(start.x, end.x) * s, y = Math.min(start.y, end.y) * s;
+        const width = Math.abs(start.x - end.x) * s, height = Math.abs(start.y - end.y) * s;
+        ctx.fillStyle = '#88cfff25'; ctx.strokeStyle = '#88cfff'; ctx.lineWidth = 1;
+        ctx.fillRect(x, y, width, height); ctx.strokeRect(x, y, width, height);
     }
     if (gesture?.tool === 'zone' && !gesture.pan) {
         ctx.fillStyle = '#d5e99a20';

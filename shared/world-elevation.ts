@@ -12,6 +12,7 @@ import { circleSupported, circleTouchesRect, containsRectPoint, elevationOf, pla
 
 /** Sparse geometry is indexed once. Procedural/placed asset geometry is queried locally. */
 export class WorldElevation {
+  bindWorld(world: World): void { this.world = world; }
   private surfaces = new SpatialIndex<WorldSurface>(rectBounds);
   private solids = new SpatialIndex<WorldSolid>(rectBounds);
   private stairs = new SpatialIndex<WorldStair>(rectBounds);

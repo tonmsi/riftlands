@@ -1,10 +1,11 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { WebSocket, WebSocketServer } from 'ws';
-import { CLASSES, DT, PROTOCOL_VERSION, SNAPSHOT_RATE, TICK_RATE, WORLD_SEED } from '../shared/config';
+import { CLASSES, DT, PROTOCOL_VERSION, SNAPSHOT_RATE, TICK_RATE } from '../shared/config';
 import type { ClassId, ClientMessage, ServerMessage } from '../shared/types';
 import { Account, AccountStore, publicAccount, characterFor, saveCharacterBuild } from './store';
 import { RoomManager } from './rooms';
@@ -17,18 +18,24 @@ import { OrderedSaveWriter } from './save-writer';
 import { ACTOR_CATALOG } from '../shared/actor-catalog';
 import { serveAudioFile } from './audio-files';
 import { validWorldAssetImage } from '../shared/world-schema';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { WORLD_DOCUMENT, installWorldDocument } from '../shared/world-content';
+import { saveWorldProject } from '../scripts/world-library';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT deve essere tra 1 e 65535.');
 const dataPath = process.env.DATA_FILE ? resolve(process.env.DATA_FILE) : resolve(ROOT, 'data/accounts.json');
-const releaseData = acquireDataLease(dataPath);
+const documentPath = process.env.WORLD_FILE ? resolve(process.env.WORLD_FILE) : resolve(ROOT, 'shared/custom-world.json');
+const publicationSecret = randomBytes(32).toString('hex');
+const releaseData = acquireDataLease(dataPath, { publisher: { port, secret: publicationSecret, documentPath } });
 process.once('exit', releaseData);
+installWorldDocument(JSON.parse(await readFile(documentPath, 'utf8')));
 const saves = new OrderedSaveWriter();
 const store = new AccountStore(dataPath, saves);
 await store.drain(); // Finish migrations before exposing the server or world.
-const rooms = new RoomManager(store, WORLD_SEED);
+const rooms = new RoomManager(store, WORLD_DOCUMENT.seed);
 const simulation = rooms.global;
 let healthy = true;
 let closing = false;
@@ -37,10 +44,48 @@ let tickCostMs = 0;
 const metrics = new NetworkMetrics();
 const dist = resolve(ROOT, 'dist');
 const mime: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
+let worldRevision = 1, publishingWorld = false;
+let worldJSON = JSON.stringify(rooms.project);
+let worldPacket = JSON.stringify({ type: 'world', revision: worldRevision, document: rooms.project });
 
 const server = createServer((request, response) => {
   const path = (request.url ?? '/').split('?')[0];
   response.setHeader('X-Content-Type-Options', 'nosniff');
+  if ((path === '/api/world' || path === '/api/world.js') && request.method === 'GET') {
+    response.writeHead(200, { 'Content-Type': path.endsWith('.js') ? 'text/javascript; charset=utf-8' : 'application/json', 'Cache-Control': 'no-store' });
+    response.end(path.endsWith('.js') ? `globalThis.__RIFTLANDS_WORLD__=${worldJSON};` : worldJSON); return;
+  }
+  if (path === '/__world/publish') {
+    const reply = (status: number, value: unknown) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(value)); };
+    const address = request.socket.remoteAddress;
+    const provided = Buffer.from(request.headers.authorization ?? ''), expected = Buffer.from(`Bearer ${publicationSecret}`);
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address ?? '') || provided.length !== expected.length || !timingSafeEqual(provided, expected)) { reply(403, { error: 'Pubblicazione locale non autorizzata.' }); return; }
+    if (request.method !== 'POST') { reply(405, { error: 'Metodo non consentito.' }); return; }
+    if (closing || !healthy || publishingWorld) { reply(409, { error: 'Server occupato o in chiusura.' }); return; }
+    publishingWorld = true;
+    void (async () => {
+      try {
+        const chunks: Buffer[] = []; let size = 0;
+        request.setTimeout(30_000, () => request.destroy());
+        for await (const chunk of request) { size += chunk.length; if (size > 40_000_000) throw new Error('Progetto oltre 40 MB.'); chunks.push(Buffer.from(chunk)); }
+        const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if (typeof payload.revision !== 'string' || payload.deleteAssetId !== undefined && typeof payload.deleteAssetId !== 'string') throw new Error('Pubblicazione non valida.');
+        const result = await saveWorldProject({ root: ROOT, documentPath, dungeonPath: resolve(ROOT, 'shared/custom-dungeons.json'), dataPath,
+          live: document => {
+            const prepared = rooms.prepareProject(document);
+            return () => {
+              if (closing) throw new Error('Server in chiusura.');
+              const relocated = rooms.applyProject(document, prepared); installWorldDocument(document); worldRevision++;
+              worldJSON = JSON.stringify(rooms.project);
+              worldPacket = JSON.stringify({ type: 'world', revision: worldRevision, document: rooms.project });
+              for (const session of byAccount.values()) sendWorld(session, relocated.has(session.id!));
+            };
+          } }, payload.document, payload.revision, payload.deleteAssetId);
+        await store.drain(); reply(200, result);
+      } catch (error) { if (!response.headersSent && !response.destroyed) reply(400, { error: error instanceof Error ? error.message : String(error) }); }
+      finally { publishingWorld = false; }
+    })(); return;
+  }
   if (path === '/api/actor-catalog' && request.method === 'GET') {
     response.setHeader('Cache-Control', 'no-store'); response.setHeader('Content-Type', 'application/json');
     response.end(JSON.stringify({ catalog: ACTOR_CATALOG })); return;
@@ -190,7 +235,7 @@ if (!production) {
 } else if (!existsSync(resolve(dist, 'index.html'))) throw new Error('Build frontend assente. Esegui npm run build prima di npm start.');
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
-type Session = { ws: WebSocket; snapshots: SnapshotEncoder; id?: string; authenticating?: boolean; roomEpoch?: number; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; interactionTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
+type Session = { ws: WebSocket; snapshots: SnapshotEncoder; worldTransfers?: number; id?: string; authenticating?: boolean; roomEpoch?: number; ip: string; alive: boolean; receivedAt: number; tokens: number; socialTokens: number; interactionTokens: number; badPackets: number; helloDeadline: ReturnType<typeof setTimeout> };
 const sessions = new Map<WebSocket, Session>();
 const byAccount = new Map<string, Session>();
 const ipConnections = new Map<string, number>();
@@ -237,7 +282,7 @@ server.on('upgrade', (request, socket, head) => {
 
 function send(session: Session, message: ServerMessage | SnapshotPacket): boolean {
   if (session.ws.readyState !== WebSocket.OPEN) return false;
-  if (session.ws.bufferedAmount > 1024 * 1024) { session.ws.close(1008, 'Connessione troppo lenta'); return false; }
+  if (session.ws.bufferedAmount > 1024 * 1024 && !session.worldTransfers) { session.ws.close(1008, 'Connessione troppo lenta'); return false; }
   if (message.type === 'snapshot' && session.ws.bufferedAmount > 0) return false;
   const encoded = JSON.stringify(message);
   session.ws.send(encoded);
@@ -276,6 +321,15 @@ function sendSnapshot(session: Session): void {
     if (send(session, prepared.packet)) prepared.commit();
   }
   metrics.snapshot(performance.now() - started);
+}
+
+function sendWorld(session: Session, relocated = false): void {
+  if (session.ws.readyState !== WebSocket.OPEN) return;
+  if (session.ws.bufferedAmount > 1024 * 1024) { session.ws.close(1008, 'Connessione troppo lenta'); return; }
+  session.worldTransfers = (session.worldTransfers ?? 0) + 1;
+  const packet = relocated ? JSON.stringify({ type: 'world', revision: worldRevision, document: rooms.project, relocated: true }) : worldPacket;
+  session.ws.send(packet, () => { session.worldTransfers!--; });
+  if (relocated) session.roomEpoch = undefined;
 }
 
 wss.on('connection', (ws, request) => {
@@ -333,6 +387,7 @@ wss.on('connection', (ws, request) => {
           send(previous, { type: 'error', message: 'Account aperto in un’altra scheda. Questa sessione è stata chiusa.', fatal: true });
           previous.ws.close(4001, 'Sessione sostituita');
         }
+        sendWorld(session);
         send(session, { type: 'welcome', token, account: publicAccount(account), playerId: player.id, seed: rooms.simulationFor(account.id).seed, tickRate: TICK_RATE, time: simulation.now, social: rooms.socialFor(account.id) });
         sendSnapshot(session);
         socialBroadcast();

@@ -24,6 +24,13 @@ export async function startWorldStudio(options: { root: string; documentPath: st
     const reply = (status: number, value: unknown) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); response.end(JSON.stringify(value)); };
     if (`http://${request.headers.host}` !== origin || (request.headers.origin && request.headers.origin !== origin)) { reply(403, { error: 'World Studio accessibile dalla propria pagina locale.' }); return; }
     const path = (request.url ?? '').split('?')[0];
+    if (path === '/api/world.js' && request.method === 'GET') {
+      void readWorldProject(options.documentPath).then(({ document }) => {
+        response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+        response.end(`globalThis.__RIFTLANDS_WORLD__=${JSON.stringify(document)};`);
+      }).catch(e => reply(500, { error: String(e) }));
+      return;
+    }
     if (library(request, response, origin)) return;
     const music = /^\/music\/([a-zA-Z0-9_-]+\.(mp3|ogg|wav))$/.exec(path);
     if (music && ['GET', 'HEAD'].includes(request.method ?? '')) {

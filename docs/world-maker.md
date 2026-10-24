@@ -5,7 +5,7 @@ mappa interna**. Dopo conferma vengono rimossi l’intera mappa con terreno, ogg
 NPC, zone e dungeon, e tutti i passaggi da e verso quella mappa, anche dagli altri
 interni. I dungeon contenuti non ricompaiono automaticamente nel mondo principale.
 La cancellazione supporta Undo e diventa effettiva nel progetto con **Applica al gioco**.
-Per vederla nel gioco già aperto, ricompila e riavvia il server. Il mondo principale
+Nel gioco già aperto, **Applica al gioco** pubblica la nuova versione senza riavvio. Il mondo principale
 non può essere eliminato. Un edificio disegnato all’esterno è un oggetto separato:
 si rimuove selezionandolo sulla mappa del mondo, senza eliminare il suo asset condiviso.
 
@@ -15,6 +15,13 @@ con chiusura automatica. Il catalogo fissato e la scheda ingrandita vengono rico
 anche dopo un ricaricamento. **Ripristina layout** torna alla disposizione iniziale.
 
 La scheda asset mostra il file immagine e gli altri asset che lo condividono.
+**Sostituisci immagine interna · dal catalogo** apre la ricerca con miniature delle
+immagini già importate: scegli un asset e premi **Usa immagine**. **Sostituisci immagine
+esterna · da file** apre invece il file system. Entrambe cambiano solo l’immagine
+dell’asset corrente, anche quando è una variante: gruppo, dimensioni, collisioni,
+trasparenza e istanze restano conservati. La scelta interna riusa il file esistente,
+senza duplicare l’asset sorgente, e la sostituzione supporta Undo.
+
 **Rimuovi dal catalogo · conserva file** elimina solo la definizione e le sue copie
 manuali, mantenendo il file per gli altri asset. Supporta Undo e si salva con
 **Applica al gioco**; **Sincronizza cartelle** può reimportare il file rimasto.
@@ -39,9 +46,10 @@ ingrandita con **⤢**, chiusa con **×** e riaperta selezionando un oggetto.
 **Ripristina layout** recupera le dimensioni iniziali.
 
 Il box **Terreno** riunisce materiale e **Livello terreno**, con pulsanti **− / ＋**.
-**Mantieni livello** cambia soltanto il materiale. Il terreno ordinario cambia di un
+**Mantieni livello** cambia soltanto il materiale. Il terreno ordinario sale di un
 solo livello per volta: dipingere quota 2 su terreno 0 viene escluso con un messaggio;
-sono consentiti 0 → 1 e poi 1 → 2. Ponti, scale e geometrie configurate dentro un asset
+sono consentiti 0 → 1 e poi 1 → 2. Si può abbassare direttamente il terreno a quota 0
+anche partendo da quota 2 o superiore. Ponti, scale e geometrie configurate dentro un asset
 mantengono le loro quote specifiche. Le vecchie mappe non vengono modificate da questa
 regola di authoring.
 
@@ -52,6 +60,18 @@ del mouse non sposta l'oggetto; Escape annulla anche il disegno di rialzi e pont
 Le proprietà della copia sono separate dalla definizione condivisa: **Crea variante
 per questa copia** permette di modificarne il modello senza cambiare le altre istanze.
 La quota base vuota eredita il terreno e mostra il valore effettivo nel campo.
+Le zone hanno precedenza sui terreni rialzati e sui bordi automatici quando si clicca:
+le geometrie del terreno sono selezionate solo se non ci sono altri elementi nel punto.
+Le scale restano selezionabili con un clic in **Seleziona** anche dentro una zona:
+hanno precedenza sulla zona e aprono le proprietà per modificarle o eliminarle.
+Per selezionare la zona sotto una scala usa **Seleziona → Alt + clic**.
+Le zone non appartengono a una quota e restano visibili e selezionabili anche filtrando i piani.
+
+Tieni premuto il sinistro e trascina per disegnare un rettangolo di selezione: include
+gli oggetti e gli NPC sulle quote visibili, escludendo terreni, geometrie, zone e passaggi.
+Trascina un oggetto del gruppo per spostare insieme la selezione; **Canc** o **Rimuovi**
+eliminano il gruppo. Spostamento e rimozione supportano **Undo**. **Escape** annulla
+il trascinamento in corso.
 
 **Esplora** elenca mappe, asset, NPC, zone, passaggi, dungeon e geometrie con ricerca.
 Selezionando una voce si centra la mappa e si apre la scheda relativa. I problemi
@@ -68,11 +88,17 @@ condivisa** ricarica invece l'ultima versione salvata.
 Per rialzi, ponti, collisioni parziali e scale vedere
 [Quote, terreni sopraelevati e scale](livelli-terreno-scale.md).
 
-Avvia `npm run world:studio` e apri `http://127.0.0.1:3002/world-maker.html`. `WORLD_STUDIO_PORT` cambia la porta. L’editor è un processo locale separato dal server del gioco: non aggiunge API di amministrazione al gioco e non apre il server multiplayer.
+Avvia `npm run world:studio` e apri `http://127.0.0.1:3002/world-maker.html`. `WORLD_STUDIO_PORT` cambia la porta. L’editor è un processo locale separato dal server del gioco. La pubblicazione usa un endpoint del gioco accessibile soltanto da loopback con un segreto presente nel lock locale dei salvataggi.
 
 Lo stesso Studio include il Dungeon Maker: **Dungeon Maker ↗** apre una scheda dedicata, mentre **Modifica dungeon ↗** apre il dungeon selezionato. `npm run dungeon:studio` è un accesso allo stesso World Studio (`STUDIO_PORT` resta supportata). Catalogo installato, backup e API locali sono condivisi nello stesso processo.
 
-Per applicare il progetto, ferma il server del gioco. La stessa esclusione usata dal Dungeon Studio impedisce modifiche mentre il salvataggio è in uso. Dopo **Applica al gioco**, esegui `npm run build` e riavvia il gioco. Se il gioco usa `DATA_FILE`, avvia lo Studio con lo stesso `DATA_FILE`. `Ctrl+C` chiude lo Studio, compresi i suoi socket.
+**Applica al gioco** valida e salva con backup la mappa e la pubblica sul server locale attivo. Se il gioco usa `DATA_FILE`, avvia lo Studio con lo stesso `DATA_FILE`; `WORLD_FILE` permette di scegliere un documento alternativo sia per il gioco sia per lo Studio. A gioco spento salva il progetto per il prossimo avvio. Dopo aver installato questa modifica serve una build iniziale; le successive modifiche al documento della mappa non richiedono build o riavvio. Il client carica la mappa da `/api/world.js` e riceve gli aggiornamenti via WebSocket prima degli snapshot della nuova versione. `Ctrl+C` chiude lo Studio, compresi i suoi socket.
+
+All'apertura e con **Ricarica progetto**, la base è sempre il JSON applicato. Una vecchia bozza del browser non sostituisce automaticamente né il documento né la revisione del server: se esiste, è disponibile con **Ripristina bozza precedente** e diventa pubblica solo premendo **Applica al gioco**. Ogni applicazione riuscita aggiorna la base dello Studio, permettendo di continuare a modificare senza ricaricare o esportare.
+
+Alla pubblicazione si controlla solo la geometria nella posizione occupata dal giocatore. Se resta calpestabile alla stessa quota, X/Y e quota restano invariati. Se la quota cambia verso un valore non negativo, si aggiorna la quota mantenendo X/Y; se diventa negativa o compare un ostacolo, il giocatore torna allo spawn della nuova mappa. Cambi di bioma, grafica o NPC non causano spostamenti da soli. Lo spawn deve essere calpestabile e non negativo. Gli interni vengono aggiornati allo stesso modo; eliminando un interno, i suoi occupanti tornano allo spawn del mondo principale. Le posizioni salvate e i checkpoint di ritorno vengono aggiornati anche per gli account offline. Solo i giocatori riposizionati ricevono una nuova epoch e il reset del movimento; gli altri ricevono la mappa aggiornata conservando input, camera e stato del client. La pagina e la connessione non vengono ricaricate.
+
+NPC e oggetti transitori della mappa vengono rigenerati alla pubblicazione; gli incontri boss con definizioni e posizionamenti invariati vengono conservati. La modifica delle definizioni del catalogo nel Dungeon Maker o degli attori rimane un'operazione offline: la pubblicazione live riguarda il documento del World Studio, compresi posizionamenti dungeon, interni e passaggi.
 
 ## Asset e griglia
 

@@ -4,7 +4,7 @@ import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../np
 import { setupDungeonLibrary } from './dungeon-library';
 import './dungeon-maker.css';
 import { WORLD_DOCUMENT } from '../../../shared/world-content';
-import { newWorldDocument, parseWorldDocument, worldAssetVisual, type WorldAsset } from '../../../shared/world-schema';
+import { newWorldDocument, parseWorldDocument, worldAssetVisual, worldAssetShadow, type WorldAsset } from '../../../shared/world-schema';
 import { loadWorldCheckpoint } from '../world/world-editor-storage';
 import { WorldAssetCatalog } from '../world/world-asset-catalog';
 import { WorldAssetArt } from '../../render/world-asset-art';
@@ -286,7 +286,7 @@ function draw(): void {
     });
     for (const p of placements) {
         const a = sharedAssets.find(a => a.id === p.assetId);
-        if (a) assetArt.draw(ctx, a, p, 1, s, performance.now());
+        if (a) assetArt.draw(ctx, { ...a, shadow: worldAssetShadow(a, sharedAssets.find(parent => parent.id === a.variantOf)) }, p, 1, s, performance.now());
         if (!a || p.id === selected) {
             ctx.strokeStyle = a ? '#fff' : '#ed997e'; ctx.lineWidth = 2;
             ctx.strokeRect(p.x * s, p.y * s, (a?.width ?? 1) * s, (a?.height ?? 1) * s);

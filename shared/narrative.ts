@@ -123,6 +123,15 @@ export function conditionMatches(progress: NarrativeProgress, condition: Narrati
   if (condition.kind === 'quest-completed') return !!progress.quests[condition.questId] && questCompletions(progress.quests[condition.questId]) > 0;
   return questStatus(progress, condition.questId, now) === condition.status;
 }
+/** Shared by NPC snapshots and map pins, including personal dialogue conditions. */
+export function dialogueQuestMarker(progress: NarrativeProgress, dialogueId: string, now = Date.now()): 'available' | 'active' | 'completed' | undefined {
+  const dialogue = DIALOGUE_DEFINITIONS[dialogueId];
+  if (!dialogue || dialogue.showQuestMarker === false) return undefined;
+  const quest = QUEST_DEFINITIONS[dialogue.questId];
+  if (dialogue.questMarkerCondition && !conditionMatches(progress, dialogue.questMarkerCondition, now)) return undefined;
+  if (quest?.requiresQuest && !conditionMatches(progress, { kind: 'quest-completed', questId: quest.requiresQuest }, now)) return undefined;
+  return questStatus(progress, dialogue.questId, now);
+}
 /** Legacy completed missions count once, without requiring an account reset. */
 export function questCompletions(quest: QuestProgress): number { return quest.completions ?? (quest.status === 'completed' ? 1 : 0); }
 export function questReward(quest: QuestDefinition, previousCompletions: number): { xp: number; gold: number } {

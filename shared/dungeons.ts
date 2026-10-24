@@ -5,7 +5,7 @@ import type { Pickup, TileKind, Vec2 } from './types';
 import { NPC_DEFINITIONS, type NpcTemplateId } from './npcs';
 import customDungeons from './custom-dungeons.json';
 import { unpackDungeonCatalog } from './dungeon-storage';
-import { WORLD_DOCUMENT } from './world-content';
+import { WORLD_DOCUMENT, onWorldDocumentChange } from './world-content';
 import { relocateDungeon } from './dungeon-relocation';
 import type { AssetPlacement } from './world-schema';
 
@@ -126,12 +126,13 @@ export function inwardFlameAngle(flame: DungeonFlameBarrier, bounds: DungeonTile
 export const DEFAULT_DUNGEON_THEME: DungeonTheme = { floor: '#918567', wall: '#5c5d52', wallTop: '#92917e', minimap: '#d8bd79', markerStone: '#777864', markerEdge: '#464e42', markerRune: '#d0b97999' };
 
 export const INSTALLED_DUNGEON_DEFINITIONS = unpackDungeonCatalog(customDungeons).map(entry => entry.definition);
-const indoorDungeonIds = new Set((WORLD_DOCUMENT.interiors ?? []).flatMap(m => m.document.dungeons.filter(p => p.enabled !== false).map(p => p.dungeonId)));
-export const DUNGEON_DEFINITIONS: readonly DungeonDefinition[] =
-  unpackDungeonCatalog(customDungeons).filter(entry => !indoorDungeonIds.has(entry.definition.id) && WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id)?.enabled !== false).map(entry => {
+const indoorDungeonIds = () => new Set((WORLD_DOCUMENT.interiors ?? []).flatMap(m => m.document.dungeons.filter(p => p.enabled !== false).map(p => p.dungeonId)));
+const placedDungeons = () =>
+  unpackDungeonCatalog(customDungeons).filter(entry => !indoorDungeonIds().has(entry.definition.id) && WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id)?.enabled !== false).map(entry => {
     const placement = WORLD_DOCUMENT.dungeons.find(p => p.dungeonId === entry.definition.id);
     return placement ? relocateDungeon(entry.definition, placement) : entry.definition;
   });
+export let DUNGEON_DEFINITIONS: readonly DungeonDefinition[] = placedDungeons();
 export function dungeonEncounters(definition: DungeonDefinition): DungeonDefinition[] {
   if (definition.noEncounters) return [];
   return [definition, ...(definition.additionalEncounters ?? []).map(encounter => ({ ...definition, ...encounter, additionalEncounters: undefined }))];
@@ -147,6 +148,19 @@ export const PERSISTENT_DUNGEON_BY_BOSS_ID = new Map([...DUNGEON_DEFINITIONS,
     const definition = INSTALLED_DUNGEON_DEFINITIONS.find(d => d.id === p.dungeonId); return definition ? [relocateDungeon(definition, p)] : [];
   }))].flatMap(dungeonEncounters).map(d => [d.bossId, d]));
 if (DUNGEON_BY_BOSS_ID.size !== DUNGEON_DEFINITIONS.flatMap(dungeonEncounters).length) throw new Error('ID boss duplicato nel catalogo dungeon.');
+
+onWorldDocumentChange(() => {
+  DUNGEON_DEFINITIONS = placedDungeons();
+  DUNGEON_BY_ID.clear(); DUNGEON_BY_BOSS_ID.clear(); PERSISTENT_DUNGEON_BY_BOSS_ID.clear();
+  for (const d of DUNGEON_DEFINITIONS) {
+    DUNGEON_BY_ID.set(d.id, d);
+    for (const e of dungeonEncounters(d)) { DUNGEON_BY_BOSS_ID.set(e.bossId, e); PERSISTENT_DUNGEON_BY_BOSS_ID.set(e.bossId, e); }
+  }
+  for (const m of WORLD_DOCUMENT.interiors ?? []) for (const p of m.document.dungeons.filter(p => p.enabled !== false)) {
+    const d = INSTALLED_DUNGEON_DEFINITIONS.find(d => d.id === p.dungeonId);
+    if (d) for (const e of dungeonEncounters(relocateDungeon(d, p))) PERSISTENT_DUNGEON_BY_BOSS_ID.set(e.bossId, e);
+  }
+});
 
 const insideRect = (tx: number, ty: number, rect: DungeonTileRect): boolean =>
   tx >= rect.minTx && tx <= rect.maxTx && ty >= rect.minTy && ty <= rect.maxTy;

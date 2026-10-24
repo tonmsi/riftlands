@@ -31,7 +31,17 @@ test('map fog reveals visited terrain, retains it, hides actors and separates in
       const restored = JSON.parse(JSON.stringify(progress)); draw(restored); const reloaded = pixel(20, 1);
       draw(restored, [], 'house'); const interior = pixel(20, 1);
       const other = newNarrativeProgress(); other.revision = progress.revision; draw(other); const otherCharacter = pixel(20, 1);
-      return { unknown, visited, hiddenActor, revealed, retained, seenActor, reloaded, interior, otherCharacter };
+      // Mission givers and accepted destinations stay visible above unexplored fog.
+      world.authoring.document.npcs.push({id:'quest-giver',npcKind:'old-fisher',x:20,y:1,level:1});
+      draw(other);const questGiver=pixel(20,1),questNpcCount=canvas.dataset.questNpcCount;
+      const untouchedFog=pixel(22,3);
+      other.quests['stinking-bait']={status:'completed',objectives:{},completedAt:Date.now()};
+      draw(other);const completedGiver=pixel(20,1);
+      world.authoring.document.zones.push({id:'destination',name:'Destinazione',priority:1,questId:'north-road',shape:{kind:'rect',x:29,y:19,width:2,height:2}});
+      other.quests['north-road']={status:'active',objectives:{}};
+      draw(other);const destination=pixel(29,19),targets=canvas.dataset.questTargetCount;
+      other.quests['north-road'].status='completed';draw(other);const completedDestination=pixel(29,19);
+      return { unknown, visited, hiddenActor, revealed, retained, seenActor, reloaded, interior, otherCharacter,questGiver,questNpcCount,untouchedFog,completedGiver,destination,targets,completedDestination };
     });
     assert.deepEqual(result.unknown, [17, 27, 37, 255]);
     assert.notDeepEqual(result.visited, result.unknown);
@@ -42,5 +52,10 @@ test('map fog reveals visited terrain, retains it, hides actors and separates in
     assert.deepEqual(result.reloaded, result.revealed);
     assert.deepEqual(result.interior, result.unknown);
     assert.deepEqual(result.otherCharacter, result.unknown);
+    assert.notDeepEqual(result.questGiver,result.unknown);
+    assert.equal(result.questNpcCount,'1');assert.deepEqual(result.untouchedFog,result.unknown);
+    assert.deepEqual(result.completedGiver,result.unknown);
+    assert.notDeepEqual(result.destination,result.unknown);assert.equal(result.targets,'1');
+    assert.deepEqual(result.completedDestination,result.unknown);
   } finally { await browser?.close(); await server.close(); }
 });

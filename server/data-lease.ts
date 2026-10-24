@@ -3,13 +3,13 @@ import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** Cooperative exclusion between the game server and offline developer tools. */
-export function acquireDataLease(dataPath: string): () => void {
+export function acquireDataLease(dataPath: string, metadata: Record<string, unknown> = {}): () => void {
     const path = `${dataPath}.lock`, token = randomUUID();
     mkdirSync(dirname(path), { recursive: true });
     for (let attempt = 0; attempt < 2; attempt++) {
         try {
             const fd = openSync(path, 'wx', 0o600);
-            try { writeFileSync(fd, JSON.stringify({ pid: process.pid, token })); }
+            try { writeFileSync(fd, JSON.stringify({ ...metadata, pid: process.pid, token })); }
             finally { closeSync(fd); }
             let released = false;
             return () => {

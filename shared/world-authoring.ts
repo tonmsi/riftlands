@@ -4,7 +4,7 @@ import { pickAssetVariant } from './asset-variants';
 import { coordinateHash } from './coordinate-random';
 import type { TileKind } from './types';
 import type { AssetCell, AssetPlacement, TileOverride, WorldAsset, WorldDocument, WorldZone, ZoneShape } from './world-schema';
-import { worldAssetImageBounds, assetCellColumns, assetCellRows, assetCellSubdivision } from './world-schema';
+import { worldAssetImageBounds, worldAssetShadow, assetCellColumns, assetCellRows, assetCellSubdivision } from './world-schema';
 import { WorldTiles } from './world-tiles';
 
 export interface TileBounds { left: number; top: number; right: number; bottom: number; }
@@ -69,7 +69,7 @@ export class WorldAuthoring {
   private zoneCache = new Map<string, WorldZone[]>();
   constructor(public document: WorldDocument) {
     const definitions = new Map(document.assets.map(a => [a.id, a]));
-    this.assets = new Map(document.assets.map(a => [a.id, a.variantOf ? { ...a, generation: definitions.get(a.variantOf)!.generation } : a]));
+    this.assets = new Map(document.assets.map(a => [a.id, a.variantOf ? { ...a, generation: definitions.get(a.variantOf)!.generation, shadow: worldAssetShadow(a, definitions.get(a.variantOf)) } : a]));
     for (const a of this.assets.values()) {
       const root = a.variantOf ?? a.id;
       const pool = this.variants.get(root) ?? [];

@@ -10,6 +10,10 @@ import { CLIFF_VARIANTS, type CliffVariant } from './terrain-cliffs';
  * Gameplay positions remain world units. The format contains data only, never scripts. */
 export interface AssetCell { blocked: boolean; visibility: 'normal' | 'hide' | 'fade' | 'hide-fade'; elevation?: number; }
 export const DEFAULT_ASSET_FADE = { opacity: .28, feather: .35, durationMs: 180 };
+/** Coordinates and full dimensions relative to artwork, before its transform.
+ * x/y locate the ellipse centre or the silhouette base. */
+export interface AssetShadow { kind: 'ellipse' | 'silhouette'; skew: number; x: number; y: number; width: number; height: number; opacity: number; softness: number; }
+export const DEFAULT_ASSET_SHADOW: AssetShadow = { kind: 'silhouette', skew: .15, x: .5, y: .95, width: .8, height: .2, opacity: .3, softness: .5 };
 export const assetCellFades = (cell?: AssetCell): boolean => cell?.visibility === 'fade' || cell?.visibility === 'hide-fade';
 export interface AssetGeneration {
   enabled: boolean; category: string; terrains: TileKind[];
@@ -31,6 +35,11 @@ export interface WorldAsset {
   variantOf?: string;
   /** Artwork moves and scales independently of the annotated tile grid. */
   imageTransform?: { x: number; y: number; scale: number };
+  /** Missing inherits from variantOf; null explicitly disables the shadow. */
+  shadow?: AssetShadow | null;
+}
+export function worldAssetShadow(asset: WorldAsset, parent?: WorldAsset): AssetShadow | undefined {
+  return (asset.shadow === undefined && asset.variantOf ? parent?.shadow : asset.shadow) ?? undefined;
 }
 export function worldAssetImageBounds(asset: WorldAsset) {
   const { x = 0, y = 0, scale = 1 } = asset.imageTransform ?? {};
@@ -174,6 +183,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     if (a.imageTransform !== undefined && (!object(a.imageTransform) || !finite(a.imageTransform.x, -32, 32)
       || !finite(a.imageTransform.y, -32, 32) || !finite(a.imageTransform.scale, .1, 8))) fail(`trasformazione immagine di ${a.id}`);
     if (a.visual !== undefined && (!object(a.visual) || (a.visual.kind !== 'image' && (a.visual.kind !== 'fire' || !['brazier', 'campfire'].includes(a.visual.style))))) fail(`aspetto di ${a.id}`);
+    if (a.shadow !== undefined && a.shadow !== null && (!object(a.shadow) || !['ellipse', 'silhouette'].includes(a.shadow.kind) || !finite(a.shadow.skew, -1, 1) || !['x', 'y', 'width', 'height', 'opacity', 'softness'].every(k => finite(a.shadow[k], 0, 1)))) fail(`ombra di ${a.id}`);
     if (a.cells.length !== assetCellColumns(a) * assetCellRows(a) || !a.cells.every((c: any) => object(c) && boolean(c.blocked) && ['normal', 'hide', 'fade', 'hide-fade'].includes(c.visibility) && (c.elevation===undefined||validElevation(c.elevation)))) fail(`celle di ${a.id}`);
     if (a.fade !== undefined && (!object(a.fade) || !finite(a.fade.opacity, 0, 1) || !finite(a.fade.feather, 0, 1) || !integer(a.fade.durationMs, 0, 2000))) fail(`sfumatura di ${a.id}`);
     const g = a.generation;

@@ -2,7 +2,6 @@ import { PICKUP_COLORS, circle, noise, polygon } from './render-primitives';
 import { elevationOf, placedGeometry } from '../../shared/elevation';
 import { drawElevationSurface, drawElevationStair } from './elevation-art';
 import { bridgeAssetOpacity, surfaceOpacity } from './bridge-visibility';
-import { cameraElevation, elevationCameraZoom } from './elevation-camera';
 import { drawTerrainCliff } from './cliff-art';
 import { cliffLevels } from '../../shared/cliff-assets';
 import { worldAssetImageBounds } from '../../shared/world-schema';
@@ -61,7 +60,6 @@ export class Renderer {
   private zoom = 1;
   private baseZoom = 1;
   private fishingZoom = 1;
-  private elevationZoom = 1;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   private cameraSettings = parseCameraSettings(null);
   private viewSign = 1;
@@ -98,14 +96,16 @@ export class Renderer {
     this.resize();
   }
 
-  setSeed(seed: number, mode: RoomMode = 'world', mapId = 'world'): void {
+  setSeed(seed: number, mode: RoomMode = 'world', mapId = 'world', preserveView = false): void {
     const document = mapDocument(WORLD_DOCUMENT, mapId);
     this.world = new World(seed, 160, mode, document, worldDungeons(document, DUNGEON_DEFINITIONS));
     this.terrain.invalidate();
-    this.hasCamera = false;
-    this.viewSign = 1;
-    this.characters.reset();
-    this.ambientSpeech.reset();
+    if (!preserveView) {
+      this.hasCamera = false;
+      this.viewSign = 1;
+      this.characters.reset();
+      this.ambientSpeech.reset();
+    }
     this.resize();
   }
 
@@ -138,7 +138,7 @@ export class Renderer {
       this.canvas.height = Math.round(this.height * this.dpr);
     }
     this.baseZoom = cameraZoom(this.width, this.height, this.touchQuery.matches, this.cameraSettings);
-    this.zoom = this.baseZoom * this.fishingZoom * this.elevationZoom;
+    this.zoom = this.baseZoom * this.fishingZoom;
   }
 
   render(frame: RenderFrame): void {
@@ -150,18 +150,7 @@ export class Renderer {
     if (this.dpr !== renderDpr(window.devicePixelRatio, this.width, this.height)) this.resize();
     const fishingTargetZoom = !this.reducedMotion.matches && frame.fishing?.phase === 'fight' ? 1.12 : 1;
     this.fishingZoom += (fishingTargetZoom - this.fishingZoom) * (1 - Math.exp(-delta / 240));
-    if(this.reducedMotion.matches)this.elevationZoom=1;
-    else if(!frame.holdCamera||!this.hasCamera) {
-      let elevationTarget=1;
-      if(frame.playing&&!frame.spectating&&frame.self) {
-        const x=frame.self.x/TILE_SIZE,y=frame.self.y/TILE_SIZE;
-        const stairs=this.world.elevation.stairsIn({left:x,top:y,right:x+1e-8,bottom:y+1e-8});
-        elevationTarget=elevationCameraZoom(cameraElevation(frame.self,stairs));
-      }
-      this.elevationZoom=!this.hasCamera||(frame.playing&&!this.wasPlaying)?elevationTarget
-        :this.elevationZoom+(elevationTarget-this.elevationZoom)*(1-Math.exp(-delta/200));
-    }
-    this.zoom = this.baseZoom * this.fishingZoom * this.elevationZoom;
+    this.zoom = this.baseZoom * this.fishingZoom;
     if (frame.spectating) this.zoom = Math.min(this.zoom, this.width / 1000, this.height / 850);
 
     this.viewSign = arenaViewSign(this.world.mode, frame.playing && !frame.spectating ? frame.self?.teamId : null);

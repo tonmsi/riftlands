@@ -381,12 +381,12 @@ export function installElevationEditor(root: HTMLElement, canvas: HTMLCanvasElem
       });
     }, true);
   }
-  function selectMapAt(p: Vec2): boolean {
+  function selectMapAt(p: Vec2, only?: 'stairs'): boolean {
     const g = host.document().geometry; if (!g) return false;
     const hit = (s: GeometryShape) => shapeVisible(s, visibility()) && p.x >= s.x && p.y >= s.y && p.x < s.x + s.width && p.y < s.y + s.height;
     const stair = g.stairs.find(hit);
-    const surface = g.surfaces.filter(hit).sort((a, b) => b.elevation - a.elevation)[0];
-    const solid = g.solids.find(s => !s.id.endsWith('-mass') && hit(s));
+    const surface = only ? undefined : g.surfaces.filter(hit).sort((a, b) => b.elevation - a.elevation)[0];
+    const solid = only ? undefined : g.solids.find(s => !s.id.endsWith('-mass') && hit(s));
     const item = stair ?? surface ?? solid; if (!item) return false;
     set('owner', 'map'); selection = `${stair ? 'stairs' : surface ? 'surfaces' : 'solids'}|${item.id}`; needsPrepare = false;
     fill(); host.selectTool('elevation-select'); refresh(); host.schedule(); return true;

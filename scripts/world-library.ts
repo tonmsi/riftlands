@@ -13,6 +13,7 @@ import { compactWorldTiles, serializeWorldDocument } from '../shared/world-tiles
 import { readCatalog } from './dungeon-removal';
 import { repairWorldAssetPaths } from '../shared/world-asset-paths';
 import { listWorldAssetFiles } from './world-asset-files';
+import { forwardWorldPublication } from './world-publication';
 
 export const worldRevision = (text: string): string => createHash('sha256').update(text).digest('hex');
 async function formatCompatibleRevisions(path: string, revision: string): Promise<string[]> {
@@ -29,8 +30,13 @@ export async function readWorldDungeonCatalog(path: string): Promise<DungeonDefi
   const { bundles } = await readCatalog(path);
   return bundles.map(b => b.definition);
 }
-export async function saveWorldProject(options: { root: string; documentPath: string; dungeonPath: string; dataPath: string }, document: unknown, revision: string, deleteAssetId?: string) {
-  const releaseData = acquireDataLease(options.dataPath);
+export async function saveWorldProject(options: { root: string; documentPath: string; dungeonPath: string; dataPath: string;
+  live?: (document: WorldDocument) => () => void }, document: unknown, revision: string, deleteAssetId?: string): Promise<{ revision: string; backup: string; backups: string[]; document?: WorldDocument; live?: boolean }> {
+  if (!options.live) {
+    const forwarded = await forwardWorldPublication(options, { document, revision, deleteAssetId });
+    if (forwarded) return forwarded;
+  }
+  const releaseData = options.live ? () => {} : acquireDataLease(options.dataPath);
   let releaseWorld: (() => void) | undefined;
   const temp = `${options.documentPath}.${randomUUID()}.tmp`;
   let removedImage: { path: string; staged: string } | undefined;
@@ -78,6 +84,7 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     }
     for (const doc of [next, ...(next.interiors ?? []).map(m => m.document)])
       for (const zone of doc.zones) if (zone.music) await access(resolve(options.root, 'public', zone.music.src.slice(1)));
+    const applyLive = options.live?.(next);
     const tag = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`;
     const backup = `${options.documentPath}.${tag}.bak`, backups = [backup];
     await writeFile(backup, current, { flag: 'wx' });
@@ -90,7 +97,7 @@ export async function saveWorldProject(options: { root: string; documentPath: st
       const next = newDungeons.find(d => d.dungeon.id === old.dungeon.id);
       return !next || next.mapId !== old.mapId || old.dungeon.layout.bounds.minTx !== next.dungeon.layout.bounds.minTx || old.dungeon.layout.bounds.minTy !== next.dungeon.layout.bounds.minTy;
     }).flatMap(({ dungeon }) => [dungeon.bossId, ...(dungeon.additionalEncounters ?? []).map(e => e.bossId)]));
-    if (movedBossIds.size) {
+    if (movedBossIds.size && !options.live) {
       let savePath = resolve(dirname(options.dataPath), 'dungeon.json'), saveText: string | undefined;
       try { saveText = await readFile(savePath, 'utf8'); }
       catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; savePath = options.dataPath; try { saveText = await readFile(savePath, 'utf8'); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; } }
@@ -120,7 +127,8 @@ export async function saveWorldProject(options: { root: string; documentPath: st
         throw e;
       }
     }
-    return { revision: worldRevision(text), backup, backups, ...(deleteAssetId !== undefined ? { document: next } : {}) };
+    applyLive?.();
+    return { revision: worldRevision(text), backup, backups, live: !!applyLive, document: next };
   } finally {
     await unlink(temp).catch(() => {}); releaseWorld?.(); releaseData();
   }

@@ -1,3 +1,4 @@
+import { onWorldDocumentChange } from './world-content';
 import type { ClassId, Vec2 } from './types';
 import { DUNGEON_BY_BOSS_ID, PERSISTENT_DUNGEON_BY_BOSS_ID, insideDungeonRegion } from './dungeons';
 import customDungeons from './custom-dungeons.json';
@@ -59,10 +60,15 @@ export const BOSS_WAKE_MS = 1400;
 export interface BossLockState { bossId: string; locked: boolean; startedAt?: number; ownerId?: string; relation?: 'participant' | 'eliminated' | 'outsider'; }
 export interface BossPreparationState { bossId: string; name: string; startedAt: number; endsAt: number; entrants: number; team: boolean; }
 
-export const BOSS_DEFINITIONS: readonly BossDefinition[] =
+export let BOSS_DEFINITIONS: readonly BossDefinition[] =
   unpackDungeonCatalog(customDungeons).flatMap(entry => entry.bosses).filter(boss => PERSISTENT_DUNGEON_BY_BOSS_ID.has(boss.id));
 export const BOSS_BY_ID = new Map(BOSS_DEFINITIONS.map(definition => [definition.id, definition]));
 export const INSTALLED_BOSS_BY_ID = new Map(unpackDungeonCatalog(customDungeons).flatMap(entry => entry.bosses).map(b => [b.id, b]));
+onWorldDocumentChange(() => {
+  BOSS_DEFINITIONS = [...INSTALLED_BOSS_BY_ID.values()].filter(b => PERSISTENT_DUNGEON_BY_BOSS_ID.has(b.id));
+  BOSS_BY_ID.clear(); for (const b of BOSS_DEFINITIONS) BOSS_BY_ID.set(b.id, b);
+});
+
 for (const definition of BOSS_DEFINITIONS) {
   const dungeon = DUNGEON_BY_BOSS_ID.get(definition.id) ?? PERSISTENT_DUNGEON_BY_BOSS_ID.get(definition.id);
   if (!dungeon || dungeon.id !== definition.dungeonId) throw new Error(`Boss ${definition.id}: dungeon ${definition.dungeonId} assente o non associato.`);

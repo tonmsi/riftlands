@@ -87,6 +87,7 @@ export interface MatchResult {
 }
 
 export type ServerMessage =
+  | { type: 'world'; revision: number; document: import('./world-schema').WorldDocument; relocated?: boolean }
   | { type: 'warp-transition'; phase: 'start' | 'cancel'; name?: string }
   | { type: 'bet-win'; win: import('./betting').BetWin }
   | { type: 'welcome'; token: string; account: PublicAccount; playerId: string; seed: number; tickRate: number; time: number; social: SocialState }

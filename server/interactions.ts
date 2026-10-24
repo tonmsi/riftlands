@@ -10,7 +10,7 @@ import { SOUL_QUEST_ID } from '../shared/soul-escort';
 import type { Account } from './store';
 import { canCollectItem, collectItem, ITEM_DEFINITIONS, newInventory, type ItemStack } from '../shared/items';
 import { VENDOR_DEFINITIONS, type VendorOffer } from '../shared/vendors';
-import { acceptQuest, advanceQuest, conditionMatches, DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS, newNarrativeProgress, questStatus, questReward, questCompletions } from '../shared/narrative';
+import { acceptQuest, advanceQuest, conditionMatches, dialogueQuestMarker, DIALOGUE_DEFINITIONS, QUEST_DEFINITIONS, newNarrativeProgress, questStatus, questReward, questCompletions } from '../shared/narrative';
 import { NPC_LOOT_TABLES } from '../shared/loot';
 import { GROUND_ITEM_TTL, LOOT_ITEM_TTL, INTERACTION_RANGE, type GroundItem, type DialogueView, type InteractionCommand, type InventoryAction } from '../shared/interactions';
 
@@ -177,13 +177,7 @@ export class InteractionSystem {
     return undefined;
   }
   marker(id: string, dialogueId: string, now: number): Actor['questMarker'] {
-    const dialogue = DIALOGUE_DEFINITIONS[dialogueId];
-    if (!dialogue) return undefined;
-    if (dialogue.showQuestMarker === false) return undefined;
-    const progress = this.account(id).narrative!, quest = QUEST_DEFINITIONS[dialogue.questId];
-    if (dialogue.questMarkerCondition && !conditionMatches(progress, dialogue.questMarkerCondition, now)) return undefined;
-    if (quest?.requiresQuest && !conditionMatches(progress, { kind: 'quest-completed', questId: quest.requiresQuest }, now)) return undefined;
-    return questStatus(progress, dialogue.questId, now);
+    return dialogueQuestMarker(this.account(id).narrative!, dialogueId, now);
   }
   killed(victim: Actor, killer: Actor | undefined, now: number): void {
     if (killer?.kind !== 'player' || !this.host.connected(killer.id)) return;

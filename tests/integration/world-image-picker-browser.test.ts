@@ -1,0 +1,71 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { chromium, expect } from '@playwright/test';
+import { startWorldStudio } from '../../scripts/world-studio-server';
+import { newWorldDocument, newWorldAsset } from '../../shared/world-schema';
+
+test('internal image replacement preserves variants and source assets, supports cancel and undo, and leaves external upload available', { timeout: 90_000 }, async () => {
+    const fixture = newWorldDocument(1);
+    const parent = newWorldAsset('parent', 'Gruppo alberi', '/world-assets/picker-parent.svg');
+    const variant = newWorldAsset('variant', 'Variante albero', '/world-assets/picker-variant.svg');
+    variant.variantOf = parent.id; variant.cells[0].blocked = true;
+    variant.imageTransform = { x: .2, y: .1, scale: 1.5 };
+    const source = newWorldAsset('source', 'Immagine esistente', '/world-assets/picker-source.svg');
+    fixture.assets.push(parent, variant, source);
+    fixture.placements.push({ id: 'copy', assetId: variant.id, x: 3, y: 3 });
+    const directory = await mkdtemp(join(tmpdir(), 'riftlands-image-picker-'));
+    await writeFile(join(directory, 'world.json'), JSON.stringify(fixture));
+    await writeFile(join(directory, 'dungeons.json'), '[]');
+    const studio = await startWorldStudio({ root: resolve('.'), documentPath: join(directory, 'world.json'), dungeonPath: join(directory, 'dungeons.json'), dataPath: join(directory, 'accounts.json'), port: 0 });
+    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+    try {
+        browser = await chromium.launch({ channel: 'chrome', headless: true });
+        const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+        const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+        let uploads = 0;
+        page.on('request', r => { if (r.method() === 'POST' && r.url().includes('/__world/upload')) uploads++; });
+        await page.route('**/world-assets/picker-*.svg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="green"/></svg>' }));
+        await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
+        const checkpoint = () => page.evaluate(async () => {
+            const db = await new Promise<IDBDatabase>((resolve, reject) => { const r = indexedDB.open('riftlands.world-maker.v1', 2); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+            return new Promise<any>((resolve, reject) => { const tx = db.transaction('drafts'), r = tx.objectStore('drafts').get('project'); tx.oncomplete = () => { db.close(); resolve(r.result); }; tx.onerror = () => reject(tx.error); });
+        });
+        await page.locator('#asset-list [data-asset="variant"]').click();
+        await page.locator('#asset-replace-image-internal').click();
+        await expect(page.locator('#asset-image-picker')).toBeVisible();
+        await expect(page.locator('#asset-image-picker-use')).toBeDisabled();
+        await page.locator('#asset-image-picker-search').fill('Immagine esistente');
+        await expect(page.locator('#asset-image-picker-list .asset-item')).toHaveCount(1);
+        await page.locator('#asset-image-picker-list [data-asset="source"]').click();
+        await expect(page.locator('#asset-image-picker-preview img')).toHaveAttribute('src', source.image);
+        await page.locator('#asset-image-picker-use').click();
+        await expect(page.locator('#asset-image-picker')).not.toBeVisible();
+        await expect(page.locator('#asset-name')).toHaveValue(variant.name);
+        await expect.poll(async () => (await checkpoint())?.document.assets.find((a: any) => a.id === variant.id)?.image).toBe(source.image);
+        const saved = (await checkpoint()).document;
+        assert.deepEqual(saved.assets.find((a: any) => a.id === variant.id), { ...variant, image: source.image });
+        assert.deepEqual(saved.assets.find((a: any) => a.id === source.id), source);
+        assert.equal(saved.assets.find((a: any) => a.id === parent.id).image, parent.image);
+        assert.deepEqual(saved.placements, fixture.placements); assert.equal(uploads, 0);
+        await page.locator('#undo').click();
+        await expect.poll(async () => (await checkpoint()).document.assets.find((a: any) => a.id === variant.id).image).toBe(variant.image);
+        await page.locator('#redo').click();
+        await expect.poll(async () => (await checkpoint()).document.assets.find((a: any) => a.id === variant.id).image).toBe(source.image);
+        await page.locator('#asset-replace-image-internal').click();
+        await page.locator('#asset-image-picker-list [data-asset="parent"]').click();
+        await page.locator('#asset-image-picker-cancel').click();
+        assert.equal((await checkpoint()).document.assets.find((a: any) => a.id === variant.id).image, source.image);
+        // The same picker works for an independent asset, without importing a copy.
+        await page.locator('#asset-list [data-asset="source"]').click();
+        await page.locator('#asset-replace-image-internal').click();
+        await page.locator('#asset-image-picker-list [data-asset="parent"]').click();
+        await page.locator('#asset-image-picker-use').click();
+        await expect.poll(async () => (await checkpoint()).document.assets.find((a: any) => a.id === source.id).image).toBe(parent.image);
+        const chooser = page.waitForEvent('filechooser'); await page.locator('#asset-replace-image').click();
+        assert.equal((await chooser).isMultiple(), false);
+        assert.deepEqual(errors, []);
+    } finally { await browser?.close(); await studio.close(); await rm(directory, { recursive: true, force: true }); }
+});

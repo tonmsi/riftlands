@@ -1,5 +1,5 @@
 import type { Vec2 } from './types';
-import { WORLD_DOCUMENT } from './world-content';
+import { WORLD_DOCUMENT, onWorldDocumentChange } from './world-content';
 import { TILE_SIZE } from './config';
 
 const entrance = WORLD_DOCUMENT.zones.find(z => z.arenaId)?.shape;
@@ -7,6 +7,11 @@ const entrance = WORLD_DOCUMENT.zones.find(z => z.arenaId)?.shape;
 export const ARENA_GATE = { x: entrance ? entrance.x * TILE_SIZE : 0, y: entrance ? entrance.y * TILE_SIZE : -115,
   radius: entrance?.kind === 'circle' ? entrance.radius * TILE_SIZE : 70, countdownMs: 3000 } as const;
 export const ARENA_DURATION_SECONDS = 180;
+onWorldDocumentChange(() => {
+  const shape = WORLD_DOCUMENT.zones.find(z => z.arenaId)?.shape;
+  Object.assign(ARENA_GATE, { x: shape ? shape.x * TILE_SIZE : 0, y: shape ? shape.y * TILE_SIZE : -115,
+    radius: shape?.kind === 'circle' ? shape.radius * TILE_SIZE : 70 });
+});
 export function insideArenaGate(position: Vec2): boolean {
   return nearArenaGate(position, 0);
 }

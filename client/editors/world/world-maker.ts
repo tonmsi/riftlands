@@ -32,11 +32,14 @@ import { newWorldAsset, parseWorldDocument, resizeWorldAsset, worldAssetVisual, 
 import { brushTiles, strokeTiles, WorldBrush, forkWorldDocument } from '../../../shared/world-editing';
 import { compactWorldTiles, worldTileMetrics, worldDocumentsEqual } from '../../../shared/world-tiles';
 import { WorldAssetArt } from '../../render/world-asset-art';
+import { DEFAULT_ASSET_SHADOW, worldAssetShadow } from '../../../shared/world-schema';
+import { rasterizeAssetShadow } from '../../render/world-asset-shadow';
 import { WorldEditorHistory } from './world-editor-history';
 import { WorldAssetCatalog, assetGroup } from './world-asset-catalog';
+import { installWorldImagePicker } from './world-image-picker';
 import { AssetGridCamera } from '../../render/world-asset-view';
 import { loadWorldCheckpoint, saveWorldCheckpoint, WorldCheckpointConflictError } from './world-editor-storage';
-import { assetPickFloor, canPaintTerrainLevel, compareAssetDrawOrder } from './world-picking';
+import { assetPickFloor, assetInSelection, selectionRect, intersectsSelection, canPaintTerrainLevel, compareAssetDrawOrder } from './world-picking';
 import { WorldInspectorDrafts } from './world-inspector-drafts';
 import { installWorldWorkspace } from './world-workspace';
 import { locateWorldIssue, type WorldIssueLocation } from './world-problems';
@@ -62,13 +65,28 @@ let world: World, tool = 'select', activeAsset = draft.assets[0]?.id ?? '', sele
     kind: 'placement' | 'npc' | 'dungeon' | 'zone';
     id: string;
 } | null = null;
+type ObjectSelection = { kind: 'placement' | 'npc'; id: string; generated?: AssetPlacement };
+let selectedObjects: ObjectSelection[] = [], groupPrimary: { kind: 'placement' | 'npc' | 'dungeon' | 'zone'; id: string } | null = null;
+function clearObjectSelection(): void { selectedObjects = []; groupPrimary = null; }
 let worldDirty = true, framePending = false, dirty = false, checkpointQueue = Promise.resolve();
 let draftConflict = false;
 let animationTimer: ReturnType<typeof setTimeout> | undefined;
 let checkpointTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingCheckpoint: { document: WorldDocument; revision: string } | undefined;
-let compatibleRevisions: string[] = [];
 let installedDocument = draft;
+let recoverableDraft: WorldDocument | undefined;
+const recoverDraftButton = document.createElement('button');
+recoverDraftButton.id = 'recover-world-draft'; recoverDraftButton.textContent = 'Ripristina bozza precedente'; recoverDraftButton.hidden = true;
+root.querySelector('.top-actions')!.prepend(recoverDraftButton);
+recoverDraftButton.onclick = () => { void settleGesture().then(() => {
+    if (!recoverableDraft) return;
+    const recovered = recoverableDraft;
+    change(() => { draft = forkWorldDocument(recovered); selected = null; });
+    recoverableDraft = undefined; recoverDraftButton.hidden = true;
+    status('Bozza precedente ripristinata per la modifica. Applica al gioco per pubblicarla.');
+}).catch(report); };
+let appliedDocument: WorldDocument | undefined;
+let applyingWorld = false, projectGeneration = 0;
 let lastAssetPublication = '';
 const studioChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('riftlands.studio') : undefined;
 const history = new WorldEditorHistory(), canvas = el<HTMLCanvasElement>('map');
@@ -121,6 +139,7 @@ function acceptInspectorAction(id: string): void {
     if (id === 'asset-update') inspectorDrafts.accept('asset-inspector');
     else if (id === 'gen-update') inspectorDrafts.accept('asset-inspector', ['gen-enabled','gen-category','gen-temp-min','gen-temp-max','gen-moist-min','gen-moist-max','gen-density','gen-spacing',...WORLD_TERRAINS.map(t=>`gen-terrain-${t}`)]);
     else if (id.startsWith('asset-image-')) inspectorDrafts.accept('asset-inspector', ['asset-image-x','asset-image-y','asset-image-scale']);
+    else if (id.startsWith('asset-shadow-') && id !== 'asset-shadow-png') inspectorDrafts.accept('asset-inspector', ['asset-shadow-inherit', 'asset-shadow-enabled', ...Object.keys(DEFAULT_ASSET_SHADOW).map(key => `asset-shadow-${key}`)]);
     else if (id === 'asset-fade-update') inspectorDrafts.accept('asset-inspector', ['fade-opacity','fade-feather','fade-duration']);
     else if (id === 'selection-update') inspectorDrafts.accept('selection-inspector');
     else if (id === 'zone-update') inspectorDrafts.accept('zone-inspector');
@@ -166,6 +185,8 @@ let gesture: {
     spawnMove?: Vec2;
     warpMove?: { id: string; side: 'entry' | 'arrival'; x: number; y: number };
     move?: { kind: 'placement' | 'npc' | 'dungeon' | 'zone'; id: string; x: number; y: number };
+    marquee?: { start: Vec2; end: Vec2; tile: Vec2 };
+    groupMove?: { item: ObjectSelection; x: number; y: number }[];
     cell?: boolean;
     cellLast?: Vec2;
     image?: { x: number; y: number; scale: number; unit: number };
@@ -310,6 +331,7 @@ function focusWorldIssue(location: WorldIssueLocation): void {
     refresh();centerAt(location.point.x+.5,location.point.y+.5);revealInspector();schedule(true);
 }
 function refresh(): void {
+    if (selected !== groupPrimary || tool !== 'select') clearObjectSelection();
     input('bush-js').disabled = !['grass', 'bush'].includes(val('terrain'));
     if (activeMap !== 'world' && !draft.interiors?.some(m => m.id === activeMap)) activeMap = 'world';
     refreshPainting();
@@ -323,7 +345,7 @@ function refresh(): void {
     set('seed', draft.seed);
     el<HTMLButtonElement>('undo').disabled = !history.canUndo;
     el<HTMLButtonElement>('redo').disabled = !history.canRedo;
-    el<HTMLButtonElement>('apply-world').disabled = !token || !ready || draftConflict;
+    el<HTMLButtonElement>('apply-world').disabled = !token || !ready || draftConflict || applyingWorld;
     el<HTMLButtonElement>('asset-delete-permanently').disabled = !token || !ready || draftConflict;
     const cells = worldTileMetrics(surface()).cells;
     el('map-info').textContent = `${cells.toLocaleString('it-IT')} celle · ${surface().placements.length} asset · ${surface().zones.length} zone`;
@@ -354,6 +376,18 @@ function refreshAsset(a: WorldAsset): void {
     set('asset-cell-subdivision',assetCellSubdivision(a));
     el('asset-cell-info').textContent=`Griglia: ${assetCellColumns(a)} × ${assetCellRows(a)} celle. Ogni cella: 1/${assetCellSubdivision(a)} di tile (${48/assetCellSubdivision(a)} unità).`;
     const visual = worldAssetVisual(a);
+    const shadow = effectiveAsset(a).shadow;
+    el('asset-shadow-inherit-label').hidden = !a.variantOf;
+    input('asset-shadow-inherit').checked = !!a.variantOf && a.shadow === undefined;
+    input('asset-shadow-enabled').checked = !!shadow;
+    set('asset-shadow-kind', (shadow ?? DEFAULT_ASSET_SHADOW).kind);
+    el<HTMLSelectElement>('asset-shadow-kind').disabled = visual.kind !== 'image';
+    for (const key of ['x', 'y', 'width', 'height', 'opacity', 'softness', 'skew'] as const) {
+        set(`asset-shadow-${key}`, Math.round((shadow ?? DEFAULT_ASSET_SHADOW)[key] * 10000) / 100);
+        input(`asset-shadow-${key}`).disabled = visual.kind !== 'image';
+    }
+    for (const id of ['asset-shadow-enabled', 'asset-shadow-update', 'asset-shadow-reset', 'asset-shadow-png'])
+        el<HTMLInputElement | HTMLButtonElement>(id).disabled = visual.kind !== 'image';
     set('asset-visual', visual.kind === 'fire' ? visual.style : 'image');
     const fade = a.fade ?? DEFAULT_ASSET_FADE;
     set('fade-opacity', Math.round(fade.opacity * 100_000) / 1000); set('fade-feather', fade.feather); set('fade-duration', fade.durationMs);
@@ -427,6 +461,12 @@ function selectionEntity(): any {
         : selected.kind === 'dungeon' ? surface().dungeons.find(d => d.dungeonId === selected!.id) ?? (() => { const d = worldDungeons(mapDocument(draft, activeMap), catalog).find(d => d.id === selected!.id); return d ? { dungeonId: d.id, x: d.layout.bounds.minTx, y: d.layout.bounds.minTy } : undefined; })() : surface().zones.find(z => z.id === selected!.id);
 }
 function refreshSelection(): void {
+    el('selection-update').hidden = selectedObjects.length > 1;
+    if (selectedObjects.length > 1) {
+        el('selection-title').textContent = `${selectedObjects.length} oggetti selezionati`;
+        el('selection-fields').textContent = 'Trascina un oggetto selezionato per spostare il gruppo. Premi Canc per rimuoverlo.';
+        return;
+    }
     const e = selectionEntity();
     if (!e) {
         selected = null;
@@ -466,7 +506,7 @@ function refreshSelection(): void {
         el('selection-fields').append(b);
         const variant = document.createElement('button'); variant.textContent = 'Crea variante per questa copia';
         variant.onclick = () => change(() => { materializeSelection(); const placement = selectionEntity(); const source = draft.assets.find(a => a.id === placement.assetId)!;
-            const copy = structuredClone(source); copy.id = uid('asset'); copy.name = `${source.name} · variante`.slice(0,160); copy.generation.enabled = false;
+            const copy = structuredClone(effectiveAsset(source)); copy.id = uid('asset'); copy.name = `${source.name} · variante`.slice(0,160); copy.generation.enabled = false;
             delete copy.variantOf;
             draft.assets.push(copy); placement.assetId = copy.id; activeAsset = copy.id;
         }); el('selection-fields').append(variant);
@@ -475,7 +515,7 @@ function refreshSelection(): void {
 function draw(): void {
     ensureWorld();
     const animated = drawWorldEditorMap(canvas, world, mapDocument(draft, activeMap), view, art, { painting: input('show-painting').checked, grid: input('show-grid').checked, cells: input('show-cells').checked,
-        zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, gesture, pointerTile, tool, activeAsset: active(), activeElevation: elevationEditor.elevation(), visibleElevations: elevationEditor.visibility() });
+        zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, selectedObjects, gesture, pointerTile, tool, activeAsset: active() && effectiveAsset(active()!), activeElevation: elevationEditor.elevation(), visibleElevations: elevationEditor.visibility() });
     if ((animated || (!el('asset-inspector').hidden && active() && worldAssetVisual(active()!).kind === 'fire')) && animationTimer === undefined)
         animationTimer = setTimeout(() => { animationTimer = undefined; schedule(); }, 33);
     warpEditor.draw(canvas, view, elevationEditor.visibility());
@@ -487,7 +527,7 @@ function draw(): void {
 function drawAssetGrid(): void {
     if (el('asset-inspector').hidden) return;
     assetView();
-    renderAssetGrid(assetCanvas, art, active(), input('preview-fade').checked, assetCamera, input('edit-asset-image').checked, elevationEditor.visibility());
+    renderAssetGrid(assetCanvas, art, active() && effectiveAsset(active()!), input('preview-fade').checked, assetCamera, input('edit-asset-image').checked, elevationEditor.visibility());
     const v = assetView(); if (v) {
         const ctx = assetCanvas.getContext('2d')!, dpr = assetCanvas.width / Math.max(1, assetCanvas.getBoundingClientRect().width);
         ctx.save(); ctx.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
@@ -509,6 +549,7 @@ function position(event: PointerEvent): Vec2 { const r = canvas.getBoundingClien
 function centerAt(x: number, y: number): void { const r = canvas.getBoundingClientRect(); view.x = r.width / 2 - x * view.scale; view.y = r.height / 2 - y * view.scale; schedule(); }
 function zoom(factor: number, x?: number, y?: number): void { const r = canvas.getBoundingClientRect(); x ??= r.width / 2; y ??= r.height / 2; const next = Math.max(.75, Math.min(96, view.scale * factor)); view.x = x - (x - view.x) * next / view.scale; view.y = y - (y - view.y) * next / view.scale; view.scale = next; schedule(); }
 function selectAt(p: Vec2, precise: Vec2 = { x: p.x + .5, y: p.y + .5 }, cycle = false): void {
+    clearObjectSelection();
     ensureWorld();
     const n = surface().npcs.find(n => Math.hypot(n.x + .5 - precise.x, n.y + .5 - precise.y) <= Math.max(.24, 6 / view.scale) && floorVisible(elevationEditor.visibility(), n.elevation ?? 0));
     const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 }).filter(p => {
@@ -517,9 +558,13 @@ function selectAt(p: Vec2, precise: Vec2 = { x: p.x + .5, y: p.y + .5 }, cycle =
       return assetPickFloor(a, base, { x: precise.x - p.x, y: precise.y - p.y }, elevationEditor.visibility()) !== undefined && art.hit(a, p, precise.x, precise.y);
     }).sort((a,b) => compareAssetDrawOrder(a,b,world.authoring.assets));
     const asset = placements.at(-1), dungeon = floorVisible(elevationEditor.visibility(), 0) ? world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy) : undefined;
-    const zone = floorVisible(elevationEditor.visibility(), 0) ? world.authoring.zonesAt(p.x + .5, p.y + .5)[0] : undefined;
-    if (!n && !asset && elevationEditor.selectMapAt(precise)) { revealInspector(); return; }
-    if (!n && !asset) {
+    const zone = world.authoring.zonesAt(precise.x, precise.y)[0];
+    // A stair is an editable passage, rather than a low-priority terrain tile.
+    // Alt-click still allows selecting the zone underneath it.
+    if (!cycle && !n && !asset && elevationEditor.selectMapAt(precise, 'stairs')) { revealInspector(); return; }
+    // Terrain geometry and automatic cliffs are the last fallback, after map entities.
+    if (!n && !asset && !zone && !dungeon && elevationEditor.selectMapAt(precise)) { revealInspector(); return; }
+    if (!n && !asset && !zone && !dungeon) {
         const cliffs = world.elevation.cliffs({ left: p.x, top: p.y, right: p.x+1, bottom: p.y+1 }).filter(c=>cliffLevels(draft,c,true).some(e=>floorVisible(elevationEditor.visibility(),e)));
         for (const cliff of cliffs.slice().reverse()) {
             const part = cliff.parts.slice().reverse().find(part=>{
@@ -553,6 +598,33 @@ function materializeSelection(): void {
     brush.tile(generated, { suppressAssets: true, ...(terrain ? { terrain } : {}) }); brush.flushTiles();
     const placement = { ...generated, id: uid('asset') }; surface().placements.push(placement);
     selected = { kind: 'placement', id: placement.id }; selectedGenerated = undefined;
+}
+function objectEntity(item: ObjectSelection) {
+    return item.kind === 'npc' ? surface().npcs.find(n => n.id === item.id)
+        : surface().placements.find(p => p.id === item.id) ?? item.generated;
+}
+function materializeObjects(): void {
+    for (const item of selectedObjects) {
+        if (!item.generated) continue;
+        selected = { kind: 'placement', id: item.id }; selectedGenerated = item.generated;
+        materializeSelection(); item.id = selected!.id; delete item.generated;
+    }
+    selected = selectedObjects[0] ?? null; groupPrimary = selected; selectedGenerated = undefined;
+}
+function selectObjectsInBox(start: Vec2, end: Vec2): void {
+    ensureWorld();
+    const box = selectionRect(start, end), visible = elevationEditor.visibility();
+    selectedObjects = world.assetsIn(box).filter(p => {
+        const a = world.authoring.assets.get(p.assetId)!;
+        return assetInSelection(a, p, p.baseElevation ?? world.elevation.terrainElevationAt(p.x + .5, p.y + .5), visible, box);
+    }).map(p => ({ kind: 'placement', id: p.id, ...(p.id.startsWith('generated:') ? { generated: p } : {}) }));
+    selectedObjects.push(...surface().npcs.filter(n => floorVisible(visible, n.elevation ?? 0)
+        && intersectsSelection(box, { left: n.x + .26, top: n.y + .26, right: n.x + .74, bottom: n.y + .74 }))
+        .map(n => ({ kind: 'npc' as const, id: n.id })));
+    warpEditor.clearSelection(); elevationEditor.cancelGesture();
+    selected = selectedObjects[0] ?? null; groupPrimary = selected;
+    selectedGenerated = selectedObjects[0]?.generated;
+    refresh(); if (selected) revealInspector(); schedule();
 }
 function paint(p: Vec2): void {
     if (!gesture)
@@ -596,7 +668,7 @@ function paint(p: Vec2): void {
 canvas.addEventListener('pointerdown', event => {
     if (!ready || gesture)
         return;
-    if (event.button === 0 && !keys.has('Space') && !floorVisible(elevationEditor.visibility(), elevationEditor.elevation())) { status('Scegli una quota attiva visibile prima di modificare la mappa.'); return; }
+    if (event.button === 0 && tool !== 'select' && !keys.has('Space') && !floorVisible(elevationEditor.visibility(), elevationEditor.elevation())) { status('Scegli una quota attiva visibile prima di modificare la mappa.'); return; }
     canvas.focus();
     const p = position(event);
     ensureWorld();
@@ -626,8 +698,28 @@ canvas.addEventListener('pointerdown', event => {
     }
     if (event.button === 0 && tool === 'select' && !keys.has('Space')) {
         const previous = selected, r = canvas.getBoundingClientRect();
-        selectAt(p, { x: (event.clientX - r.left - view.x) / view.scale, y: (event.clientY - r.top - view.y) / view.scale }, event.altKey);
-        if (!previous || selected?.id !== previous.id || selected?.kind !== previous.kind || event.altKey) return;
+        const precise = { x: (event.clientX - r.left - view.x) / view.scale, y: (event.clientY - r.top - view.y) / view.scale };
+        if (!event.altKey && selectedObjects.length > 1 && selectedObjects.some(item => {
+            const entity = objectEntity(item); if (!entity) return false;
+            return item.kind === 'npc' ? Math.hypot(entity.x + .5 - precise.x, entity.y + .5 - precise.y) <= .3
+                : art.hit(world.authoring.assets.get((entity as AssetPlacement).assetId)!, entity, precise.x, precise.y);
+        })) {
+            gesture = { pointer: event.pointerId, before: draft, start: p, last: p, screenStart: { x: event.clientX, y: event.clientY }, tool: 'move-group', mass: false,
+                groupMove: selectedObjects.map(item => { const entity = objectEntity(item)!; return { item, x: entity.x, y: entity.y }; }) };
+            canvas.setPointerCapture(event.pointerId); event.preventDefault(); return;
+        }
+        if (event.altKey) { selectAt(p, precise, true); return; }
+        const onPrevious = previous?.kind === 'npc' ? surface().npcs.some(n => n.id === previous.id && Math.hypot(n.x + .5 - precise.x, n.y + .5 - precise.y) <= .3)
+            : previous?.kind === 'placement' ? (() => { const entity = selectionEntity(); return entity && art.hit(world.authoring.assets.get(entity.assetId)!, entity, precise.x, precise.y); })()
+            : previous?.kind === 'zone' ? world.authoring.zonesAt(precise.x, precise.y).some(z => z.id === previous.id)
+            : previous?.kind === 'dungeon' && world.dungeons.some(d => d.id === previous.id && p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
+        if (!onPrevious) {
+            gesture = { pointer: event.pointerId, before: draft, start: p, last: p, screenStart: { x: event.clientX, y: event.clientY }, tool: 'marquee', mass: false,
+                marquee: { start: precise, end: precise, tile: p } };
+            canvas.setPointerCapture(event.pointerId); event.preventDefault(); return;
+        }
+        selectAt(p, precise);
+        if (selected?.id !== previous?.id || selected?.kind !== previous?.kind) return;
         if (selected) {
             const before = draft;
             draft = forkWorldDocument(draft);
@@ -688,6 +780,23 @@ canvas.addEventListener('pointermove', event => {
     if (gesture.pointer !== event.pointerId)
         return;
     if (gesture.ending) return;
+    if (gesture.marquee) {
+        if (!gesture.moved && gesture.screenStart && Math.hypot(event.clientX - gesture.screenStart.x, event.clientY - gesture.screenStart.y) < 4) return;
+        gesture.moved = true;
+        const rect = canvas.getBoundingClientRect();
+        gesture.marquee.end = { x: (event.clientX - rect.left - view.x) / view.scale, y: (event.clientY - rect.top - view.y) / view.scale };
+        selectObjectsInBox(gesture.marquee.start, gesture.marquee.end); return;
+    }
+    if (gesture.groupMove) {
+        if (!gesture.moved && gesture.screenStart && Math.hypot(event.clientX - gesture.screenStart.x, event.clientY - gesture.screenStart.y) < 4) return;
+        if (!gesture.moved) { draft = forkWorldDocument(draft); materializeObjects(); gesture.moved = true; }
+        for (const move of gesture.groupMove) {
+            const entity = objectEntity(move.item)!;
+            entity.x = move.x + pointerTile.x - gesture.start.x;
+            entity.y = move.y + pointerTile.y - gesture.start.y;
+        }
+        refresh(); schedule(true); return;
+    }
     if (gesture.pan) {
         view.x += event.clientX - gesture.pan.x;
         view.y += event.clientY - gesture.pan.y;
@@ -734,11 +843,19 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
     if (!gesture || (event && gesture.pointer !== event.pointerId))
         return;
     const g = gesture;
+    if (g.marquee) {
+        gesture = null;
+        if (cancel) { selected = null; clearObjectSelection(); refresh(); schedule(); }
+        else if (g.moved) selectObjectsInBox(g.marquee.start, g.marquee.end);
+        else selectAt(g.marquee.tile, g.marquee.start);
+        return;
+    }
     if (!cancel && g.pending && (g.cursor ?? 0) < g.pending.length) { g.ending = true; schedule(); return; }
     g.brush?.flushTiles();
     g.terrainBrush?.flush(true);
     if (cancel) {
         draft = g.before;
+        if (g.groupMove) { selected = null; clearObjectSelection(); }
         gesture = null;
         refresh();
         schedule(true);
@@ -772,7 +889,7 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
         commit(g.before, !!surface().tileChunks && !surface().geometry && (g.tool === 'terrain' || g.tool === 'restore'));
     else
         schedule();
-    if (g.blockedLevels) status(`Non possibile: ${g.blockedLevels} celle escluse. Il terreno può cambiare di un solo livello per volta. Per salti maggiori usa un oggetto specifico.`);
+    if (g.blockedLevels) status(`Non possibile: ${g.blockedLevels} celle escluse. Il terreno può salire di un solo livello per volta.`);
 }
 async function settleGesture(): Promise<void> {
     if (gesture) finishGesture();
@@ -836,7 +953,49 @@ on('asset-fit', () => { assetCamera.fit(); schedule(); });
 input('edit-asset-image').addEventListener('change', () => { finishGesture(undefined, true); schedule(); });
 on('asset-image-update', () => change(() => { active()!.imageTransform = { x: num('asset-image-x'), y: num('asset-image-y'), scale: num('asset-image-scale') / 100 }; }));
 on('asset-image-reset', () => change(() => { delete active()!.imageTransform; assetCamera.fit(); }));
+function effectiveAsset(a: WorldAsset): WorldAsset {
+    return { ...a, shadow: worldAssetShadow(a, draft.assets.find(parent => parent.id === a.variantOf)) };
+}
+function updateAssetShadow(): void {
+    const a = active()!;
+    if (a.variantOf && input('asset-shadow-inherit').checked) { delete a.shadow; return; }
+    if (!input('asset-shadow-enabled').checked) { a.shadow = null; return; }
+    a.shadow = { kind: val('asset-shadow-kind') as 'ellipse' | 'silhouette', skew: num('asset-shadow-skew') / 100,
+        x: num('asset-shadow-x') / 100, y: num('asset-shadow-y') / 100,
+        width: num('asset-shadow-width') / 100, height: num('asset-shadow-height') / 100,
+        opacity: num('asset-shadow-opacity') / 100, softness: num('asset-shadow-softness') / 100 };
+}
+on('asset-shadow-update', () => change(updateAssetShadow));
+on('asset-shadow-reset', () => change(() => {
+    const a = active()!;
+    if (a.variantOf) delete a.shadow; else a.shadow = { ...DEFAULT_ASSET_SHADOW };
+}));
+el('asset-shadow-inherit').addEventListener('change', () => {
+    if (input('asset-shadow-inherit').checked) {
+        const shadow = worldAssetShadow({ ...active()!, shadow: undefined }, draft.assets.find(a => a.id === active()!.variantOf));
+        input('asset-shadow-enabled').checked = !!shadow;
+        set('asset-shadow-kind', (shadow ?? DEFAULT_ASSET_SHADOW).kind);
+        for (const key of ['x', 'y', 'width', 'height', 'opacity', 'softness', 'skew'] as const) set(`asset-shadow-${key}`, (shadow ?? DEFAULT_ASSET_SHADOW)[key] * 100);
+    }
+});
+for (const id of ['asset-shadow-enabled', ...Object.keys(DEFAULT_ASSET_SHADOW).map(key => `asset-shadow-${key}`)]) {
+    el(id).addEventListener('input', () => { input('asset-shadow-inherit').checked = false; });
+}
+on('asset-shadow-png', async () => {
+    const a = structuredClone(effectiveAsset(active()!));
+    if (!a.shadow) throw new Error('Attiva l’ombra e premi Aggiorna ombra prima di scaricarla.');
+    await art.ready(a);
+    const image = art.image(a, false);
+    if (!image) throw new Error('Immagine asset non disponibile.');
+    const bitmap = rasterizeAssetShadow(image.width, image.height, a.shadow, image);
+    const blob = await new Promise<Blob>((resolve, reject) => bitmap.toBlob(blob => blob ? resolve(blob) : reject(new Error('Esportazione ombra non riuscita.')), 'image/png'));
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url; link.download = `${a.id}-ombra.png`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
 const previewDialog = el<HTMLDialogElement>('asset-preview-dialog');
+el<HTMLSelectElement>('asset-preview-background').addEventListener('change', () => {
+    assetCanvas.dataset.background = val('asset-preview-background');
+});
 on('asset-expand', () => {
     if (previewDialog.open) { previewDialog.close(); return; }
     el('asset-preview-slot').append(el('asset-preview')); el('asset-expand').textContent = 'Riduci';
@@ -850,6 +1009,7 @@ on('asset-update', () => change(() => {
     resizeWorldAsset(a,num('asset-width'),num('asset-height')); a.name=val('asset-name').trim();assetCatalog.reveal(a);
     if (val('asset-variant-of')) a.variantOf = val('asset-variant-of'); else delete a.variantOf;
     a.layer=val('asset-layer') as 'ground'|'object';a.pivot.y=num('asset-pivot');
+    updateAssetShadow();
     a.fade={opacity:num('fade-opacity')/100,feather:num('fade-feather'),durationMs:num('fade-duration')};
     a.visual=val('asset-visual')==='image'?{kind:'image'}:{kind:'fire',style:val('asset-visual') as 'brazier'|'campfire'};
     const transform={x:num('asset-image-x'),y:num('asset-image-y'),scale:num('asset-image-scale')/100};
@@ -938,7 +1098,16 @@ on('selection-update', () => change(() => { materializeSelection(); const e = se
     } if (selected?.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id))
     surface().dungeons.push(e); e.x = num('entity-x'); e.y = num('entity-y'); if (selected?.kind === 'placement') { if (val('entity-pivot').trim()==='') delete e.pivotY; else {const pivot=num('entity-pivot');if(!Number.isFinite(pivot)||pivot<0||pivot>1)throw new Error('La base deve essere fra 0 e 1.');e.pivotY=pivot;} } if (selected?.kind === 'npc')
     { e.level = num('entity-level'); const properties = readNpcProperties(root, 'selected-npc'); e.npcKind = properties.kind; e.settings = properties.settings; } if (selected?.kind === 'dungeon') { if (val('entity-pvp') === '') delete e.pvp; else e.pvp = val('entity-pvp') === 'true'; } }));
-on('selection-delete', () => change(() => { materializeSelection(); if (selected?.kind === 'placement')
+on('selection-delete', () => change(() => {
+    if (selectedObjects.length > 1) {
+        materializeObjects();
+        const placements = new Set(selectedObjects.filter(s => s.kind === 'placement').map(s => s.id));
+        const npcs = new Set(selectedObjects.filter(s => s.kind === 'npc').map(s => s.id));
+        surface().placements = surface().placements.filter(p => !placements.has(p.id));
+        surface().npcs = surface().npcs.filter(n => !npcs.has(n.id));
+        selected = null; clearObjectSelection(); return;
+    }
+    materializeSelection(); if (selected?.kind === 'placement')
     surface().placements = surface().placements.filter(p => p.id !== selected!.id); if (selected?.kind === 'npc')
     surface().npcs = surface().npcs.filter(n => n.id !== selected!.id); if (selected?.kind === 'dungeon') {
     const existing = surface().dungeons.find(d => d.dungeonId === selected!.id);
@@ -996,6 +1165,7 @@ on('asset-create-variant', () => {
         const copy = structuredClone(source);
         copy.id = uid('asset'); copy.name = `${source.name} · variante`.slice(0, 160);
         copy.variantOf = source.variantOf ?? source.id;
+        delete copy.shadow;
         draft.assets.push(copy); activeAsset = copy.id; selected = null; selectedGenerated = undefined;
         selectTool('asset');
     });
@@ -1051,32 +1221,60 @@ input('asset-files').addEventListener('change', () => { void (async () => { cons
     imported.push({ name: file.name.replace(/\.(png|svg)$/i, ''), image, ...size });
 } await settleGesture(); change(() => { for (const data of imported) { const a = importWorldAsset(draft, installedDocument, catalog, data); activeAsset = a.id; assetCatalog.reveal(a); } selected = null; selectTool('asset'); }); status(`Importati ${imported.length} asset. Riferimenti e proprietà esistenti conservati.`); })().catch(report).finally(() => { input('asset-files').value = ''; }); });
 const replaceFile = document.createElement('input'); replaceFile.id = 'asset-replace-file'; replaceFile.type = 'file'; replaceFile.accept = '.png,.svg,image/png,image/svg+xml'; replaceFile.hidden = true;
-const replaceButton = document.createElement('button'); replaceButton.id = 'asset-replace-image'; replaceButton.className = 'wide'; replaceButton.textContent = 'Sostituisci immagine';
-el('asset-update').after(replaceButton); root.append(replaceFile);
+const replaceButton = document.createElement('button'); replaceButton.id = 'asset-replace-image'; replaceButton.className = 'wide'; replaceButton.textContent = 'Sostituisci immagine esterna · da file';
+const replaceInternalButton = document.createElement('button'); replaceInternalButton.id = 'asset-replace-image-internal'; replaceInternalButton.className = 'wide'; replaceInternalButton.textContent = 'Sostituisci immagine interna · dal catalogo';
+el('asset-update').after(replaceInternalButton, replaceButton); root.append(replaceFile);
+async function replaceAssetImage(id: string, image: string): Promise<void> {
+    await imageSize(image); await settleGesture();
+    const failures = failedChanges;
+    change(() => { const a = draft.assets.find(a => a.id === id); if (!a) throw new Error('Asset non più presente.'); a.image = image; });
+    if (failedChanges !== failures) throw new Error(el('status').textContent ?? 'Impossibile sostituire l’immagine.');
+    status('Immagine sostituita. ID, celle, gruppo e riferimenti ai dungeon conservati.');
+}
+const openImagePicker = installWorldImagePicker(root, () => draft.assets, replaceAssetImage);
+replaceInternalButton.onclick = () => { const target = active(); if (target) openImagePicker(target); };
 replaceButton.onclick = () => { replaceFile.value = ''; replaceFile.click(); };
 replaceFile.addEventListener('change', () => { void (async () => {
     const file = replaceFile.files?.[0], id = active()?.id; if (!file || !id) return;
     const mime = file.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/png';
-    const image = await upload(file, mime); await imageSize(image); await settleGesture();
-    change(() => { const a = draft.assets.find(a => a.id === id); if (!a) throw new Error('Asset non più presente.'); a.image = image; });
-    status('Immagine sostituita. ID, celle e riferimenti ai dungeon conservati.');
+    const image = await upload(file, mime); await replaceAssetImage(id, image);
 })().catch(report); });
-on('apply-world', async () => { if (draftConflict) throw new WorldCheckpointConflictError(); status('Controllo della bozza…'); await checkpoint(true); if (gesture)
+async function publishWorld(document: WorldDocument): Promise<any> {
+    try { return await api('/__world/project', { document, revision }); }
+    catch (error) {
+        if (!appliedDocument || !(error instanceof Error) || !error.message.startsWith('Il progetto è stato modificato da un’altra finestra.')) throw error;
+        const response = await fetch('/__world/project', { cache: 'no-store' });
+        if (!response.ok) throw error;
+        const current = await response.json();
+        // Recover only our last successful publication. Real edits in another window still conflict.
+        if (!worldDocumentsEqual(compactWorldTiles(parseWorldDocument(current.document)), appliedDocument)) throw error;
+        revision = installedRevision = current.revision;
+        return api('/__world/project', { document, revision });
+    }
+}
+on('apply-world', async () => {
+if (applyingWorld) return;
+applyingWorld = true; projectGeneration++;
+el<HTMLButtonElement>('apply-world').disabled = true;
+try { if (draftConflict) throw new WorldCheckpointConflictError(); status('Controllo della bozza…'); await checkpoint(true); if (gesture)
     finishGesture(); while (gesture?.ending) await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); const document = parseWorldDocument(draft); const issues = validateWorld(document, catalog); if (issues.length) {
     el('validate').click();
     throw new Error('Correggi i problemi del progetto prima di applicare.');
-} el<HTMLButtonElement>('apply-world').disabled = true; status('Applicazione del progetto…'); try {
-    const result = await api('/__world/project', { document, revision });
+} status('Applicazione del progetto…');
+    const result = await publishWorld(document);
     revision = result.revision;
     installedRevision = revision;
-    installedDocument = document;
+    installedDocument = compactWorldTiles(parseWorldDocument(result.document ?? document));
+    appliedDocument = installedDocument;
+    projectGeneration++;
     dirty = !worldDocumentsEqual(draft, document);
     await checkpoint(true);
     el('save-state').textContent = dirty ? 'Bozza salvata · da applicare' : 'Applicato al progetto';
-    status('Progetto applicato con backup. Ricompila e riavvia il gioco.');
+    status(result.live ? 'Mappa pubblicata sul gioco attivo e salvata con backup.' : 'Progetto salvato con backup. Verrà caricato al prossimo avvio del gioco.');
 }
 finally {
-    el<HTMLButtonElement>('apply-world').disabled = false;
+    applyingWorld = false;
+    el<HTMLButtonElement>('apply-world').disabled = !token || !ready || draftConflict;
 } });
 async function repairMovedAssets(): Promise<number> {
     if (!token) return 0;
@@ -1132,6 +1330,8 @@ input('world-file').addEventListener('change', () => { void (async () => { const
     musicSources = [...new Set([...musicSources, ...sources.values()])];
 } change(() => { draft = document; selected = null; }); status('Progetto importato nella bozza locale.'); })().catch(report).finally(() => { input('world-file').value = ''; }); });
 async function load(reload = false): Promise<void> {
+    appliedDocument = undefined; projectGeneration++;
+    recoverableDraft = undefined; recoverDraftButton.hidden = true;
     if (reload) {
         if (checkpointTimer !== undefined) clearTimeout(checkpointTimer);
         checkpointTimer = undefined; pendingCheckpoint = undefined;
@@ -1150,33 +1350,17 @@ async function load(reload = false): Promise<void> {
             if (musicResponse.ok) musicSources = (await musicResponse.json()).files;
             revision = project.revision;
             installedRevision = revision;
-            compatibleRevisions = project.compatibleRevisions ?? [];
             catalog = project.dungeons;
         }
-        if (!reload) {
-            const local = await loadWorldCheckpoint();
-            if (local) {
-                const installedDocument = draft;
-                draft = compactWorldTiles(local.document);
-                revision = local.revision;
-                if (compatibleRevisions.includes(revision)) revision = installedRevision;
-                dirty = revision !== installedRevision || !worldDocumentsEqual(draft, installedDocument);
-                if (token && revision !== installedRevision)
-                    status('Bozza recuperata da una versione precedente: esportala o ricarica il progetto prima di applicare.');
-                else
-                    status(dirty ? 'Bozza locale recuperata.' : 'World Studio pronto · progetto applicato.');
-                el('save-state').textContent = dirty ? 'Bozza salvata · da applicare' : 'Applicato al progetto';
-                if (local.migrated) await checkpoint(true);
-            }
-            else
-                status(token ? 'World Studio pronto.' : 'Anteprima: avvia npm run world:studio per importare e applicare.');
+        const local = await loadWorldCheckpoint();
+        // The applied project is always the editing base. Browser drafts are opt-in recovery only.
+        if (local && !worldDocumentsEqual(local.document, draft)) {
+            recoverableDraft = local.document; recoverDraftButton.hidden = false;
         }
-        else {
-            dirty = false;
-            history.clear();
-            await checkpoint();
-            status('Progetto ricaricato.');
-        }
+        dirty = false;
+        if (reload) history.clear();
+        el('save-state').textContent = 'Applicato al progetto';
+        status(token ? (reload ? 'Progetto ricaricato.' : 'World Studio pronto · progetto applicato.') : 'Anteprima: avvia npm run world:studio per importare e applicare.');
     }
     catch (e) {
         report(e);
@@ -1230,11 +1414,14 @@ el('edit-map-dungeon').onclick = () => {
     if (dungeon) openDungeonMaker(dungeon.dungeonId);
 };
 async function refreshDungeonCatalog(): Promise<void> {
-    if (!ready || !token) return;
+    if (!ready || !token || applyingWorld) return;
+    const generation = projectGeneration;
     await settleGesture();
     const response = await fetch('/__world/project');
     if (!response.ok) return;
-    const project = await response.json(), document = compactWorldTiles(parseWorldDocument(project.document));
+    const project = await response.json();
+    if (applyingWorld || generation !== projectGeneration) return;
+    const document = compactWorldTiles(parseWorldDocument(project.document));
     const known = new Set(catalog.map(d => d.id));
     catalog = project.dungeons;
     const ids = new Set(catalog.map(d => d.id));
@@ -1243,6 +1430,7 @@ async function refreshDungeonCatalog(): Promise<void> {
     for (const doc of [draft, ...(draft.interiors ?? []).map(m => m.document)]) doc.dungeons = doc.dungeons.filter(p => ids.has(p.dungeonId));
     for (const p of document.dungeons) if (!known.has(p.dungeonId) && !draft.dungeons.some(d => d.dungeonId === p.dungeonId)) draft.dungeons.push(p);
     if (project.revision !== installedRevision) {
+        if (appliedDocument && !worldDocumentsEqual(document, appliedDocument)) appliedDocument = undefined;
         if (revision === installedRevision && worldDocumentsEqual({ ...document, dungeons: [] }, { ...installedDocument, dungeons: [] })) revision = project.revision;
         else status('Il progetto è cambiato in un’altra scheda: esporta la bozza e ricarica prima di applicare.');
         installedRevision = project.revision; installedDocument = document;
