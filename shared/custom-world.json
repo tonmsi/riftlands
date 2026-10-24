@@ -41201,20 +41201,6 @@
       "baseElevation": 0
     },
     {
-      "id": "asset-ff9eabf7-1d36-424b-969a-589be428b5fa",
-      "assetId": "asset-c14acd38-d30a-456a-b273-9ed66244d1ab",
-      "x": 95,
-      "y": 106,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-8fb1d90f-24f1-49b6-adeb-fc6002862b9e",
-      "assetId": "asset-c14acd38-d30a-456a-b273-9ed66244d1ab",
-      "x": 92,
-      "y": 105,
-      "baseElevation": 0
-    },
-    {
       "id": "asset-f15bdc38-d350-41a0-85bf-097489805329",
       "assetId": "Monumento-d-ancora-dorata-tra-le-onde",
       "x": -117,
@@ -47844,87 +47830,10 @@
       "baseElevation": 0
     },
     {
-      "id": "asset-3d77b79c-fdaa-4ef5-91ce-0c0db28cf16c",
-      "assetId": "asset-b2073933-b621-47ee-be56-5e8ef82c296d",
-      "x": 94,
-      "y": 109,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-d4c8525c-f297-471c-ac60-c491b6b19342",
-      "assetId": "asset-b2073933-b621-47ee-be56-5e8ef82c296d",
-      "x": 93,
-      "y": 110,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-1ba4d8f1-56dc-4083-9cac-8c5b601f15cd",
-      "assetId": "asset-0e6ba508-dcdb-42b3-9eff-481476de8993",
-      "x": 94,
-      "y": 110,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-0d144abf-9a25-4172-9ad3-ca57463f21ac",
-      "assetId": "asset-0e6ba508-dcdb-42b3-9eff-481476de8993",
-      "x": 95,
-      "y": 110,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-629cb456-5236-479f-8e96-1712e0ce1d9a",
-      "assetId": "asset-b2073933-b621-47ee-be56-5e8ef82c296d",
-      "x": 94,
-      "y": 111,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-ad203616-2d0d-4ef3-9290-537e1c37fdcf",
-      "assetId": "asset-0e6ba508-dcdb-42b3-9eff-481476de8993",
-      "x": 95,
-      "y": 111,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-6b54093e-f886-49e6-95ab-d6af6b416de6",
-      "assetId": "asset-b2073933-b621-47ee-be56-5e8ef82c296d",
-      "x": 96,
-      "y": 111,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-9ab3226c-f685-48e0-8ef1-5771f57833f8",
-      "assetId": "asset-b2073933-b621-47ee-be56-5e8ef82c296d",
-      "x": 95,
-      "y": 112,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-6fea1daf-5b7c-47ec-9901-304a3ed2a056",
-      "assetId": "bush",
-      "x": 94,
-      "y": 112,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-3515fef5-4815-41d8-a2b5-d7ec6a1b3d04",
-      "assetId": "bush",
-      "x": 96,
-      "y": 112,
-      "baseElevation": 0
-    },
-    {
       "id": "asset-90889ec8-737a-4d38-8352-d1cd15077fe6",
       "assetId": "asset-0e6ba508-dcdb-42b3-9eff-481476de8993",
       "x": 95,
       "y": 113,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-30168048-3909-4db9-8d0c-314686c2e0b2",
-      "assetId": "asset-b2073933-b621-47ee-be56-5e8ef82c296d",
-      "x": 97,
-      "y": 112,
       "baseElevation": 0
     },
     {
@@ -47935,38 +47844,10 @@
       "baseElevation": 0
     },
     {
-      "id": "asset-c98e0dff-4f8a-4522-a425-0a8488b0968e",
-      "assetId": "bush",
-      "x": 97,
-      "y": 111,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-b73ae03f-4efb-4377-b10a-d2b7948d5397",
-      "assetId": "bush",
-      "x": 98,
-      "y": 112,
-      "baseElevation": 0
-    },
-    {
       "id": "asset-65e78a90-61ff-4ba1-9607-cd85f18c35c5",
       "assetId": "asset-0e6ba508-dcdb-42b3-9eff-481476de8993",
       "x": 97,
       "y": 113,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-6f37a4dc-cbb9-44ca-9d34-4169438a2048",
-      "assetId": "asset-0e6ba508-dcdb-42b3-9eff-481476de8993",
-      "x": 98,
-      "y": 111,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-467b2766-92aa-4bf7-be2b-c679d355ce98",
-      "assetId": "bush",
-      "x": 99,
-      "y": 112,
       "baseElevation": 0
     },
     {
@@ -51338,10 +51219,10 @@
       "priority": 20,
       "shape": {
         "kind": "rect",
-        "x": -131,
-        "y": -99,
-        "width": 375,
-        "height": 357
+        "x": -120,
+        "y": -40,
+        "width": 350,
+        "height": 300
       },
       "npcs": {
         "density": 0,
@@ -51355,7 +51236,7 @@
       "generateAssets": false,
       "temperature": 1,
       "moisture": 0.1,
-      "pvp": true
+      "pvp": false
     },
     {
       "id": "zone-c851824e-36dc-4132-abe2-5ec056429433",
@@ -51364,8 +51245,8 @@
       "priority": 22,
       "shape": {
         "kind": "rect",
-        "x": 128,
-        "y": -7,
+        "x": 126,
+        "y": -12,
         "width": 12,
         "height": 8
       },
@@ -51396,7 +51277,7 @@
     },
     {
       "id": "zone-4647f52e-dd5e-4af1-88ac-edf3f1d9a8b7",
-      "name": "Nuova zona",
+      "name": "Sand yle Zyp Hill",
       "priority": 25,
       "shape": {
         "kind": "circle",
@@ -51604,48 +51485,48 @@
       }
     },
     {
-      "x": 137,
-      "y": 19,
+      "x": 126,
+      "y": -6,
       "id": "npc-85341042-9ed6-4a80-8600-874a3ccae760",
       "npcKind": "fallen-soldier",
       "level": 1,
       "elevation": 0
     },
     {
-      "x": 137,
-      "y": -1,
+      "x": 136,
+      "y": -7,
       "id": "npc-18726364-c5ec-4f1f-a9e8-fbd0d6645af5",
       "npcKind": "sentinel",
       "level": 1,
       "elevation": 0
     },
     {
-      "x": 130,
-      "y": -5,
+      "x": 123,
+      "y": -8,
       "id": "npc-e1b594d5-b07a-4b2a-a941-c8f9be889152",
       "npcKind": "sentinel",
       "level": 1,
       "elevation": 0
     },
     {
-      "x": 144,
-      "y": 7,
+      "x": 120,
+      "y": -10,
       "id": "npc-b1c44653-1be6-459f-a939-8db85103ba82",
       "npcKind": "sentinel",
       "level": 1,
       "elevation": 0
     },
     {
-      "x": 127,
-      "y": 14,
+      "x": 124,
+      "y": -6,
       "id": "npc-c932327d-1336-42c5-b6d2-0e97c66e317b",
       "npcKind": "sentinel",
       "level": 1,
       "elevation": 0
     },
     {
-      "x": 119,
-      "y": 15,
+      "x": 135,
+      "y": -9,
       "id": "npc-f2015892-dd12-4d56-bc54-7d5a024c9982",
       "npcKind": "sentinel",
       "level": 1,

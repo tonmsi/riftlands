@@ -24,6 +24,15 @@ La zona iniziale è `zone-north-road`, rettangolo alle celle `(-4, 4)`, largo 8 
 
 La minimappa mostra un’area dorata e un indicatore quando la destinazione è visibile; fuori mappa compare una freccia sul bordo rivolta verso l’area. L’indicatore appare solo per la missione attiva, resta durante snapshot senza aggiornamenti narrativi e sparisce al completamento. Non viene mostrato in arena.
 
+Minimappa e mappa estesa rappresentano le quote del terreno con una tinta leggera e
+contorni fra livelli differenti. Mostrano anche piccole miniature degli asset del
+mondo, inclusi cespugli ed edifici, senza classificare gli oggetti in base al nome.
+Le miniature e i contorni sono ritagliati alle celle già esplorate: un edificio
+parzialmente scoperto non rivela la parte oltre la nebbia. Il terreno e gli oggetti
+sono composti nella stessa bitmap in cache. Ogni mappa conserva al massimo 128
+miniature da 128 pixel sul lato lungo, caricate quattro alla volta; ombre e animazioni
+degli asset non vengono riprodotte nella mappa.
+
 ## Conferma delle missioni
 
 Ogni nuova conclusione confermata nei progressi fa brillare per 4,5 secondi il contorno del box del personaggio e mostra **Missione completata · nome missione**, anche per Nereo e le sue ripetizioni. Vale per tutte le classi. I salvataggi caricati e gli aggiornamenti duplicati non producono nuovi avvisi. Uscita e riconnessione azzerano il feedback; chi preferisce movimento ridotto vede il contorno luminoso senza pulsazione.

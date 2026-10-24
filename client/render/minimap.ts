@@ -1,4 +1,4 @@
-import { TILE_SIZE } from '../../shared/config';
+import { CHUNK_TILES, TILE_SIZE } from '../../shared/config';
 import type { Actor, Pickup } from '../../shared/types';
 import type { World } from '../../shared/world';
 import { DUNGEON_DEFINITIONS, dungeonAtTile } from '../../shared/dungeons';
@@ -9,12 +9,19 @@ import { PICKUP_COLORS, circle, noise } from './render-primitives';
 import { activeQuestAreas, questMapNpcs } from '../../shared/quest-areas';
 import type { NarrativeProgress } from '../../shared/narrative';
 import { tileExplored, type Exploration } from '../../shared/exploration';
+import { MinimapAssets } from './minimap-assets';
+import { compareAssetDrawOrder } from '../editors/world/world-picking';
+import type { AssetPlacement } from '../../shared/world-schema';
+import { worldAssetImageBounds } from '../../shared/world-schema';
 
 /** Mappa locale limitata del terreno procedurale noto. */
 const minimapTerrainViews = new WeakMap<HTMLCanvasElement, { world: World; exploration?: Exploration; key: string; canvas: HTMLCanvasElement; width: number; height: number }>();
+const minimapAssetViews = new WeakMap<HTMLCanvasElement, MinimapAssets>();
 export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor | null, actors: Actor[], pickups: Pickup[] = [], visibleSpan = 1600, viewSign = 1, narrative?: NarrativeProgress, mapId = 'world'): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
+  let minimapAssets=minimapAssetViews.get(canvas);
+  if(!minimapAssets){minimapAssets=new MinimapAssets();minimapAssetViews.set(canvas,minimapAssets);}
   const rect = canvas.getBoundingClientRect(), dpr = renderDpr(window.devicePixelRatio, rect.width, rect.height);
   const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
@@ -40,23 +47,60 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   const cols = Math.ceil(width / scale / TILE_SIZE) + 2, rows = Math.ceil(height / scale / TILE_SIZE) + 2;
   const known = (tx: number, ty: number) => world.mode !== 'world' || tileExplored(narrative?.exploration, mapId, tx, ty);
   const knownPoint = (point: { x: number; y: number }) => known(Math.floor(point.x / TILE_SIZE), Math.floor(point.y / TILE_SIZE));
-  const terrainKey = `${mapId}:${narrative?.revision ?? 0}:${world.lockRevision}:${world.authoringRevision}:${startX}:${startY}:${width}:${height}:${visibleSpan}:${dpr}`;
+  const terrainKey = `${mapId}:${narrative?.revision ?? 0}:${world.lockRevision}:${world.authoringRevision}:${minimapAssets.revision}:${startX}:${startY}:${width}:${height}:${visibleSpan}:${dpr}`;
   let cached = minimapTerrainViews.get(canvas);
   if (!cached || cached.world !== world || cached.exploration !== narrative?.exploration || cached.key !== terrainKey) {
     const bitmap = document.createElement('canvas'), bitmapWidth = cols * TILE_SIZE * scale, bitmapHeight = rows * TILE_SIZE * scale;
     bitmap.width = Math.ceil(bitmapWidth * dpr); bitmap.height = Math.ceil(bitmapHeight * dpr);
     const paint = bitmap.getContext('2d')!; paint.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cell=TILE_SIZE*scale,levels=new Map<string,number>(),explored=new Path2D(),chunks=new Map<string,{x:number;y:number}>();
+    const elevation=(x:number,y:number)=>{
+      const key=`${x},${y}`;let value=levels.get(key);
+      if(value===undefined){value=world.elevation.terrainElevationAt(x+.5,y+.5);levels.set(key,value);}return value;
+    };
     for (let ty = startY; ty < startY + rows; ty++) {
       for (let tx = startX; tx < startX + cols; tx++) {
       if (!known(tx, ty)) continue;
+      const x=(tx-startX)*cell,y=(ty-startY)*cell;
+      explored.rect(x,y,cell,cell);
+      const cx=Math.floor(tx/CHUNK_TILES),cy=Math.floor(ty/CHUNK_TILES);chunks.set(`${cx},${cy}`,{x:cx,y:cy});
       const tile = world.getTile(tx, ty);
       const dungeon = world.mode === 'world' ? world.dungeons.find(d => tx >= d.layout.bounds.minTx && tx <= d.layout.bounds.maxTx && ty >= d.layout.bounds.minTy && ty <= d.layout.bounds.maxTy) : undefined;
       paint.fillStyle = dungeon && tile === 'rock' ? dungeon.theme.wallTop
         : dungeon && tile === dungeon.layout.floor ? dungeon.theme.floor
         : mapTerrainColor(tile, world.getMoisture((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE), noise(tx, ty));
       paint.fillRect((tx - startX) * TILE_SIZE * scale, (ty - startY) * TILE_SIZE * scale, TILE_SIZE * scale + 0.5, TILE_SIZE * scale + 0.5);
+      const level=elevation(tx,ty);
+      if(level!==0&&tile!=='water'){
+        paint.fillStyle=level>0?`rgba(245,233,188,${Math.min(.28,level*.055)})`:`rgba(24,42,55,${Math.min(.28,-level*.055)})`;
+        paint.fillRect(x,y,cell+.5,cell+.5);
+      }
       }
     }
+    // Contours compare only explored neighbours, without constructing cliff meshes.
+    paint.save();paint.clip(explored);paint.beginPath();
+    for(let ty=startY;ty<startY+rows;ty++)for(let tx=startX;tx<startX+cols;tx++){
+      if(!known(tx,ty))continue;
+      const level=elevation(tx,ty),x=(tx-startX)*cell,y=(ty-startY)*cell;
+      if(known(tx+1,ty)&&level!==elevation(tx+1,ty)){paint.moveTo(x+cell,y);paint.lineTo(x+cell,y+cell);}
+      if(known(tx,ty+1)&&level!==elevation(tx,ty+1)){paint.moveTo(x,y+cell);paint.lineTo(x+cell,y+cell);}
+    }
+    paint.strokeStyle='#3b3f2c';paint.lineWidth=Math.max(.65,Math.min(1.25,cell*.22));paint.stroke();
+    const placements=new Map<string,AssetPlacement>();
+    // Query generation only in chunks with discovered cells, once per bitmap build.
+    if(world.mode==='world')for(const {x,y} of chunks.values())for(const p of world.assetsIn({left:Math.max(startX,x*CHUNK_TILES),top:Math.max(startY,y*CHUNK_TILES),right:Math.min(startX+cols,(x+1)*CHUNK_TILES),bottom:Math.min(startY+rows,(y+1)*CHUNK_TILES)}))placements.set(p.id,p);
+    const visiblePlacements=[...placements.values()].filter(p=>{
+      const asset=world.authoring.assets.get(p.assetId);if(!asset)return false;
+      const b=worldAssetImageBounds(asset);
+      for(let y=Math.max(startY,Math.floor(p.y+b.y));y<Math.min(startY+rows,Math.ceil(p.y+b.y+b.height));y++)
+        for(let x=Math.max(startX,Math.floor(p.x+b.x));x<Math.min(startX+cols,Math.ceil(p.x+b.x+b.width));x++)if(known(x,y))return true;
+      return false;
+    }).sort((a,b)=>compareAssetDrawOrder(a,b,world.authoring.assets));
+    minimapAssets.begin(visiblePlacements.map(p=>world.authoring.assets.get(p.assetId)!));
+    for(const p of visiblePlacements){
+      const asset=world.authoring.assets.get(p.assetId);if(asset)minimapAssets.draw(paint,asset,p,startX,startY,cell);
+    }
+    paint.restore();
     cached = { world, exploration: narrative?.exploration, key: terrainKey, canvas: bitmap, width: bitmap.width / dpr, height: bitmap.height / dpr }; minimapTerrainViews.set(canvas, cached);
   }
   ctx.drawImage(cached.canvas, (startX * TILE_SIZE - left) * scale, (startY * TILE_SIZE - top) * scale, cached.width, cached.height);

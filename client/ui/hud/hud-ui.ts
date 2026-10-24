@@ -39,6 +39,7 @@ export class HudUI {
   private readonly display: GameDisplay;
   private readonly exitDialog = document.createElement('dialog');
   private readonly mapToggle = document.createElement('button');
+  private readonly mapPvp = document.createElement('span');
   private mapVisible = true;
   dismissLevelUp(): void { this.xpFeedback?.dismiss(); }
 
@@ -125,6 +126,9 @@ export class HudUI {
     this.compactMinimap.className = 'compact-minimap';
     this.compactMinimap.setAttribute('aria-hidden', 'true');
     this.mapToggle.append(this.compactMinimap);
+    this.mapPvp.className = 'minimap-pvp';this.mapPvp.id = 'minimap-pvp-status';this.mapPvp.hidden = true;
+    this.mapToggle.setAttribute('aria-describedby',this.mapPvp.id);
+    this.mapToggle.append(this.mapPvp);
     location.remove();
     root.querySelector('.game-hud')!.append(this.mapToggle);
     this.mapToggle.setAttribute('aria-controls', mapPanel.id);
@@ -326,6 +330,7 @@ export class HudUI {
       this.social.toggle(false);
       this.setSelected(null);
       this.latest = null;
+      this.mapPvp.hidden = true;
       this.activeClass = null;
       this.social.clear();
     }
@@ -368,6 +373,15 @@ export class HudUI {
     this.xpFeedback ??= new XpFeedback(this.ref('xp-fill'), this.ref('player-level'));
     this.xpFeedback.update(player.id + ':' + player.classId, player.xp);
     this.write('map-status', snapshot.sanctuary === 'safe' ? 'ZONA SICURA · NO PVP' : snapshot.sanctuary === 'combat' ? `VULNERABILE · ${Math.max(0, Math.ceil(((player.pvpUntil ?? 0) - snapshot.time) / 1000))}s` : snapshot.sanctuary === 'outside' ? 'PVP ATTIVO' : 'ISTANZA PVP');
+    const pvpState = snapshot.sanctuary === 'safe' ? 'safe' : snapshot.sanctuary === 'combat' ? 'combat' : 'active';
+    const pvpLabel = pvpState === 'combat' ? `PvP · ${Math.max(0,Math.ceil(((player.pvpUntil ?? 0)-snapshot.time)/1000))}s` : 'PvP';
+    const pvpDescription = pvpState === 'safe' ? 'PvP disabilitato in questa zona' : pvpState === 'combat'
+      ? 'Zona senza PvP: sei ancora vulnerabile per il combattimento in corso' : 'PvP attivo';
+    this.mapPvp.hidden = false;
+    if(this.mapPvp.textContent!==pvpLabel)this.mapPvp.textContent=pvpLabel;
+    if(this.mapPvp.dataset.state!==pvpState){
+      this.mapPvp.dataset.state=pvpState;this.mapPvp.title=pvpDescription;this.mapPvp.setAttribute('aria-label',pvpDescription);
+    }
     this.write('online', String(snapshot.online));
     const gold = snapshot.gold ?? 0;
     this.goldFeedback.update(player.id, gold);

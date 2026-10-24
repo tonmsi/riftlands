@@ -158,10 +158,14 @@
 .rift-app .team-portrait-art { display:flex; width:100%; height:100%; align-items:center; justify-content:center; overflow:hidden; border-radius:50% }
 .rift-app .team-health-ring { display:none }
 .rift-app .effect-chip { background:#283d2ab3; border:1px solid #a2ad7d88; padding:3px 5px; color:#e0e8c5 }
-.rift-app .compact-map { position:absolute; top:calc(var(--safe-top) + 18px); right:calc(var(--safe-right) + 18px); width:104px; height:104px; border-radius:50%; padding:0; overflow:hidden; border:2px solid #c3ddff66; background:#142535; box-shadow:0 6px 20px #020b1740; pointer-events:auto; z-index:18 }
-.rift-app .compact-map::after { content:'N'; position:absolute; top:5px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:800; color:#fff; text-shadow:0 1px 3px #000 }
+.rift-app .compact-map { position:absolute; top:calc(var(--safe-top) + 18px); right:calc(var(--safe-right) + 18px); width:104px; height:104px; border-radius:50%; padding:0; overflow:visible; border:2px solid #c3ddff66; background:#142535; box-shadow:0 6px 20px #020b1740; pointer-events:auto; z-index:18 }
+.rift-app .compact-map::after { content:'N'; position:absolute; top:15px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:800; color:#fff; text-shadow:0 1px 3px #000 }
 .rift-app .compact-map:has([data-view-sign="-1"])::after { content:'S' }
-.rift-app .compact-minimap { display:block; width:100%; height:100% }
+.rift-app .compact-minimap { display:block; width:100%; height:100%; border-radius:50% }
+.rift-app .minimap-pvp { position:absolute; top:-8px; left:50%; transform:translateX(-50%); min-width:42px; padding:2px 7px; border:1px solid #b66b64; border-radius:5px; background:#352128; color:#ffbbb0; font-size:10px; font-weight:800; line-height:14px; white-space:nowrap; box-shadow:0 2px 5px #0006 }
+.rift-app .minimap-pvp[hidden] { display:none }
+.rift-app .minimap-pvp[data-state=safe] { color:#aeb7c0; background:#222c36; border-color:#677480; text-decoration:line-through; text-decoration-thickness:2px }
+.rift-app .minimap-pvp[data-state=combat] { color:#ffdb92; background:#362b20; border-color:#ae8548 }
 .rift-app .minimap-panel { top:50%; left:50%; right:auto; bottom:auto; transform:translate(-50%,-50%); width:min(520px,calc(100% - 48px),calc(var(--game-height,100dvh) - 160px)); padding:14px; max-height:calc(var(--game-height,100dvh) - 24px); z-index:32 }
 .rift-app .minimap-panel .map-actions { display:flex; justify-content:center; gap:10px; margin-top:10px }
 .rift-app .map-actions .hud-menu-button>span { display:none }
