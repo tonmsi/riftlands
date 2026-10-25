@@ -1,3 +1,6 @@
+import { installNpcConversationEditor } from './npc-conversation-editor';
+import { duplicateNpcVariant } from '../../../shared/npc-variants';
+import { setNpcEditorCatalog } from '../npc-catalog';
 import './boss-editor.css';
 import { ACTOR_CATALOG, parseActorCatalog, type ActorCatalog, type ActorVisual } from '../../../shared/actor-catalog';
 import { ActorSpriteRenderer } from '../../render/actor-sprite-renderer';
@@ -11,7 +14,7 @@ export function installActorEditor(): void {
   const dialog = document.createElement('dialog'); dialog.id = 'boss-editor';
   dialog.innerHTML = `<header><div><h2>Boss · laboratorio visuale</h2><p>Anteprima con il renderer del gioco. Le modifiche al catalogo valgono per tutti i dungeon che lo ereditano.</p></div><button id="boss-close">Chiudi</button></header>
     <div class="boss-workspace"><aside><label>Boss<select id="boss-select"></select></label><div class="pair"><button id="boss-duplicate">Nuovo da questo</button><button id="boss-reload">Ricarica</button></div>
-    <h3>Personaggio</h3><label>Nome<input id="boss-name" maxlength="80"></label><label>Skin<select id="boss-skin"></select></label>
+    <p id="boss-npc-identity" class="npc-only"></p><label class="npc-only">Gruppo<input id="boss-npc-group" maxlength="80" placeholder="Es. Abitanti, Mercanti, Guardie"></label><h3>Personaggio</h3><label>Nome<input id="boss-name" maxlength="80"></label><label>Skin<select id="boss-skin"></select></label>
     <div class="pair">${field('hp', 'Vita')}${field('speed', 'Velocità')}${field('level', 'Livello')}${field('radius', 'Raggio hitbox', '.5')}${field('respawnMs', 'Respawn · ms')}${field('gold', 'Ricompensa gold')}</div>
     <h3>Sprite e ancoraggio</h3><div class="pair">${field('drawSize', 'Larghezza sprite · px')}${field('anchorX', 'Anchor X · 0–1', '.01')}${field('anchorY', 'Anchor Y · 0–1', '.01')}${field('offsetX', 'Offset X · px')}${field('offsetY', 'Offset Y · px')}</div>
     <h3>Ombra</h3><div class="pair">${field('shadowX', 'Posizione X')}${field('shadowY', 'Posizione Y')}${field('shadowWidth', 'Raggio orizzontale')}${field('shadowHeight', 'Raggio verticale')}${field('shadowOpacity', 'Opacità · 0–1', '.01')}</div>
@@ -41,11 +44,12 @@ export function installActorEditor(): void {
   let playing = true, startedAt = performance.now(), frame = 0, elapsed = 0, raf = 0;
   let npcMode = false;
   const npcDrafts = new Map<NpcTemplateId, { skin: string; visual: ActorVisual }>();
-  const npcKind = () => val('select') as NpcTemplateId;
+  const variant = () => npcMode ? catalog.npcVariants?.find(v => `variant:${v.id}` === val('select')) : undefined;
+  const npcKind = () => variant()?.base ?? val('select') as NpcTemplateId;
   const boss = () => {
     if (!npcMode) return catalog.bosses.find(b => b.id === val('select'))!;
     const kind = npcKind(), spec = NPC_DEFINITIONS[kind];
-    return { ...catalog.bosses[0], id: kind, name: spec.name, radius: spec.radius, skin: catalog.npcSkins?.[kind] ?? npcDrafts.get(kind)?.skin ?? '' };
+    return { ...catalog.bosses[0], id: variant()?.id ?? kind, name: variant()?.name ?? spec.name, radius: spec.radius, skin: variant()?.skin ?? catalog.npcSkins?.[kind] ?? npcDrafts.get(kind)?.skin ?? '' };
   };
   const visual = (): ActorVisual => catalog.skins[boss().skin] ?? npcDrafts.get(npcKind())!.visual;
   const animation = () => resolveAnimation(visual(), { name: val('animation'), elapsed: 0 })!.animation;
@@ -54,9 +58,9 @@ export function installActorEditor(): void {
     if (!v.animations[name]) { v.animations[name] = structuredClone(animation()!); v.animations[name].loop = name !== 'idle'; }
     return v.animations[name];
   };
-  function choices() { options('select', npcMode ? Object.entries(NPC_DEFINITIONS).map(([id, n]) => [id, n.name]) : catalog.bosses.map(b => [b.id, b.name])); }
+  function choices() { options('select', npcMode ? [...Object.entries(NPC_DEFINITIONS).map(([id, n]): [string, string] => [id, n.name]), ...(catalog.npcVariants ?? []).map((v): [string, string] => [`variant:${v.id}`, `${v.group ? v.group + ' · ' : ''}${v.name}`])] : catalog.bosses.map(b => [b.id, b.name])); }
   function ensureNpcVisual() {
-    if (!npcMode || catalog.npcSkins?.[npcKind()] || npcDrafts.has(npcKind())) return;
+    if (!npcMode || variant() || catalog.npcSkins?.[npcKind()] || npcDrafts.has(npcKind())) return;
     let skin = `npc-${npcKind()}`, suffix = 2;
     while (catalog.skins[skin]) skin = `npc-${npcKind()}-${suffix++}`;
     npcDrafts.set(npcKind(), { skin, visual: structuredClone(ACTOR_CATALOG.skins['npc-old-fisher']) });
@@ -77,24 +81,32 @@ export function installActorEditor(): void {
     for (const id of ['animationAnchorX', 'animationAnchorY', 'animationOffsetX', 'animationOffsetY']) el<HTMLInputElement>(id).disabled = !check('animation-offset');
     startedAt = performance.now(); elapsed = 0; void prepare();
   }
+  const conversations = installNpcConversationEditor(dialog, {
+    catalog: () => catalog, selection: () => ({ kind: npcKind(), variant: variant() }),
+    changed: () => { dirty = true; status('Modifiche da salvare.'); },
+    created: id => { choices(); set('select', `variant:${id}`); changed(); refresh(); }, report,
+  });
   function refresh() {
     ensureNpcVisual();
     const b = boss(), v = visual(); if (!b || !v) return;
+    el<HTMLInputElement>('name').readOnly = npcMode && !variant();
+    el<HTMLInputElement>('npc-group').disabled = !variant(); set('npc-group', variant()?.group ?? '');
+    el('npc-identity').textContent = npcMode ? variant() ? `ID: ${variant()!.id} · Comportamento: ${NPC_DEFINITIONS[npcKind()].name}` : `Modello originale: ${npcKind()} · Duplica per creare un NPC indipendente.` : '';
     set('name', b.name); options('skin', Object.keys(catalog.skins).filter(id => npcMode || catalog.skins[id].animations.idle).map(id => [id, id])); set('skin', b.skin);
     for (const key of ['hp', 'speed', 'level', 'radius', 'respawnMs'] as const) set(key, b[key]); set('gold', b.reward.gold);
     set('drawSize', v.drawSize); set('anchorX', v.anchor.x); set('anchorY', v.anchor.y); set('offsetX', v.offset.x); set('offsetY', v.offset.y);
     for (const [id, key] of [['shadowX', 'x'], ['shadowY', 'y'], ['shadowWidth', 'width'], ['shadowHeight', 'height'], ['shadowOpacity', 'opacity']] as const) set(id, v.shadow[key]);
     options('animation', npcMode ? [['moving', 'moving · movimento'], ['idle', v.animations.idle ? 'idle · fermo' : 'idle · primo frame di moving (fallback)']] : Object.keys(v.animations).map(id => [id, id])); options('attack', b.attacks.map((a, i) => [String(i), `${i + 1} · ${a.kind}`]));
-    refreshAnimation(); refreshAttack();
+    refreshAnimation(); refreshAttack(); if (npcMode) conversations.refresh();
   }
   async function load() {
     const response = await fetch('/__world/actors', { cache: 'no-store' });
     if (!response.ok) throw new Error('Apri il World Studio per modificare e salvare i boss.');
     const project = await response.json(); catalog = parseActorCatalog(project.catalog); token = project.token; revision = project.revision; assets = project.assets;
-    dirty = false; npcDrafts.clear(); choices(); if (npcMode) set('select', 'old-fisher'); refresh(); status('Catalogo caricato.');
+    dirty = false; npcDrafts.clear(); setNpcEditorCatalog(catalog); choices(); if (npcMode) set('select', 'old-fisher'); refresh(); status('Catalogo caricato.');
   }
   function changed() {
-    if (npcMode && !catalog.npcSkins?.[npcKind()]) {
+    if (npcMode && !variant() && !catalog.npcSkins?.[npcKind()]) {
       const draft = npcDrafts.get(npcKind())!;
       catalog.skins[draft.skin] = draft.visual;
       (catalog.npcSkins ??= {})[npcKind()] = draft.skin;
@@ -105,7 +117,10 @@ export function installActorEditor(): void {
     const b = boss(); (b as unknown as Record<string, unknown>)[id] = num(id);
     if (b.behavior.unstuck) b.behavior.unstuck.probeDistance = Math.max(b.behavior.unstuck.probeDistance, b.radius + 16); changed();
   });
-  el('name').addEventListener('input', () => { boss().name = val('name'); changed(); });
+  el('name').addEventListener('input', () => {
+    if (npcMode) { if (variant()) variant()!.name = val('name'); } else boss().name = val('name'); changed();
+  });
+  el('npc-group').addEventListener('input', () => { if (variant()) { variant()!.group = val('npc-group').trim(); changed(); } });
   el('gold').addEventListener('input', () => { boss().reward.gold = num('gold'); changed(); });
   for (const id of ['drawSize', 'anchorX', 'anchorY', 'offsetX', 'offsetY', 'shadowX', 'shadowY', 'shadowWidth', 'shadowHeight', 'shadowOpacity']) el(id).addEventListener('input', () => {
     const v = visual(); v.drawSize = num('drawSize'); v.anchor = { x: num('anchorX'), y: num('anchorY') }; v.offset = { x: num('offsetX'), y: num('offsetY') };
@@ -123,9 +138,18 @@ export function installActorEditor(): void {
     changed(); refreshAnimation();
   });
   el('select').addEventListener('change', refresh); el('animation').addEventListener('change', refreshAnimation); el('attack').addEventListener('change', refreshAttack);
-  el('skin').addEventListener('change', () => { if (npcMode) catalog.npcSkins![npcKind()] = val('skin'); else boss().skin = val('skin'); changed(); refresh(); });
+  el('skin').addEventListener('change', () => { if (npcMode) { if (variant()) variant()!.skin = val('skin'); else catalog.npcSkins![npcKind()] = val('skin'); } else boss().skin = val('skin'); changed(); refresh(); });
   el('add-animation').onclick = () => { const name = val('new-animation'); if (!visual().animations[name]) visual().animations[name] = structuredClone(animation()); changed(); refresh(); set('animation', name); refreshAnimation(); };
   el('duplicate').onclick = () => {
+    if (npcMode) {
+      const id = prompt('ID del nuovo NPC (lettere minuscole, numeri e trattini):'); if (!id) return;
+      try {
+        const copy = duplicateNpcVariant(catalog, variant() ?? npcKind(), id, visual());
+        choices(); set('select', `variant:${copy.id}`); changed(); refresh();
+        status('Nuovo NPC creato. Personalizza nome, gruppo e sprite, poi salva il catalogo.');
+      } catch (e) { report(e); }
+      return;
+    }
     const id = prompt('ID del nuovo boss (lettere minuscole, numeri e trattini):'); if (!id) return;
     if (!/^[a-z0-9-]{1,64}$/.test(id) || catalog.bosses.some(b => b.id === id) || catalog.skins[id]) { status('ID già usato o non valido.'); return; }
     const b = structuredClone(boss()); catalog.skins[id] = structuredClone(visual()); b.id = id; b.skin = id; b.name = id; catalog.bosses.push(b);
@@ -139,7 +163,7 @@ export function installActorEditor(): void {
     try {
       const response = await fetch('/__world/actors', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-World-Token': token }, body: JSON.stringify({ catalog, revision }) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error);
-      catalog = parseActorCatalog(result.catalog); revision = result.revision; dirty = false; status('Catalogo salvato con backup. Riavvia il server e ricarica il gioco.');
+      const selection = val('select'); catalog = parseActorCatalog(result.catalog); revision = result.revision; dirty = false; setNpcEditorCatalog(catalog); choices(); set('select', selection); if (npcMode) conversations.refresh(); status('Catalogo salvato con backup. Riavvia il server e ricarica il gioco.');
       const channel = new BroadcastChannel('riftlands.studio'); channel.postMessage({ type: 'actors' }); channel.close();
     } finally { el<HTMLButtonElement>('save').disabled = false; }
   })().catch(report); };
@@ -190,8 +214,8 @@ export function installActorEditor(): void {
     dialog.querySelector('header p')!.textContent = npcs ? 'Personalizza ogni tipo di NPC, amici e mob. Le modifiche valgono per tutti gli NPC di quel tipo.' : 'Anteprima con il renderer del gioco. Le modifiche al catalogo valgono per tutti i dungeon che lo ereditano.';
     el('save').textContent = npcs ? 'Salva catalogo NPC' : 'Salva catalogo boss';
     el('select').parentElement!.firstChild!.textContent = npcs ? 'NPC' : 'Boss';
-    el<HTMLInputElement>('name').readOnly = npcs;
-    const hide = ['duplicate', 'skin', 'hp', 'speed', 'level', 'radius', 'respawnMs', 'gold', 'attack', 'damage', 'range', 'attackRadius', 'windupMs', 'cooldownMs'];
+    el('duplicate').textContent = npcs ? 'Duplica come nuovo NPC' : 'Nuovo da questo';
+    const hide = ['skin', 'hp', 'speed', 'level', 'radius', 'respawnMs', 'gold', 'attack', 'damage', 'range', 'attackRadius', 'windupMs', 'cooldownMs'];
     for (const id of hide) (el(id).closest('label') ?? el(id)).classList.toggle('boss-only', npcs);
     el('attack').parentElement!.previousElementSibling!.classList.toggle('boss-only', npcs);
     el('new-animation').closest('aside')!.querySelector('p')!.classList.toggle('boss-only', npcs);

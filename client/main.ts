@@ -417,6 +417,8 @@ function frame(now: number): void {
   audio.setActive(playing && connection.connected && !document.hidden);
   if (now >= nextMusicCheck) {
     nextMusicCheck = now + 100;
+    audio.setSoundPoints(audible && renderer.world.mode === 'world' ? renderer.world.authoring.document.soundPoints ?? [] : [],
+      self ? { x: self.x / TILE_SIZE, y: self.y / TILE_SIZE } : { x: 0, y: 0 }, activeMapId);
     audio.setMusic(audible && self && renderer.world.mode === 'world'
       ? renderer.world.authoring.rule(self.x / TILE_SIZE, self.y / TILE_SIZE, 'music') : undefined);
   }

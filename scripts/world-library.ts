@@ -3,6 +3,7 @@ import { readFile, writeFile, rename, mkdir, access, unlink, realpath, lstat } f
 import { dirname, resolve, relative, isAbsolute, join } from 'node:path';
 import { parseWorldDocument, validWorldAssetImage, type WorldDocument } from '../shared/world-schema';
 import { readActorProject } from './actor-library';
+import { npcVariant } from '../shared/npc-variants';
 import { assetFilePath } from '../shared/world-asset-paths';
 import { validateWorld } from '../shared/world-validation';
 import type { DungeonDefinition } from '../shared/dungeons';
@@ -46,6 +47,12 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     const currentRevision = worldRevision(current);
     if (currentRevision !== revision && !(await formatCompatibleRevisions(options.documentPath, currentRevision)).includes(revision)) throw new Error('Il progetto è stato modificato da un’altra finestra. Esporta la bozza e ricarica prima di applicare.');
     const next = compactWorldTiles(parseWorldDocument(document)), catalog = await readWorldDungeonCatalog(options.dungeonPath);
+    const variantNpcs = [next, ...(next.interiors ?? []).map(m => m.document)].flatMap(doc => doc.npcs).filter(n => n.settings?.variantId);
+    if (variantNpcs.length) {
+      const actors = (await readActorProject(join(dirname(options.documentPath), 'actor-catalog.json'))).catalog;
+      for (const n of variantNpcs) if (!npcVariant(actors, n.npcKind, n.settings?.variantId))
+        throw new Error(`Variante NPC assente o incompatibile: ${n.settings!.variantId}. Salva prima il catalogo NPC.`);
+    }
     repairWorldAssetPaths(next, await listWorldAssetFiles(options.root));
     if (deleteAssetId !== undefined) {
       const asset = next.assets.find(a => a.id === deleteAssetId);
@@ -83,7 +90,7 @@ export async function saveWorldProject(options: { root: string; documentPath: st
       catch { throw new Error(`Immagine assente per ${a.name}: ${decodeURIComponent(a.image)}. Premi Sincronizza cartelle per riparare i file spostati, oppure ripristina l’immagine.`); }
     }
     for (const doc of [next, ...(next.interiors ?? []).map(m => m.document)])
-      for (const zone of doc.zones) if (zone.music) await access(resolve(options.root, 'public', zone.music.src.slice(1)));
+      for (const zone of [...doc.zones, ...(doc.soundPoints ?? [])]) if (zone.music) await access(resolve(options.root, 'public', zone.music.src.slice(1)));
     const applyLive = options.live?.(next);
     const tag = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`;
     const backup = `${options.documentPath}.${tag}.bak`, backups = [backup];

@@ -5,6 +5,7 @@ export class WorldInspectorDrafts {
   constructor(private root: HTMLElement, private context: (section: string) => string, private sections=['asset-inspector','selection-inspector','zone-inspector']) {
     const remember = (event: Event) => {
       const field = event.target;
+      if (field instanceof HTMLInputElement && field.type === 'file') return;
       if (field instanceof HTMLInputElement && field.id === 'asset-random-variants') return;
       if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement) || !field.id) return;
       if (['asset-cell-subdivision','cell-floor','cell-floor-custom','cell-blocked','cell-visibility','preview-fade','edit-asset-image','keep-ratio'].includes(field.id)) return;

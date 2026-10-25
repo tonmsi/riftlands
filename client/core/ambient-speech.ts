@@ -1,9 +1,11 @@
-import { AMBIENT_SPEECH } from '../../shared/ambient-speech';
+import { npcSpeech } from '../../shared/npc-conversations';
+import { npcContentCatalog } from './npc-content';
 import type { Actor } from '../../shared/types';
 
 export const SPEECH_COOLDOWN_MS = 45_000;
 export const SPEECH_REPEAT_CHANCE = 0.5;
 export const SPEECH_GAP_MS = 5_000;
+const definitionFor = (actor: Actor) => actor.npcKind && actor.npcKind !== 'boss' ? npcSpeech(actor.npcKind, actor.npcVariantId, npcContentCatalog()) : undefined;
 const ENTER_RADIUS = 180, EXIT_RADIUS = 240;
 interface Memory { intro: boolean; next: number; at: number; }
 export interface SpeechBubble { actorId: string; text: string; startedAt: number; endsAt: number; }
@@ -39,7 +41,7 @@ export class AmbientSpeech {
     }
     if (!enabled || self.hp <= 0) { this.active = null; return null; }
     const nearby = actors.filter(a => a.kind === 'npc' && a.disposition === 'neutral' && a.hp > 0
-      && a.npcKind && a.npcKind !== 'boss' && AMBIENT_SPEECH[a.npcKind]);
+      && a.npcKind && a.npcKind !== 'boss' && definitionFor(a));
     for (const id of this.inside) {
       const actor = nearby.find(a => a.id === id);
       if (!actor || Math.hypot(actor.x - self.x, actor.y - self.y) > EXIT_RADIUS) this.inside.delete(id);
@@ -58,7 +60,7 @@ export class AmbientSpeech {
       else return this.active;
     }
     if (now < this.nextAt) return null;
-    const keyFor = (actor: Actor) => `${actor.npcKind}:${actor.id}`;
+    const keyFor = (actor: Actor) => `${actor.npcVariantId ?? actor.npcKind}:${actor.id}`;
     const priority = (actor: Actor) => actor.questMarker === 'active' ? 0 : !this.memory[keyFor(actor)]?.intro ? 1 : 2;
     const eligible = entrants.filter(actor => {
       const memory = this.memory[keyFor(actor)];
@@ -71,9 +73,9 @@ export class AmbientSpeech {
       // Roll once for the selected NPC, never each frame or for a fallback neighbour.
       // A silent entry consumes neither the cooldown nor the next variant.
       if (memory?.intro && this.random() >= SPEECH_REPEAT_CHANCE) return null;
-      const definition = AMBIENT_SPEECH[actor.npcKind as keyof typeof AMBIENT_SPEECH]!;
-      const text = memory?.intro ? definition.lines[memory.next % definition.lines.length] : definition.intro;
-      this.memory[key] = { intro: true, next: memory?.intro ? (memory.next + 1) % definition.lines.length : 0, at: now };
+      const definition = definitionFor(actor)!;
+      const text = memory?.intro && definition.lines.length ? definition.lines[memory.next % definition.lines.length] : definition.intro;
+      this.memory[key] = { intro: true, next: memory?.intro ? (memory.next + 1) % Math.max(1, definition.lines.length) : 0, at: now };
       const entries = Object.entries(this.memory).sort((a, b) => a[1].at - b[1].at).slice(-64);
       this.memory = Object.fromEntries(entries);
       try { this.storage?.setItem(this.owner, JSON.stringify(this.memory)); } catch { /* Session memory remains available. */ }

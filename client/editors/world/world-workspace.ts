@@ -1,8 +1,9 @@
 import type { WorldDocument } from '../../../shared/world-schema';
-import { NPC_DEFINITIONS } from '../../../shared/npcs';
+import { npcDisplayName } from '../../../shared/npc-variants';
+import { npcEditorCatalog } from '../npc-catalog';
 import type { Vec2 } from '../../../shared/types';
 
-type Kind = 'placement' | 'npc' | 'zone' | 'dungeon' | 'warp' | 'surfaces' | 'solids' | 'stairs';
+type Kind = 'placement' | 'npc' | 'zone' | 'sound' | 'dungeon' | 'warp' | 'surfaces' | 'solids' | 'stairs';
 interface Host {
   state(): { project: WorldDocument; document: WorldDocument; mapId: string };
   openMap(id: string): void;
@@ -62,8 +63,9 @@ export function installWorldWorkspace(root: HTMLElement, host: Host): void {
     const assets=new Map(project.assets.map(a=>[a.id,a]));
     const groups: { title:string; items:{kind:Kind;id:string;name:string;p:Vec2;elevation:number}[] }[]=[
       {title:'Asset',items:doc.placements.map(p=>({kind:'placement',id:p.id,name:assets.get(p.assetId)?.name??p.assetId,p,elevation:p.baseElevation??0}))},
-      {title:'NPC e personaggi',items:doc.npcs.map(p=>({kind:'npc',id:p.id,name:p.settings?.name??NPC_DEFINITIONS[p.npcKind].name,p,elevation:p.elevation??0}))},
+      {title:'NPC e personaggi',items:doc.npcs.map(p=>({kind:'npc',id:p.id,name:npcDisplayName(p.npcKind,p.settings,npcEditorCatalog()),p,elevation:p.elevation??0}))},
       {title:'Zone e biomi',items:doc.zones.map(z=>({kind:'zone',id:z.id,name:z.name,p:z.shape,elevation:0}))},
+      {title:'Punti sonori',items:(doc.soundPoints??[]).map(p=>({kind:'sound',id:p.id,name:p.name,p,elevation:0}))},
       {title:'Passaggi',items:(project.warps??[]).filter(w=>w.from===mapId).map(w=>({kind:'warp',id:w.id,name:w.name,p:w.entry,elevation:w.entryElevation??0}))},
       {title:'Dungeon',items:doc.dungeons.filter(d=>d.enabled!==false).map(d=>({kind:'dungeon',id:d.dungeonId,name:d.dungeonId,p:d,elevation:0}))},
       ...(['surfaces','stairs','solids'] as const).map(kind=>({title:kind==='surfaces'?'Terreni e ponti':kind==='stairs'?'Scale':'Ostacoli',items:(doc.geometry?.[kind]??[]).filter(s=>!s.id.endsWith('-mass')).map(s=>({kind,id:s.id,name:'elevation'in s?`${s.ground?'Terreno':'Ponte'} · quota ${s.elevation}`:'from'in s?`Scala ${s.from} → ${s.to}`:`Ostacolo ${s.base} → ${s.top}`,p:s,elevation:'elevation'in s?s.elevation:'from'in s?s.from:s.base}))})),

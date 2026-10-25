@@ -1,3 +1,4 @@
+import { loadNpcEditorCatalog, readNpcChoice, refreshNpcSelect } from '../npc-catalog';
 import { installWorldPaintingPanel } from './world-painting-panel';
 import { installElevationEditor } from './elevation-editor';
 import { validElevation } from '../../../shared/elevation';
@@ -71,11 +72,11 @@ const status = (s: string) => { el('status').textContent = s; };
 const uid = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 let draft = forkWorldDocument(compactWorldTiles(WORLD_DOCUMENT)), catalog: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS, token = '', revision = '', installedRevision = '', ready = false;
 let world: World, tool = 'select', activeAsset = draft.assets[0]?.id ?? '', selected: {
-    kind: 'placement' | 'npc' | 'dungeon' | 'zone';
+    kind: 'placement' | 'npc' | 'dungeon' | 'zone' | 'sound';
     id: string;
 } | null = null;
 type ObjectSelection = { kind: 'placement' | 'npc'; id: string; generated?: AssetPlacement };
-let selectedObjects: ObjectSelection[] = [], groupPrimary: { kind: 'placement' | 'npc' | 'dungeon' | 'zone'; id: string } | null = null;
+let selectedObjects: ObjectSelection[] = [], groupPrimary: { kind: 'placement' | 'npc' | 'dungeon' | 'zone' | 'sound'; id: string } | null = null;
 function clearObjectSelection(): void { selectedObjects = []; groupPrimary = null; }
 let worldDirty = true, framePending = false, dirty = false, checkpointQueue = Promise.resolve();
 let draftConflict = false;
@@ -222,7 +223,7 @@ let gesture: {
     pan?: Vec2;
     spawnMove?: Vec2;
     warpMove?: { id: string; side: 'entry' | 'arrival'; x: number; y: number };
-    move?: { kind: 'placement' | 'npc' | 'dungeon' | 'zone'; id: string; x: number; y: number };
+    move?: { kind: 'placement' | 'npc' | 'dungeon' | 'zone' | 'sound'; id: string; x: number; y: number };
     marquee?: { start: Vec2; end: Vec2; tile: Vec2 };
     groupMove?: { item: ObjectSelection; x: number; y: number }[];
     cell?: boolean;
@@ -380,6 +381,7 @@ function refresh(): void {
     if (!active())
         activeAsset = draft.assets[0]?.id ?? '';
     palette();
+    refreshNpcSelect(el<HTMLSelectElement>('npc'));
     set('seed', draft.seed);
     el<HTMLButtonElement>('undo').disabled = !history.canUndo;
     el<HTMLButtonElement>('redo').disabled = !history.canRedo;
@@ -405,7 +407,7 @@ function refresh(): void {
     el('inspector-empty').hidden = !!selected || warpEditor.hasSelection() || !el('elevation-inspector').hidden || ((tool === 'asset' || tool.startsWith('elevation-')) && !!active());
     if (!selected && active())
         refreshAsset(active()!);
-    el('zone-list').replaceChildren(...surface().zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
+    el('zone-list').replaceChildren(...(surface().soundPoints ?? []).map(point => { const b = document.createElement('button'); b.textContent = `♫ ${point.name}`; b.onclick = () => { selected = { kind: 'sound', id: point.id }; selectTool('select'); centerAt(point.x + .5, point.y + .5); refresh(); revealInspector(); }; return b; }), ...surface().zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
     inspectorDrafts.restore();
     refreshClimateTransitionControl();
     root.dispatchEvent(new Event('world-refresh'));
@@ -471,7 +473,7 @@ function refreshMusicOptions(src?: string): void {
 function fileData(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
 }
-function musicZones(project: WorldDocument): WorldZone[] { return [project, ...(project.interiors ?? []).map(m => m.document)].flatMap(doc => doc.zones).filter(z => !!z.music); }
+function musicEntries(project: WorldDocument): { music?: import('../../../shared/world-schema').ZoneMusic }[] { return [project, ...(project.interiors ?? []).map(m => m.document)].flatMap(doc => [...doc.zones, ...(doc.soundPoints ?? [])]).filter(z => !!z.music); }
 function refreshZone(z: WorldZone): void {
     refreshMusicOptions(z.music?.src);
     set('zone-music-volume', (z.music?.volume ?? .5) * 100);
@@ -500,7 +502,7 @@ function refreshZone(z: WorldZone): void {
 function selectionEntity(): any {
     if (!selected)
         return;
-    return selected.kind === 'placement' ? surface().placements.find(p => p.id === selected!.id) ?? (selectedGenerated?.id === selected.id ? selectedGenerated : undefined) : selected.kind === 'npc' ? surface().npcs.find(n => n.id === selected!.id)
+    return selected.kind === 'sound' ? surface().soundPoints?.find(p => p.id === selected!.id) : selected.kind === 'placement' ? surface().placements.find(p => p.id === selected!.id) ?? (selectedGenerated?.id === selected.id ? selectedGenerated : undefined) : selected.kind === 'npc' ? surface().npcs.find(n => n.id === selected!.id)
         : selected.kind === 'dungeon' ? surface().dungeons.find(d => d.dungeonId === selected!.id) ?? (() => { const d = worldDungeons(mapDocument(draft, activeMap), catalog).find(d => d.id === selected!.id); return d ? { dungeonId: d.id, x: d.layout.bounds.minTx, y: d.layout.bounds.minTy } : undefined; })() : surface().zones.find(z => z.id === selected!.id);
 }
 function refreshSelection(): void {
@@ -519,6 +521,16 @@ function refreshSelection(): void {
     el('selection-title').textContent = selected?.kind === 'dungeon' ? 'Posizione dungeon' : selected?.kind === 'npc' ? 'NPC manuale' : 'Istanza asset';
     el('selection-fields').innerHTML = `<div class="pair">${field('entity-x', 'X · celle')}${field('entity-y', 'Y · celle')}</div>${selected?.kind === 'npc' ? field('entity-level', 'Livello') : ''}${selected?.kind === 'dungeon' ? '<label>PvP del dungeon<select id="entity-pvp"><option value="">Eredita dalla mappa</option><option value="false">Disabilitato</option><option value="true">Abilitato</option></select></label><p class="hint">Le zone con una regola PvP esplicita hanno precedenza.</p>' : ''}`;
     set('entity-x', e.x);
+    if (selected?.kind === 'sound') {
+        el('selection-title').textContent = 'Punto sonoro';
+        el('selection-fields').insertAdjacentHTML('beforeend', `${field('sound-name', 'Nome', 'text')}<label>Traccia<select id="sound-music"><option value="">Nessuna</option></select></label>${field('sound-volume', 'Volume massimo %')}${field('sound-inner', 'Raggio a volume pieno · celle', 'number', '.25')}${field('sound-radius', 'Raggio di ascolto · celle', 'number', '.25')}<button id="sound-import" type="button">Importa traccia</button><input id="sound-file" type="file" accept=".mp3,.ogg,.wav" hidden><p class="hint">Loop musicale: il volume diminuisce tra i due cerchi e si azzera al limite esterno. Si sovrappone alla musica della zona e segue il volume Musica. MP3, OGG o WAV · massimo 20 MB. Premi Aggiorna per salvare.</p>`);
+        const select = el<HTMLSelectElement>('sound-music');
+        select.append(...[...new Set([...musicSources, ...(e.music ? [e.music.src] : [])])].sort().map(src => new Option(src.split('/').at(-1), src)));
+        set('sound-name', e.name); set('sound-music', e.music?.src ?? ''); set('sound-volume', (e.music?.volume ?? .5) * 100);
+        set('sound-inner', e.innerRadius); set('sound-radius', e.radius);
+        el('sound-import').onclick = () => input('sound-file').click();
+        input('sound-file').onchange = () => { void importSoundPointFile(e.id).catch(report); };
+    }
     if (selected?.kind === 'npc') {
         el('selection-fields').insertAdjacentHTML('beforeend', npcPropertiesMarkup('selected-npc'));
         fillNpcProperties(root, 'selected-npc', e.npcKind, e.settings);
@@ -595,6 +607,7 @@ function zoom(factor: number, x?: number, y?: number): void { const r = canvas.g
 function selectAt(p: Vec2, precise: Vec2 = { x: p.x + .5, y: p.y + .5 }, cycle = false): void {
     clearObjectSelection();
     ensureWorld();
+    const sound = surface().soundPoints?.find(n => Math.hypot(n.x + .5 - precise.x, n.y + .5 - precise.y) <= Math.max(.35, 10 / view.scale));
     const n = surface().npcs.find(n => Math.hypot(n.x + .5 - precise.x, n.y + .5 - precise.y) <= Math.max(.24, 6 / view.scale) && floorVisible(elevationEditor.visibility(), n.elevation ?? 0));
     const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 }).filter(p => {
       const base = p.baseElevation ?? world.elevation.terrainElevationAt(p.x + .5, p.y + .5);
@@ -605,10 +618,10 @@ function selectAt(p: Vec2, precise: Vec2 = { x: p.x + .5, y: p.y + .5 }, cycle =
     const zone = world.authoring.zonesAt(precise.x, precise.y)[0];
     // A stair is an editable passage, rather than a low-priority terrain tile.
     // Alt-click still allows selecting the zone underneath it.
-    if (!cycle && !n && !asset && elevationEditor.selectMapAt(precise, 'stairs')) { revealInspector(); return; }
+    if (!cycle && !sound && !n && !asset && elevationEditor.selectMapAt(precise, 'stairs')) { revealInspector(); return; }
     // Terrain geometry and automatic cliffs are the last fallback, after map entities.
-    if (!n && !asset && !zone && !dungeon && elevationEditor.selectMapAt(precise)) { revealInspector(); return; }
-    if (!n && !asset && !zone && !dungeon) {
+    if (!sound && !n && !asset && !zone && !dungeon && elevationEditor.selectMapAt(precise)) { revealInspector(); return; }
+    if (!sound && !n && !asset && !zone && !dungeon) {
         const cliffs = world.elevation.cliffs({ left: p.x, top: p.y, right: p.x+1, bottom: p.y+1 }).filter(c=>cliffLevels(draft,c,true).some(e=>floorVisible(elevationEditor.visibility(),e)));
         for (const cliff of cliffs.slice().reverse()) {
             const part = cliff.parts.slice().reverse().find(part=>{
@@ -619,6 +632,7 @@ function selectAt(p: Vec2, precise: Vec2 = { x: p.x + .5, y: p.y + .5 }, cycle =
         }
     }
     const candidates: NonNullable<typeof selected>[] = [
+        ...(sound ? [{ kind: 'sound' as const, id: sound.id }] : []),
         ...(n ? [{ kind: 'npc' as const, id: n.id }] : []),
         ...placements.slice().reverse().map(a => ({ kind: 'placement' as const, id: a.id })),
         ...(dungeon ? [{ kind: 'dungeon' as const, id: dungeon.id }] : []),
@@ -753,7 +767,8 @@ canvas.addEventListener('pointerdown', event => {
             canvas.setPointerCapture(event.pointerId); event.preventDefault(); return;
         }
         if (event.altKey) { selectAt(p, precise, true); return; }
-        const onPrevious = previous?.kind === 'npc' ? surface().npcs.some(n => n.id === previous.id && Math.hypot(n.x + .5 - precise.x, n.y + .5 - precise.y) <= .3)
+        const onPrevious = previous?.kind === 'sound' ? surface().soundPoints?.some(n => n.id === previous.id && Math.hypot(n.x + .5 - precise.x, n.y + .5 - precise.y) <= Math.max(.35, 10 / view.scale))
+            : previous?.kind === 'npc' ? surface().npcs.some(n => n.id === previous.id && Math.hypot(n.x + .5 - precise.x, n.y + .5 - precise.y) <= .3)
             : previous?.kind === 'placement' ? (() => { const entity = selectionEntity(); return entity && art.hit(world.authoring.assets.get(entity.assetId)!, entity, precise.x, precise.y); })()
             : previous?.kind === 'zone' ? world.authoring.zonesAt(precise.x, precise.y).some(z => z.id === previous.id)
             : previous?.kind === 'dungeon' && world.dungeons.some(d => d.id === previous.id && p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy);
@@ -792,9 +807,15 @@ canvas.addEventListener('pointerdown', event => {
     if (tool === 'terrain' || tool === 'restore') gesture.terrainBrush = new TerrainElevationBrush(surface());
     gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, bushJs: input('bush-js').checked, asset: active(), elevation: elevationEditor.terrainElevation() };
     canvas.setPointerCapture(event.pointerId);
-    if (tool === 'npc') {
+    if (tool === 'sound') {
+        const point = { ...p, id: uid('sound'), name: 'Punto sonoro', radius: 12, innerRadius: 2 };
+        (surface().soundPoints ??= []).push(point); selected = { kind: 'sound', id: point.id };
+        revealInspector();
+    }
+    else if (tool === 'npc') {
+        const choice = readNpcChoice(val('npc'));
         if (!surface().npcs.some(n => n.x === p.x && n.y === p.y && (n.elevation ?? 0) === elevationEditor.elevation()))
-            surface().npcs.push({ ...p, id: uid('npc'), npcKind: val('npc') as import('../../../shared/npcs').NpcTemplateId, level: 1, elevation: elevationEditor.elevation() });
+            surface().npcs.push({ ...p, id: uid('npc'), npcKind: choice.kind, level: 1, elevation: elevationEditor.elevation(), ...(choice.variantId ? { settings: { variantId: choice.variantId } } : {}) });
     }
     else if (tool === 'dungeon') {
         const dungeonId = val('dungeon');
@@ -1133,6 +1154,20 @@ if (input('zone-npcs').checked)
 else
     delete z.npcs; }));
 on('zone-delete', () => change(() => { surface().zones = surface().zones.filter(z => z.id !== selected?.id); selected = null; }));
+async function importSoundPointFile(id: string): Promise<void> {
+    const file = input('sound-file').files?.[0]; if (!file) return;
+    if (!token) throw new Error('Apri World Studio per importare musica.');
+    if (file.size > 20_000_000) throw new Error('Traccia oltre 20 MB.');
+    status('Importazione musica…');
+    const data = await fileData(file);
+    const { src } = await api('/__world/music', { filename: file.name, base64: data.slice(data.indexOf(',') + 1) });
+    musicSources.push(src);
+    if (selected?.kind === 'sound' && selected.id === id) {
+        el<HTMLSelectElement>('sound-music').add(new Option(src.split('/').at(-1), src)); set('sound-music', src); input('sound-file').value = '';
+        el('sound-music').dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    status('Traccia importata. Premi Aggiorna per associarla al punto sonoro.');
+}
 on('zone-music-import', () => input('zone-music-file').click());
 input('zone-music-file').addEventListener('change', () => { void (async () => {
     const file = input('zone-music-file').files?.[0]; if (!file) return;
@@ -1148,7 +1183,12 @@ input('zone-music-file').addEventListener('change', () => { void (async () => {
     status('Traccia importata. Premi Aggiorna zona per associarla.');
 })().catch(report).finally(() => { input('zone-music-file').value = ''; }); });
 on('selection-update', () => change(() => { materializeSelection(); const e = selectionEntity(); if (!e)
-    return; if (selected?.kind === 'placement' || selected?.kind === 'npc') {
+    return;
+    if (selected?.kind === 'sound') {
+        e.name = val('sound-name').trim(); e.innerRadius = num('sound-inner'); e.radius = num('sound-radius');
+        if (val('sound-music')) e.music = { src: val('sound-music'), volume: num('sound-volume') / 100 }; else delete e.music;
+    }
+    if (selected?.kind === 'placement' || selected?.kind === 'npc') {
         const elevation = num('entity-elevation'); if (!validElevation(elevation)) throw new Error('Quota: intero da -128 a 127.');
         if (selected.kind === 'placement') { if (val('entity-elevation').trim() === '') delete e.baseElevation; else e.baseElevation = elevation; } else e.elevation = elevation;
     } if (selected?.kind === 'dungeon' && !surface().dungeons.some(d => d.dungeonId === selected!.id))
@@ -1163,6 +1203,7 @@ on('selection-delete', () => change(() => {
         surface().npcs = surface().npcs.filter(n => !npcs.has(n.id));
         selected = null; clearObjectSelection(); return;
     }
+    if (selected?.kind === 'sound') surface().soundPoints = surface().soundPoints?.filter(p => p.id !== selected!.id);
     materializeSelection(); if (selected?.kind === 'placement')
     surface().placements = surface().placements.filter(p => p.id !== selected!.id); if (selected?.kind === 'npc')
     surface().npcs = surface().npcs.filter(n => n.id !== selected!.id); if (selected?.kind === 'dungeon') {
@@ -1346,7 +1387,7 @@ async function repairMovedAssets(): Promise<number> {
     return repaired;
 }
 on('export-world', async () => { await repairMovedAssets(); status('Preparazione esportazione con immagini e musica…'); const music: Record<string, string> = {};
-for (const src of new Set(musicZones(draft).map(z => z.music!.src))) {
+for (const src of new Set(musicEntries(draft).map(z => z.music!.src))) {
     const response = await fetch(src); if (!response.ok) throw new Error(`Traccia mancante: ${src}`);
     music[src] = await fileData(await response.blob());
 }
@@ -1379,7 +1420,7 @@ input('world-file').addEventListener('change', () => { void (async () => { const
 } if (payload.music) {
     if (!token) throw new Error('Importa da World Studio per ripristinare la musica.');
     const sources = new Map<string, string>();
-    for (const zone of musicZones(document)) {
+    for (const zone of musicEntries(document)) {
         const src = zone.music!.src;
         if (!sources.has(src)) {
             const data = payload.music[src];
@@ -1390,6 +1431,7 @@ input('world-file').addEventListener('change', () => { void (async () => { const
     }
     musicSources = [...new Set([...musicSources, ...sources.values()])];
 } change(() => { draft = document; selected = null; }); status('Progetto importato nella bozza locale.'); })().catch(report).finally(() => { input('world-file').value = ''; }); });
+document.addEventListener('npc-catalog-updated', () => { refresh(); schedule(); });
 async function load(reload = false): Promise<void> {
     appliedDocument = undefined; projectGeneration++;
     recoverableDraft = undefined; recoverDraftButton.hidden = true;
@@ -1400,6 +1442,7 @@ async function load(reload = false): Promise<void> {
     }
     inspectorDrafts.clear(); draftConflict = false; el('draft-conflict').hidden = true;
     ready = false;
+    await loadNpcEditorCatalog().catch(report);
     try {
         const response = await fetch('/__world/project');
         if (response.ok) {
@@ -1500,7 +1543,10 @@ async function refreshDungeonCatalog(): Promise<void> {
     await checkpoint(true);
     refresh(); schedule(true);
 }
-if (studioChannel) studioChannel.onmessage = event => { if (event.data?.type === 'dungeons') void refreshDungeonCatalog().catch(report); };
+if (studioChannel) studioChannel.onmessage = event => {
+    if (event.data?.type === 'dungeons') void refreshDungeonCatalog().catch(report);
+    if (event.data?.type === 'actors') void loadNpcEditorCatalog().catch(report);
+};
 window.addEventListener('focus', () => { void refreshDungeonCatalog().catch(report); });
 installWorldWorkspace(root, {
     state: () => ({ project: draft, document: surface(), mapId: activeMap }),

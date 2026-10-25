@@ -1,5 +1,25 @@
 # World Maker locale
 
+### Nuovi NPC, fumetti e conversazioni
+
+Nel **laboratorio visuale NPC**, apri **＋ Nuovo NPC**, inserisci ID e nome e scegli il comportamento di base. Il personaggio neutro predefinito si muove vicino al punto di origine e parte senza missioni, fumetti o dialoghi. Importa gli sprite o personalizza la grafica nella scheda, poi salva il catalogo.
+
+**Fumetti automatici** e **Dialogo di interazione** sono indipendenti: puoi ereditare dal modello, disattivarli o personalizzarli. Nei fumetti imposta una prima frase e, facoltativamente, altre frasi da alternare, una per riga. I tempi e le distanze restano quelli dei fumetti del gioco.
+
+Nel dialogo personalizzato aggiungi le frasi dell'NPC e le risposte del giocatore. Per ogni risposta scegli una frase successiva oppure **Chiudi dialogo**. Imposta la frase iniziale e usa **Prova il dialogo** per attraversare le risposte prima di salvare. Sono ammessi fino a 64 frasi, con 8 risposte ciascuna; rimuovendo una frase, le risposte che la raggiungevano diventano chiusure del dialogo. Queste conversazioni sono libere, senza missioni o ricompense. **Usa un dialogo esistente** conserva invece il funzionamento dei dialoghi di missione e del negozio già disponibili.
+
+Le modifiche vengono salvate con **Salva catalogo NPC** e valgono per tutte le istanze che ereditano quel modello. Se un personaggio già piazzato ha un dialogo assegnato esplicitamente, selezionalo sulla mappa e scegli **Eredita dal modello NPC** nel campo Dialogo, poi premi **Aggiorna** e **Applica al gioco**. **Nessun dialogo** disabilita l'interazione solo su quella istanza. Anche duplicando un NPC i contenuti personalizzati vengono copiati indipendentemente.
+
+### Duplicare un NPC
+
+Apri **NPC · laboratorio visuale**, scegli un personaggio o un mob e premi **Duplica come nuovo NPC**. Assegna un ID univoco (lettere minuscole, numeri e trattini), poi personalizza nome, gruppo facoltativo, sprite e animazioni. La copia ha una skin indipendente: le modifiche alla sua grafica non cambiano l'originale. Puoi duplicare anche una copia.
+
+La scheda mostra l'ID della variante e il modello da cui eredita il comportamento. Il gruppo serve a organizzare il catalogo; non modifica l'IA. Movimento, combattimento e interazioni restano quelli del modello originale. Nome, dialogo e parametri della singola istanza si impostano selezionando il personaggio sulla mappa.
+
+Premi **Salva catalogo NPC**: la nuova voce diventa disponibile nel menu **NPC manuale**, con gruppo e modello di origine. Sceglila e usa **Spawn NPC** per piazzarla, quindi **Applica al gioco** per salvare i piazzamenti. La stessa variante può essere usata da più personaggi e compare anche nelle proprietà NPC del Dungeon Maker. Ricarica il gioco e riavvia il server per caricare il catalogo aggiornato.
+
+I modelli e le skin vengono salvati in `shared/actor-catalog.json`; le istanze nel documento del mondo conservano il riferimento alla variante. Per trasferire il progetto completo copia anche quel catalogo e i relativi file in `public/actor-assets`: l'archivio del World Maker contiene i piazzamenti, mentre il catalogo attori resta una risorsa separata.
+
 In **Mappe**, seleziona una mappa interna e premi **Elimina completamente questa
 mappa interna**. Dopo conferma vengono rimossi l’intera mappa con terreno, oggetti,
 NPC, zone e dungeon, e tutti i passaggi da e verso quella mappa, anche dagli altri
@@ -263,3 +283,11 @@ Il selettore **Regola dei passaggi** distingue **Generale**, **Materiale** e **C
 Il colore pieno dell’anteprima indica il terreno che definisce la maschera; l’altro terreno usa il contorno complementare, senza disegnare un bordo indipendente. Nelle coppie il terreno guida è selezionabile. Agli incontri di tre o quattro materiali prevale una regola per quadrato: prima la specificità, poi la priorità, poi la chiave. I contorni restano raccordati sui lati. Questa scelta evita soluzioni geometriche incompatibili nello stesso punto.
 
 La risoluzione delle precedenze avviene quando si ricostruisce il terreno. Le combinazioni condividono al massimo 29 regole compilate (generale, sette materiali, 21 coppie); le regole non aggiungono canvas. Il gioco può usare una seconda bitmap per preparare il terreno prima che la camera lo raggiunga. Problema, soluzione, misure sul telefono e limiti sono descritti in [Prestazioni del client](performance.md).
+
+## Punti sonori
+
+Lo strumento **♫ Punto sonoro** posiziona una sorgente musicale sulla mappa, separata dalle zone. Dopo averla piazzata, scegli o importa una traccia MP3, OGG o WAV (massimo 20 MB), imposta il volume massimo e premi **Aggiorna**. Il raggio interno mantiene il volume pieno; tra questo e il raggio di ascolto il volume diminuisce gradualmente. Oltre il cerchio esterno la traccia è ferma. I raggi sono in celle: quello esterno deve superare quello interno (massimo 1024 celle).
+
+Il marker ♫ indica il centro della cella; selezionandolo compaiono i due cerchi. Puoi trascinarlo, cambiarne le coordinate, rimuoverlo e usare annulla/ripeti. I punti sono elencati in **Esplora oggetti → Punti sonori** e in **Progetto e verifica → Zone e punti sonori**. Ogni mappa, compresi gli interni, conserva i propri punti.
+
+Nel gioco le tracce vanno in loop, seguono distanza e direzione stereo e si sovrappongono alla musica della zona. Usano il controllo **Musica** e il mute generale. Si attivano soltanto nel raggio di ascolto e si fermano all'uscita, al cambio mappa o all'uscita dal gioco. Per contenere il numero di stream vengono riprodotti al massimo i quattro punti più udibili; rientrando nel raggio una traccia riparte dall'inizio. I punti e i file musicali vengono inclusi nell'esportazione del progetto e ripristinati con l'importazione.

@@ -1,3 +1,4 @@
+import { resolveNpcDialogue } from '../shared/npc-conversations';
 import type { Actor } from '../shared/types';
 import { randomUUID } from '../shared/id';
 import { hasLineOfSight, collidesWorld } from '../shared/physics';
@@ -64,14 +65,14 @@ export class InteractionSystem {
       if (vendor) {
         this.sessions.set(id, { id: randomUUID(), targetId: target.id, dialogueId: vendor.id, node: 'shop', startedAt: now, expiresAt: now + 120_000 }); return;
       }
-      const dialogue = DIALOGUE_DEFINITIONS[target.dialogueId!];
+      const dialogue = resolveNpcDialogue(target.dialogueId!);
       if (!dialogue) throw new Error('Questo personaggio non ha ancora un dialogo.');
       if (dialogue.onTalkFlag && !account.narrative!.flags?.includes(dialogue.onTalkFlag)) {
         (account.narrative!.flags ??= []).push(dialogue.onTalkFlag);
         account.narrative!.revision = (account.narrative!.revision ?? 0) + 1;
         this.host.changed(id);
       }
-      const node = dialogue.entries.find(entry => conditionMatches(account.narrative!, entry.condition, now))?.node;
+      const node = dialogue.entries.find(entry => conditionMatches(account.narrative!, entry.condition, now))?.node ?? dialogue.startNode;
       if (!node) throw new Error('Nessuna conversazione disponibile.');
       this.sessions.set(id, { id: randomUUID(), targetId: target.id, dialogueId: dialogue.id, node, startedAt: now, expiresAt: now + 120_000 }); return;
     }
@@ -89,7 +90,7 @@ export class InteractionSystem {
       // Rotate the token only after success so a duplicate purchase packet cannot charge twice.
       this.advance(session, 'shop', now); this.action(id, 'purchase', offer, now); this.host.changed(id); return;
     }
-    const dialogue = DIALOGUE_DEFINITIONS[session.dialogueId], node = dialogue?.nodes[session.node];
+    const dialogue = resolveNpcDialogue(session.dialogueId), node = dialogue?.nodes[session.node];
     if (!node) throw new Error('Interazione non disponibile.');
     if (command.kind === 'choose') {
       const choice = node.choices.find(choice => choice.id === command.choiceId && (!choice.condition || conditionMatches(account.narrative!, choice.condition, now)));
@@ -154,7 +155,8 @@ export class InteractionSystem {
     const account = this.account(id), vendor = VENDOR_DEFINITIONS[session.dialogueId];
     if (vendor) return { sessionId: session.id, targetId: session.targetId, speaker: this.host.npcs.get(session.targetId)!.name, text: vendor.greeting, choices: [],
       shop: vendor.offers.map(offer => ({ ...offer, disabledReason: this.purchaseBlocked(account, offer) })) };
-    const dialogue = DIALOGUE_DEFINITIONS[session.dialogueId], node = dialogue.nodes[session.node];
+    const dialogue = resolveNpcDialogue(session.dialogueId), node = dialogue?.nodes[session.node];
+    if (!node) { this.sessions.delete(id); return null; }
     const requested = node.itemRequest ? QUEST_DEFINITIONS[node.itemRequest.questId] : undefined;
     const quest = requested?.objective.kind !== 'reach-area' ? requested : undefined;
     const remaining = quest ? Math.max(0, quest.objective.quantity - (account.narrative!.quests[quest.id]?.objectives[quest.objective.id] ?? 0)) : 0;

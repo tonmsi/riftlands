@@ -1,5 +1,6 @@
 import { parseDungeonDraft, compactDungeonDraft, type DungeonDraft } from '../../../shared/dungeon-draft';
 import { parseActorCatalog } from '../../../shared/actor-catalog';
+import { setNpcEditorCatalog } from '../npc-catalog';
 import { BOSS_TEMPLATES, BOSS_TEMPLATE_BY_ID } from '../../../shared/boss-templates';
 
 export async function setupDungeonLibrary(getDraft: () => DungeonDraft, open: (draft: DungeonDraft) => void, status: (message: string) => void, actorsUpdated?: () => void): Promise<void> {
@@ -12,6 +13,7 @@ export async function setupDungeonLibrary(getDraft: () => DungeonDraft, open: (d
         if (!library.token || !Array.isArray(library.dungeons)) return;
         if (library.actors) {
           const catalog = parseActorCatalog(library.actors);
+          setNpcEditorCatalog(catalog);
           (BOSS_TEMPLATES as typeof catalog.bosses).splice(0, BOSS_TEMPLATES.length, ...catalog.bosses);
           BOSS_TEMPLATE_BY_ID.clear(); for (const b of catalog.bosses) BOSS_TEMPLATE_BY_ID.set(b.id, b);
           actorsUpdated?.();

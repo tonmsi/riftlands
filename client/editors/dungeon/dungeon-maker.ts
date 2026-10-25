@@ -1,3 +1,4 @@
+import { setNpcEditorCatalog } from '../npc-catalog';
 import { installDungeonPanels } from './dungeon-panels';
 import { installDungeonRooms } from './dungeon-rooms-editor';
 import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../npc-properties';
@@ -657,7 +658,7 @@ async function refreshSharedAssets(): Promise<void> {
         if (library.ok) {
             const actors = (await library.json()).actors;
             if (actors) {
-                const bosses = parseActorCatalog(actors).bosses;
+                const actorCatalog = parseActorCatalog(actors); setNpcEditorCatalog(actorCatalog); const bosses = actorCatalog.bosses;
                 (BOSS_DEFINITIONS as typeof bosses).splice(0, BOSS_DEFINITIONS.length, ...bosses);
                 BOSS_TEMPLATE_BY_ID.clear(); for (const b of bosses) BOSS_TEMPLATE_BY_ID.set(b.id, b);
                 refreshBossPalette();

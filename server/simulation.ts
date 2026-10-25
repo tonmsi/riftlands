@@ -1,3 +1,5 @@
+import { npcDialogueId } from '../shared/npc-conversations';
+import { npcDisplayName } from '../shared/npc-variants';
 import { sweptWorldHit } from '../shared/projectiles';
 import { elevationOf, sameElevation, validElevation, type Elevated } from '../shared/elevation';
 export { sweptWorldHit } from '../shared/projectiles';
@@ -852,10 +854,11 @@ export class WorldSimulation {
           const slept = this.npcSleep.get(npc.id);
           const npcHp = 55 + Math.min(npc.level, 12) * 12;
           const spec = NPC_DEFINITIONS[npc.npcKind];
+          const dialogueId = npcDialogueId(npc.npcKind, npc.settings);
           const actor: Actor = slept ? copyActor(slept.body) : {
             id: npc.id, kind: 'npc', npcKind: npc.npcKind, classId: spec.classId,
-            name: npc.settings?.name || spec.name,
-            disposition: spec.disposition, ...((npc.settings?.dialogueId ?? spec.dialogueId) ? { dialogueId: npc.settings?.dialogueId ?? spec.dialogueId } : {}),
+            name: npcDisplayName(npc.npcKind, npc.settings), ...(npc.settings?.variantId ? { npcVariantId: npc.settings.variantId } : {}),
+            disposition: spec.disposition, ...(dialogueId ? { dialogueId } : {}),
             x: npc.x, y: npc.y, radius: spec.radius,
             hp: npcHp, maxHp: npcHp, resource: 0, maxResource: 100, aim: (npc.settings?.initialAngle ?? 0) * Math.PI / 180, speed: npc.settings?.speed ?? spec.speed,
             level: npc.level, xp: 0, kills: 0, deaths: 0, teamId: null, hidden: false, revealedUntil: 0, deadUntil: 0, spawnProtectedUntil: 0, effects: [], cooldowns: EMPTY_COOLDOWNS(),

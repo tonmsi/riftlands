@@ -1,3 +1,4 @@
+import { npcContentCatalog } from '../core/npc-content';
 import { CHUNK_TILES, TILE_SIZE } from '../../shared/config';
 import type { Actor, Pickup } from '../../shared/types';
 import type { World } from '../../shared/world';
@@ -178,7 +179,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, world: World, self: Actor
   }
 
   // Quest pins are drawn above the fog, without revealing terrain or other NPCs.
-  const questNpcs = world.mode === 'world' ? questMapNpcs(world.authoring.document.npcs, narrative) : [];
+  const questNpcs = world.mode === 'world' ? questMapNpcs(world.authoring.document.npcs, narrative, Date.now(), npcContentCatalog()) : [];
   canvas.dataset.questNpcCount = String(questNpcs.length);
   const visibleActors = new Map(actors.map(actor => [actor.id, actor]));
   for (const { npc, marker } of questNpcs) {

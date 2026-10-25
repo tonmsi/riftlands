@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { startWorldStudio } from '../../scripts/world-studio-server';
 import { ACTOR_CATALOG } from '../../shared/actor-catalog';
+import { NPC_DEFINITIONS } from '../../shared/npcs';
 import { newWorldDocument } from '../../shared/world-schema';
 
 test('NPC laboratory imports sprites, previews idle fallback, saves every NPC type and preserves bosses', { timeout: 60_000 }, async t => {
@@ -25,7 +26,7 @@ test('NPC laboratory imports sprites, previews idle fallback, saves every NPC ty
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
     await page.locator('#open-npc-editor').click(); await expect(page.locator('#boss-status')).toHaveText('Catalogo caricato.');
-    await expect(page.locator('#boss-select option')).toHaveCount(10);
+    await expect(page.locator('#boss-select option')).toHaveCount(Object.keys(NPC_DEFINITIONS).length + (ACTOR_CATALOG.npcVariants?.length ?? 0));
     await expect(page.locator('#boss-hp')).toBeHidden();
     await page.locator('#boss-select').selectOption('platos');
     await expect(page.locator('#boss-status')).toHaveText('Catalogo caricato.');
@@ -36,7 +37,7 @@ test('NPC laboratory imports sprites, previews idle fallback, saves every NPC ty
     await page.waitForTimeout(250); await expect(page.locator('#boss-frame')).toContainText('Frame 9 / 16');
     await page.locator('#boss-select').selectOption('dock-skeptic');
     await page.locator('#boss-drawSize').fill('64');
-    await page.locator('#boss-file').setInputFiles({ name: 'npc-editor-import-test.png', mimeType: 'image/png', buffer: await readFile(join(root, 'assets/npc-old-fisher.png')) });
+    await page.locator('#boss-file').setInputFiles({ name: 'npc-editor-import-test.png', mimeType: 'image/png', buffer: await readFile(join(root, 'public/actor-assets/npc-old-fisher.png')) });
     await expect(page.locator('#boss-asset')).toHaveValue('/actor-assets/npc-editor-import-test.png');
     await page.locator('#boss-new-animation').selectOption('idle'); await page.locator('#boss-add-animation').click();
     await page.locator('#boss-loop').check(); await expect(page.locator('#boss-animation option:checked')).toHaveText('idle · fermo');
@@ -72,6 +73,9 @@ test('NPC laboratory imports sprites, previews idle fallback, saves every NPC ty
     await mkdir(join(root, '.tmp'), { recursive: true });
     await page.screenshot({ path: join(root, '.tmp/npc-editor-landscape.png') });
     await page.locator('#boss-close').click();
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.locator('#area-kind').selectOption('dungeon');
+    await page.locator('#dungeon-resources > summary').click();
     await page.locator('#open-boss-editor').click(); await expect(page.locator('#boss-hp')).toBeVisible();
     await expect(page.locator('#boss-idle-fallback')).toBeHidden();
     assert.deepEqual(errors, []);

@@ -55,6 +55,8 @@ export type ZoneShape = { kind: 'rect'; x: number; y: number; width: number; hei
   | { kind: 'circle'; x: number; y: number; radius: number };
 export interface NpcRule { density: number; maxPerChunk: number; weights: Record<NpcKind, number>; }
 export interface ZoneMusic { src: string; volume: number; }
+/** Tile coordinates; the source is at the tile centre. Empty music allows an editor draft. */
+export interface WorldSoundPoint extends Vec2 { id: string; name: string; radius: number; innerRadius: number; music?: ZoneMusic; }
 export interface ClimateBand { at: number; value: number; curve?: number; }
 export interface WorldZone {
   id: string; name: string; priority: number; shape: ZoneShape;
@@ -89,6 +91,7 @@ export interface WorldDocument {
   version: 1 | 2; generatorVersion: 1; seed: number; spawn: Vec2;
   assets: WorldAsset[]; placements: AssetPlacement[]; tiles: TileOverride[];
   zones: WorldZone[]; npcs: WorldNpc[]; dungeons: WorldDungeon[];
+  soundPoints?: WorldSoundPoint[];
   tileChunks?: WorldTileChunk[];
   interiors?: WorldInterior[];
   warps?: WorldWarp[];
@@ -177,6 +180,16 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   if (d.spawnElevation !== undefined && !validElevation(d.spawnElevation)) fail('quota spawn');
   list(d.assets, 4096, 'catalogo asset'); list(d.placements, 100_000, 'piazzamenti'); list(d.tiles, 500_000, 'terreno');
   list(d.zones, 10_000, 'zone'); list(d.npcs, 100_000, 'NPC'); list(d.dungeons, 4096, 'dungeon');
+  if (d.soundPoints !== undefined) {
+    list(d.soundPoints, 4096, 'punti sonori');
+    for (const p of d.soundPoints) {
+      if (!object(p) || !point(p) || !id(p.id) || !name(p.name) || !finite(p.radius, .25, 1024)
+        || !finite(p.innerRadius, 0, p.radius) || p.innerRadius >= p.radius) fail('punto sonoro: raggi o posizione');
+      if (p.music !== undefined && (!object(p.music) || typeof p.music.src !== 'string'
+        || !/^\/music\/[a-zA-Z0-9_-]+\.(mp3|ogg|wav)$/.test(p.music.src) || !finite(p.music.volume, 0, 1))) fail('musica punto sonoro');
+    }
+    unique(d.soundPoints, p => p.id, 'punti sonori');
+  }
   if (d.version === 2 && (!Array.isArray(d.tileChunks) || d.tiles.length)) fail('versione 2: terreno in chunk');
   for (const a of d.assets) {
     if (!object(a)) fail('definizione asset');
@@ -297,7 +310,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   }
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
   const result: WorldDocument = structuredClone({ ...(d.cliffAssets !== undefined ? { cliffAssets: d.cliffAssets } : {}), ...(d.geometry !== undefined ? { geometry: d.geometry } : {}), ...(d.spawnElevation !== undefined ? { spawnElevation: d.spawnElevation } : {}), ...(d.painting !== undefined ? { painting: d.painting } : {}), version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
-    placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons, ...(d.tileChunks !== undefined ? { tileChunks: d.tileChunks } : {}),
+    placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons, ...(d.soundPoints !== undefined ? { soundPoints: d.soundPoints } : {}), ...(d.tileChunks !== undefined ? { tileChunks: d.tileChunks } : {}),
     ...(d.interiors !== undefined ? { interiors: d.interiors.map((m: WorldInterior) => ({ id: m.id, name: m.name, width: m.width, height: m.height,
       ...(m.pvp !== undefined ? { pvp: m.pvp } : {}), ...(m.kind !== undefined ? { kind: m.kind } : {}),
       document: { ...parseWorldDocument({ ...m.document, assets: d.assets, seed: d.seed }), assets: [] } })) } : {}),

@@ -495,13 +495,40 @@
           "frameMs": 1000
         }
       }
+    },
+    "npc-bardo": {
+      "drawSize": 48,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 1,
+        "y": 13,
+        "width": 23,
+        "height": 10.08,
+        "opacity": 0.28
+      },
+      "animations": {
+        "moving": {
+          "asset": "/actor-assets/Sprite-di-Bardo-con-Liuto-2.png",
+          "columns": 4,
+          "rows": 1,
+          "directional": false,
+          "loop": true,
+          "frameMs": 200
+        }
+      }
     }
   },
   "playerDrawSizes": {
-    "warrior": 60,
-    "mage": 60,
-    "hunter": 60,
-    "paladin": 60
+    "mage": 62,
+    "warrior": 75,
+    "paladin": 70
   },
   "npcSkins": {
     "slime": "npc-slime",
@@ -513,9 +540,48 @@
     "platos": "npc-platos",
     "fallen-soldier": "npc-fallen-soldier"
   },
-  "playerDrawSizes": {
-    "mage": 62,
-    "warrior": 75,
-    "paladin": 70
-  }
+  "npcVariants": [
+    {
+      "id": "bardo",
+      "base": "custom-npc",
+      "skin": "npc-bardo",
+      "name": "Sigur il bardo",
+      "conversation": {
+        "speech": {
+          "intro": "Salute a voi, brava gente!",
+          "lines": []
+        },
+        "dialogue": {
+          "kind": "custom",
+          "start": "intro",
+          "nodes": {
+            "intro": {
+              "text": "Sei una leggenda.. non ho particolari idee su di voi! Se vuoi imparare a suonare, dovrai pagare!",
+              "choices": [
+                {
+                  "id": "leave",
+                  "label": "Va bene, come faccio?",
+                  "next": "frase-1"
+                },
+                {
+                  "id": "risposta-1",
+                  "label": "No, non sarò mai come te!"
+                }
+              ]
+            },
+            "frase-1": {
+              "text": "A breve aprirò i corsi.. il sol si è scordato! Succede sempre.. ",
+              "choices": [
+                {
+                  "id": "leave",
+                  "label": "A presto."
+                }
+              ]
+            }
+          }
+        }
+      },
+      "group": ""
+    }
+  ]
 }

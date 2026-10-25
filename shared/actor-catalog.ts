@@ -2,6 +2,7 @@ import defaults from './actor-catalog.json';
 import type { BossDefinition } from './bosses';
 import type { ClassId, Vec2 } from './types';
 import { NPC_DEFINITIONS, type NpcTemplateId } from './npcs';
+import { validNpcConversation, type NpcConversation } from './npc-conversation-schema';
 
 export type BossTemplate = Omit<BossDefinition, 'dungeonId'>;
 export interface SpriteAnimation {
@@ -13,7 +14,8 @@ export interface ActorVisual {
   shadow: { x: number; y: number; width: number; height: number; opacity: number };
   animations: Record<string, SpriteAnimation>;
 }
-export interface ActorCatalog { version: 1; bosses: BossTemplate[]; skins: Record<string, ActorVisual>; npcSkins?: Partial<Record<NpcTemplateId, string>>; playerDrawSizes?: Partial<Record<ClassId, number>>; }
+export interface NpcVariant { id: string; name: string; base: NpcTemplateId; skin: string; group?: string; conversation?: NpcConversation; }
+export interface ActorCatalog { version: 1; bosses: BossTemplate[]; skins: Record<string, ActorVisual>; npcSkins?: Partial<Record<NpcTemplateId, string>>; npcVariants?: NpcVariant[]; npcConversations?: Partial<Record<NpcTemplateId, NpcConversation>>; playerDrawSizes?: Partial<Record<ClassId, number>>; }
 export const DEFAULT_PLAYER_DRAW_SIZE = 48;
 export function playerDrawSize(catalog: ActorCatalog, classId: ClassId): number {
   return catalog.playerDrawSizes?.[classId] ?? DEFAULT_PLAYER_DRAW_SIZE;
@@ -26,6 +28,21 @@ export function parseActorCatalog(value: unknown): ActorCatalog {
   if (!c || c.version !== 1 || !Array.isArray(c.bosses) || !c.bosses.length || c.bosses.length > 100
     || !c.skins || typeof c.skins !== 'object' || Array.isArray(c.skins) || Object.keys(c.skins).length > 100) fail('formato non valido.');
   const ids = new Set<string>();
+  if (c.npcConversations !== undefined && (!c.npcConversations || typeof c.npcConversations !== 'object' || Array.isArray(c.npcConversations)
+    || Object.entries(c.npcConversations).some(([kind, value]) => !Object.hasOwn(NPC_DEFINITIONS, kind) || !validNpcConversation(value)))) fail('fumetti o dialoghi NPC non validi.');
+  if (c.npcVariants !== undefined) {
+    if (!Array.isArray(c.npcVariants) || c.npcVariants.length > 100) fail('varianti NPC non valide.');
+    const variants = new Set<string>();
+    for (const v of c.npcVariants) {
+      if (!v || typeof v.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(v.id) || variants.has(v.id)
+        || Object.hasOwn(NPC_DEFINITIONS, v.id) || typeof v.name !== 'string' || !v.name.trim() || v.name.length > 80
+        || !Object.hasOwn(NPC_DEFINITIONS, v.base) || typeof v.skin !== 'string' || !Object.hasOwn(c.skins, v.skin)
+        || !c.skins[v.skin]?.animations?.moving
+        || (v.group !== undefined && (typeof v.group !== 'string' || v.group.length > 80))) fail('variante NPC: ID, nome, modello o sprite non validi.');
+      if (v.conversation !== undefined && !validNpcConversation(v.conversation)) fail(`${v.name}: fumetti o dialoghi non validi. Controlla testi, risposte e destinazioni.`);
+      variants.add(v.id);
+    }
+  }
   for (const boss of c.bosses) {
     if (!boss || !/^[a-z0-9-]{1,64}$/.test(boss.id) || ids.has(boss.id) || !boss.name || boss.name.length > 80
       || !Object.hasOwn(c.skins, boss.skin) || !c.skins[boss.skin]?.animations?.idle || !['warrior', 'mage', 'hunter', 'paladin'].includes(boss.classId)
@@ -53,7 +70,7 @@ export function parseActorCatalog(value: unknown): ActorCatalog {
       || !v.animations || (!v.animations.idle && !v.animations.moving) || Object.keys(v.animations).length > 32) fail('skin non valida.');
     for (const [name, a] of Object.entries(v.animations)) {
       const kind = Object.entries(c.npcSkins ?? {}).find(([, skin]) => skin === id)?.[0];
-      const actorName = kind && Object.hasOwn(NPC_DEFINITIONS, kind) ? NPC_DEFINITIONS[kind as NpcTemplateId].name : id;
+      const actorName = c.npcVariants?.find(v => v.skin === id)?.name ?? (kind && Object.hasOwn(NPC_DEFINITIONS, kind) ? NPC_DEFINITIONS[kind as NpcTemplateId].name : id);
       const invalid = (reason: string): never => fail(`${actorName} · ${name}: ${reason}`);
       if (!/^[a-z][a-z0-9-]{0,32}$/.test(name) || !a) invalid('definizione animazione non valida.');
       if (!/^\/(actor-assets|world-assets)\/[a-zA-Z0-9_-]+\.(png|svg)$/.test(a.asset)) invalid(`percorso spritesheet non valido: ${String(a.asset)}.`);

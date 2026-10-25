@@ -29,7 +29,7 @@ export interface Actor { loadout?: Loadout; }
 export interface Actor { bossAwakenedAt?: number; bossMeleeAt?: number; bossDiedAt?: number; }
 export interface StatusEffect { kind: 'haste' | 'power' | 'weakness' | 'slow' | 'shield' | 'root'; until: number; }
 export interface Actor extends Vec2 { id: string; kind: 'player' | 'npc'; name: string; classId: ClassId; radius: number; hp: number; maxHp: number; resource: number; maxResource: number; aim: number; speed: number; level: number; xp: number; kills: number; deaths: number; teamId: string | null; hidden: boolean; revealedUntil: number; deadUntil: number; spawnProtectedUntil: number; effects: StatusEffect[]; cooldowns: Record<AbilitySlot, number>; npcKind?: NpcTemplateId | 'boss'; bossKey?: string; bossSkin?: string; }
-export interface Actor { disposition?: 'neutral' | 'hostile'; dialogueId?: string; questMarker?: 'available' | 'active' | 'completed'; }
+export interface Actor { disposition?: 'neutral' | 'hostile'; dialogueId?: string; questMarker?: 'available' | 'active' | 'completed'; npcVariantId?: string; }
 export interface Projectile extends Vec2 { id: string; ownerId: string; vx: number; vy: number; radius: number; damage: number; expiresAt: number; color: string; slow?: number; }
 /** Correlation only: the server derives this from the consumed command, never from client projectile data. */
 export interface Projectile { inputSeq?: number; }

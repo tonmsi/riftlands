@@ -28,7 +28,7 @@ export interface EditorView {
     scale: number;
 }
 export interface EditorSelection {
-    kind: 'placement' | 'npc' | 'dungeon' | 'zone';
+    kind: 'placement' | 'npc' | 'dungeon' | 'zone' | 'sound';
     id: string;
 }
 export interface MapOptions {
@@ -215,6 +215,18 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         ctx.fillStyle = '#f2e3c2';
         ctx.font = '11px system-ui';
         ctx.fillText(d.name, t.minTx * s + 5, t.minTy * s - 7);
+    }
+    for (const point of draft.soundPoints ?? []) {
+        const x = (point.x + .5) * s, y = (point.y + .5) * s;
+        const chosen = selected?.kind === 'sound' && selected.id === point.id;
+        ctx.save(); ctx.strokeStyle = chosen ? '#ffe5a4' : '#9cdbed'; ctx.fillStyle = ctx.strokeStyle;
+        if (chosen || options.tool === 'sound') {
+            ctx.lineWidth = 1; ctx.setLineDash([6, 4]);
+            ctx.beginPath(); ctx.arc(x, y, point.radius * s, 0, Math.PI * 2); ctx.stroke();
+            ctx.setLineDash([]); ctx.beginPath(); ctx.arc(x, y, point.innerRadius * s, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'center'; ctx.fillText('♫', x, y + 6);
+        ctx.font = '11px system-ui'; ctx.fillText(point.name, x, y - 14); ctx.restore();
     }
     if (options.zones)
         for (const z of world.authoring.zones.query(b))

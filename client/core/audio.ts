@@ -1,6 +1,8 @@
 import type { Actor, GameEvent, Vec2 } from '../../shared/types';
 import type { BossWindup } from '../../shared/bosses';
 import type { ZoneMusic } from '../../shared/world-schema';
+import { SoundPointPlayer } from './sound-points';
+import type { WorldSoundPoint } from '../../shared/world-schema';
 import { ZoneMusicPlayer } from './zone-music';
 import { AUDIO_STORAGE_KEY, parseAudioSettings, type AudioSettings } from '../controls/audio-settings';
 
@@ -64,6 +66,7 @@ export class GameAudio {
   private voices = 0;
   private active = false;
   private music?: ZoneMusicPlayer;
+  private soundPoints?: SoundPointPlayer;
   private readonly cues = new SoundCues();
   muted = false;
   settings: AudioSettings = parseAudioSettings(null);
@@ -80,6 +83,8 @@ export class GameAudio {
         const context = new AudioContext();
         this.context = context;
         this.music = new ZoneMusicPlayer(context);
+        this.soundPoints = new SoundPointPlayer(context);
+        this.soundPoints.setVolume(this.settings.music); this.soundPoints.setMuted(this.muted);
         this.music.setVolume(this.settings.music); this.music.setMuted(this.muted);
         this.master = context.createGain();
         this.master.gain.value = this.active && !this.muted ? 0.45 * this.settings.effects : 0;
@@ -95,18 +100,24 @@ export class GameAudio {
   setMuted(muted: boolean): void {
     this.muted = muted;
     this.music?.setMuted(muted);
+    this.soundPoints?.setMuted(muted);
     if (this.master && this.context) this.master.gain.setTargetAtTime(muted || !this.active ? 0 : 0.45 * this.settings.effects, this.context.currentTime, 0.015);
     try { localStorage.setItem('riftlands.audio.muted', String(muted)); } catch { /* Optional storage. */ }
     if (!muted) this.unlock();
   }
 
-  reset(stopMusic = true): void { this.cues.reset(); if (stopMusic) this.music?.stop(); }
+  reset(stopMusic = true): void { this.cues.reset(); if (stopMusic) { this.music?.stop(); this.soundPoints?.stop(); } }
 
   setVolumes(settings: AudioSettings): void {
     this.settings = parseAudioSettings(JSON.stringify(settings));
     this.music?.setVolume(this.settings.music);
+    this.soundPoints?.setVolume(this.settings.music);
     if (this.master && this.context) this.master.gain.setTargetAtTime(this.active && !this.muted ? .45 * this.settings.effects : 0, this.context.currentTime, .015);
     try { localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(this.settings)); } catch { /* Optional storage. */ }
+  }
+
+  setSoundPoints(points: readonly WorldSoundPoint[], listener: Vec2, mapId: string): void {
+    if (this.active && this.context?.state === 'running') this.soundPoints?.update(points, listener, mapId);
   }
 
   setMusic(track?: ZoneMusic): void {

@@ -1,3 +1,5 @@
+import { setNpcContentCatalog } from '../core/npc-content';
+import { npcVariant } from '../../shared/npc-variants';
 import { ACTOR_CATALOG, parseActorCatalog, playerDrawSize, type ActorCatalog, type ActorVisual } from '../../shared/actor-catalog';
 import type { Actor, ClassId } from '../../shared/types';
 import type { BossWindup } from '../../shared/bosses';
@@ -17,11 +19,11 @@ export class CatalogSpriteRenderer {
   private readonly sprites = new ActorSpriteRenderer();
   playerDrawSize(classId: ClassId): number { return playerDrawSize(this.catalog, classId); }
   async prepare(): Promise<void> {
-    this.catalog = await loadCatalog();
+    this.catalog = await loadCatalog(); setNpcContentCatalog(this.catalog);
     await Promise.all(Object.values({ ...ACTOR_CATALOG.skins, ...this.catalog.skins }).map(v => this.sprites.prepare(v).catch(error => console.warn(error))));
   }
   visual(actor: Actor): ActorVisual | undefined {
-    const skin = actor.npcKind === 'boss' ? actor.bossSkin : actor.npcKind ? this.catalog.npcSkins?.[actor.npcKind] ?? ACTOR_CATALOG.npcSkins?.[actor.npcKind] : undefined;
+    const skin = actor.npcKind === 'boss' ? actor.bossSkin : actor.npcKind ? npcVariant(this.catalog, actor.npcKind, actor.npcVariantId)?.skin ?? this.catalog.npcSkins?.[actor.npcKind] ?? ACTOR_CATALOG.npcSkins?.[actor.npcKind] : undefined;
     return skin ? this.catalog.skins[skin] ?? ACTOR_CATALOG.skins[skin] : undefined;
   }
   drawNpc(ctx: CanvasRenderingContext2D, actor: Actor, elapsed: number, moving: boolean, row: number): boolean {
