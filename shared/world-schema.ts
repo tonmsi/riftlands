@@ -55,9 +55,16 @@ export type ZoneShape = { kind: 'rect'; x: number; y: number; width: number; hei
   | { kind: 'circle'; x: number; y: number; radius: number };
 export interface NpcRule { density: number; maxPerChunk: number; weights: Record<NpcKind, number>; }
 export interface ZoneMusic { src: string; volume: number; }
+export interface ClimateBand { at: number; value: number; curve?: number; }
 export interface WorldZone {
   id: string; name: string; priority: number; shape: ZoneShape;
   temperature?: number; moisture?: number; pvp?: boolean; generateAssets?: boolean;
+  /** Inward climate blending depth, as a fraction of radius / shortest half-side. Missing preserves hard overrides. */
+  climateTransition?: number;
+  /** Independent curve strength per climate property; 1 is linear, missing is 3. */
+  climateCurves?: { temperature?: number; moisture?: number };
+  /** Up to three absolute climate targets; positions are fractions of the transition depth. Last position is 1. */
+  climateBands?: { temperature?: ClimateBand[]; moisture?: ClimateBand[] };
   npcs?: NpcRule; arenaId?: string;
   /** Entering this area advances the matching reach-area quest, on the server. */
   questId?: string;
@@ -234,6 +241,24 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     if (s.kind === 'rect' ? !integer(s.width, 1, 1_000_000) || !integer(s.height, 1, 1_000_000)
       : s.kind !== 'circle' || !finite(s.radius, .25, 1_000_000)) fail(`forma di ${z.id}`);
     for (const k of ['temperature', 'moisture']) if (z[k] !== undefined && !finite(z[k], 0, 1)) fail(`clima di ${z.id}`);
+    if (z.climateTransition !== undefined && !finite(z.climateTransition, .01, 1)) fail(`transizione clima di ${z.id}`);
+    if (z.climateCurves !== undefined && (!object(z.climateCurves)
+      || Object.keys(z.climateCurves).some(k => !['temperature', 'moisture'].includes(k))
+      || ['temperature', 'moisture'].some(k => z.climateCurves[k] !== undefined && !finite(z.climateCurves[k], .25, 12)))) fail(`curve clima di ${z.id}`);
+    if (z.climateBands !== undefined) {
+      if (!object(z.climateBands) || Object.keys(z.climateBands).some(k => !['temperature', 'moisture'].includes(k))) fail(`bande clima di ${z.id}`);
+      for (const key of ['temperature', 'moisture']) if (z.climateBands[key] !== undefined) {
+        const bands = z.climateBands[key];
+        if (!Array.isArray(bands) || bands.length < 1 || bands.length > 3) fail(`bande clima di ${z.id}`);
+        let previous = 0;
+        for (const band of bands) {
+          if (!object(band) || !finite(band.at, .001, 1) || band.at <= previous || !finite(band.value, 0, 1)
+            || (band.curve !== undefined && !finite(band.curve, .25, 12))) fail(`bande clima di ${z.id}`);
+          previous = band.at;
+        }
+        if (previous !== 1) fail(`ultima banda clima di ${z.id}: posizione 100% richiesta`);
+      }
+    }
     for (const k of ['pvp', 'generateAssets']) if (z[k] !== undefined && !boolean(z[k])) fail(`regole di ${z.id}`);
     if (z.arenaId !== undefined && !id(z.arenaId)) fail('arena');
     if (z.questId !== undefined && !id(z.questId)) fail('missione zona');

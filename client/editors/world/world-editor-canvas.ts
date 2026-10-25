@@ -2,7 +2,7 @@ import { TerrainRenderer } from '../../render/terrain-renderer';
 import { TILE_SIZE, CHUNK_TILES } from '../../../shared/config';
 import type { Vec2 } from '../../../shared/types';
 import type { World } from '../../../shared/world';
-import { shapeBounds } from '../../../shared/world-authoring';
+import { shapeBounds, overlaps } from '../../../shared/world-authoring';
 import type { WorldDocument, WorldAsset, WorldZone } from '../../../shared/world-schema';
 import { worldAssetVisual, worldAssetImageBounds } from '../../../shared/world-schema';
 import { NPC_DEFINITIONS } from '../../../shared/npcs';
@@ -13,11 +13,13 @@ import { assetCellColumns, assetCellRows, assetCellSubdivision } from '../../../
 import { AssetGridCamera } from '../../render/world-asset-view';
 import { terrains } from './world-maker-layout';
 import type { AssetPlacement } from '../../../shared/world-schema';
-import { placedGeometry } from '../../../shared/elevation';
+import { placedGeometry, rectBounds } from '../../../shared/elevation';
 import { drawElevationSurface, drawElevationStair } from '../../render/elevation-art';
 import { drawTerrainCliff } from '../../render/cliff-art';
 import { assetVisible, drawVisibleAsset, exposedSurfaceParts, floorVisible, type ElevationVisibility } from './elevation-visibility';
 import { compareAssetDrawOrder } from './world-picking';
+import { WorldLightArt } from './world-light-art';
+const lightArtists = new WeakMap<WorldAssetArt, WorldLightArt>();
 const terrainPainters = new WeakMap<HTMLCanvasElement, TerrainRenderer>();
 const terrainViews = new WeakMap<HTMLCanvasElement, { key: string; world: World; canvas: HTMLCanvasElement; placements: AssetPlacement[] }>();
 export interface EditorView {
@@ -30,6 +32,7 @@ export interface EditorSelection {
     id: string;
 }
 export interface MapOptions {
+    lightMode?: boolean;
     visibleElevations?: ElevationVisibility;
     activeElevation?: number;
     painting?: boolean;
@@ -51,12 +54,12 @@ export interface MapOptions {
     tool: string;
     activeAsset?: WorldAsset;
 }
-function sizeCanvas(c: HTMLCanvasElement): {
+function sizeCanvas(c: HTMLCanvasElement, maxDpr = 2): {
     width: number;
     height: number;
     dpr: number;
 } {
-    const r = c.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+    const r = c.getBoundingClientRect(), dpr = Math.min(maxDpr, devicePixelRatio || 1);
     const width = Math.max(1, r.width), height = Math.max(1, r.height);
     if (c.width !== Math.round(width * dpr) || c.height !== Math.round(height * dpr)) {
         c.width = Math.round(width * dpr);
@@ -65,26 +68,29 @@ function sizeCanvas(c: HTMLCanvasElement): {
     return { width, height, dpr };
 }
 export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draft: WorldDocument, view: EditorView, art: WorldAssetArt, options: MapOptions): boolean {
-    const time = performance.now();
+    const light = options.lightMode === true;
+    const time = light ? 0 : performance.now();
+    let lightArt = lightArtists.get(art);
+    if (light && !lightArt) { lightArt = new WorldLightArt(art); lightArtists.set(art, lightArt); }
     let animated = false;
     const ctx = canvas.getContext('2d')!, selected = options.selected, gesture = options.gesture, pointerTile = options.pointerTile;
     const selectedIds = new Set(options.selectedObjects?.map(item => `${item.kind}:${item.id}`));
     if (selected) selectedIds.add(`${selected.kind}:${selected.id}`);
     const bounds = () => { const r = canvas.getBoundingClientRect(); return { left: -view.x / view.scale, top: -view.y / view.scale, right: (r.width - view.x) / view.scale, bottom: (r.height - view.y) / view.scale }; };
-    const { width, height, dpr } = sizeCanvas(canvas), b = bounds(), s = view.scale;
+    const { width, height, dpr } = sizeCanvas(canvas, light ? 1 : 2), b = bounds(), s = view.scale;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#131d16';
     ctx.fillRect(0, 0, width, height);
     ctx.translate(view.x, view.y);
     // At distant zoom, bounded sampling shows landforms rather than generating millions of tiles.
-    const step = Math.max(1, Math.ceil(Math.sqrt((b.right - b.left) * (b.bottom - b.top) / 16000)));
+    const step = Math.max(1, Math.ceil(Math.sqrt((b.right - b.left) * (b.bottom - b.top) / (light ? 6000 : 16000))));
     const visible = options.visibleElevations ?? null;
-    const key = `${terrainPainters.get(canvas)?.spriteRevision ?? 0}:${art.revision}:${JSON.stringify(visible)}:${options.painting}:${world.authoringRevision}:${world.lockRevision}:${view.x}:${view.y}:${s}:${width}:${height}:${dpr}`;
+    const key = `${light}:${terrainPainters.get(canvas)?.spriteRevision ?? 0}:${art.revision}:${JSON.stringify(visible)}:${options.painting}:${world.authoringRevision}:${world.lockRevision}:${view.x}:${view.y}:${s}:${width}:${height}:${dpr}`;
     let cached = terrainViews.get(canvas);
     if (!cached || cached.world !== world || cached.key !== key) {
         const bitmap = cached?.canvas ?? document.createElement('canvas'); bitmap.width = canvas.width; bitmap.height = canvas.height;
         const paint = bitmap.getContext('2d')!; paint.setTransform(dpr, 0, 0, dpr, view.x * dpr, view.y * dpr);
-        if (options.painting && step === 1 && s >= 12) {
+        if (!light && options.painting && step === 1 && s >= 12) {
             let painter = terrainPainters.get(canvas);
             if (!painter) { painter = new TerrainRenderer(paint); terrainPainters.set(canvas, painter); }
             paint.scale(s / TILE_SIZE, s / TILE_SIZE);
@@ -96,8 +102,14 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
                 paint.fillRect(x * s, y * s, step * s + .5, step * s + .5);
             }
         const placements = step === 1 ? world.assetsIn(b) : world.authoring.visibleAssetsIn(b);
-        const geometry = world.elevation.authoredGeometry(b);
-        const cliffs = world.elevation.cliffs(b);
+        // Light previews query authored rectangles directly, without constructing cliff masks/meshes.
+        const authored = draft.geometry;
+        const geometry = light ? {
+            surfaces: (authored?.surfaces ?? []).filter(r => overlaps(rectBounds(r), b)),
+            solids: (authored?.solids ?? []).filter(r => overlaps(rectBounds(r), b)),
+            stairs: (authored?.stairs ?? []).filter(r => overlaps(rectBounds(r), b)),
+        } : world.elevation.authoredGeometry(b);
+        const cliffs = light ? [] : world.elevation.cliffs(b);
         const groundBitmap = geometry.surfaces.some(top => top.painted && top.ground) ? document.createElement('canvas') : undefined;
         if (groundBitmap) { groundBitmap.width = bitmap.width; groundBitmap.height = bitmap.height; groundBitmap.getContext('2d')!.drawImage(bitmap,0,0); }
         for (const p of placements) {
@@ -117,40 +129,53 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
             paint.restore();
         }
         paint.save(); paint.scale(s / TILE_SIZE, s / TILE_SIZE);
-        for (const cliff of cliffs) if (cliffLevels(draft,cliff,true).some(e=>floorVisible(visible,e))) drawTerrainCliff(paint, cliff, art, geometry.stairs, { document: draft, time, visibleFloors:visible, version:world });
+        for (const cliff of cliffs) if (cliffLevels(draft,cliff,true).some(e=>floorVisible(visible,e))) {
+            drawTerrainCliff(paint, cliff, art, geometry.stairs, { document: draft, time, visibleFloors:visible, version:world });
+        }
         for (const top of geometry.surfaces.filter(top => !top.id.includes('/') && floorVisible(visible, top.elevation)).sort((a, b) => a.elevation - b.elevation))
             for (const part of exposedSurfaceParts(top, geometry)) {
                 if (part.painted && part.ground && groundBitmap) {
                     paint.save(); paint.beginPath(); paint.rect(part.x*TILE_SIZE,part.y*TILE_SIZE,part.width*TILE_SIZE,part.height*TILE_SIZE); paint.clip();
                     paint.setTransform(1,0,0,1,0,0); paint.drawImage(groundBitmap,0,0); paint.restore();
-                } else if (!part.ground) {
+                } else if (!part.ground && !light) {
                     let painter = terrainPainters.get(canvas);
                     if (!painter) { painter = new TerrainRenderer(paint); terrainPainters.set(canvas, painter); }
                     painter.drawSurfaceMaterial(world, paint, part, time);
                 } else drawElevationSurface(paint, part);
+                if (light && part.elevation !== 0) {
+                    paint.strokeStyle = '#515849'; paint.lineWidth = TILE_SIZE / s;
+                    paint.strokeRect(part.x*TILE_SIZE, part.y*TILE_SIZE, part.width*TILE_SIZE, part.height*TILE_SIZE);
+                }
             }
         for (const stair of geometry.stairs.filter(stair => !stair.id.includes('/'))) {
-            if (floorVisible(visible, stair.from)) drawElevationStair(paint, stair, stair.from, art);
-            if (floorVisible(visible, stair.to)) drawElevationStair(paint, stair, stair.to, art);
+            if (floorVisible(visible, stair.from)) drawElevationStair(paint, stair, stair.from, light ? undefined : art);
+            if (floorVisible(visible, stair.to)) drawElevationStair(paint, stair, stair.to, light ? undefined : art);
         }
         paint.restore();
         placements.sort((p, q) => compareAssetDrawOrder(p, q, world.authoring.assets));
+        if (light) for (const p of placements) {
+            const a = world.authoring.assets.get(p.assetId)!;
+            const base = p.baseElevation ?? world.elevation.terrainElevationAt(p.x + .5, p.y + .5);
+            if (assetVisible(a, base, visible)) drawVisibleAsset(paint, lightArt!, a, p, base, visible, s, 0);
+        }
         cached = { key, world, canvas: bitmap, placements }; terrainViews.set(canvas, cached);
     }
     ctx.drawImage(cached.canvas, -view.x, -view.y, width, height);
-    if(visible === null && options.painting&&step===1&&s>=12){
+    if(!light && visible === null && options.painting&&step===1&&s>=12){
         ctx.save();ctx.scale(s/TILE_SIZE,s/TILE_SIZE);
         animated=terrainPainters.get(canvas)?.drawCoastMotion(ctx,{left:b.left*TILE_SIZE,top:b.top*TILE_SIZE,right:b.right*TILE_SIZE,bottom:b.bottom*TILE_SIZE},time)??false;
         ctx.restore();
     }
-    animated ||= terrainPainters.get(canvas)?.spritesPending ?? false;
+    if (!light) animated ||= terrainPainters.get(canvas)?.spritesPending ?? false;
     const placements = cached.placements;
-    for (const p of placements) {
+    for (const p of light && !options.cells && !selectedIds.size ? [] : placements) {
         const a = world.authoring.assets.get(p.assetId)!;
         const base = p.baseElevation ?? world.elevation.terrainElevationAt(p.x + .5, p.y + .5);
         if (!assetVisible(a, base, visible)) continue;
-        drawVisibleAsset(ctx, art, a, p, base, visible, s, time);
-        animated ||= worldAssetVisual(a).kind === 'fire';
+        if (!light) {
+            drawVisibleAsset(ctx, art, a, p, base, visible, s, time);
+            animated ||= worldAssetVisual(a).kind === 'fire';
+        }
         if (selectedIds.has(`placement:${p.id}`)) {
             ctx.strokeStyle = '#f0df9d';
             ctx.lineWidth = 2;
@@ -257,8 +282,8 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         ctx.setLineDash([5, 4]);
         ctx.strokeRect(pointerTile.x * s, pointerTile.y * s, a.columns * s, a.rows * s);
         ctx.setLineDash([]);
-        drawVisibleAsset(ctx, art, a, { ...pointerTile, id: 'preview', assetId: a.id }, options.activeElevation ?? 0, visible, s, time, .45);
-        animated ||= worldAssetVisual(a).kind === 'fire';
+        drawVisibleAsset(ctx, light ? lightArt! : art, a, { ...pointerTile, id: 'preview', assetId: a.id }, options.activeElevation ?? 0, visible, s, time, .45);
+        animated ||= !light && worldAssetVisual(a).kind === 'fire';
     }
     for (const room of world.rooms) {
       if (!floorVisible(visible, 0)) continue;

@@ -696,35 +696,24 @@ export class EnvironmentArt {
     ctx.fill();
   }
 
-  drawSnowFringe(ctx: CanvasRenderingContext2D, x: number, y: number, variation: number, level: number): void {
-    const rng = random(Math.floor(variation * 100000) + level * 7919);
+  drawSnowFringe(ctx: CanvasRenderingContext2D, x: number, y: number, variation: number, coverage: number): void {
+    coverage = Math.max(0, Math.min(1, coverage));
+    if (coverage <= 0) return;
     const shadowColor = 'rgba(165, 205, 225, 0.42)';
-
-    if (level === 1 && rng() > 0.22) return;
-    if (level === 2 && rng() > 0.4) return;
-    if (level === 3 && rng() > 0.68) return;
-
-    const numPatches = (level === 3 && rng() > 0.45) || (level === 2 && rng() > 0.75) ? 2 : 1;
-    const p1x = x + 8 + rng() * 32;
-    const p1y = y + 8 + rng() * 32;
-    const spots: [number, number][] = [[p1x, p1y]];
-
-    if (numPatches === 2) {
-      const angle = rng() * TAU;
-      const dist = 14 + rng() * 14;
-      const p2x = Math.max(x + 6, Math.min(x + 42, p1x + Math.cos(angle) * dist));
-      const p2y = Math.max(y + 6, Math.min(y + 42, p1y + Math.sin(angle) * dist));
-      spots.push([p2x, p2y]);
-    }
-
-    for (let i = 0; i < spots.length; i++) {
-      const [px, py] = spots[i];
-      const baseR = level === 3 ? 10 + rng() * 6 : level === 2 ? 5 + rng() * 3.5 : 2.5 + rng() * 2;
+    for (let i = 0; i < 2; i++) {
+      // Independent, temperature-invariant seeds keep patches in place as they grow/fade.
+      const rng = random(Math.floor(variation * 100000) + i * 7919);
+      const delay = rng() * .35;
+      const amount = Math.max(0, (coverage - delay) / (1 - delay));
+      if (amount <= 0) continue;
+      const px = x + 8 + rng() * 32, py = y + 8 + rng() * 32;
+      const baseR = (8 + rng() * 8) * Math.sqrt(amount);
       const rx = baseR * (1.15 + rng() * 0.4);
       const ry = baseR * (0.42 + rng() * 0.25);
-
+      ctx.save(); ctx.globalAlpha *= amount;
       this.drawOrganicBlob(ctx, px, py + 1.2, rx * 1.05, ry * 1.05, rng, shadowColor);
       this.drawOrganicBlob(ctx, px - 0.3, py, rx, ry, rng, '#ffffff');
+      ctx.restore();
     }
   }
 

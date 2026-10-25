@@ -34,6 +34,11 @@ export function groundColor(moisture: number, temperature = 1): string {
   return `rgb(${finalRgb.join(',')})`;
 }
 
+/** Continuous snow on painted ground, without changing terrain/collision thresholds. */
+export function climateSnowCoverage(temperature: number): number {
+  return Math.max(0, Math.min(1, (.38 - temperature) / .28));
+}
+
 export function pathColor(temperature: number): string {
   // Oltre 0.34 è la strada estiva classica dorata
   if (temperature >= 0.34) return TERRAIN.path;

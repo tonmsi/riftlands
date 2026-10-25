@@ -45,8 +45,10 @@ import { installWorldWorkspace } from './world-workspace';
 import { locateWorldIssue, type WorldIssueLocation } from './world-problems';
 import { mapDocument } from '../../../shared/warps';
 import { installWarpEditor } from './warp-editor';
+import { installZoneClimateControls } from './world-climate-controls';
 const root = document.getElementById('world-maker')!;
 root.innerHTML = worldMakerLayout;
+root.querySelector('.top-actions')!.insertAdjacentHTML('afterbegin', '<label class="check light-mode-toggle" title="Anteprima leggera: senza mare animato, maschere e ombre; asset semplificati. Il progetto e il gioco mantengono tutti gli effetti."><input id="light-mode" type="checkbox">Light mode <small>solo editor</small></label>');
 organizeWorldPanels(root);
 installActorEditor();
 installPlayerEditor();
@@ -55,6 +57,13 @@ const input = (id: string) => el<HTMLInputElement>(id);
 const val = (id: string) => (el(id) as HTMLInputElement | HTMLSelectElement).value;
 const num = (id: string) => Number(val(id));
 const set = (id: string, value: unknown) => { (el(id) as HTMLInputElement | HTMLSelectElement).value = String(value ?? ''); };
+try { input('light-mode').checked = localStorage.getItem('riftlands.world-maker.light-mode') === 'true'; } catch { /* Optional editor preference. */ }
+input('zone-template').closest('label')!.insertAdjacentHTML('afterend', '<label class="check" title="Temperatura e umidità cambiano gradualmente dal bordo verso l’interno."><input id="zone-create-climate-transition" type="checkbox">Clima graduale nelle nuove zone</label>');
+input('zone-moisture').closest('.pair')!.insertAdjacentHTML('afterend', '<label class="check"><input id="zone-climate-transition" type="checkbox">Sfuma temperatura e umidità verso l’interno</label><label id="zone-climate-depth-label" hidden>Profondità sfumatura %<input id="zone-climate-depth" type="number" min="1" max="100" step="1" value="100"></label><p class="hint">Al bordo eredita il clima circostante, poi raggiunge i valori impostati. 100%: al centro del cerchio o a metà del lato più corto del rettangolo; 50%: a metà di questa distanza, con un interno uniforme. Vale solo per temperatura e umidità non vuote. Disattivato: cambio immediato al bordo.</p>');
+const climateControls = installZoneClimateControls(root);
+const refreshClimateTransitionControl = () => { el('zone-climate-depth-label').hidden = !input('zone-climate-transition').checked; climateControls.refresh(); };
+input('zone-climate-depth').title = 'La variazione è più rapida nella parte esterna e rallenta avvicinandosi al valore interno.';
+input('zone-climate-transition').addEventListener('change', refreshClimateTransitionControl);
 let failedChanges = 0;
 const on = (id: string, action: () => void | Promise<void>) => el(id).addEventListener('click', () => { void Promise.resolve().then(async () => { await settleGesture(); const failures=failedChanges; await action(); if(failures===failedChanges)acceptInspectorAction(id); }).catch(report); });
 const report = (e: unknown) => { el('status').textContent = e instanceof Error ? e.message : String(e); };
@@ -170,8 +179,37 @@ input('asset-cell-subdivision').addEventListener('change',()=>{
 input('cell-blocked').closest('.pair')!.insertAdjacentHTML('afterend','<label>Piano delle sottocelle che dipingi<select id="cell-floor"><option value="keep">Mantieni quota esistente</option><option value="0">0 · stessa quota della base</option><option value="1">+1 · un piano sopra la base</option><option value="-1">−1 · un piano sotto la base</option><option value="custom">Quota relativa personalizzata…</option><option value="inherit">Rimuovi quota personalizzata</option></select></label><label id="cell-floor-custom-label" hidden>Offset dalla base dell’asset<input id="cell-floor-custom" type="number" min="-128" max="127" step="1" value="1"></label><p class="hint">Calpestabile + quota +1 crea il pavimento superiore solo nelle sottocelle dipinte. Nei cliff-grid la base è il terreno inferiore. Per cambiare piano configura una scala o un passaggio sul terreno o su un PNG.</p>');
 input('cell-floor').addEventListener('change',()=>{el('cell-floor-custom-label').hidden=val('cell-floor')!=='custom';});
 input('cell-floor-custom').addEventListener('change',()=>set('cell-floor-custom',Math.max(-128,Math.min(127,Math.round(num('cell-floor-custom'))||0))));
+const cellVisibilityLabels: Record<AssetCell['visibility'], string> = {
+    normal: 'Normale', hide: 'Nascondiglio', fade: 'Trasparente al passaggio', 'hide-fade': 'Nascondiglio + trasparenza',
+};
+const cellControls = input('cell-blocked').closest('.pair')!;
+input('cell-blocked').closest('label')!.firstChild!.textContent = 'Movimento da applicare';
+input('cell-visibility').closest('label')!.firstChild!.textContent = 'Visibilità da applicare';
+cellControls.insertAdjacentHTML('beforebegin', '<h3>Proprietà delle celle</h3><p id="asset-cell-state" class="cell-status" aria-live="polite"></p><p class="cell-status">Scegli i valori da applicare, poi clicca sui quadratini o premi “Applica a tutte le celle”. I valori misti restano invariati finché non scegli un valore.</p>');
+cellControls.insertAdjacentHTML('afterend', '<p id="asset-cell-pending" class="cell-status" role="status" hidden>Valori da applicare: dipingi i quadratini o premi “Applica a tutte le celle”.</p>');
+for (const id of ['cell-blocked', 'cell-visibility']) {
+    const mixed = new Option('Valori misti · mantieni', '');
+    el<HTMLSelectElement>(id).prepend(mixed);
+    el(id).addEventListener('change', () => { el('asset-cell-pending').hidden = false; });
+}
+let cellControlsSignature = '';
+function refreshCellControls(a: WorldAsset): void {
+    const counts = new Map<string, number>();
+    for (const c of a.cells) {
+        const label = `${c.blocked ? 'Bloccante' : 'Calpestabile'} · ${cellVisibilityLabels[c.visibility]}`;
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    el('asset-cell-state').textContent = `Stato attuale di ${a.name}: ${[...counts].map(([label, count]) => `${count} ${count === 1 ? 'cella' : 'celle'} ${label}`).join('; ')}.`;
+    const signature = JSON.stringify([a.id, a.cells]);
+    if (signature === cellControlsSignature) return;
+    cellControlsSignature = signature;
+    const first = a.cells[0];
+    set('cell-blocked', a.cells.every(c => c.blocked === first.blocked) ? first.blocked : '');
+    set('cell-visibility', a.cells.every(c => c.visibility === first.visibility) ? first.visibility : '');
+    el('asset-cell-pending').hidden = true;
+}
 function paintedAssetCell(previous:AssetCell):AssetCell {
-    const cell:AssetCell={blocked:val('cell-blocked')==='true',visibility:val('cell-visibility') as AssetCell['visibility'],...(previous.elevation!==undefined?{elevation:previous.elevation}:{})};
+    const cell:AssetCell={blocked:val('cell-blocked')===''?previous.blocked:val('cell-blocked')==='true',visibility:(val('cell-visibility')||previous.visibility) as AssetCell['visibility'],...(previous.elevation!==undefined?{elevation:previous.elevation}:{})};
     const mode=val('cell-floor');if(mode==='inherit')delete cell.elevation;
     else if(mode!=='keep') {const elevation=mode==='custom'?num('cell-floor-custom'):Number(mode);if(!validElevation(elevation))throw new Error('La quota della sottocella deve essere intera da -128 a 127.');cell.elevation=elevation;}
     return cell;
@@ -369,9 +407,11 @@ function refresh(): void {
         refreshAsset(active()!);
     el('zone-list').replaceChildren(...surface().zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
     inspectorDrafts.restore();
+    refreshClimateTransitionControl();
     root.dispatchEvent(new Event('world-refresh'));
 }
 function refreshAsset(a: WorldAsset): void {
+    refreshCellControls(a);
     const generation = (a.variantOf ? draft.assets.find(other => other.id === a.variantOf) : a)!.generation;
     set('asset-cell-subdivision',assetCellSubdivision(a));
     el('asset-cell-info').textContent=`Griglia: ${assetCellColumns(a)} × ${assetCellRows(a)} celle. Ogni cella: 1/${assetCellSubdivision(a)} di tile (${48/assetCellSubdivision(a)} unità).`;
@@ -444,6 +484,9 @@ function refreshZone(z: WorldZone): void {
     set('zone-height', z.shape.kind === 'rect' ? z.shape.height : '');
     set('zone-temperature', z.temperature);
     set('zone-moisture', z.moisture);
+    input('zone-climate-transition').checked = z.climateTransition !== undefined;
+    set('zone-climate-depth', (z.climateTransition ?? 1) * 100);
+    climateControls.fill(z);
     set('zone-pvp', z.pvp);
     set('zone-generation', z.generateAssets);
     set('zone-arena', z.arenaId);
@@ -514,9 +557,10 @@ function refreshSelection(): void {
 }
 function draw(): void {
     ensureWorld();
-    const animated = drawWorldEditorMap(canvas, world, mapDocument(draft, activeMap), view, art, { painting: input('show-painting').checked, grid: input('show-grid').checked, cells: input('show-cells').checked,
+    const lightMode = input('light-mode').checked;
+    const animated = drawWorldEditorMap(canvas, world, mapDocument(draft, activeMap), view, art, { lightMode, painting: input('show-painting').checked, grid: input('show-grid').checked, cells: input('show-cells').checked,
         zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, selectedObjects, gesture, pointerTile, tool, activeAsset: active() && effectiveAsset(active()!), activeElevation: elevationEditor.elevation(), visibleElevations: elevationEditor.visibility() });
-    if ((animated || (!el('asset-inspector').hidden && active() && worldAssetVisual(active()!).kind === 'fire')) && animationTimer === undefined)
+    if (!lightMode && (animated || (!el('asset-inspector').hidden && active() && worldAssetVisual(active()!).kind === 'fire')) && animationTimer === undefined)
         animationTimer = setTimeout(() => { animationTimer = undefined; schedule(); }, 33);
     warpEditor.draw(canvas, view, elevationEditor.visibility());
     const ctx = canvas.getContext('2d')!, dpr = canvas.width / Math.max(1, canvas.getBoundingClientRect().width);
@@ -869,6 +913,7 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
     if (g.tool === 'zone' && !g.pan) {
         const shape = { kind: 'rect' as const, x: Math.min(g.start.x, g.last.x), y: Math.min(g.start.y, g.last.y), width: Math.abs(g.start.x - g.last.x) + 1, height: Math.abs(g.start.y - g.last.y) + 1 };
         const z: WorldZone = { id: uid('zone'), name: 'Nuova zona', priority: 20, shape };
+        if (input('zone-create-climate-transition').checked) z.climateTransition = 1;
         const template = val('zone-template');
         if (template === 'safe')
             z.pvp = false;
@@ -883,6 +928,11 @@ function finishGesture(event?: PointerEvent, cancel = false): void {
             z.npcs = { density: 1, maxPerChunk: 3, weights: { slime: 100, wisp: 0, sentinel: 0 } };
         surface().zones.push(z);
         selected = { kind: 'zone', id: z.id };
+    }
+    if (g.cell && !g.pan && !g.image && active()) {
+        // Keep the chosen brush for the next stroke, even when the grid becomes mixed.
+        cellControlsSignature = JSON.stringify([active()!.id, active()!.cells]);
+        el('asset-cell-pending').hidden = true;
     }
     gesture = null;
     if (!g.pan)
@@ -1020,7 +1070,7 @@ input('asset-width').addEventListener('input', () => { const a = active(); if (a
     set('asset-height', Math.round(num('asset-width') * a.height / a.width * 1000) / 1000); });
 input('asset-height').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
     set('asset-width', Math.round(num('asset-height') * a.width / a.height * 1000) / 1000); });
-on('fill-cells', () => change(() => { const a = active()!; a.cells = a.cells.map(paintedAssetCell); }));
+on('fill-cells', () => change(() => { const a = active()!; a.cells = a.cells.map(paintedAssetCell); el('asset-cell-pending').hidden = true; }));
 on('asset-fade-update', () => change(() => { active()!.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') }; }));
 on('gen-update', () => change(() => { const a = active()!; a.generation = { enabled: input('gen-enabled').checked, category: val('gen-category').trim(), temperature: [num('gen-temp-min'), num('gen-temp-max')], moisture: [num('gen-moist-min'), num('gen-moist-max')], density: num('gen-density') / 100, spacing: num('gen-spacing'), terrains: [...el('gen-terrains').querySelectorAll<HTMLInputElement>('input:checked')].map(c => c.value as TileKind) }; }));
 on('asset-delete', () => change(() => { const a = active()!;
@@ -1061,7 +1111,13 @@ on('zone-update', () => change(() => { const z = surface().zones.find(z => z.id 
         delete z[key];
     else
         z[key] = num(id);
-} for (const [key, id] of [['pvp', 'zone-pvp'], ['generateAssets', 'zone-generation']] as const) {
+} if (input('zone-climate-transition').checked) {
+    const depth = num('zone-climate-depth');
+    if (!Number.isFinite(depth) || depth < 1 || depth > 100) throw new Error('Profondità sfumatura clima: da 1 a 100%.');
+    z.climateTransition = depth / 100;
+} else delete z.climateTransition;
+climateControls.read(z);
+for (const [key, id] of [['pvp', 'zone-pvp'], ['generateAssets', 'zone-generation']] as const) {
     if (val(id) === '')
         delete z[key];
     else
@@ -1128,6 +1184,11 @@ on('goto-confirm', () => { const x = num('goto-x'), y = num('goto-y'); if (!Numb
 on('properties-toggle', () => { root.querySelector('.inspector')!.classList.toggle('collapsed'); root.classList.toggle('inspector-hidden', root.querySelector('.inspector')!.classList.contains('collapsed')); schedule(); });
 for (const id of ['show-grid', 'show-zones', 'show-cells', 'show-npcs', 'show-painting'])
     input(id).addEventListener('change', () => schedule());
+input('light-mode').addEventListener('change', () => {
+    try { localStorage.setItem('riftlands.world-maker.light-mode', String(input('light-mode').checked)); } catch { /* Optional editor preference. */ }
+    if (animationTimer !== undefined) { clearTimeout(animationTimer); animationTimer = undefined; }
+    schedule();
+});
 input('preview-fade').addEventListener('change', () => schedule());
 input('asset-search').addEventListener('input', palette);
 const catalogDialog = el<HTMLDialogElement>('asset-catalog-dialog');

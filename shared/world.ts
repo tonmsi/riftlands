@@ -123,16 +123,16 @@ export class World {
   }
 
   getMoisture(x: number, y: number): number {
-    return this.mode === 'world' ? this.authoring.rule(x / TILE_SIZE, y / TILE_SIZE, 'moisture') ?? noise(x / 1250, y / 1250, this.seed + 411) : 0;
+    return this.mode === 'world' ? this.authoring.climateAt(x / TILE_SIZE, y / TILE_SIZE, 'moisture', () => noise(x / 1250, y / 1250, this.seed + 411)) : 0;
   }
 
   getTemperature(tx: number, ty: number): number {
     if (this.mode !== 'world') return 1;
-    const override = this.authoring.rule(tx + .5, ty + .5, 'temperature');
-    if (override !== undefined) return override;
-    const warpX = (noise(tx * 0.025, ty * 0.025, this.seed + 701) - 0.5) * 5;
-    const warpY = (noise(tx * 0.025, ty * 0.025, this.seed + 709) - 0.5) * 5;
-    return noise((tx + warpY) * 0.035, (ty - warpX) * 0.035, this.seed + 805);
+    return this.authoring.climateAt(tx + .5, ty + .5, 'temperature', () => {
+      const warpX = (noise(tx * 0.025, ty * 0.025, this.seed + 701) - 0.5) * 5;
+      const warpY = (noise(tx * 0.025, ty * 0.025, this.seed + 709) - 0.5) * 5;
+      return noise((tx + warpY) * 0.035, (ty - warpX) * 0.035, this.seed + 805);
+    });
   }
 
   getTile(tx: number, ty: number): TileKind {

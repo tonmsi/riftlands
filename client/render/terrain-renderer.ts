@@ -8,7 +8,7 @@ import { EnvironmentArt } from './environment-art';
 import { WorldAssetArt } from './world-asset-art';
 import { terrainBushAsset } from '../../shared/bush';
 import { noise } from './render-primitives';
-import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor } from './terrain-style';
+import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor, climateSnowCoverage } from './terrain-style';
 import type { RenderBounds, TerrainViewport } from './render-types';
 import { performanceLog as perf } from '../core/performance-log';
 import type { WorldSurface } from '../../shared/elevation';
@@ -500,9 +500,10 @@ export class TerrainRenderer {
               else this.maskedTerrain.motion.recordRect(tx,ty,wx,wy,width,height);
             }
           }else{
-            const cold=temperatureAt(tx,ty)<.28;
-            if(surface!=='stone')this.environmentArt.draw(ctx,surface,x,y,noise(tx,ty),0,1,1,cold);
+            const temp=temperatureAt(tx,ty);
+            if(surface!=='stone')this.environmentArt.draw(ctx,surface,x,y,noise(tx,ty),0,1,1,temp<.28);
             this.environmentArt.paintGround(ctx,surface==='stone'?'path':surface,x,y,surface==='stone');
+            if(surface==='grass'||surface==='mud'||surface==='stone')this.environmentArt.drawSnowFringe(ctx,x,y,noise(tx,ty),climateSnowCoverage(temp));
           }
         }
       }
@@ -589,8 +590,7 @@ export class TerrainRenderer {
           if (surface === 'grass' || surface === 'mud' || surface === 'stone') {
             const temp = world.getTemperature(tx, ty);
             if (temp < 0.38) {
-              const level = temp < 0.30 ? 3 : temp < 0.34 ? 2 : 1;
-              this.environmentArt.drawSnowFringe(ctx, tx * TILE_SIZE, ty * TILE_SIZE, noise(tx, ty), level);
+              this.environmentArt.drawSnowFringe(ctx, tx * TILE_SIZE, ty * TILE_SIZE, noise(tx, ty), climateSnowCoverage(temp));
             }
           }
         }

@@ -10,6 +10,7 @@ import { DEFAULT_WATER_COAST } from '../../shared/world-painting';
 import { WaterCoastArt } from './water-coast';
 import { CoastMotionArt } from './coast-motion';
 import { performanceLog as perf } from '../core/performance-log';
+import { climateSnowCoverage } from './terrain-style';
 
 export type Surface = Exclude<PaintMaterial, 'rock' | 'bush'>;
 const order: Surface[] = ['water', 'grass', 'mud', 'ice', 'path', 'snow', 'stone'];
@@ -176,7 +177,7 @@ export class PaintedTerrain {
           const temp = temperatureAt(tx,ty);
           art.draw(ctx, s, tx*TILE_SIZE, ty*TILE_SIZE, noise(tx,ty), 0, 1, 1, temp < .28);
           if ((s === 'grass' || s === 'mud') && temp < .38) {
-            art.drawSnowFringe(ctx, tx*TILE_SIZE, ty*TILE_SIZE, noise(tx,ty), temp < .30 ? 3 : temp < .34 ? 2 : 1);
+            art.drawSnowFringe(ctx, tx*TILE_SIZE, ty*TILE_SIZE, noise(tx,ty), climateSnowCoverage(temp));
           }
         }
       }

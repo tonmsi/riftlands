@@ -51185,15 +51185,8 @@
     {
       "id": "asset-4e23d71a-494b-4b21-b897-54ee6dcb65b2",
       "assetId": "deadwarriors-4",
-      "x": 133,
+      "x": 135,
       "y": 20,
-      "baseElevation": 0
-    },
-    {
-      "id": "asset-2fc0bf44-e1bb-464b-8b6c-2899253f9dea",
-      "assetId": "deadwarriors-9",
-      "x": 138,
-      "y": 21,
       "baseElevation": 0
     },
     {
@@ -51281,8 +51274,8 @@
       "priority": 25,
       "shape": {
         "kind": "circle",
-        "x": -11,
-        "y": -20,
+        "x": -1,
+        "y": -14,
         "radius": 35
       },
       "temperature": 0.1,
@@ -51296,6 +51289,26 @@
           "wisp": 100,
           "sentinel": 0
         }
+      },
+      "climateTransition": 1,
+      "climateBands": {
+        "temperature": [
+          {
+            "at": 0.25,
+            "value": 0.3,
+            "curve": 6
+          },
+          {
+            "at": 0.7,
+            "value": 0.2,
+            "curve": 3
+          },
+          {
+            "at": 1,
+            "value": 0.1,
+            "curve": 3
+          }
+        ]
       }
     }
   ],

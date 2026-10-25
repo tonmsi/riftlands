@@ -3,7 +3,7 @@ import { isBushAsset, terrainBushAsset } from './bush';
 import { pickAssetVariant } from './asset-variants';
 import { coordinateHash } from './coordinate-random';
 import type { TileKind } from './types';
-import type { AssetCell, AssetPlacement, TileOverride, WorldAsset, WorldDocument, WorldZone, ZoneShape } from './world-schema';
+import type { AssetCell, AssetPlacement, TileOverride, WorldAsset, WorldDocument, WorldZone, ZoneShape, ClimateBand } from './world-schema';
 import { worldAssetImageBounds, worldAssetShadow, assetCellColumns, assetCellRows, assetCellSubdivision } from './world-schema';
 import { WorldTiles } from './world-tiles';
 
@@ -15,6 +15,37 @@ export function shapeBounds(s: ZoneShape): TileBounds {
 export function insideShape(s: ZoneShape, x: number, y: number): boolean {
   return s.kind === 'rect' ? x >= s.x && y >= s.y && x < s.x + s.width && y < s.y + s.height
     : (x - s.x) ** 2 + (y - s.y) ** 2 <= s.radius ** 2;
+}
+/** Monotone curve: strength > 1 changes sooner at the edge; strength < 1 changes later inside. */
+export function climateCurveWeight(progress: number, strength = 3): number {
+  const t = Math.max(0, Math.min(1, progress));
+  return 1 - (1 - t) ** strength;
+}
+export function climateBandState(progress: number, bands: readonly ClimateBand[]): { value: number; weight: number } {
+  const t = Math.max(0, Math.min(1, progress));
+  let position = 0;
+  for (let i = 0; i < bands.length; i++) {
+    const band = bands[i];
+    if (t <= band.at) {
+      const weight = climateCurveWeight((t - position) / (band.at - position), band.curve ?? 1);
+      return i === 0 ? { value: band.value, weight }
+        : { value: bands[i - 1].value + (band.value - bands[i - 1].value) * weight, weight: 1 };
+    }
+    position = band.at;
+  }
+  return { value: bands[bands.length - 1].value, weight: 1 };
+}
+export function zoneClimateProgress(zone: WorldZone, x: number, y: number): number {
+  const s = zone.shape;
+  if (!insideShape(s, x, y)) return 0;
+  if (zone.climateTransition === undefined) return 1;
+  const depth = s.kind === 'circle' ? s.radius - Math.hypot(x - s.x, y - s.y)
+    : Math.min(x - s.x, y - s.y, s.x + s.width - x, s.y + s.height - y);
+  const radius = s.kind === 'circle' ? s.radius : Math.min(s.width, s.height) / 2;
+  return Math.max(0, Math.min(1, depth / (radius * zone.climateTransition)));
+}
+export function zoneClimateWeight(zone: WorldZone, x: number, y: number, key: 'temperature' | 'moisture' = 'temperature'): number {
+  return climateCurveWeight(zoneClimateProgress(zone, x, y), zone.climateCurves?.[key]);
 }
 export function overlaps(a: TileBounds, b: TileBounds): boolean {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
@@ -113,6 +144,24 @@ export class WorldAuthoring {
   }
   rule<K extends keyof WorldZone>(x: number, y: number, key: K): WorldZone[K] | undefined {
     return this.zonesAt(x, y).find(z => z[key] !== undefined)?.[key];
+  }
+  climateAt(x: number, y: number, key: 'temperature' | 'moisture', generated: () => number): number {
+    let value = 0, remaining = 1;
+    // Fade the highest-priority override into the climate of the underlying zones, per property.
+    for (const z of this.zonesAt(x, y)) {
+      const bands = z.climateTransition !== undefined ? z.climateBands?.[key] : undefined;
+      let target = z[key], weight: number;
+      if (!bands && target === undefined) continue;
+      if (bands) {
+        const state = climateBandState(zoneClimateProgress(z, x, y), bands);
+        target = state.value; weight = state.weight;
+      } else weight = zoneClimateWeight(z, x, y, key);
+      if (target === undefined) continue;
+      value += remaining * weight * target;
+      remaining *= 1 - weight;
+      if (remaining === 0) return value;
+    }
+    return value + remaining * generated();
   }
   cell(p: AssetPlacement, x: number, y: number): AssetCell | undefined {
     const a = this.assets.get(p.assetId)!;
