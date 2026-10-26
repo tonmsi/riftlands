@@ -96,7 +96,14 @@ export function installActorEditor(): void {
     for (const key of ['hp', 'speed', 'level', 'radius', 'respawnMs'] as const) set(key, b[key]); set('gold', b.reward.gold);
     set('drawSize', v.drawSize); set('anchorX', v.anchor.x); set('anchorY', v.anchor.y); set('offsetX', v.offset.x); set('offsetY', v.offset.y);
     for (const [id, key] of [['shadowX', 'x'], ['shadowY', 'y'], ['shadowWidth', 'width'], ['shadowHeight', 'height'], ['shadowOpacity', 'opacity']] as const) set(id, v.shadow[key]);
-    options('animation', npcMode ? [['moving', 'moving · movimento'], ['idle', v.animations.idle ? 'idle · fermo' : 'idle · primo frame di moving (fallback)']] : Object.keys(v.animations).map(id => [id, id])); options('attack', b.attacks.map((a, i) => [String(i), `${i + 1} · ${a.kind}`]));
+    const npcAnimations: [string, string][] = [];
+    if (v.animations.moving) npcAnimations.push(['moving', 'moving · movimento']);
+    npcAnimations.push(['idle', v.animations.idle ? 'idle · fermo' : 'idle · primo frame di moving (fallback)']);
+    options('animation', npcMode ? npcAnimations : Object.keys(v.animations).map(id => [id, id])); options('attack', b.attacks.map((a, i) => [String(i), `${i + 1} · ${a.kind}`]));
+    if (npcMode) {
+      el<HTMLButtonElement>('idle-fallback').disabled = !v.animations.moving;
+      el<HTMLButtonElement>('idle-only').disabled = !v.animations.moving;
+    }
     refreshAnimation(); refreshAttack(); if (npcMode) conversations.refresh();
   }
   async function load() {
@@ -227,6 +234,13 @@ export function installActorEditor(): void {
   document.getElementById('open-npc-editor')!.onclick = () => open(true);
   const fallback = document.createElement('button'); fallback.id = 'boss-idle-fallback'; fallback.textContent = 'Idle: usa primo frame di moving'; fallback.className = 'npc-only';
   el('add-animation').after(fallback);
-  const help = document.createElement('p'); help.className = 'npc-only'; help.textContent = 'moving: camminata. idle: fermo. Senza idle il gioco mostra il primo frame di moving della direzione attuale. Per animare anche le pause, aggiungi idle e attiva Ripeti animazione. Ordine delle righe: giù, su, destra, sinistra. Le animazioni non cambiano il comportamento del personaggio.'; fallback.after(help);
-  fallback.onclick = () => { delete visual().animations.idle; changed(); refresh(); set('animation', 'idle'); refreshAnimation(); };
+  const idleOnly = document.createElement('button'); idleOnly.id = 'boss-idle-only'; idleOnly.textContent = 'Usa solo idle · rimuovi moving'; idleOnly.className = 'npc-only'; fallback.after(idleOnly);
+  const help = document.createElement('p'); help.className = 'npc-only'; help.textContent = 'È sufficiente idle oppure moving. Usa solo idle conserva l’idle esistente o lo crea dal moving, poi rimuove moving. Puoi importare uno spritesheet direttamente su idle e attivare Ripeti animazione. Senza idle viene mostrato il primo frame di moving. Per riaggiungere la camminata scegli moving in Nuova animazione. Ordine delle righe direzionali: giù, su, destra, sinistra. La grafica non modifica il movimento: per un NPC fermo imposta Raggio di movimento a 0 nelle proprietà sulla mappa.'; idleOnly.after(help);
+  fallback.onclick = () => { if (!visual().animations.moving) return; delete visual().animations.idle; changed(); refresh(); set('animation', 'idle'); refreshAnimation(); };
+  idleOnly.onclick = () => {
+    const v = visual(); if (!v.animations.moving) return;
+    v.animations.idle ??= { ...structuredClone(v.animations.moving), loop: true };
+    delete v.animations.moving;
+    changed(); refresh(); set('animation', 'idle'); refreshAnimation();
+  };
 }

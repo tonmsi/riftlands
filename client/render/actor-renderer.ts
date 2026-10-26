@@ -75,8 +75,10 @@ export class ActorRenderer {
     if (actor.hidden) ctx.globalAlpha = self || allied ? 0.58 : 0.32;
     if (actor.dialogueId) {
       ctx.strokeStyle = actor.questMarker === 'available' ? '#ead182' : actor.questMarker === 'active' ? '#8ac6bf' : '#b1b6a0'; ctx.lineWidth = 2;
-      if (actor.questMarker === 'active') ctx.setLineDash([5, 3]);
-      circle(ctx, 0, 0, r + 6); ctx.stroke(); ctx.setLineDash([]);
+      if (actor.showDialogueRing !== false) {
+        if (actor.questMarker === 'active') ctx.setLineDash([5, 3]);
+        circle(ctx, 0, 0, r + 6); ctx.stroke(); ctx.setLineDash([]);
+      }
       ctx.font = 'bold 14px system-ui'; ctx.fillStyle = ctx.strokeStyle; ctx.textAlign = 'center';
       ctx.fillText(actor.npcKind === 'arena-bookmaker' ? '♠' : actor.npcKind === 'outpost-vendor' ? '¤' : actor.questMarker === 'available' ? '!' : actor.questMarker === 'active' ? '…' : '•', 0, -r - 12);
     }

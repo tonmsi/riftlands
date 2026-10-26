@@ -36986,45 +36986,6 @@
       }
     },
     {
-      "id": "asset-aa0c833f-4296-44b0-9e42-1f5debf5c976",
-      "name": "Isola-montuosa-terrazzata-cel-shading",
-      "image": "/world-assets/Isola-montuosa-terrazzata-cel-shading.png",
-      "width": 1,
-      "height": 1,
-      "columns": 1,
-      "rows": 1,
-      "cells": [
-        {
-          "blocked": false,
-          "visibility": "normal"
-        }
-      ],
-      "layer": "object",
-      "pivot": {
-        "x": 0.5,
-        "y": 1
-      },
-      "generation": {
-        "enabled": false,
-        "category": "vegetation",
-        "terrains": [
-          "grass",
-          "bush",
-          "mud"
-        ],
-        "temperature": [
-          0,
-          1
-        ],
-        "moisture": [
-          0,
-          1
-        ],
-        "density": 0.2,
-        "spacing": 1
-      }
-    },
-    {
       "id": "asset-9df70f62-0c37-4f87-bfa1-853f78ef130f",
       "name": "locanda-1",
       "image": "/world-assets/locanda-1.png",
@@ -40024,7 +39985,7 @@
       "cells": [
         {
           "blocked": false,
-          "visibility": "normal"
+          "visibility": "hide-fade"
         }
       ],
       "layer": "object",
@@ -40313,6 +40274,1219 @@
         "kind": "image"
       },
       "shadow": null,
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "Immagine-ChatGPT-26-ott-2026-21_00_35-2",
+      "name": "Immagine ChatGPT 26 ott 2026, 21_00_35-2",
+      "image": "/world-assets/Immagine-ChatGPT-26-ott-2026-21_00_35-2.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "Immagine-ChatGPT-26-ott-2026-21_00_36-4",
+      "name": "Immagine ChatGPT 26 ott 2026, 21_00_36-4",
+      "image": "/world-assets/Immagine-ChatGPT-26-ott-2026-21_00_36-4.png",
+      "width": 6,
+      "height": 6,
+      "columns": 6,
+      "rows": 6,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "shadow": null,
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "Immagine-ChatGPT-26-ott-2026-21_00_34-1",
+      "name": "Immagine ChatGPT 26 ott 2026, 21_00_34-1",
+      "image": "/world-assets/Immagine-ChatGPT-26-ott-2026-21_00_34-1.png",
+      "width": 1,
+      "height": 1,
+      "columns": 1,
+      "rows": 1,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ],
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      }
+    },
+    {
+      "id": "Immagine-ChatGPT-26-ott-2026-21_00_36-3",
+      "name": "Immagine ChatGPT 26 ott 2026, 21_00_36-3",
+      "image": "/world-assets/Immagine-ChatGPT-26-ott-2026-21_00_36-3.png",
+      "width": 5,
+      "height": 5,
+      "columns": 5,
+      "rows": 5,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "shadow": null,
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "Immagine-ChatGPT-26-ott-2026-21_00_37-5",
+      "name": "Immagine ChatGPT 26 ott 2026, 21_00_37-5",
+      "image": "/world-assets/Immagine-ChatGPT-26-ott-2026-21_00_37-5.png",
+      "width": 6,
+      "height": 6,
+      "columns": 6,
+      "rows": 6,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "shadow": null,
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      }
+    },
+    {
+      "id": "Immagine-ChatGPT-26-ott-2026-21_09_20-2",
+      "name": "Immagine ChatGPT 26 ott 2026, 21_09_20-2",
+      "image": "/world-assets/Immagine-ChatGPT-26-ott-2026-21_09_20-2.png",
+      "width": 6,
+      "height": 6,
+      "columns": 6,
+      "rows": 6,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "shadow": {
+        "kind": "silhouette",
+        "skew": 0,
+        "x": 0.5,
+        "y": 0.95,
+        "width": 0.8,
+        "height": 0.35,
+        "opacity": 0.3,
+        "softness": 0.5
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "imageTransform": {
+        "x": 0.4788,
+        "y": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "Immagine-ChatGPT-26-ott-2026-21_09_21-3",
+      "name": "Immagine ChatGPT 26 ott 2026, 21_09_21-3",
+      "image": "/world-assets/Immagine-ChatGPT-26-ott-2026-21_09_21-3.png",
+      "width": 6,
+      "height": 6,
+      "columns": 6,
+      "rows": 6,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "fade"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "shadow": {
+        "kind": "silhouette",
+        "skew": 0,
+        "x": 0.5,
+        "y": 0.95,
+        "width": 0.8,
+        "height": 0.35,
+        "opacity": 0.3,
+        "softness": 0.5
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "imageTransform": {
+        "x": 0.4611,
+        "y": -0.0922,
+        "scale": 1
+      }
+    },
+    {
+      "id": "Immagine-ChatGPT-26-ott-2026-21_09_20-1",
+      "name": "Immagine ChatGPT 26 ott 2026, 21_09_20-1",
+      "image": "/world-assets/Immagine-ChatGPT-26-ott-2026-21_09_20-1.png",
+      "width": 6,
+      "height": 6,
+      "columns": 6,
+      "rows": 6,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": true,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "ground",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "shadow": {
+        "kind": "silhouette",
+        "skew": 0,
+        "x": 0.5,
+        "y": 1,
+        "width": 0.8,
+        "height": 0.55,
+        "opacity": 0.35,
+        "softness": 0.5
+      },
       "fade": {
         "opacity": 0.28,
         "feather": 0.35,
@@ -51128,6 +52302,41 @@
       "x": 140,
       "y": 4,
       "baseElevation": 0
+    },
+    {
+      "id": "asset-9478d429-e7e5-4a6b-80b6-68e835cbdb04",
+      "assetId": "Immagine-ChatGPT-26-ott-2026-21_09_20-1",
+      "x": -42,
+      "y": 88,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-af618bc1-cdbe-4be3-8623-ba9cbed17222",
+      "assetId": "Immagine-ChatGPT-26-ott-2026-21_09_20-2",
+      "x": -34,
+      "y": 88,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-905c136c-8837-40d9-a63c-5d0e15dcea50",
+      "assetId": "Immagine-ChatGPT-26-ott-2026-21_09_20-2",
+      "x": -80,
+      "y": 82,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-2497a75c-37f3-437f-91a7-f6bc3db76f93",
+      "assetId": "Immagine-ChatGPT-26-ott-2026-21_09_21-3",
+      "x": -64,
+      "y": 85,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-50959c50-1cb0-4482-b6db-bbe3b83d926b",
+      "assetId": "Immagine-ChatGPT-26-ott-2026-21_09_21-3",
+      "x": -72,
+      "y": 115,
+      "baseElevation": 0
     }
   ],
   "tiles": [],
@@ -51155,7 +52364,7 @@
       "generateAssets": false,
       "temperature": 1,
       "moisture": 0.1,
-      "pvp": false
+      "pvp": true
     },
     {
       "id": "zone-c851824e-36dc-4132-abe2-5ec056429433",
@@ -51567,17 +52776,6 @@
         "name": "Platos, il vecchio",
         "dialogueId": "platos"
       }
-    },
-    {
-      "x": -1,
-      "y": 176,
-      "id": "npc-c175c9c4-65d9-4c2e-89ea-c874e4a7c0b8",
-      "npcKind": "custom-npc",
-      "level": 1,
-      "elevation": 0,
-      "settings": {
-        "variantId": "bardo"
-      }
     }
   ],
   "dungeons": [
@@ -51594,20 +52792,7 @@
       "enabled": false
     }
   ],
-  "soundPoints": [
-    {
-      "x": -1,
-      "y": 176,
-      "id": "sound-c799b778-8938-4c6c-b01a-147ee04740ae",
-      "name": "Bard",
-      "radius": 28,
-      "innerRadius": 2,
-      "music": {
-        "src": "/music/sand-yle-folk-song-guitar.mp3",
-        "volume": 0.5
-      }
-    }
-  ],
+  "soundPoints": [],
   "tileChunks": [
     [18,-26,114,1,7,141,11,7,171,14,7,201,16,7,232,17,7,263,18,7,294,18,7,325,19,7,357,19,7,388,20,7,420,20,7,451,21,7,483,21,7,515,21,7,547,21,7,579,21,7,610,22,7,642,22,7,674,22,7,706,22,7,738,22,7,770,22,7,802,22,7,834,22,7,866,22,7,898,22,7,930,22,7,962,22,7,994,21,7],
     [7,2,0,1024,7],
@@ -52636,8 +53821,8 @@
           {
             "id": "asset-a48a5d7b-99a6-4db7-a98c-e16aa3bda388",
             "assetId": "asset-736f6f90-3580-493f-bc3f-ea01f4af6c1e",
-            "x": 9,
-            "y": 0,
+            "x": 15,
+            "y": 1,
             "baseElevation": 0
           },
           {
@@ -52650,21 +53835,21 @@
           {
             "id": "asset-c04e2d6a-8422-443d-b1c5-454e0ba17553",
             "assetId": "asset-a3739ce6-083a-4cbd-ad1f-84103d09b588",
-            "x": 16,
-            "y": 2,
+            "x": 9,
+            "y": 11,
             "baseElevation": 0
           },
           {
             "id": "asset-c7ee4b88-8121-4229-b7c8-ffc7f638ca4e",
             "assetId": "brazier",
-            "x": 8,
-            "y": 2,
+            "x": 12,
+            "y": 0,
             "baseElevation": 0
           },
           {
             "id": "asset-426adae9-eece-4335-8c1a-91f2c746cca8",
             "assetId": "brazier",
-            "x": 12,
+            "x": 18,
             "y": 2,
             "baseElevation": 0
           },
@@ -52692,7 +53877,7 @@
           {
             "id": "asset-bdd578b6-1964-415a-bab5-2fda4b4dcc61",
             "assetId": "brazier",
-            "x": 19,
+            "x": 6,
             "y": 0,
             "baseElevation": 0
           },
@@ -52734,8 +53919,62 @@
         ],
         "tiles": [],
         "zones": [],
-        "npcs": [],
+        "npcs": [
+          {
+            "x": 9,
+            "y": 2,
+            "id": "npc-5402aab1-67b7-47bb-af3d-5f9e784f599c",
+            "npcKind": "custom-npc",
+            "level": 1,
+            "elevation": 0,
+            "settings": {
+              "variantId": "bardo"
+            }
+          },
+          {
+            "x": 7,
+            "y": 1,
+            "id": "npc-3e9d6dd9-5935-454c-a7f7-624c743165f5",
+            "npcKind": "custom-npc",
+            "level": 1,
+            "elevation": 0,
+            "settings": {
+              "name": "Marr il bardo",
+              "dialogueId": "",
+              "variantId": "bardo",
+              "showDialogueRing": false
+            }
+          },
+          {
+            "x": 11,
+            "y": 1,
+            "id": "npc-f7965200-1077-448f-bd93-d110fcad5dec",
+            "npcKind": "custom-npc",
+            "level": 1,
+            "elevation": 0,
+            "settings": {
+              "name": "Ross il bardo",
+              "dialogueId": "",
+              "variantId": "bardo",
+              "showDialogueRing": false
+            }
+          }
+        ],
         "dungeons": [],
+        "soundPoints": [
+          {
+            "x": 9,
+            "y": 1,
+            "id": "sound-e287600b-3e6b-435a-8f0c-a232f06e43d3",
+            "name": "Punto sonoro",
+            "radius": 18,
+            "innerRadius": 1,
+            "music": {
+              "src": "/music/sand-yle-folk-song-guitar-2.mp3",
+              "volume": 0.25
+            }
+          }
+        ],
         "tileChunks": [
           [
             0,
@@ -54547,6 +55786,14 @@
       "activation": "walk",
       "entryElevation": 0,
       "arrivalElevation": 0,
+      "entrySize": {
+        "x": 1,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 1
+      },
       "reverseId": "warp-fbd525e8-387b-4a04-8d70-06ca3b46a1f9"
     },
     {
@@ -54565,6 +55812,14 @@
       "activation": "walk",
       "entryElevation": 0,
       "arrivalElevation": 0,
+      "entrySize": {
+        "x": 1,
+        "y": 1
+      },
+      "arrivalSize": {
+        "x": 1,
+        "y": 1
+      },
       "reverseId": "warp-1117b975-fd94-49ae-90e4-f53179ca49a4"
     },
     {
@@ -54577,8 +55832,8 @@
         "y": 0
       },
       "arrival": {
-        "x": 7,
-        "y": 11
+        "x": 13,
+        "y": 13
       },
       "activation": "walk",
       "entryElevation": 0,
@@ -54599,8 +55854,8 @@
       "from": "interior-39c09fe5-301d-4d55-b6fa-0ad162b35ce2",
       "to": "interior-a8b3bf2d-5445-43a4-b26d-352054ebdd0a",
       "entry": {
-        "x": 7,
-        "y": 11
+        "x": 13,
+        "y": 13
       },
       "arrival": {
         "x": 16,

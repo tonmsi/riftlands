@@ -523,11 +523,11 @@ function refreshSelection(): void {
     set('entity-x', e.x);
     if (selected?.kind === 'sound') {
         el('selection-title').textContent = 'Punto sonoro';
-        el('selection-fields').insertAdjacentHTML('beforeend', `${field('sound-name', 'Nome', 'text')}<label>Traccia<select id="sound-music"><option value="">Nessuna</option></select></label>${field('sound-volume', 'Volume massimo %')}${field('sound-inner', 'Raggio a volume pieno · celle', 'number', '.25')}${field('sound-radius', 'Raggio di ascolto · celle', 'number', '.25')}<button id="sound-import" type="button">Importa traccia</button><input id="sound-file" type="file" accept=".mp3,.ogg,.wav" hidden><p class="hint">Loop musicale: il volume diminuisce tra i due cerchi e si azzera al limite esterno. Si sovrappone alla musica della zona e segue il volume Musica. MP3, OGG o WAV · massimo 20 MB. Premi Aggiorna per salvare.</p>`);
+        el('selection-fields').insertAdjacentHTML('beforeend', `${field('sound-name', 'Nome', 'text')}<label>Traccia<select id="sound-music"><option value="">Nessuna</option></select></label>${field('sound-volume', 'Volume massimo %')}${field('sound-inner', 'Raggio a volume pieno · celle', 'number', '.25')}${field('sound-radius', 'Raggio di ascolto · celle', 'number', '.25')}<label class="check"><input id="sound-restart" type="checkbox">Ricomincia la canzone a ogni ingresso</label><p class="hint">Disattivato: riprende dal punto in cui era arrivata quando rientri nel raggio, durante questa sessione.</p><button id="sound-import" type="button">Importa traccia</button><input id="sound-file" type="file" accept=".mp3,.ogg,.wav" hidden><p class="hint">Loop musicale: il volume diminuisce tra i due cerchi e si azzera al limite esterno. Si sovrappone alla musica della zona e segue il volume Musica. MP3, OGG o WAV · massimo 20 MB. Premi Aggiorna per salvare.</p>`);
         const select = el<HTMLSelectElement>('sound-music');
         select.append(...[...new Set([...musicSources, ...(e.music ? [e.music.src] : [])])].sort().map(src => new Option(src.split('/').at(-1), src)));
         set('sound-name', e.name); set('sound-music', e.music?.src ?? ''); set('sound-volume', (e.music?.volume ?? .5) * 100);
-        set('sound-inner', e.innerRadius); set('sound-radius', e.radius);
+        set('sound-inner', e.innerRadius); set('sound-radius', e.radius); input('sound-restart').checked = e.restartOnEnter === true;
         el('sound-import').onclick = () => input('sound-file').click();
         input('sound-file').onchange = () => { void importSoundPointFile(e.id).catch(report); };
     }
@@ -1186,6 +1186,7 @@ on('selection-update', () => change(() => { materializeSelection(); const e = se
     return;
     if (selected?.kind === 'sound') {
         e.name = val('sound-name').trim(); e.innerRadius = num('sound-inner'); e.radius = num('sound-radius');
+        if (input('sound-restart').checked) e.restartOnEnter = true; else delete e.restartOnEnter;
         if (val('sound-music')) e.music = { src: val('sound-music'), volume: num('sound-volume') / 100 }; else delete e.music;
     }
     if (selected?.kind === 'placement' || selected?.kind === 'npc') {

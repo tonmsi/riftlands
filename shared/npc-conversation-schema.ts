@@ -7,12 +7,13 @@ export interface NpcDialogueNode { text: string; choices: NpcDialogueChoice[]; }
 export type NpcDialogue = { kind: 'none' } | { kind: 'existing'; id: string }
   | { kind: 'custom'; start: string; nodes: Record<string, NpcDialogueNode> };
 /** Missing inherits; null explicitly silences the automatic bubbles. */
-export interface NpcConversation { speech?: AmbientSpeechDefinition | null; dialogue?: NpcDialogue; }
+export interface NpcConversation { speech?: AmbientSpeechDefinition | null; dialogue?: NpcDialogue; showDialogueRing?: boolean; }
 const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max: number) => typeof v === 'string' && !!v.trim() && v.length <= max;
 const id = (v: unknown) => typeof v === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(v);
 export function validNpcConversation(v: unknown): v is NpcConversation {
-  if (!object(v) || Object.keys(v).some(k => !['speech', 'dialogue'].includes(k))) return false;
+  if (!object(v) || Object.keys(v).some(k => !['speech', 'dialogue', 'showDialogueRing'].includes(k))) return false;
+  if (v.showDialogueRing !== undefined && typeof v.showDialogueRing !== 'boolean') return false;
   if (v.speech !== undefined && v.speech !== null && (!object(v.speech) || !text(v.speech.intro, 400)
     || !Array.isArray(v.speech.lines) || v.speech.lines.length > 32 || !v.speech.lines.every((line: unknown) => text(line, 400)))) return false;
   const d = v.dialogue;

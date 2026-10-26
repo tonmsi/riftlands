@@ -39,6 +39,9 @@ test('game renderer draws authored layers around players and fades overhead cell
       const precipitation: string[] = [];
       renderer.drawRain = () => precipitation.push('rain'); renderer.drawSnow = () => precipitation.push('snow');
       renderer.world.getTemperature = () => 1;
+      // Weather now fades in; allow clouds and precipitation to build before checking outdoors.
+      for (let time = 1500; time < 3000; time += 100) renderer.render({ ...frame, time });
+      precipitation.splice(0);
       renderer.render({ ...frame, time: 3000 });
       const outdoors = precipitation.splice(0);
       renderer.world.authoring.document.interiorBounds = { id: 'inn', name: 'Locanda', width: 8, height: 8 };
@@ -53,8 +56,8 @@ test('game renderer draws authored layers around players and fades overhead cell
     });
     assert.equal(result.faded.find(e => e.id === 'floor-1')!.opacity, 1); assert.ok(result.faded.find(e => e.id === 'roof-1')!.fade! > .99);
     assert.equal(result.rects, 0); assert.equal(result.location, 'Southern Docks');
-    assert.deepEqual(result.outdoors, ['rain']); assert.deepEqual(result.indoors, []); assert.deepEqual(result.warp, []);
-    assert.deepEqual(result.returnedOutdoors, ['rain']);
+    assert.ok(result.outdoors.includes('rain')); assert.deepEqual(result.indoors, []); assert.deepEqual(result.warp, []);
+    assert.deepEqual(result.returnedOutdoors, [], 'returning outdoors starts a fresh fade from clear');
     assert.ok(result.faded.findIndex(e => e.id === 'floor-1') < result.faded.findIndex(e => e.id === 'self'));
     assert.ok(result.faded.findIndex(e => e.id === 'floor-1') < result.faded.findIndex(e => e.id === 'brazier-1'),
       'a background floor placed last must draw beneath an earlier background brazier, as in the World Maker');

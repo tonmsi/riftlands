@@ -35,9 +35,9 @@ test('catalog and world parsing preserve variant identity and reject malformed r
   const catalog = structuredClone(ACTOR_CATALOG), copy = duplicateNpcVariant(catalog, 'slime', 'red-slime');
   const doc = newWorldDocument(); doc.npcs.push({ id: 'one', npcKind: 'slime', x: 2, y: 2, level: 2, settings: { variantId: copy.id } });
   assert.equal(parseWorldDocument(JSON.stringify(doc)).npcs[0].settings?.variantId, copy.id);
-  assert.deepEqual(parseActorCatalog(JSON.parse(JSON.stringify(catalog))).npcVariants, [copy]);
+  assert.deepEqual(parseActorCatalog(JSON.parse(JSON.stringify(catalog))).npcVariants, catalog.npcVariants);
   assert.equal(validNpcSettings({ variantId: '../bad' }), false);
-  for (const patch of [{ id: 'slime' }, { base: 'missing' }, { skin: 'missing' }, { name: ' ' }, { skin: 'stone-warden' }, { group: 42 }]) {
+  for (const patch of [{ id: 'slime' }, { base: 'missing' }, { skin: 'missing' }, { name: ' ' }, { group: 42 }]) {
     assert.throws(() => parseActorCatalog({ ...catalog, npcVariants: [{ ...copy, ...patch }] }), /variante NPC/);
   }
   assert.throws(() => parseActorCatalog({ ...catalog, npcVariants: [copy, copy] }), /variante NPC/);

@@ -21,7 +21,7 @@ export function installNpcConversationEditor(dialog: HTMLElement, host: Host) {
     <h3>Fumetti automatici</h3><label>Fumetti<select id="npc-speech-mode"><option value="inherit">Eredita dal modello</option><option value="none">Disattivati</option><option value="custom">Personalizzati</option></select></label>
     <div id="npc-speech-fields"><label>Prima frase<textarea id="npc-speech-intro" maxlength="400" rows="3"></textarea></label>
     <label>Frasi successive · una per riga<textarea id="npc-speech-lines" rows="4"></textarea></label></div>
-    <h3>Dialogo di interazione</h3><label>Dialogo<select id="npc-dialogue-mode"><option value="inherit">Eredita dal modello</option><option value="none">Nessuno</option><option value="existing">Usa un dialogo esistente</option><option value="custom">Dialogo personalizzato</option></select></label>
+    <h3>Dialogo di interazione</h3><label><input id="npc-dialogue-ring" type="checkbox">Mostra cerchio attorno all’NPC</label><label>Dialogo<select id="npc-dialogue-mode"><option value="inherit">Eredita dal modello</option><option value="none">Nessuno</option><option value="existing">Usa un dialogo esistente</option><option value="custom">Dialogo personalizzato</option></select></label>
     <label id="npc-existing-label">Dialogo esistente<select id="npc-dialogue-existing"></select></label>
     <div id="npc-dialogue-fields"><p>Risposte a scelta senza missioni o ricompense. Ogni risposta porta a un'altra frase oppure chiude il dialogo.</p>
       <label>Frase iniziale<select id="npc-dialogue-start"></select></label><label>Frase da modificare<select id="npc-dialogue-node"></select></label>
@@ -83,6 +83,7 @@ export function installNpcConversationEditor(dialog: HTMLElement, host: Host) {
     const { kind, variant } = host.selection(), key = variant?.id ?? kind;
     if (context !== key) { context = key; selectedNode = ''; previewNode = ''; }
     const c = config();
+    el<HTMLInputElement>('npc-dialogue-ring').checked = c.showDialogueRing !== false;
     el<HTMLSelectElement>('npc-speech-mode').value = c.speech === undefined ? 'inherit' : c.speech === null ? 'none' : 'custom';
     el('npc-speech-fields').hidden = !c.speech;
     el<HTMLTextAreaElement>('npc-speech-intro').value = c.speech?.intro ?? '';
@@ -103,6 +104,7 @@ export function installNpcConversationEditor(dialog: HTMLElement, host: Host) {
       host.created(v.id);
     } catch (e) { host.report(e); }
   };
+  el('npc-dialogue-ring').onchange = () => { edit().showDialogueRing = el<HTMLInputElement>('npc-dialogue-ring').checked; host.changed(); };
   el('npc-speech-mode').onchange = () => {
     const mode = value('npc-speech-mode'), { kind, variant } = host.selection();
     const inherited = npcSpeech(kind, variant?.id, host.catalog());

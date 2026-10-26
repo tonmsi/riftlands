@@ -37,6 +37,7 @@ import { AmbientSpeech } from '../core/ambient-speech';
 import { drawSpeechBubble } from './speech-bubble';
 import { hasLineOfSight } from '../../shared/physics';
 import type { RenderFrame } from './render-types';
+import { WeatherTransition } from './weather-transition';
 export type { RenderFrame } from './render-types';
 const TAU = Math.PI * 2;
 export class Renderer {
@@ -76,13 +77,15 @@ export class Renderer {
 
   private readonly restoreContext = (): void => { this.terrain.invalidate(); };
 
-  weather: 'clear' | 'rain' | 'snow' = 'clear';
+  weather: 'clear' | 'rain' | 'sleet' | 'snow' = 'clear';
+  private readonly weatherTransition = new WeatherTransition();
+  private weatherTemperature = .5;
   invalidateTerrain():void {this.terrain.invalidate();}
   resetCamera():void {this.hasCamera=false;this.characters.reset();}
   performanceInfo(){return {width:this.width,height:this.height,dpr:this.dpr,zoom:this.zoom,canvasPixels:this.canvas.width*this.canvas.height,
     coarsePointer:this.touchQuery.matches,reducedMotion:this.reducedMotion.matches,painting:this.world.authoring.document.painting??null,
     terrain:this.terrain.performanceInfo(),actors:this.characters.performanceInfo(),mapAssets:this.worldAssetArt.performanceInfo()};}
-  private lastWeatherCheck = 0;
+  private lastWeatherCheck = -Infinity;
   constructor(private readonly canvas: HTMLCanvasElement, private readonly localDungeons?: readonly DungeonDefinition[]) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D non disponibile in questo browser.');
@@ -101,6 +104,7 @@ export class Renderer {
     this.world = new World(seed, 160, mode, document, worldDungeons(document, DUNGEON_DEFINITIONS));
     this.terrain.invalidate();
     if (!preserveView) {
+      this.weatherTransition.reset(); this.lastWeatherCheck = -Infinity;
       this.hasCamera = false;
       this.viewSign = 1;
       this.characters.reset();
@@ -480,21 +484,22 @@ export class Renderer {
     const weatherStart=perf.begin();
     const outdoorWeather = this.world.mode === 'world' && !this.world.authoring.document.interiorBounds && !frame.warpTransition;
     if (!outdoorWeather) {
-      this.weather = 'clear';
       // Recalculate immediately when returning outdoors, including within the same weather tick.
       this.lastWeatherCheck = -Infinity;
-    } else if (frame.time - this.lastWeatherCheck > 1000) {
+    } else if (frame.time - this.lastWeatherCheck > 100) {
       this.lastWeatherCheck = frame.time;
       const px = frame.self?.x ?? this.camera.x, py = frame.self?.y ?? this.camera.y;
-      const isStorm = this.world.mode === 'world' && (frame.time % 600_000) < 180_000;
-      const temp = this.world.getTemperature(Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE));
-      this.weather = !isStorm ? 'clear' : (temp < 0.28 ? 'snow' : 'rain');
+      this.weatherTemperature = this.world.getTemperature(Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE));
     }
-
-    if (perf.feature('weather')&&this.weather === 'snow') {
-      this.drawSnow(frame.time);
-    } else if (perf.feature('weather')&&this.weather === 'rain') {
-      this.drawRain(frame.time);
+    const weather = this.weatherTransition.update(frame.time, this.weatherTemperature, (frame.time % 600_000) < 180_000, outdoorWeather);
+    this.weather = weather.rain + weather.snow < .01 ? 'clear' : weather.snowMix < .1 ? 'rain' : weather.snowMix > .9 ? 'snow' : 'sleet';
+    if (perf.feature('weather')) {
+      if (weather.darkness > .001) {
+        ctx.fillStyle = `rgba(${Math.round(18 + weather.snowMix * 20)}, ${Math.round(32 + weather.snowMix * 11)}, ${Math.round(44 + weather.snowMix * 6)}, ${weather.darkness})`;
+        ctx.fillRect(0, 0, this.width, this.height);
+      }
+      if (weather.rain > .001) this.drawRain(frame.time, weather.rain);
+      if (weather.snow > .001) this.drawSnow(frame.time, weather.snow);
     }
     perf.end('weather',weatherStart);
     const overlayStart=perf.begin();
@@ -689,11 +694,10 @@ export class Renderer {
     }
   }
 
-  private drawRain(time: number): void {
+  private drawRain(time: number, intensity = 1): void {
     const { ctx, width, height } = this;
     ctx.save();
-    ctx.fillStyle = 'rgba(18, 32, 44, 0.22)';
-    ctx.fillRect(0, 0, width, height);
+    ctx.globalAlpha *= intensity;
 
     const wind = 0.22;
     const dropCount = Math.round((width * height) / 9200);
@@ -757,11 +761,10 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawSnow(time: number): void {
+  private drawSnow(time: number, intensity = 1): void {
     const { ctx, width, height } = this;
     ctx.save();
-    ctx.fillStyle = 'rgba(215, 235, 250, 0.04)';
-    ctx.fillRect(0, 0, width, height);
+    ctx.globalAlpha *= intensity;
 
     const margin = 80;
     const boxW = width / this.zoom + margin * 2;

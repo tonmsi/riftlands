@@ -56,7 +56,7 @@ export type ZoneShape = { kind: 'rect'; x: number; y: number; width: number; hei
 export interface NpcRule { density: number; maxPerChunk: number; weights: Record<NpcKind, number>; }
 export interface ZoneMusic { src: string; volume: number; }
 /** Tile coordinates; the source is at the tile centre. Empty music allows an editor draft. */
-export interface WorldSoundPoint extends Vec2 { id: string; name: string; radius: number; innerRadius: number; music?: ZoneMusic; }
+export interface WorldSoundPoint extends Vec2 { id: string; name: string; radius: number; innerRadius: number; music?: ZoneMusic; restartOnEnter?: boolean; }
 export interface ClimateBand { at: number; value: number; curve?: number; }
 export interface WorldZone {
   id: string; name: string; priority: number; shape: ZoneShape;
@@ -185,6 +185,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     for (const p of d.soundPoints) {
       if (!object(p) || !point(p) || !id(p.id) || !name(p.name) || !finite(p.radius, .25, 1024)
         || !finite(p.innerRadius, 0, p.radius) || p.innerRadius >= p.radius) fail('punto sonoro: raggi o posizione');
+      if (p.restartOnEnter !== undefined && !boolean(p.restartOnEnter)) fail('punto sonoro: riproduzione');
       if (p.music !== undefined && (!object(p.music) || typeof p.music.src !== 'string'
         || !/^\/music\/[a-zA-Z0-9_-]+\.(mp3|ogg|wav)$/.test(p.music.src) || !finite(p.music.volume, 0, 1))) fail('musica punto sonoro');
     }

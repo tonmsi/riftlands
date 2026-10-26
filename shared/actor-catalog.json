@@ -509,12 +509,12 @@
       "shadow": {
         "x": 1,
         "y": 13,
-        "width": 23,
+        "width": 21,
         "height": 10.08,
         "opacity": 0.28
       },
       "animations": {
-        "moving": {
+        "idle": {
           "asset": "/actor-assets/Sprite-di-Bardo-con-Liuto-2.png",
           "columns": 4,
           "rows": 1,

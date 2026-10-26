@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { ACTOR_CATALOG, parseActorCatalog } from '../shared/actor-catalog';
 import { validNpcConversation, type NpcConversation } from '../shared/npc-conversation-schema';
 import { duplicateNpcVariant } from '../shared/npc-variants';
-import { npcDialogueId, npcSpeech, resolveNpcDialogue } from '../shared/npc-conversations';
+import { npcDialogueId, npcDialogueRing, npcSpeech, resolveNpcDialogue } from '../shared/npc-conversations';
+import { projectActor } from '../shared/snapshot-actor';
 import { WorldSimulation } from '../server/simulation';
 import { newWorldDocument } from '../shared/world-schema';
 import { World } from '../shared/world';
@@ -22,7 +23,7 @@ const conversation: NpcConversation = {
 test('conversations validate graph edges, limits and text, rejecting quest/reward actions', () => {
   assert.equal(validNpcConversation(conversation), true);
   const catalog = structuredClone(ACTOR_CATALOG), v = duplicateNpcVariant(catalog, 'custom-npc', 'citizen'); v.conversation = structuredClone(conversation);
-  assert.deepEqual(parseActorCatalog(catalog).npcVariants?.[0].conversation, conversation);
+  assert.deepEqual(parseActorCatalog(catalog).npcVariants?.find(n => n.id === v.id)?.conversation, conversation);
   for (const change of [
     (c: any) => c.dialogue.nodes.intro.choices[0].next = 'missing',
     (c: any) => c.dialogue.start = 'missing',
@@ -55,6 +56,7 @@ test('dialogue and bubbles inherit independently and instance overrides can disa
 test('custom conversations run on the server, branch, reject forged choices and never create quests or rewards', t => {
   const previous = ACTOR_CATALOG.npcVariants;
   const v = duplicateNpcVariant(ACTOR_CATALOG, 'custom-npc', 'talk-test'); v.name = 'Locandiere'; v.conversation = structuredClone(conversation);
+  v.conversation.showDialogueRing = false;
   t.after(() => { ACTOR_CATALOG.npcVariants = previous; delete ACTOR_CATALOG.skins[v.skin]; setNpcContentCatalog(ACTOR_CATALOG); });
   const doc = newWorldDocument();
   for (let y = -10; y < 12; y++) for (let x = -10; x < 12; x++) doc.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
@@ -64,6 +66,9 @@ test('custom conversations run on the server, branch, reject forged choices and 
   sim.step(.05);
   const npc = sim.npcs.get('authored:host')!, player = sim.players.get('viewer')!;
   assert.equal(npc.dialogueId, 'npc:v:talk-test');
+  assert.equal(npc.showDialogueRing, false); assert.equal(projectActor(npc).showDialogueRing, false);
+  assert.equal(npcDialogueRing('custom-npc', { variantId: v.id, showDialogueRing: true }), true);
+  assert.equal(validNpcConversation({ showDialogueRing: 'false' }), false);
   const bubbles = new AmbientSpeech(undefined, () => 0);
   assert.equal(bubbles.update(player, [npc], sim.now, true)?.text, 'Benvenuto!');
   bubbles.update({ ...player, x: -500 }, [npc], sim.now + SPEECH_COOLDOWN_MS, true);

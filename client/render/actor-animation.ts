@@ -3,12 +3,14 @@ import type { Actor } from '../../shared/types';
 import { BOSS_WAKE_MS, type BossWindup } from '../../shared/bosses';
 
 export interface AnimationState { name: string; elapsed: number; duration?: number; frozen?: boolean; }
-/** Missing idle holds the first movement frame for the facing direction. */
+/** Missing idle holds the first movement frame; idle-only NPCs keep animating when displaced. */
 export function resolveAnimation(visual: ActorVisual, state: AnimationState): { animation: SpriteAnimation; state: AnimationState } | undefined {
   const exact = visual.animations[state.name];
   if (exact) return { animation: exact, state };
   if (state.name === 'idle' && visual.animations.moving)
     return { animation: visual.animations.moving, state: { ...state, frozen: true } };
+  if (state.name === 'moving' && visual.animations.idle)
+    return { animation: visual.animations.idle, state };
   const fallback = visual.animations.idle ?? visual.animations.moving;
   return fallback ? { animation: fallback, state: { ...state, frozen: true } } : undefined;
 }

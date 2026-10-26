@@ -1,5 +1,25 @@
 # World Maker locale
 
+### Transizioni del meteo
+
+Il ciclo di maltempo resta condiviso; la temperatura locale sceglie il rapporto tra pioggia e neve. Sulla scala normalizzata del maker, sotto **0,22** prevale la neve, sopra **0,34** la pioggia; nella fascia intermedia convivono gocce e fiocchi. Questi valori non sono gradi Celsius. Le zone climatiche graduali restano utili per il territorio, ma anche un confine netto viene accompagnato da una transizione visiva.
+
+La temperatura percepita e la miscela di precipitazioni cambiano progressivamente. Attraversando ripetutamente un confine caldo/freddo, la transizione segue il nuovo obiettivo a partire dallo stato corrente, senza ripartire da zero, accodare animazioni o far lampeggiare il cielo. I passaggi molto brevi vengono attenuati; una permanenza nella nuova zona porta gradualmente al suo meteo, indicativamente in 8–12 secondi.
+
+La copertura del cielo è indipendente dalle particelle: arriva prima della pioggia e si dissolve più lentamente quando il maltempo finisce. Durante la neve rimane un filtro coperto più leggero e grigio, anziché sostituire immediatamente il filtro della pioggia con una velatura chiara. Il cambiamento della luce si distribuisce su circa 15–20 secondi, con un assestamento più lungo quando cambia anche il tipo di precipitazione. Negli interni e durante il passaggio tra mappe le precipitazioni vengono escluse; tornando all'aperto ricompaiono gradualmente.
+
+### Ripresa della musica e cerchio dei dialoghi
+
+La musica dei punti sonori e delle zone riprende dal punto raggiunto quando torni ad ascoltarla. La posizione è conservata nel client durante la sessione della pagina, separatamente per ogni giocatore: non è sincronizzata dal server e si azzera ricaricando la pagina. Fuori dal raggio il punto sonoro resta fermo e non continua a scaricare o riprodurre la traccia. Nella scheda del punto sonoro, attiva **Ricomincia la canzone a ogni ingresso** solo se vuoi ripartire dall'inizio, poi premi **Aggiorna** e **Applica al gioco**.
+
+Nel **laboratorio NPC**, disattiva **Mostra cerchio attorno all’NPC** nella sezione **Dialogo di interazione**, poi premi **Salva catalogo NPC**. Per cambiare una singola istanza selezionala sulla mappa, scegli **Cerchio dialogo → Nascondi** e premi **Aggiorna**, quindi **Applica al gioco**. **Eredita dal modello NPC** usa l'impostazione del laboratorio. Il dialogo e l'indicatore sopra la testa restano disponibili: questa opzione nasconde solo il cerchio.
+
+### NPC con solo idle
+
+Gli NPC possono usare il solo spritesheet **idle**, senza animazione **moving**. Nel laboratorio premi **Usa solo idle · rimuovi moving**: conserva l'idle già configurato oppure lo crea dal moving, poi elimina il moving. Seleziona **idle**, importa il tuo spritesheet e imposta colonne, righe e **Ripeti animazione**. Per un foglio senza direzioni disattiva **4 direzioni, una per riga**; quando è attivo servono quattro righe. Salva con **Salva catalogo NPC**.
+
+Puoi aggiungere nuovamente **moving** da **Nuova animazione → moving → Aggiungi animazione**. Il gioco usa l'idle anche quando un NPC senza moving si sposta. La scelta riguarda la grafica: per tenerlo fermo sulla mappa imposta **Raggio di movimento** a **0** nelle proprietà della singola istanza. Gli NPC con il solo moving restano supportati e, quando fermi, mostrano il primo frame della direzione attuale.
+
 ### Nuovi NPC, fumetti e conversazioni
 
 Nel **laboratorio visuale NPC**, apri **＋ Nuovo NPC**, inserisci ID e nome e scegli il comportamento di base. Il personaggio neutro predefinito si muove vicino al punto di origine e parte senza missioni, fumetti o dialoghi. Importa gli sprite o personalizza la grafica nella scheda, poi salva il catalogo.
@@ -290,4 +310,4 @@ Lo strumento **♫ Punto sonoro** posiziona una sorgente musicale sulla mappa, s
 
 Il marker ♫ indica il centro della cella; selezionandolo compaiono i due cerchi. Puoi trascinarlo, cambiarne le coordinate, rimuoverlo e usare annulla/ripeti. I punti sono elencati in **Esplora oggetti → Punti sonori** e in **Progetto e verifica → Zone e punti sonori**. Ogni mappa, compresi gli interni, conserva i propri punti.
 
-Nel gioco le tracce vanno in loop, seguono distanza e direzione stereo e si sovrappongono alla musica della zona. Usano il controllo **Musica** e il mute generale. Si attivano soltanto nel raggio di ascolto e si fermano all'uscita, al cambio mappa o all'uscita dal gioco. Per contenere il numero di stream vengono riprodotti al massimo i quattro punti più udibili; rientrando nel raggio una traccia riparte dall'inizio. I punti e i file musicali vengono inclusi nell'esportazione del progetto e ripristinati con l'importazione.
+Nel gioco le tracce vanno in loop, seguono distanza e direzione stereo e si sovrappongono alla musica della zona. Usano il controllo **Musica** e il mute generale. Si attivano soltanto nel raggio di ascolto e si fermano all'uscita, al cambio mappa o all'uscita dal gioco. Per contenere il numero di stream vengono riprodotti al massimo i quattro punti più udibili. Rientrando nel raggio la traccia riprende dal punto raggiunto; l'opzione **Ricomincia la canzone a ogni ingresso** permette invece di ripartire dall'inizio. I punti e i file musicali vengono inclusi nell'esportazione del progetto e ripristinati con l'importazione.

@@ -1,7 +1,7 @@
 import type { Actor } from './types';
 
 /** Explicit network contract: new simulation fields are never published implicitly. */
-export const ACTOR_METADATA_KEYS = ['kind', 'name', 'classId', 'radius', 'maxHp', 'maxResource', 'speed', 'level', 'xp', 'loadout', 'kills', 'deaths', 'npcKind', 'npcVariantId', 'bossKey', 'bossSkin', 'disposition', 'dialogueId'] as const;
+export const ACTOR_METADATA_KEYS = ['kind', 'name', 'classId', 'radius', 'maxHp', 'maxResource', 'speed', 'level', 'xp', 'loadout', 'kills', 'deaths', 'npcKind', 'npcVariantId', 'bossKey', 'bossSkin', 'disposition', 'dialogueId', 'showDialogueRing'] as const;
 export const ACTOR_STATE_KEYS = ['x', 'y', 'elevation', 'surfaceId', 'hp', 'resource', 'aim', 'teamId', 'hidden', 'revealedUntil', 'deadUntil', 'spawnProtectedUntil', 'pvpUntil', 'effects', 'cooldowns', 'spriteRow', 'spriteMoving', 'bossAwakenedAt', 'bossMeleeAt', 'bossDiedAt', 'questMarker', 'soulEscort', 'soulFarewellAt', 'soulFarewellX', 'soulFarewellY'] as const;
 export type ActorMetadata = Pick<Actor, typeof ACTOR_METADATA_KEYS[number]>;
 export type ActorState = Pick<Actor, typeof ACTOR_STATE_KEYS[number]>;

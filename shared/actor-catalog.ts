@@ -37,7 +37,7 @@ export function parseActorCatalog(value: unknown): ActorCatalog {
       if (!v || typeof v.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(v.id) || variants.has(v.id)
         || Object.hasOwn(NPC_DEFINITIONS, v.id) || typeof v.name !== 'string' || !v.name.trim() || v.name.length > 80
         || !Object.hasOwn(NPC_DEFINITIONS, v.base) || typeof v.skin !== 'string' || !Object.hasOwn(c.skins, v.skin)
-        || !c.skins[v.skin]?.animations?.moving
+        || (!c.skins[v.skin]?.animations?.moving && !c.skins[v.skin]?.animations?.idle)
         || (v.group !== undefined && (typeof v.group !== 'string' || v.group.length > 80))) fail('variante NPC: ID, nome, modello o sprite non validi.');
       if (v.conversation !== undefined && !validNpcConversation(v.conversation)) fail(`${v.name}: fumetti o dialoghi non validi. Controlla testi, risposte e destinazioni.`);
       variants.add(v.id);
@@ -88,7 +88,7 @@ export function parseActorCatalog(value: unknown): ActorCatalog {
     if (!c.npcSkins || typeof c.npcSkins !== 'object' || Array.isArray(c.npcSkins)) fail('skin NPC non valide.');
     for (const [kind, skin] of Object.entries(c.npcSkins)) {
       if (!Object.hasOwn(NPC_DEFINITIONS, kind) || typeof skin !== 'string' || !Object.hasOwn(c.skins, skin)
-        || !c.skins[skin].animations.moving) fail('NPC o animazione moving non validi.');
+        || (!c.skins[skin].animations.moving && !c.skins[skin].animations.idle)) fail('NPC o animazioni idle/moving non validi.');
     }
   }
   if (c.playerDrawSizes !== undefined) {

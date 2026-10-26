@@ -21,9 +21,10 @@ test('maker creates, configures, exports, restores, moves and deletes sound poin
     await page.locator('[data-tool="sound"]').click();
     await page.locator('#map').click({ position: { x: 240, y: 240 } });
     await expect(page.locator('#selection-title')).toHaveText('Punto sonoro');
+    await expect(page.locator('#sound-restart')).not.toBeChecked(); await page.locator('#sound-restart').check();
     await page.locator('#sound-name').fill('Musica locanda');
     await page.locator('#sound-inner').fill('3'); await page.locator('#sound-radius').fill('15');
-    const wave = Buffer.alloc(44 + 8000 * 2);
+    const wave = Buffer.alloc(44 + 8000 * 2 * 30);
     wave.write('RIFF'); wave.writeUInt32LE(wave.length - 8, 4); wave.write('WAVEfmt ', 8);
     wave.writeUInt32LE(16, 16); wave.writeUInt16LE(1, 20); wave.writeUInt16LE(1, 22);
     wave.writeUInt32LE(8000, 24); wave.writeUInt32LE(16000, 28); wave.writeUInt16LE(2, 32); wave.writeUInt16LE(16, 34);
@@ -36,12 +37,14 @@ test('maker creates, configures, exports, restores, moves and deletes sound poin
     const packed = JSON.parse(await readFile((await (await downloadEvent).path())!, 'utf8'));
     assert.equal(packed.document.soundPoints.length, 1);
     const point = packed.document.soundPoints[0];
+    assert.equal(point.restartOnEnter, true);
     assert.equal(point.name, 'Musica locanda'); assert.equal(point.radius, 15); assert.equal(point.innerRadius, 3);
     assert.deepEqual(point.music, { src, volume: .4 }); assert.equal(packed.music[src!].split(',')[1], wave.toString('base64'));
     await page.locator('#world-file').setInputFiles({ name: 'world.project.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(packed)) });
     await expect(page.locator('#status')).toContainText('Progetto importato');
     await page.locator('#project-settings > summary').click();
     await page.locator('#zone-list button').click(); await expect(page.locator('#sound-music')).toHaveValue(src!);
+    await expect(page.locator('#sound-restart')).toBeChecked();
     await page.locator('#entity-x').fill('4'); await page.locator('#selection-update').click();
     await page.locator('#apply-world').click(); await expect(page.locator('#status')).toContainText('Progetto salvato con backup');
     const saved = JSON.parse(await readFile(options.documentPath, 'utf8')); assert.equal(saved.soundPoints[0].x, 4);
@@ -64,6 +67,14 @@ test('maker creates, configures, exports, restores, moves and deletes sound poin
     await expect.poll(voices).toBe(1);
     const gain = () => page.evaluate(() => [...(window as any).testAudio.soundPoints.voices.values()][0]?.gain.gain.value ?? -1);
     await expect.poll(gain).toBeCloseTo(.4, 2);
+    await page.evaluate(() => { const w = window as any; [...w.testAudio.soundPoints.voices.values()][0].media.currentTime = 7; w.testAudio.setSoundPoints([w.testPoint], { x: 30, y: .5 }, 'world'); });
+    assert.equal(await voices(), 0);
+    await page.evaluate(() => { const w = window as any; w.testAudio.setSoundPoints([w.testPoint], { x: .5, y: .5 }, 'world'); });
+    const playbackTime = () => page.evaluate(() => [...(window as any).testAudio.soundPoints.voices.values()][0]?.media.currentTime ?? -1);
+    await expect.poll(playbackTime).toBeGreaterThanOrEqual(7);
+    await page.evaluate(() => { const w = window as any; w.testPoint.restartOnEnter = true; w.testAudio.setSoundPoints([w.testPoint], { x: .5, y: .5 }, 'world'); w.testAudio.setSoundPoints([], { x: 30, y: .5 }, 'world'); w.testAudio.setSoundPoints([w.testPoint], { x: .5, y: .5 }, 'world'); });
+    await expect.poll(playbackTime).toBeGreaterThan(0);
+    assert.ok(await playbackTime() < 2, 'restart option starts at the beginning');
     await page.evaluate(() => { const w = window as any; w.testAudio.setSoundPoints([w.testPoint], { x: 6.5, y: .5 }, 'world'); });
     await expect.poll(gain).toBeCloseTo(.2, 2);
     assert.ok(await page.evaluate(() => [...(window as any).testAudio.soundPoints.voices.values()][0].pan.pan.value) < 0);
@@ -79,7 +90,12 @@ test('maker creates, configures, exports, restores, moves and deletes sound poin
     await page.evaluate(() => { const w = window as any; w.testAudio.setSoundPoints([], { x: .5, y: .5 }, 'room'); });
     assert.equal(await voices(), 0);
     await page.evaluate(() => { const w = window as any; w.testAudio.setSoundPoints([w.testPoint], { x: .5, y: .5 }, 'world'); w.testAudio.setActive(false); });
-    assert.equal(await voices(), 0); assert.deepEqual(errors, []);
+    assert.equal(await voices(), 0);
+    await page.evaluate(({ src }) => { const w = window as any; w.testAudio.setActive(true); w.testAudio.setMusic({ src, volume: .4 }); }, { src });
+    await expect.poll(() => page.evaluate(() => [...(window as any).testAudio.music.voices.values()][0]?.media.readyState ?? 0)).toBeGreaterThanOrEqual(1);
+    await page.evaluate(({ src }) => { const w = window as any; [...w.testAudio.music.voices.values()][0].media.currentTime = 9; w.testAudio.reset(); w.testAudio.setMusic({ src, volume: .4 }); }, { src });
+    await expect.poll(() => page.evaluate(() => [...(window as any).testAudio.music.voices.values()][0]?.media.currentTime ?? 0)).toBeGreaterThanOrEqual(9);
+    await page.evaluate(() => (window as any).testAudio.setActive(false)); assert.deepEqual(errors, []);
   } finally {
     await browser?.close(); await studio.close();
     if (src && /^\/music\/codex-sound-editor-review-[a-f0-9]{16}\.wav$/.test(src)) await rm(resolve(options.root, 'public', src.slice(1)), { force: true });

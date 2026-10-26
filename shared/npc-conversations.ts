@@ -14,6 +14,9 @@ export function npcSpeech(kind: NpcTemplateId, variantId?: string, catalog = ACT
   const speech = npcConversation(kind, variantId, catalog)?.speech;
   return speech === undefined ? AMBIENT_SPEECH[kind] : speech ?? undefined;
 }
+export function npcDialogueRing(kind: NpcTemplateId, settings?: NpcSettings, catalog = ACTOR_CATALOG): boolean | undefined {
+  return settings?.showDialogueRing ?? npcConversation(kind, settings?.variantId, catalog)?.showDialogueRing;
+}
 export function npcDialogueId(kind: NpcTemplateId, settings?: NpcSettings, catalog = ACTOR_CATALOG): string | undefined {
   if (settings?.dialogueId !== undefined) return settings.dialogueId || undefined;
   const d = npcConversation(kind, settings?.variantId, catalog)?.dialogue;

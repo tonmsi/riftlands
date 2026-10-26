@@ -1,4 +1,5 @@
 import type { ZoneMusic } from '../../shared/world-schema';
+import { MusicPositions } from './music-position';
 
 export const MUSIC_FADE_SECONDS = 5;
 interface Voice {
@@ -10,6 +11,7 @@ interface Voice {
 /** Streaming, non-spatial music. Only boundary changes schedule browser-native fades. */
 export class ZoneMusicPlayer {
   private voices = new Map<string, Voice>();
+  private positions = new MusicPositions();
   private desired?: ZoneMusic;
   private muted = false;
   private volume = 1;
@@ -70,6 +72,7 @@ export class ZoneMusicPlayer {
     voice = { media, gain, source, started: false, from: 0, target: 0, at: this.context.currentTime };
     this.voices.set(track.src, voice);
     media.src = track.src;
+    this.positions.restore(track.src, track.src, media);
     const current = voice;
     void media.play().then(() => {
       if (this.voices.get(track.src) !== current) return;
@@ -96,6 +99,7 @@ export class ZoneMusicPlayer {
 
   private remove(src: string, voice: Voice): void {
     if (this.voices.get(src) !== voice) return;
+    this.positions.remember(src, src, voice.media); voice.media.onloadedmetadata = null;
     clearTimeout(voice.timer); voice.media.pause();
     voice.media.removeAttribute('src'); voice.media.load();
     voice.source.disconnect(); voice.gain.disconnect(); this.voices.delete(src);
