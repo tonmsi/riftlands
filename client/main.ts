@@ -30,6 +30,7 @@ import { RespawnTransition } from './ui/respawn-transition';
 import { prepareLobbyArt } from './ui/lobby/lobby-assets';
 import { CAMERA_STORAGE_KEY, parseCameraSettings } from './controls/camera-settings';
 import { CameraOptions } from './controls/camera-options';
+import { installEnvironmentOptions, readEnvironmentAnimations } from './controls/environment-options';
 import { DeviceOptions } from './controls/device-options';
 import { matchResultText } from './ui/transition-overlay';
 import { WarpUI } from './ui/warp-ui';
@@ -139,6 +140,9 @@ window.addEventListener('pointerdown', audio.unlock);
 window.addEventListener('keydown', audio.unlock);
 
 const renderer = new Renderer(ui.canvas);
+const environmentAnimations = readEnvironmentAnimations();
+renderer.setAmbientAnimations(environmentAnimations);
+installEnvironmentOptions(document.querySelector<HTMLElement>('#app')!, environmentAnimations, enabled => renderer.setAmbientAnimations(enabled));
 const fishingUI = new FishingUI(document.querySelector<HTMLElement>('.game-hud')!, () => renderer.world,
   (x, y) => renderer.screenToWorld(x, y), command => { if (playing && connection.connected) connection.send({ type: 'interaction', command: { kind: 'fishing', command } }); });
 let cameraSettings = parseCameraSettings(null);

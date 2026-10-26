@@ -1,4 +1,5 @@
 import type { WorldAsset } from '../../../shared/world-schema';
+import { worldAssetImageBounds } from '../../../shared/world-schema';
 
 /** Random pools stay together; independent assets follow their public folder. */
 export const assetGroup = (asset: WorldAsset, assets: readonly WorldAsset[] = []): string => {
@@ -57,7 +58,7 @@ export class WorldAssetCatalog {
       groups.get(group)!.push(asset);
     }
     const signature = JSON.stringify([search, [...groups].map(([group, assets]) => [group, expansion.get(group) ?? true, this.limits.get(group) ?? PAGE_SIZE,
-      assets.map(a => [a.id, a.name, a.image, a.width, a.height, a.generation.enabled])])]);
+      assets.map(a => [a.id, a.name, a.image, a.width, a.height, a.generation.enabled, a.animation])])]);
     if (signature === this.signature) { this.markActive(); return; }
     this.signature = signature;
     this.root.replaceChildren();
@@ -79,7 +80,18 @@ export class WorldAssetCatalog {
           const info = document.createElement('div'), name = document.createElement('span'), detail = document.createElement('small');
           name.textContent = asset.name; detail.textContent = `${asset.width} × ${asset.height} · ${asset.generation.enabled ? 'genera + manuale' : 'manuale'}`;
           if (asset.variantOf) detail.textContent = `${asset.width} × ${asset.height} · variante casuale`;
-          info.append(name, detail); button.append(image, info); button.onclick = () => this.select(asset.id); items.append(button);
+          let thumbnail: HTMLElement = image;
+          if (asset.animation) {
+            image.loading = 'eager';
+            const canvas = document.createElement('canvas'), s = asset.animation;
+            canvas.width = 48; canvas.height = 48; canvas.style.cssText = 'width:44px;height:44px;flex-shrink:0';
+            image.onload = () => {
+              const bounds = worldAssetImageBounds(asset), scale = Math.min(48 / bounds.width, 48 / bounds.height), w = bounds.width * scale, h = bounds.height * scale;
+              canvas.getContext('2d')!.drawImage(image,0,0,s.frameWidth,s.frameHeight,(48-w)/2,(48-h)/2,w,h);
+            };
+            thumbnail = canvas;
+          }
+          info.append(name, detail); button.append(thumbnail, info); button.onclick = () => this.select(asset.id); items.append(button);
         }
         if (assets.length > limit) {
           const more = document.createElement('button'); more.className = 'asset-more'; more.textContent = `Mostra altri · ${assets.length - limit} asset`;

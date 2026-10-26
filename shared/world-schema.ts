@@ -5,6 +5,7 @@ import { validNpcSettings, type NpcSettings } from './npc-settings';
 import { NPC_DEFINITIONS, type NpcKind, type NpcTemplateId } from './npcs';
 import { WORLD_TILE_TERRAINS, type WorldTileChunk } from './world-tiles';
 import { CLIFF_VARIANTS, type CliffVariant } from './terrain-cliffs';
+import { validAssetSpritesheet, type AssetSpritesheet } from './asset-sprites';
 
 /** Coordinates in authored documents are tiles, including fractional visual dimensions.
  * Gameplay positions remain world units. The format contains data only, never scripts. */
@@ -20,6 +21,7 @@ export interface AssetGeneration {
   temperature: [number, number]; moisture: [number, number]; density: number; spacing: number;
 }
 export interface WorldAsset {
+  animation?: AssetSpritesheet;
   /** Fine behavior cells per tile edge; never changes image or physical dimensions. */
   cellSubdivision?: 1 | 2 | 4 | 8;
   geometry?: ElevationGeometry;
@@ -43,6 +45,13 @@ export function worldAssetShadow(asset: WorldAsset, parent?: WorldAsset): AssetS
 }
 export function worldAssetImageBounds(asset: WorldAsset) {
   const { x = 0, y = 0, scale = 1 } = asset.imageTransform ?? {};
+  if (asset.animation) {
+    const { frameWidth, frameHeight } = asset.animation;
+    const fit = Math.min(asset.width / frameWidth, asset.height / frameHeight);
+    const width = frameWidth * fit * scale, height = frameHeight * fit * scale;
+    // Fit the frame inside the tile footprint, centered horizontally with its base anchored.
+    return { x: x + (asset.width * scale - width) / 2, y: y + asset.height * scale - height, width, height };
+  }
   return { x, y, width: asset.width * scale, height: asset.height * scale };
 }
 export interface AssetPlacement extends Vec2 { id: string; assetId: string; pivotY?: number; baseElevation?: number; bushJs?: boolean; }
@@ -204,6 +213,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
     if (a.imageTransform !== undefined && (!object(a.imageTransform) || !finite(a.imageTransform.x, -32, 32)
       || !finite(a.imageTransform.y, -32, 32) || !finite(a.imageTransform.scale, .1, 8))) fail(`trasformazione immagine di ${a.id}`);
     if (a.visual !== undefined && (!object(a.visual) || (a.visual.kind !== 'image' && (a.visual.kind !== 'fire' || !['brazier', 'campfire'].includes(a.visual.style))))) fail(`aspetto di ${a.id}`);
+    if (a.animation !== undefined && (!validAssetSpritesheet(a.animation) || !/\.png$/i.test(a.image) || worldAssetVisual(a).kind !== 'image')) fail(`spritesheet di ${a.id}: usa un PNG e parametri validi`);
     if (a.shadow !== undefined && a.shadow !== null && (!object(a.shadow) || !['ellipse', 'silhouette'].includes(a.shadow.kind) || !finite(a.shadow.skew, -1, 1) || !['x', 'y', 'width', 'height', 'opacity', 'softness'].every(k => finite(a.shadow[k], 0, 1)))) fail(`ombra di ${a.id}`);
     if (a.cells.length !== assetCellColumns(a) * assetCellRows(a) || !a.cells.every((c: any) => object(c) && boolean(c.blocked) && ['normal', 'hide', 'fade', 'hide-fade'].includes(c.visibility) && (c.elevation===undefined||validElevation(c.elevation)))) fail(`celle di ${a.id}`);
     if (a.fade !== undefined && (!object(a.fade) || !finite(a.fade.opacity, 0, 1) || !finite(a.fade.feather, 0, 1) || !integer(a.fade.durationMs, 0, 2000))) fail(`sfumatura di ${a.id}`);
@@ -214,6 +224,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   }
   unique(d.assets, a => a.id, 'asset'); const assets = new Set(d.assets.map((a: any) => a.id));
   if (d.cliffAssets !== undefined && (!object(d.cliffAssets) || Object.entries(d.cliffAssets).some(([variant, assetId]) => !CLIFF_VARIANTS.includes(variant as CliffVariant) || !assets.has(assetId)))) fail('catalogo bordi cliff-grid');
+  if (d.cliffAssets && d.assets.some((a: WorldAsset) => a.animation && Object.values(d.cliffAssets).includes(a.id))) fail('gli spritesheet sono per gli asset piazzati, non per i bordi automatici del terreno');
   const assetDefinitions = new Map<string, WorldAsset>(d.assets.map((a: WorldAsset) => [a.id, a]));
   for (const a of d.assets) if (a.variantOf !== undefined) {
     const parent = assetDefinitions.get(a.variantOf);

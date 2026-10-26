@@ -41492,6 +41492,193 @@
         "feather": 0.35,
         "durationMs": 180
       }
+    },
+    {
+      "id": "banner",
+      "name": "banner",
+      "image": "/world-assets/banner-spritesheet.png",
+      "width": 10,
+      "height": 3,
+      "columns": 10,
+      "rows": 3,
+      "cells": [
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        },
+        {
+          "blocked": false,
+          "visibility": "normal"
+        }
+      ],
+      "layer": "object",
+      "pivot": {
+        "x": 0.5,
+        "y": 1
+      },
+      "generation": {
+        "enabled": false,
+        "category": "vegetation",
+        "temperature": [
+          0,
+          1
+        ],
+        "moisture": [
+          0,
+          1
+        ],
+        "density": 0.2,
+        "spacing": 1,
+        "terrains": [
+          "grass",
+          "bush",
+          "mud"
+        ]
+      },
+      "group": "Importati",
+      "visual": {
+        "kind": "image"
+      },
+      "shadow": {
+        "kind": "silhouette",
+        "skew": 0,
+        "x": 0.5,
+        "y": 0.95,
+        "width": 0.8,
+        "height": 0.25,
+        "opacity": 0.55,
+        "softness": 0.5
+      },
+      "fade": {
+        "opacity": 0.28,
+        "feather": 0.35,
+        "durationMs": 180
+      },
+      "animation": {
+        "frameWidth": 256,
+        "frameHeight": 290,
+        "frames": 8,
+        "frameMs": 195,
+        "loop": true,
+        "randomStart": true
+      },
+      "imageTransform": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      }
     }
   ],
   "placements": [
@@ -52336,6 +52523,55 @@
       "assetId": "Immagine-ChatGPT-26-ott-2026-21_09_21-3",
       "x": -72,
       "y": 115,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-7bd957a0-4882-4d5f-bbbe-b06c15e6524b",
+      "assetId": "banner",
+      "x": 98,
+      "y": 213,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-9016a4c3-927d-46c1-a464-43f09b8b5c15",
+      "assetId": "banner",
+      "x": 16,
+      "y": 170,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-c5ed62a2-4bbe-4a35-b2f3-9f8220e91013",
+      "assetId": "banner",
+      "x": -23,
+      "y": 160,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-7e978a0e-51fc-4edc-9798-663dc77ef2f9",
+      "assetId": "banner",
+      "x": -33,
+      "y": 152,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-d7b8d125-aa49-4320-a15c-9d7951479dd9",
+      "assetId": "banner",
+      "x": -46,
+      "y": 146,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-36d39b3a-7716-4454-90e9-56ff50b5006b",
+      "assetId": "banner",
+      "x": -94,
+      "y": 111,
+      "baseElevation": 0
+    },
+    {
+      "id": "asset-df735609-890c-4bd1-83b2-fe8d52ce2e05",
+      "assetId": "banner",
+      "x": -72,
+      "y": 94,
       "baseElevation": 0
     }
   ],

@@ -174,7 +174,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         if (!assetVisible(a, base, visible)) continue;
         if (!light) {
             drawVisibleAsset(ctx, art, a, p, base, visible, s, time);
-            animated ||= worldAssetVisual(a).kind === 'fire';
+            animated ||= worldAssetVisual(a).kind === 'fire' || !!a.animation;
         }
         if (selectedIds.has(`placement:${p.id}`)) {
             ctx.strokeStyle = '#f0df9d';
@@ -295,7 +295,7 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
         ctx.strokeRect(pointerTile.x * s, pointerTile.y * s, a.columns * s, a.rows * s);
         ctx.setLineDash([]);
         drawVisibleAsset(ctx, light ? lightArt! : art, a, { ...pointerTile, id: 'preview', assetId: a.id }, options.activeElevation ?? 0, visible, s, time, .45);
-        animated ||= !light && worldAssetVisual(a).kind === 'fire';
+        animated ||= !light && (worldAssetVisual(a).kind === 'fire' || !!a.animation);
     }
     for (const room of world.rooms) {
       if (!floorVisible(visible, 0)) continue;
@@ -334,7 +334,7 @@ export function assetView(assetCanvas: HTMLCanvasElement, a: WorldAsset | undefi
     if (!a) return;
     const r = assetCanvas.getBoundingClientRect(); return { a, ...camera.layout(r.width, r.height, a.columns, a.rows, worldAssetImageBounds(a)) };
 }
-export function drawAssetGrid(assetCanvas: HTMLCanvasElement, art: WorldAssetArt, a: WorldAsset | undefined, previewFade = false, camera?: AssetGridCamera, editImage = false, visible?: ElevationVisibility): void {
+export function drawAssetGrid(assetCanvas: HTMLCanvasElement, art: WorldAssetArt, a: WorldAsset | undefined, previewFade = false, camera?: AssetGridCamera, editImage = false, visible?: ElevationVisibility, frameOverride?: number): void {
     const assetCtx = assetCanvas.getContext('2d')!;
     const { width, height, dpr } = sizeCanvas(assetCanvas);
     assetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -344,7 +344,7 @@ export function drawAssetGrid(assetCanvas: HTMLCanvasElement, art: WorldAssetArt
         return;
     assetCtx.save();
     assetCtx.translate(v.x, v.y);
-    drawVisibleAsset(assetCtx, art, v.a, { id: '', assetId: v.a.id, x: 0, y: 0 }, 0, visible, v.s, performance.now(), 1, previewFade ? 1 : 0);
+    drawVisibleAsset(assetCtx, art, v.a, { id: '', assetId: v.a.id, x: 0, y: 0 }, 0, visible, v.s, performance.now(), 1, previewFade ? 1 : 0, frameOverride);
     {
     const step=v.s/assetCellSubdivision(v.a), columns=assetCellColumns(v.a), rows=assetCellRows(v.a);
     for (let y = Math.max(0,Math.floor(-v.y/step)); y < Math.min(rows,Math.ceil((height-v.y)/step)); y++)

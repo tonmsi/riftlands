@@ -16,11 +16,13 @@ import type { CoastMotionArt } from './coast-motion';
 import { surfaceOpacity } from './bridge-visibility';
 import type { Elevated } from '../../shared/elevation';
 import type { Vec2 } from '../../shared/types';
+import { applyBushWind } from './bush-wind';
 const DEFAULT_PAINTING = defaultWorldPainting();
 const DEFAULT_COAST_MOTION=defaultCoastMotion();
 type SurfaceKind='grass'|'path'|'mud'|'stone'|'water'|'snow'|'ice';
 interface TerrainCache extends RenderBounds {canvas:HTMLCanvasElement;world:World;scale:number;}
 interface TerrainPreparation {cache:TerrainCache;slices:RenderBounds[];next:number;motion:CoastMotionArt;}
+interface LegacyBush { x: number; y: number; width: number; height: number; snowy: boolean; js: boolean; }
 function remember<K,V>(cache:Map<K,V>,key:K,value:V,limit=8192):V {
   if(cache.size>=limit&&!cache.has(key))cache.delete(cache.keys().next().value!);
   cache.set(key,value);return value;
@@ -48,6 +50,14 @@ function coverTileBleed(ctx: CanvasRenderingContext2D, vx: number, vy: number, c
 
 /** Terrain painting and scrolling cache. No camera, gameplay or actor animation state. */
 export class TerrainRenderer {
+  private ambientAnimations = false;
+  private legacyBushes = new Map<string, LegacyBush>();
+  private bushGroupsRevision = 0;
+  private visibleBushViews = new Map<string, LegacyBush[]>();
+  setAmbientAnimations(enabled: boolean): void {
+    if (enabled === this.ambientAnimations) return;
+    this.ambientAnimations = enabled; this.bushArt.setAmbientAnimations(enabled); this.invalidate();
+  }
   private activeWorld?: World;
   private painting: WorldPainting = defaultWorldPainting();
   private readonly maskedTerrain = new PaintedTerrain();
@@ -91,6 +101,7 @@ export class TerrainRenderer {
     this.spritesReady = this.bushArt.ready(terrainBushAsset).then(() => { this.bushReady = true; });
   }
   invalidate(): void {
+    this.legacyBushes.clear(); this.visibleBushViews.clear();
     this.surfaceMaterialCache.clear(); this.surfacePainter?.invalidate();
     for(const canvas of [this.terrainCache?.canvas,this.preparation?.cache.canvas,this.spareCanvas])if(canvas){canvas.width=canvas.height=0;}
     this.terrainCache=undefined;this.preparation=undefined;this.spareCanvas=undefined;this.previousCamera=undefined;
@@ -288,8 +299,39 @@ export class TerrainRenderer {
       terrainExtraCachePixels:extraCanvas?extraCanvas.width*extraCanvas.height:0});
   }
   drawCoastMotion(ctx:CanvasRenderingContext2D,bounds:RenderBounds,time:number):boolean {
-    if(!perf.feature('sea'))return false;
-    const start=perf.begin();try{return this.maskedTerrain.motion.draw(ctx,bounds,time);}finally{perf.end('sea-animation',start);}
+    const bushes = this.drawBushMotion(ctx,bounds,time);
+    if(!perf.feature('sea') || (ctx === this.ctx && !this.ambientAnimations && this.gameAnimationsConfigured))return bushes;
+    const start=perf.begin();try{return this.maskedTerrain.motion.draw(ctx,bounds,time) || bushes;}finally{perf.end('sea-animation',start);}
+  }
+  private gameAnimationsConfigured = false;
+  configureGameAnimations(enabled: boolean): void { this.gameAnimationsConfigured = true; this.setAmbientAnimations(enabled); }
+  private drawBushMotion(ctx: CanvasRenderingContext2D, bounds: RenderBounds, time: number): boolean {
+    if (!this.activeWorld || !this.legacyBushes.size) return false;
+    let animated = false;
+    const cell = TILE_SIZE * 2;
+    const left = Math.floor(bounds.left / cell) * cell - cell, top = Math.floor(bounds.top / cell) * cell - cell;
+    const right = Math.ceil(bounds.right / cell) * cell + cell, bottom = Math.ceil(bounds.bottom / cell) * cell + cell;
+    const key = `${left}:${top}:${right}:${bottom}:${this.bushGroupsRevision}`;
+    let visible = this.visibleBushViews.get(key);
+    if (!visible) {
+      visible = [...this.legacyBushes.values()].filter(p => p.x*TILE_SIZE >= left && p.x*TILE_SIZE <= right && p.y*TILE_SIZE >= top && p.y*TILE_SIZE <= bottom);
+      if (this.visibleBushViews.size >= 8) this.visibleBushViews.delete(this.visibleBushViews.keys().next().value!);
+      this.visibleBushViews.set(key, visible);
+    }
+    for (const p of visible) {
+      if (!p.js) {
+        const a = this.activeWorld.authoring.terrainBushAt(p.x, p.y);
+        if (!this.ambientAnimations && !a.animation) continue;
+        animated = true;
+        this.bushArt.draw(ctx, a, { id: `terrain-bush:${p.x},${p.y}`, assetId: a.id, x: p.x, y: p.y }, 1, TILE_SIZE, time);
+      } else {
+        if (!this.ambientAnimations) continue;
+        animated = true;
+        ctx.save(); applyBushWind(ctx, (p.y + p.height)*TILE_SIZE, time, noise(p.x, p.y));
+        this.environmentArt.draw(ctx, 'bush', p.x*TILE_SIZE, p.y*TILE_SIZE, noise(p.x,p.y), 0, p.width, p.height, p.snowy); ctx.restore();
+      }
+    }
+    return animated;
   }
   drawElevatedGround(world: World, ctx: CanvasRenderingContext2D, surfaces: readonly WorldSurface[], time: number): void {
     const ground = surfaces.filter(s => s.painted && s.ground); if (!ground.length) return;
@@ -299,6 +341,7 @@ export class TerrainRenderer {
     const cache = this.terrainCache;
     if (cache?.world === world) ctx.drawImage(cache.canvas, cache.left, cache.top, cache.canvas.width/cache.scale, cache.canvas.height/cache.scale);
     else this.drawTerrain(world, time, ctx, { left: Math.min(...ground.map(s=>s.x))*TILE_SIZE, top: Math.min(...ground.map(s=>s.y))*TILE_SIZE, right: Math.max(...ground.map(s=>s.x+s.width))*TILE_SIZE, bottom: Math.max(...ground.map(s=>s.y+s.height))*TILE_SIZE });
+    this.drawBushMotion(ctx, { left: Math.min(...ground.map(s=>s.x))*TILE_SIZE, top: Math.min(...ground.map(s=>s.y))*TILE_SIZE, right: Math.max(...ground.map(s=>s.x+s.width))*TILE_SIZE, bottom: Math.max(...ground.map(s=>s.y+s.height))*TILE_SIZE }, time);
     ctx.restore();
   }
   /** Render deck artwork with the same palette, climate and textures as ordinary terrain. */
@@ -336,6 +379,7 @@ export class TerrainRenderer {
   }
   drawTerrain(world: World, time: number, ctx: CanvasRenderingContext2D, bounds: RenderBounds, material?: TileKind): void {
     const requestedBounds=bounds;
+    if (this.activeWorld !== world) { this.legacyBushes.clear(); this.visibleBushViews.clear(); this.bushGroupsRevision++; }
     this.activeWorld = world;
     this.painting = world.authoring.document.painting ?? DEFAULT_PAINTING;
     if(this.sampleWorld!==world||this.sampleRevision!==world.authoringRevision||this.sampleLock!==world.lockRevision||this.samplePainting!==this.painting||this.sampleMaterial!==material){
@@ -688,6 +732,12 @@ export class TerrainRenderer {
       for (let tx = Math.floor(bounds.left / TILE_SIZE / 2) * 2; tx <= Math.floor(bounds.right / TILE_SIZE); tx += 2) {
         for (const group of sceneryGroups(getScenery, tx, ty)) {
           const isSnowy = surfaceAt(group.x, group.y) === 'snow' || surfaceAt(group.x, group.y) === 'ice';
+          if (group.tile === 'bush' && (this.ambientAnimations || (world.authoring.tiles.at(group.x,group.y)?.bushStyle !== 'js' && world.authoring.terrainBushAt(group.x,group.y).animation))) {
+            const key = `${group.x},${group.y}`;
+            this.legacyBushes.set(key, { x: group.x, y: group.y, width: group.width, height: group.height, snowy: isSnowy, js: world.authoring.tiles.at(group.x, group.y)?.bushStyle === 'js' });
+            if (this.legacyBushes.size > 8192) this.legacyBushes.delete(this.legacyBushes.keys().next().value!);
+            this.bushGroupsRevision++; continue;
+          }
           if (group.tile === 'bush' && world.authoring.tiles.at(group.x, group.y)?.bushStyle !== 'js') {
             const asset = world.authoring.terrainBushAt(group.x, group.y);
             this.bushArt.draw(ctx, asset, { id: `terrain-bush:${group.x},${group.y}`, assetId: asset.id, x: group.x, y: group.y });

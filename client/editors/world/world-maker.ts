@@ -1,3 +1,5 @@
+import { installAssetSpriteEditor } from './asset-sprite-editor';
+import { spritesheetLayout } from '../../../shared/asset-sprites';
 import { loadNpcEditorCatalog, readNpcChoice, refreshNpcSelect } from '../npc-catalog';
 import { installWorldPaintingPanel } from './world-painting-panel';
 import { installElevationEditor } from './elevation-editor';
@@ -369,6 +371,29 @@ function focusWorldIssue(location: WorldIssueLocation): void {
     else if(location.kind){selectTool('select');selected={kind:location.kind,id:location.id!};}
     refresh();centerAt(location.point.x+.5,location.point.y+.5);revealInspector();schedule(true);
 }
+const spriteEditor = installAssetSpriteEditor(root, {
+    asset: active, schedule, report,
+    apply: animation => {
+        const failures = failedChanges;
+        change(() => { const a = active()!; if (animation) { a.animation = animation; a.visual = {kind:'image'}; } else delete a.animation; });
+        if (failedChanges !== failures) throw new Error(el('status').textContent ?? 'Animazione non valida.');
+        inspectorDrafts.accept('asset-inspector', [...spriteEditor.configIds, 'asset-visual']); refresh(); schedule();
+        status('Animazione aggiornata. Premi Applica al gioco per salvare il progetto.');
+    },
+    import: async (file, animation, footprint) => {
+        if (file.size > 5_000_000) throw new Error('Massimo 5 MB per immagine.');
+        const id = active()?.id; if (!id) return;
+        const image = await upload(file,'image/png'), size = await imageSize(image); if (animation) spritesheetLayout(animation,size.width,size.height); await settleGesture();
+        const failures = failedChanges;
+        change(() => { const a = draft.assets.find(a=>a.id===id); if (!a) throw new Error('Asset non più presente.'); a.image=image; a.visual={kind:'image'};
+            if (animation) a.animation=animation; else delete a.animation;
+            if (footprint) { resizeWorldAsset(a,footprint.width,footprint.height); delete a.imageTransform; }
+        });
+        if (failedChanges !== failures) throw new Error(el('status').textContent ?? 'Spritesheet non valido.');
+        inspectorDrafts.accept('asset-inspector', [...spriteEditor.configIds, 'asset-visual', ...(footprint ? ['asset-width','asset-height','asset-image-x','asset-image-y','asset-image-scale'] : [])]); refresh(); schedule();
+        status(animation ? 'Spritesheet creato e applicato alla bozza. Premi Applica al gioco per salvare il progetto.' : 'PNG importato. Imposta le dimensioni dei fotogrammi e premi Applica animazione.');
+    },
+});
 function refresh(): void {
     if (selected !== groupPrimary || tool !== 'select') clearObjectSelection();
     input('bush-js').disabled = !['grass', 'bush'].includes(val('terrain'));
@@ -409,6 +434,7 @@ function refresh(): void {
         refreshAsset(active()!);
     el('zone-list').replaceChildren(...(surface().soundPoints ?? []).map(point => { const b = document.createElement('button'); b.textContent = `♫ ${point.name}`; b.onclick = () => { selected = { kind: 'sound', id: point.id }; selectTool('select'); centerAt(point.x + .5, point.y + .5); refresh(); revealInspector(); }; return b; }), ...surface().zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
     inspectorDrafts.restore();
+    spriteEditor.syncInfo();
     refreshClimateTransitionControl();
     root.dispatchEvent(new Event('world-refresh'));
 }
@@ -417,6 +443,7 @@ function refreshAsset(a: WorldAsset): void {
     const generation = (a.variantOf ? draft.assets.find(other => other.id === a.variantOf) : a)!.generation;
     set('asset-cell-subdivision',assetCellSubdivision(a));
     el('asset-cell-info').textContent=`Griglia: ${assetCellColumns(a)} × ${assetCellRows(a)} celle. Ogni cella: 1/${assetCellSubdivision(a)} di tile (${48/assetCellSubdivision(a)} unità).`;
+    spriteEditor.refresh();
     const visual = worldAssetVisual(a);
     const shadow = effectiveAsset(a).shadow;
     el('asset-shadow-inherit-label').hidden = !a.variantOf;
@@ -446,7 +473,7 @@ function refreshAsset(a: WorldAsset): void {
     input('asset-group').readOnly = true;
     input('asset-group').title = 'Derivata dalla cartella immagine in public/world-assets.';
     el('asset-groups').replaceChildren(...[...new Set(draft.assets.flatMap(a => a.group ? [a.group] : []))].sort().map(group => new Option(group)));
-    el('asset-preview-title').textContent = `Celle · ${a.name}`;
+    el('asset-preview-title').textContent = `Immagine · ${a.name}`;
     set('asset-width', a.width);
     set('asset-height', a.height);
     set('asset-image-x', Math.round((a.imageTransform?.x ?? 0) * 10000) / 10000); set('asset-image-y', Math.round((a.imageTransform?.y ?? 0) * 10000) / 10000);
@@ -572,7 +599,7 @@ function draw(): void {
     const lightMode = input('light-mode').checked;
     const animated = drawWorldEditorMap(canvas, world, mapDocument(draft, activeMap), view, art, { lightMode, painting: input('show-painting').checked, grid: input('show-grid').checked, cells: input('show-cells').checked,
         zones: input('show-zones').checked, npcs: input('show-npcs').checked, selected, selectedObjects, gesture, pointerTile, tool, activeAsset: active() && effectiveAsset(active()!), activeElevation: elevationEditor.elevation(), visibleElevations: elevationEditor.visibility() });
-    if (!lightMode && (animated || (!el('asset-inspector').hidden && active() && worldAssetVisual(active()!).kind === 'fire')) && animationTimer === undefined)
+    if (!lightMode && (animated || (!el('asset-inspector').hidden && active() && (worldAssetVisual(active()!).kind === 'fire' || spriteEditor.preview(active()!).animated))) && animationTimer === undefined)
         animationTimer = setTimeout(() => { animationTimer = undefined; schedule(); }, 33);
     warpEditor.draw(canvas, view, elevationEditor.visibility());
     const ctx = canvas.getContext('2d')!, dpr = canvas.width / Math.max(1, canvas.getBoundingClientRect().width);
@@ -583,7 +610,8 @@ function draw(): void {
 function drawAssetGrid(): void {
     if (el('asset-inspector').hidden) return;
     assetView();
-    renderAssetGrid(assetCanvas, art, active() && effectiveAsset(active()!), input('preview-fade').checked, assetCamera, input('edit-asset-image').checked, elevationEditor.visibility());
+    const preview = active() ? spriteEditor.preview(effectiveAsset(active()!)) : undefined;
+    renderAssetGrid(assetCanvas, art, preview?.asset, input('preview-fade').checked, assetCamera, input('edit-asset-image').checked, elevationEditor.visibility(), preview?.frame);
     const v = assetView(); if (v) {
         const ctx = assetCanvas.getContext('2d')!, dpr = assetCanvas.width / Math.max(1, assetCanvas.getBoundingClientRect().width);
         ctx.save(); ctx.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
@@ -1077,6 +1105,8 @@ previewDialog.addEventListener('cancel', () => finishGesture(undefined, true));
 previewDialog.addEventListener('close', () => { finishGesture(undefined, true); el('asset-preview-home').append(el('asset-preview')); el('asset-expand').textContent = 'Ingrandisci'; schedule(); });
 on('asset-update', () => change(() => {
     const a = active()!;
+    const animation = val('asset-visual') === 'image' ? spriteEditor.read() : undefined;
+    if (animation) a.animation = animation; else delete a.animation;
     resizeWorldAsset(a,num('asset-width'),num('asset-height')); a.name=val('asset-name').trim();assetCatalog.reveal(a);
     if (val('asset-variant-of')) a.variantOf = val('asset-variant-of'); else delete a.variantOf;
     a.layer=val('asset-layer') as 'ground'|'object';a.pivot.y=num('asset-pivot');
@@ -1088,9 +1118,11 @@ on('asset-update', () => change(() => {
     a.generation={enabled:input('gen-enabled').checked,category:val('gen-category').trim(),temperature:[num('gen-temp-min'),num('gen-temp-max')],moisture:[num('gen-moist-min'),num('gen-moist-max')],density:num('gen-density')/100,spacing:num('gen-spacing'),terrains:[...el('gen-terrains').querySelectorAll<HTMLInputElement>('input:checked')].map(c=>c.value as TileKind)};
 }));
 input('asset-width').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
-    set('asset-height', Math.round(num('asset-width') * a.height / a.width * 1000) / 1000); });
+    { const frame = spriteEditor.preview(a).asset.animation;
+    set('asset-height', Math.round(num('asset-width') * (frame ? frame.frameHeight / frame.frameWidth : a.height / a.width) * 1000) / 1000); } });
 input('asset-height').addEventListener('input', () => { const a = active(); if (a && input('keep-ratio').checked)
-    set('asset-width', Math.round(num('asset-height') * a.width / a.height * 1000) / 1000); });
+    { const frame = spriteEditor.preview(a).asset.animation;
+    set('asset-width', Math.round(num('asset-height') * (frame ? frame.frameWidth / frame.frameHeight : a.width / a.height) * 1000) / 1000); } });
 on('fill-cells', () => change(() => { const a = active()!; a.cells = a.cells.map(paintedAssetCell); el('asset-cell-pending').hidden = true; }));
 on('asset-fade-update', () => change(() => { active()!.fade = { opacity: num('fade-opacity') / 100, feather: num('fade-feather'), durationMs: num('fade-duration') }; }));
 on('gen-update', () => change(() => { const a = active()!; a.generation = { enabled: input('gen-enabled').checked, category: val('gen-category').trim(), temperature: [num('gen-temp-min'), num('gen-temp-max')], moisture: [num('gen-moist-min'), num('gen-moist-max')], density: num('gen-density') / 100, spacing: num('gen-spacing'), terrains: [...el('gen-terrains').querySelectorAll<HTMLInputElement>('input:checked')].map(c => c.value as TileKind) }; }));
@@ -1328,7 +1360,12 @@ const replaceButton = document.createElement('button'); replaceButton.id = 'asse
 const replaceInternalButton = document.createElement('button'); replaceInternalButton.id = 'asset-replace-image-internal'; replaceInternalButton.className = 'wide'; replaceInternalButton.textContent = 'Sostituisci immagine interna · dal catalogo';
 el('asset-update').after(replaceInternalButton, replaceButton); root.append(replaceFile);
 async function replaceAssetImage(id: string, image: string): Promise<void> {
-    await imageSize(image); await settleGesture();
+    const size = await imageSize(image), asset = draft.assets.find(a => a.id === id);
+    if (asset?.animation) {
+        if (!/\.png$/i.test(image)) throw new Error('Disattiva prima lo spritesheet per usare un SVG.');
+        spritesheetLayout(asset.animation,size.width,size.height);
+    }
+    await settleGesture();
     const failures = failedChanges;
     change(() => { const a = draft.assets.find(a => a.id === id); if (!a) throw new Error('Asset non più presente.'); a.image = image; });
     if (failedChanges !== failures) throw new Error(el('status').textContent ?? 'Impossibile sostituire l’immagine.');

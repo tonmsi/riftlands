@@ -3,6 +3,7 @@ import { readFile, writeFile, rename, mkdir, access, unlink, realpath, lstat } f
 import { dirname, resolve, relative, isAbsolute, join } from 'node:path';
 import { parseWorldDocument, validWorldAssetImage, type WorldDocument } from '../shared/world-schema';
 import { readActorProject } from './actor-library';
+import { spritesheetLayout } from '../shared/asset-sprites';
 import { npcVariant } from '../shared/npc-variants';
 import { assetFilePath } from '../shared/world-asset-paths';
 import { validateWorld } from '../shared/world-validation';
@@ -88,6 +89,12 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     for (const a of next.assets) {
       try { await access(resolve(options.root, 'public', decodeURIComponent(a.image.slice(1)))); }
       catch { throw new Error(`Immagine assente per ${a.name}: ${decodeURIComponent(a.image)}. Premi Sincronizza cartelle per riparare i file spostati, oppure ripristina l’immagine.`); }
+      if (a.animation) {
+        const bytes = await readFile(resolve(options.root,'public',decodeURIComponent(a.image.slice(1))));
+        if (bytes.length < 24 || bytes.subarray(0,8).toString('hex') !== '89504e470d0a1a0a') throw new Error(`${a.name}: spritesheet PNG non valido.`);
+        try { spritesheetLayout(a.animation,bytes.readUInt32BE(16),bytes.readUInt32BE(20)); }
+        catch (e) { throw new Error(`${a.name}: ${e instanceof Error ? e.message : String(e)}`); }
+      }
     }
     for (const doc of [next, ...(next.interiors ?? []).map(m => m.document)])
       for (const zone of [...doc.zones, ...(doc.soundPoints ?? [])]) if (zone.music) await access(resolve(options.root, 'public', zone.music.src.slice(1)));

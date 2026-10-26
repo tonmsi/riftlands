@@ -523,6 +523,34 @@
           "frameMs": 200
         }
       }
+    },
+    "npc-dock-skeptic": {
+      "drawSize": 48,
+      "anchor": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 1,
+        "y": 13,
+        "width": 23,
+        "height": 10.08,
+        "opacity": 0.28
+      },
+      "animations": {
+        "idle": {
+          "asset": "/actor-assets/Sprite-di-pescatore-in-quattro-pose-1.png",
+          "columns": 4,
+          "rows": 1,
+          "directional": false,
+          "loop": true,
+          "frameMs": 180
+        }
+      }
     }
   },
   "playerDrawSizes": {
@@ -538,7 +566,8 @@
     "north-scout": "npc-north-scout",
     "wounded-scout": "npc-wounded-scout",
     "platos": "npc-platos",
-    "fallen-soldier": "npc-fallen-soldier"
+    "fallen-soldier": "npc-fallen-soldier",
+    "dock-skeptic": "npc-dock-skeptic"
   },
   "npcVariants": [
     {

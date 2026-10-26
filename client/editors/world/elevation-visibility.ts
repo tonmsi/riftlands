@@ -39,8 +39,8 @@ export function assetVisible(a: WorldAsset, base: number, filter: ElevationVisib
 
 /** The bitmap's unannotated region belongs to its base; each surface region has its own floor. */
 export function drawVisibleAsset(ctx: CanvasRenderingContext2D, art: WorldAssetArt, a: WorldAsset, p: AssetPlacement,
-  base: number, filter: ElevationVisibility | undefined, unit: number, time: number, opacity = 1, fade = 0): void {
-  if (filter == null) { art.draw(ctx, a, p, opacity, unit, time, fade); return; }
+  base: number, filter: ElevationVisibility | undefined, unit: number, time: number, opacity = 1, fade = 0, frameOverride?: number): void {
+  if (filter == null) { art.draw(ctx, a, p, opacity, unit, time, fade, fade, frameOverride); return; }
   const surfaces = assetCellElevationGeometry(a).surfaces;
   const rect = (r: Pick<ElevationRect, 'x' | 'y' | 'width' | 'height'>) => ctx.rect((p.x + r.x) * unit, (p.y + r.y) * unit, r.width * unit, r.height * unit);
   if (floorVisible(filter, base)) {
@@ -49,10 +49,10 @@ export function drawVisibleAsset(ctx: CanvasRenderingContext2D, art: WorldAssetA
     const left = Math.min(0, image.x), top = Math.min(0, image.y);
     const bounds = { x: left, y: top, width: Math.max(a.columns, image.x + image.width) - left, height: Math.max(a.rows, image.y + image.height) - top };
     for (const s of surfaces) { ctx.beginPath(); rect(bounds); rect(s); ctx.clip('evenodd'); }
-    art.draw(ctx, a, p, opacity, unit, time, fade); ctx.restore();
+    art.draw(ctx, a, p, opacity, unit, time, fade, fade, frameOverride); ctx.restore();
   }
   for (const s of surfaces.filter(s => floorVisible(filter, base + s.elevation)).sort((a, b) => a.elevation - b.elevation)) {
     ctx.save(); ctx.beginPath(); rect(s); ctx.clip();
-    art.draw(ctx, a, p, opacity, unit, time, fade); ctx.restore();
+    art.draw(ctx, a, p, opacity, unit, time, fade, fade, frameOverride); ctx.restore();
   }
 }

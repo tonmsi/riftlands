@@ -8,9 +8,10 @@ export class WorldInspectorDrafts {
       if (field instanceof HTMLInputElement && field.type === 'file') return;
       if (field instanceof HTMLInputElement && field.id === 'asset-random-variants') return;
       if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement) || !field.id) return;
-      if (['asset-cell-subdivision','cell-floor','cell-floor-custom','cell-blocked','cell-visibility','preview-fade','edit-asset-image','keep-ratio'].includes(field.id)) return;
+      if (field.id.startsWith('asset-sheet-')) return;
+      if (['asset-cell-subdivision','cell-floor','cell-floor-custom','cell-blocked','cell-visibility','preview-fade','edit-asset-image','keep-ratio','asset-sprite-frame'].includes(field.id)) return;
       if (['warp-entry-size','warp-arrival-size','warp-entry-elevation','warp-arrival-elevation','warp-one-way','warp-to','warp-from'].includes(field.id)) return;
-      const section = field.closest<HTMLElement>('.inspector > section');
+      const section = field.closest<HTMLElement>('.inspector > section') ?? (field.closest('#asset-preview') ? this.root.querySelector<HTMLElement>('#asset-inspector') : null);
       if (!section || !this.sections.includes(section.id)) return;
       const key = this.context(section.id), fields = this.drafts.get(key) ?? new Map();
       fields.set(field.id, { value: field.value, checked: (field as HTMLInputElement).checked }); this.drafts.set(key, fields);
@@ -35,7 +36,7 @@ export class WorldInspectorDrafts {
       const fields=this.drafts.get(this.context(section.id));
       this.mark(section,fields);
       for (const [id, state] of fields ?? []) {
-        const field = section.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`);
+        const field = this.root.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`);
         if (!field) continue;
         field.value = state.value;
         if (field instanceof HTMLInputElement && field.type === 'checkbox') field.checked = state.checked;

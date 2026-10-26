@@ -72,6 +72,14 @@ export class Renderer {
   private bounds = { left: 0, top: 0, right: 0, bottom: 0 };
 
   private readonly worldAssetArt = new WorldAssetArt();
+  private ambientAnimations = true;
+  private staticPrecipitation = new Map<'rain' | 'snow', { key: string; canvas: HTMLCanvasElement }>();
+  setAmbientAnimations(enabled: boolean): void {
+    this.ambientAnimations = enabled;
+    this.worldAssetArt.setAmbientAnimations(enabled); this.terrain.configureGameAnimations(enabled);
+    for (const entry of this.staticPrecipitation.values()) entry.canvas.width = entry.canvas.height = 0;
+    this.staticPrecipitation.clear();
+  }
 
   readonly spritesReady: Promise<void>;
 
@@ -93,6 +101,7 @@ export class Renderer {
     canvas.addEventListener('contextrestored', this.restoreContext);
     this.terrain = new TerrainRenderer(ctx, localDungeons);
     this.characters = new ActorRenderer(ctx, this.touchQuery);
+    this.setAmbientAnimations(true);
     this.spritesReady = Promise.all([this.terrain.spritesReady, this.characters.spritesReady]).then(() => {});
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -124,6 +133,8 @@ export class Renderer {
   }
 
   destroy(): void {
+    for (const entry of this.staticPrecipitation.values()) entry.canvas.width = entry.canvas.height = 0;
+    this.staticPrecipitation.clear();
     this.resizeObserver.disconnect();
     this.canvas.removeEventListener('contextrestored', this.restoreContext);
     this.terrain.dispose();
@@ -498,8 +509,12 @@ export class Renderer {
         ctx.fillStyle = `rgba(${Math.round(18 + weather.snowMix * 20)}, ${Math.round(32 + weather.snowMix * 11)}, ${Math.round(44 + weather.snowMix * 6)}, ${weather.darkness})`;
         ctx.fillRect(0, 0, this.width, this.height);
       }
-      if (weather.rain > .001) this.drawRain(frame.time, weather.rain);
-      if (weather.snow > .001) this.drawSnow(frame.time, weather.snow);
+      if (weather.rain > .001) {
+        if (this.ambientAnimations) this.drawRain(frame.time, weather.rain); else this.drawStaticPrecipitation('rain', weather.rain);
+      }
+      if (weather.snow > .001) {
+        if (this.ambientAnimations) this.drawSnow(frame.time, weather.snow); else this.drawStaticPrecipitation('snow', weather.snow);
+      }
     }
     perf.end('weather',weatherStart);
     const overlayStart=perf.begin();
@@ -694,8 +709,20 @@ export class Renderer {
     }
   }
 
-  private drawRain(time: number, intensity = 1): void {
-    const { ctx, width, height } = this;
+  private drawStaticPrecipitation(kind: 'rain' | 'snow', intensity: number): void {
+    const key = `${this.width}:${this.height}:${this.zoom}`;
+    let entry = this.staticPrecipitation.get(kind);
+    if (!entry || entry.key !== key) {
+      if (entry) entry.canvas.width = entry.canvas.height = 0;
+      const canvas = document.createElement('canvas'); canvas.width = Math.ceil(this.width); canvas.height = Math.ceil(this.height);
+      const paint = canvas.getContext('2d')!;
+      if (kind === 'rain') this.drawRain(0, 1, paint); else this.drawSnow(0, 1, paint);
+      entry = { key, canvas }; this.staticPrecipitation.set(kind, entry);
+    }
+    this.ctx.save(); this.ctx.globalAlpha *= intensity; this.ctx.drawImage(entry.canvas, 0, 0); this.ctx.restore();
+  }
+  private drawRain(time: number, intensity = 1, ctx = this.ctx): void {
+    const { width, height } = this;
     ctx.save();
     ctx.globalAlpha *= intensity;
 
@@ -761,8 +788,8 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawSnow(time: number, intensity = 1): void {
-    const { ctx, width, height } = this;
+  private drawSnow(time: number, intensity = 1, ctx = this.ctx): void {
+    const { width, height } = this;
     ctx.save();
     ctx.globalAlpha *= intensity;
 
@@ -883,6 +910,7 @@ export class Renderer {
 
   private drawPickup(pickup: Pickup, time: number): void {
     const { ctx } = this;
+    if (!this.ambientAnimations) time = 0;
     const bob = Math.sin(time * 0.0025 + pickup.x) * 2.5;
     ctx.save();
     ctx.translate(pickup.x, pickup.y);

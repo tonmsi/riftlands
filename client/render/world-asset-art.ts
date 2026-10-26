@@ -7,12 +7,22 @@ import { EnvironmentArt } from './environment-art';
 import { coordinateHash } from '../../shared/coordinate-random';
 import { performanceLog as perf } from '../core/performance-log';
 import { rasterizeAssetShadow } from './world-asset-shadow';
+import { isBushAsset } from '../../shared/bush';
+import { applyBushWind } from './bush-wind';
+import { AssetSpriteArt } from './asset-sprite-art';
+import { assetSpriteFrame } from '../../shared/asset-sprites';
 
 /** Shared by the game and editor. Each source is decoded once; SVG is rasterized outside the frame loop.
  * Cache pressure is bounded by both pixels and entries, independent of catalog size. */
 export class WorldAssetArt {
+  private readonly sprites = new AssetSpriteArt(() => { this.revision++; this.redraw(); });
+  private spriteStarts = new Map<string, number>();
+  private spriteSurface?: HTMLCanvasElement;
+  private proceduralAnimations = true;
+  private wind = false;
+  setAmbientAnimations(enabled: boolean): void { this.proceduralAnimations = this.wind = enabled; }
   revision = 0;
-  performanceInfo(){return {entries:this.cache.size,pixels:this.pixels,pending:this.pending.size,failed:this.failed.size,
+  performanceInfo(){return {entries:this.cache.size,pixels:this.pixels,pending:this.pending.size,failed:this.failed.size,sprites:this.sprites.stats(),
     dynamicPixels:(this.fireSurface?this.fireSurface.width*this.fireSurface.height:0)+(this.fadeSurface?this.fadeSurface.width*this.fadeSurface.height:0)};}
   private cache = new Map<string, HTMLCanvasElement>();
   private pending = new Set<string>();
@@ -32,6 +42,7 @@ export class WorldAssetArt {
     return bitmap;
   }
   image(a: WorldAsset, includeShadow = true): HTMLCanvasElement | undefined {
+    if (a.animation) return this.sprites.image(a,includeShadow);
     if (includeShadow && a.shadow && worldAssetVisual(a).kind === 'image') {
       const source = this.image(a, false);
       if (!source) return undefined;
@@ -69,6 +80,7 @@ export class WorldAssetArt {
     return undefined;
   }
   ready(a: WorldAsset): Promise<void> {
+    if (a.animation) return this.sprites.ready(a);
     const b = worldAssetImageBounds(a); this.image(a);
     return this.loading.get(`${a.image}:${b.width}:${b.height}`) ?? Promise.resolve();
   }
@@ -87,7 +99,7 @@ export class WorldAssetArt {
   hit(a: WorldAsset, p: Pick<AssetPlacement, 'x' | 'y' | 'bushJs'>, x: number, y: number): boolean {
     const b = worldAssetImageBounds(a), u = (x - p.x - b.x) / b.width, v = (y - p.y - b.y) / b.height;
     if (u < 0 || v < 0 || u >= 1 || v >= 1) return false;
-    if (worldAssetVisual(a).kind === 'fire') return true;
+    if (a.animation || worldAssetVisual(a).kind === 'fire') return true;
     const bitmap = p.bushJs ? this.jsBush(a, p) : this.image(a, false);
     if (!bitmap) return true;
     try { return bitmap.getContext('2d')!.getImageData(Math.floor(u * bitmap.width), Math.floor(v * bitmap.height), 1, 1).data[3] >= 16; }
@@ -97,7 +109,7 @@ export class WorldAssetArt {
     const fade = a.fade ?? DEFAULT_ASSET_FADE, bucket = Math.round(Math.max(0, Math.min(1, strength)) * 16);
     const hidingBucket = Math.round(Math.max(0, Math.min(1, hidingStrength)) * 16);
     if (!bucket && !hidingBucket) return image;
-    const maskKey = `mask:${image.width}:${image.height}:${a.width}:${a.height}:${a.cellSubdivision ?? 1}:${JSON.stringify(a.imageTransform)}:${a.cells.map(c => c.visibility).join(',')}:${fade.feather}`;
+    const maskKey = `mask:${image.width}:${image.height}:${a.width}:${a.height}:${a.cellSubdivision ?? 1}:${JSON.stringify(worldAssetImageBounds(a))}:${a.cells.map(c => c.visibility).join(',')}:${fade.feather}`;
     const key = `${source}:${maskKey}:${fade.opacity}:${bucket}:${hidingBucket}`;
     const cached = !dynamic && this.cache.get(key); if (cached) return cached;
     const bitmap = dynamic ? (this.fadeSurface ??= document.createElement('canvas')) : document.createElement('canvas');
@@ -112,24 +124,64 @@ export class WorldAssetArt {
     }
     return dynamic ? bitmap : this.remember(key, bitmap);
   }
-  draw(ctx: CanvasRenderingContext2D, a: WorldAsset, p: AssetPlacement, opacity = 1, unit = TILE_SIZE, time = 0, fade = 0, hidingFade = fade): void {
+  draw(ctx: CanvasRenderingContext2D, a: WorldAsset, p: AssetPlacement, opacity = 1, unit = TILE_SIZE, time = 0, fade = 0, hidingFade = fade, frameOverride?: number): void {
     const visual = worldAssetVisual(a), b = worldAssetImageBounds(a);
-    if (visual.kind === 'fire' && fade <= 0 && hidingFade <= 0) {
+    if (a.animation && !p.bushJs) {
+      const s = this.sprites.get(a); if (!s) return;
+      const key = `${a.id}:${p.id}:${p.x}:${p.y}:${JSON.stringify(a.animation)}`;
+      if (!a.animation.loop && !this.spriteStarts.has(key)) {
+        if (this.spriteStarts.size >= 8192) this.spriteStarts.delete(this.spriteStarts.keys().next().value!);
+        this.spriteStarts.set(key,time);
+      }
+      const elapsed = a.animation.loop ? time : Math.max(0,time-(this.spriteStarts.get(key) ?? time));
+      const frame = frameOverride === undefined ? assetSpriteFrame(a.animation,elapsed,coordinateHash(p.x,p.y,7919)) : Math.max(0,Math.min(a.animation.frames-1,frameOverride));
+      const x = (frame%s.columns)*s.width, y = Math.floor(frame/s.columns)*s.height;
+      ctx.save(); ctx.globalAlpha *= opacity;
+      if (fade > 0 || hidingFade > 0) {
+        const bitmap = this.spriteSurface ??= document.createElement('canvas');
+        if (bitmap.width !== s.width || bitmap.height !== s.height) { bitmap.width = s.width; bitmap.height = s.height; }
+        const paint = bitmap.getContext('2d')!; paint.clearRect(0,0,s.width,s.height); paint.drawImage(s.canvas,x,y,s.width,s.height,0,0,s.width,s.height);
+        ctx.drawImage(this.faded(a,bitmap,fade,true,hidingFade,`sheet:${a.image}`),(p.x+b.x)*unit,(p.y+b.y)*unit,b.width*unit,b.height*unit);
+      } else ctx.drawImage(s.canvas,x,y,s.width,s.height,(p.x+b.x)*unit,(p.y+b.y)*unit,b.width*unit,b.height*unit);
+      ctx.restore(); return;
+    }
+    const wind = this.wind && (p.bushJs || isBushAsset(a) || a.variantOf === 'bush');
+    if (visual.kind === 'fire' && this.proceduralAnimations && fade <= 0 && hidingFade <= 0) {
       ctx.save(); ctx.globalAlpha *= opacity;
       ctx.translate((p.x + b.x) * unit, (p.y + b.y) * unit); ctx.scale(b.width * unit / TILE_SIZE, b.height * unit / TILE_SIZE);
       drawWorldFire(ctx, visual.style, time, coordinateHash(p.x, p.y, 941) * 100);
       ctx.restore(); return;
     }
     let image: HTMLCanvasElement | undefined;
-    if (visual.kind === 'fire') {
+    if (visual.kind === 'fire' && !this.proceduralAnimations) {
+      const phase = Math.floor(coordinateHash(p.x, p.y, 941) * 4);
+      const key = `still-fire:${visual.style}:${b.width}:${b.height}:${phase}`;
+      image = this.cache.get(key);
+      if (!image) {
+        image = document.createElement('canvas');
+        const factor = Math.min(2, 1024 / (Math.max(b.width, b.height) * TILE_SIZE));
+        image.width = Math.max(1, Math.ceil(b.width * TILE_SIZE * factor)); image.height = Math.max(1, Math.ceil(b.height * TILE_SIZE * factor));
+        const paint = image.getContext('2d')!; paint.scale(image.width / TILE_SIZE, image.height / TILE_SIZE);
+        drawWorldFire(paint, visual.style, 0, phase * 25); this.remember(key, image);
+      }
+    } else if (visual.kind === 'fire') {
       image = this.fireSurface ??= document.createElement('canvas');
       const factor = Math.min(2, 1024 / (Math.max(b.width, b.height) * TILE_SIZE));
       image.width = Math.max(1, Math.ceil(b.width * TILE_SIZE * factor)); image.height = Math.max(1, Math.ceil(b.height * TILE_SIZE * factor));
       const paint = image.getContext('2d')!; paint.scale(image.width / TILE_SIZE, image.height / TILE_SIZE); drawWorldFire(paint, visual.style, time, coordinateHash(p.x, p.y, 941) * 100);
-    } else image = p.bushJs ? this.jsBush(a, p) : this.image(a);
-    if (image && (fade > 0 || hidingFade > 0)) image = this.faded(a, image, fade, visual.kind === 'fire', hidingFade,
-      p.bushJs ? `js-bush:${Math.floor(coordinateHash(p.x, p.y, 99127) * 4)}` : `${a.image}:${JSON.stringify(a.shadow)}`);
+    } else image = p.bushJs ? this.jsBush(a, p) : this.image(a, !wind);
+    const source = visual.kind === 'fire' ? `fire:${visual.style}:${this.proceduralAnimations ? 'moving' : Math.floor(coordinateHash(p.x,p.y,941)*4)}`
+      : p.bushJs ? `js-bush:${Math.floor(coordinateHash(p.x, p.y, 99127) * 4)}` : `${a.image}:${wind ? 'wind' : JSON.stringify(a.shadow)}`;
+    if (wind && image && a.shadow && !p.bushJs) {
+      const key = `wind-shadow:${a.image}:${b.width}:${b.height}:${JSON.stringify(a.shadow)}`;
+      let shadow = this.cache.get(key);
+      if (!shadow) shadow = this.remember(key, rasterizeAssetShadow(image.width, image.height, a.shadow, image));
+      if (fade > 0 || hidingFade > 0) shadow = this.faded(a, shadow, fade, false, hidingFade, key);
+      ctx.save(); ctx.globalAlpha *= opacity; ctx.drawImage(shadow, (p.x+b.x)*unit, (p.y+b.y)*unit,b.width*unit,b.height*unit); ctx.restore();
+    }
+    if (image && (fade > 0 || hidingFade > 0)) image = this.faded(a, image, fade, visual.kind === 'fire' && this.proceduralAnimations, hidingFade, source);
     ctx.save(); ctx.globalAlpha *= opacity;
+    if (wind) applyBushWind(ctx, (p.y + b.y + b.height) * unit, time, coordinateHash(p.x, p.y, 99127));
     if (image) ctx.drawImage(image, (p.x + b.x) * unit, (p.y + b.y) * unit, b.width * unit, b.height * unit);
     else { ctx.fillStyle = '#86ab8544'; ctx.fillRect((p.x + b.x) * unit, (p.y + b.y) * unit, b.width * unit, b.height * unit); }
     ctx.restore();
