@@ -15,10 +15,18 @@ export interface ActorVisual {
   animations: Record<string, SpriteAnimation>;
 }
 export interface NpcVariant { id: string; name: string; base: NpcTemplateId; skin: string; group?: string; conversation?: NpcConversation; }
-export interface ActorCatalog { version: 1; bosses: BossTemplate[]; skins: Record<string, ActorVisual>; npcSkins?: Partial<Record<NpcTemplateId, string>>; npcVariants?: NpcVariant[]; npcConversations?: Partial<Record<NpcTemplateId, NpcConversation>>; playerDrawSizes?: Partial<Record<ClassId, number>>; }
+export interface ActorCatalog { version: 1; bosses: BossTemplate[]; skins: Record<string, ActorVisual>; npcSkins?: Partial<Record<NpcTemplateId, string>>; npcVariants?: NpcVariant[]; npcConversations?: Partial<Record<NpcTemplateId, NpcConversation>>; playerDrawSizes?: Partial<Record<ClassId, number>>; playerSkins?: Partial<Record<ClassId, string>>; }
 export const DEFAULT_PLAYER_DRAW_SIZE = 48;
 export function playerDrawSize(catalog: ActorCatalog, classId: ClassId): number {
-  return catalog.playerDrawSizes?.[classId] ?? DEFAULT_PLAYER_DRAW_SIZE;
+  return catalog.playerDrawSizes?.[classId] ?? catalog.skins[catalog.playerSkins?.[classId] ?? '']?.drawSize ?? DEFAULT_PLAYER_DRAW_SIZE;
+}
+/** Editable starting point for classes still using the original renderer. */
+export function defaultPlayerVisual(catalog: ActorCatalog, classId: ClassId): ActorVisual {
+  const asset = { mage: 'mage256.png', warrior: 'warrior256.png', paladin: 'paladino256.png', hunter: 'hunter.svg' }[classId];
+  return { drawSize: playerDrawSize(catalog, classId), anchor: { x: .5, y: .5 }, offset: { x: 0, y: 0 },
+    shadow: { x: 1, y: 13, width: 20, height: 8.4, opacity: .28 },
+    animations: { [classId === 'hunter' ? 'idle' : 'moving']: { asset: `/actor-assets/${asset}`, columns: classId === 'hunter' ? 1 : 4,
+      rows: classId === 'hunter' ? 1 : 4, directional: classId !== 'hunter', loop: true, frameMs: 130 } } };
 }
 const number = (n: unknown, min: number, max: number) => typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max;
 const point = (p: Vec2 | undefined, min: number, max: number) => !!p && number(p.x, min, max) && number(p.y, min, max);
@@ -45,7 +53,7 @@ export function parseActorCatalog(value: unknown): ActorCatalog {
   }
   for (const boss of c.bosses) {
     if (!boss || !/^[a-z0-9-]{1,64}$/.test(boss.id) || ids.has(boss.id) || !boss.name || boss.name.length > 80
-      || !Object.hasOwn(c.skins, boss.skin) || !c.skins[boss.skin]?.animations?.idle || !['warrior', 'mage', 'hunter', 'paladin'].includes(boss.classId)
+      || !Object.hasOwn(c.skins, boss.skin) || !['idle', 'moving', 'walk'].some(name => c.skins[boss.skin]?.animations?.[name]) || !['warrior', 'mage', 'hunter', 'paladin'].includes(boss.classId)
       || !number(boss.radius, 4, 200) || !number(boss.hp, 1, 1e7) || !number(boss.speed, 0, 1000)
       || !number(boss.level, 1, 100) || !number(boss.respawnMs, 1000, 86_400_000)
       || !number(boss.enrageAt, 0, 1) || !number(boss.enrageSpeed, .1, 10) || !number(boss.enrageCooldown, .01, 10)
@@ -56,6 +64,7 @@ export function parseActorCatalog(value: unknown): ActorCatalog {
       || !Array.isArray(boss.attacks) || !boss.attacks.length || boss.attacks.length > 64) fail('definizione boss non valida.');
     ids.add(boss.id);
     for (const a of boss.attacks) if (!['melee', 'slam', 'charge', 'nova'].includes(a.kind)
+      || (a.name !== undefined && (typeof a.name !== 'string' || !a.name.trim() || a.name.length > 80))
       || !number(a.damage, 0, 1e6) || !number(a.range, 1, 5000) || !number(a.radius, 1, 5000)
       || !number(a.windupMs, 0, 60_000) || !number(a.cooldownMs, 50, 60_000)
       || (a.innerRadius !== undefined && !number(a.innerRadius, 0, a.radius))
@@ -67,7 +76,7 @@ export function parseActorCatalog(value: unknown): ActorCatalog {
     if (!/^[a-z0-9-]{1,64}$/.test(id) || !v || !number(v.drawSize, 8, 1000) || !point(v.anchor, 0, 1)
       || !point(v.offset, -1000, 1000) || !v.shadow || !number(v.shadow.x, -1000, 1000) || !number(v.shadow.y, -1000, 1000)
       || !number(v.shadow.width, 0, 1000) || !number(v.shadow.height, 0, 1000) || !number(v.shadow.opacity, 0, 1)
-      || !v.animations || (!v.animations.idle && !v.animations.moving) || Object.keys(v.animations).length > 32) fail('skin non valida.');
+      || !v.animations || (!v.animations.idle && !v.animations.moving && !v.animations.walk) || Object.keys(v.animations).length > 32) fail('skin non valida.');
     for (const [name, a] of Object.entries(v.animations)) {
       const kind = Object.entries(c.npcSkins ?? {}).find(([, skin]) => skin === id)?.[0];
       const actorName = c.npcVariants?.find(v => v.skin === id)?.name ?? (kind && Object.hasOwn(NPC_DEFINITIONS, kind) ? NPC_DEFINITIONS[kind as NpcTemplateId].name : id);
@@ -90,6 +99,11 @@ export function parseActorCatalog(value: unknown): ActorCatalog {
       if (!Object.hasOwn(NPC_DEFINITIONS, kind) || typeof skin !== 'string' || !Object.hasOwn(c.skins, skin)
         || (!c.skins[skin].animations.moving && !c.skins[skin].animations.idle)) fail('NPC o animazioni idle/moving non validi.');
     }
+  }
+  if (c.playerSkins !== undefined) {
+    if (!c.playerSkins || typeof c.playerSkins !== 'object' || Array.isArray(c.playerSkins)) fail('skin player non valide.');
+    for (const [classId, skin] of Object.entries(c.playerSkins))
+      if (!['mage', 'warrior', 'paladin', 'hunter'].includes(classId) || typeof skin !== 'string' || !Object.hasOwn(c.skins, skin)) fail('classe o skin player non valida.');
   }
   if (c.playerDrawSizes !== undefined) {
     if (!c.playerDrawSizes || typeof c.playerDrawSizes !== 'object' || Array.isArray(c.playerDrawSizes)) fail('dimensioni player non valide.');

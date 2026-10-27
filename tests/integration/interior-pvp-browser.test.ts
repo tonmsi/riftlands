@@ -1,0 +1,74 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { chromium, expect } from '@playwright/test';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { startWorldStudio } from '../../scripts/world-studio-server';
+import { newWorldDocument } from '../../shared/world-schema';
+import { newInterior } from '../../shared/warps';
+import { INSTALLED_DUNGEON_DEFINITIONS } from '../../shared/dungeons';
+import { RoomManager } from '../../server/rooms';
+import type { Account } from '../../server/store';
+
+test('dungeon interior PvP is editable on the current map and server snapshots drive the minimap badge', { timeout: 60_000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'riftlands-indoor-pvp-'));
+  const project = newWorldDocument(); project.spawn = { x: 4, y: 4 };
+  for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) project.tiles.push({ x, y, terrain: 'grass', suppressAssets: true });
+  const interior = newInterior('crypt', 'Cripta', 12, 12); interior.kind = 'dungeon'; interior.pvp = false;
+  project.interiors = [interior];
+  await writeFile(join(dir, 'world.json'), JSON.stringify(project)); await writeFile(join(dir, 'dungeons.json'), '[]');
+  const studio = await startWorldStudio({ root: resolve('.'), documentPath: join(dir, 'world.json'), dungeonPath: join(dir, 'dungeons.json'), dataPath: join(dir, 'accounts.json'), port: 0 });
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  try {
+    browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage(), errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(studio.url); await expect(page.locator('#status')).toContainText('World Studio pronto');
+    await expect(page.locator('#map-pvp-controls')).toBeHidden();
+    await page.locator('#surface-map').selectOption('crypt');
+    await expect(page.locator('#map-pvp-controls')).toBeVisible(); await expect(page.locator('#map-pvp')).toHaveValue('false');
+    await expect(page.locator('#interior-pvp')).toBeHidden();
+    await page.locator('#map-pvp').selectOption('true'); await expect(page.locator('.map-note')).not.toContainText('Senza PvP');
+    await page.locator('#undo').click(); await expect(page.locator('#map-pvp')).toHaveValue('false');
+    await page.locator('#redo').click(); await expect(page.locator('#map-pvp')).toHaveValue('true');
+    await page.locator('#apply-world').click(); await expect(page.locator('#status')).toContainText('Progetto salvato con backup');
+    let saved = (await (await page.request.get(new URL('/__world/project', studio.url).href)).json()).document;
+    assert.equal(saved.interiors[0].pvp, true);
+    await page.reload(); await expect(page.locator('#status')).toContainText('World Studio pronto');
+    await page.locator('#surface-map').selectOption('crypt'); await expect(page.locator('#map-pvp')).toHaveValue('true');
+    const disabledDungeons = INSTALLED_DUNGEON_DEFINITIONS.map(d => ({ dungeonId: d.id, x: 0, y: 0, enabled: false }));
+    const manager = new RoomManager(undefined, saved.seed, 1_000_000, { ...saved, dungeons: disabledDungeons });
+    const account: Account = { id: 'indoor-review', name: 'Player', nameLower: 'player', salt: '', passwordHash: '', xp: 0, kills: 0, deaths: 0,
+      friends: [], requests: [], lastSeen: 0, location: { mapId: 'crypt', returnTo: { x: 216, y: 216 } } };
+    manager.connect(account, 'warrior'); manager.step(.05);
+    const uiPage = await context.newPage(); uiPage.on('pageerror', error => errors.push(error.message));
+    await uiPage.addInitScript('window.__name = value => value');
+    await uiPage.route('**/indoor-pvp-review', route => route.fulfill({ contentType: 'text/html', body: '<div id="app"></div>' }));
+    await uiPage.route('**/api/lobby', route => route.fulfill({ json: { account: null, friends: [], leaderboard: [] } }));
+    await uiPage.goto(new URL('/indoor-pvp-review', studio.url).href);
+    await uiPage.evaluate(async snapshot => {
+      for (const file of ['styles/style.css', 'styles/mobile.css', 'ui/hud/team.css', 'ui/lobby/lobby.css', 'ui/hud/hud.css', 'ui/interactions/interactions.css']) await import(`/client/${file}`);
+      const { GameUI } = await import('/client/ui/ui.ts' as string);
+      const noop = () => {}, ui = new GameUI(document.querySelector('#app')!, { join: noop, leave: noop, social: noop, select: noop });
+      ui.setAssetProgress(1, 1, 0); ui.setPlaying(true); ui.setSnapshot(snapshot, 24); (window as any).indoorPvpUI = ui;
+    }, manager.snapshotFor(account.id)!);
+    await expect(uiPage.locator('.minimap-pvp')).toHaveAttribute('data-state', 'active');
+    await page.locator('#map-pvp').selectOption('false');
+    await page.locator('#apply-world').click(); await expect(page.locator('#status')).toContainText('Progetto salvato con backup');
+    saved = (await (await page.request.get(new URL('/__world/project', studio.url).href)).json()).document;
+    const updated = { ...saved, dungeons: disabledDungeons };
+    manager.applyProject(updated, manager.prepareProject(updated)); manager.step(.05);
+    assert.equal(manager.snapshotFor(account.id)!.sanctuary, 'safe');
+    await uiPage.evaluate(snapshot => (window as any).indoorPvpUI.setSnapshot(snapshot, 24), manager.snapshotFor(account.id)!);
+    await expect(uiPage.locator('.minimap-pvp')).toHaveAttribute('data-state', 'safe');
+    await expect(uiPage.locator('.minimap-pvp')).toHaveAttribute('aria-label', 'PvP disabilitato in questa zona');
+    assert.ok(await uiPage.locator('.minimap-pvp').evaluate(el => getComputedStyle(el).textDecorationLine.includes('line-through')));
+    const sim = manager.simulationFor(account.id); sim.players.get(account.id)!.pvpUntil = sim.now + 7000; manager.step(.05);
+    await uiPage.evaluate(snapshot => (window as any).indoorPvpUI.setSnapshot(snapshot, 24), manager.snapshotFor(account.id)!);
+    await expect(uiPage.locator('.minimap-pvp')).toHaveAttribute('data-state', 'combat');
+    await page.locator('#surface-map').selectOption('world'); await expect(page.locator('#map-pvp-controls')).toBeHidden();
+    assert.deepEqual(errors, []);
+  } finally { await browser?.close(); await studio.close(); await rm(dir, { recursive: true, force: true }); }
+});

@@ -7,6 +7,7 @@ import { unpackDungeonCatalog } from './dungeon-storage';
 export type BossAttackKind = 'melee' | 'slam' | 'charge' | 'nova';
 export interface BossAttackDefinition {
   kind: BossAttackKind;
+  name?: string;
   damage: number;
   range: number;
   radius: number;

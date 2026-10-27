@@ -460,12 +460,13 @@ export class RoomManager {
         activeChunks: sim.activeChunks.size, gold: this.membership(id).account.gold ?? 0,
         matchEndsAt: room.endsAt, betting: this.bettingView(id) };
     }
-    const snapshot = this.simulationFor(id).snapshotFor(id);
+    const simulation = this.simulationFor(id);
+    const snapshot = simulation.snapshotFor(id);
     if (snapshot) {
       snapshot.betting = this.bettingView(id);
       snapshot.gold = this.membership(id).account.gold ?? 0;
       snapshot.arenaGate = this.gateStateFor(id);
-      if (this.membership(id).roomId === 'world') snapshot.sanctuary = this.global.world.pvpAt(snapshot.self.x, snapshot.self.y) ? 'outside' : this.global.isSafeProtected(snapshot.self) ? 'safe' : 'combat';
+      if (simulation.mode === 'world') snapshot.sanctuary = simulation.world.pvpAt(snapshot.self.x, snapshot.self.y) ? 'outside' : simulation.isSafeProtected(snapshot.self) ? 'safe' : 'combat';
       snapshot.matchEndsAt = this.rooms.get(this.membership(id).roomId)?.endsAt;
     }
     return snapshot;
@@ -508,6 +509,15 @@ export class RoomManager {
     return !!actor && !!npc && Math.hypot(actor.x - npc.x, actor.y - npc.y) <= INTERACTION_RANGE;
   }
 
+  private warpCombatMessage(id: string, sim: WorldSimulation): string | undefined {
+    if ([...sim.bosses.values()].some(b => b.participantIds.has(id) && b.ownerId))
+      return 'Combattimento con un boss in corso: non puoi usare i passaggi.';
+    const until = Math.max(sim.connections.get(id)?.combatUntil ?? 0, sim.players.get(id)?.pvpUntil ?? 0);
+    if (until <= sim.now) return;
+    const seconds = Math.ceil((until - sim.now) / 1000);
+    return `Sei ancora in combattimento: passaggio bloccato per ${seconds} s. Allontanati e riprova.`;
+  }
+
   private requestWarp(id: string, warp: WorldWarp): void {
     const member = this.membership(id), sim = this.simulationFor(id), actor = sim.players.get(id);
     if (this.transfersStopped || this.pendingPlayers.has(id) || this.warpRequests.has(id) || this.spectators.has(id)
@@ -515,8 +525,8 @@ export class RoomManager {
       throw new Error('Avvicinati al passaggio per attraversarlo.');
     if (this.warpRearm.has(id)) throw new Error('Allontanati dalla porta e rientra per attraversarla di nuovo.');
     if (sim.fishing.busy(id)) throw new Error('Ritira la lenza prima di attraversare.');
-    if (Math.max(sim.connections.get(id)?.combatUntil ?? 0, actor.pvpUntil ?? 0) > sim.now
-      || [...sim.bosses.values()].some(b => b.participantIds.has(id) && b.ownerId)) throw new Error('Non puoi attraversare durante un combattimento.');
+    const combatMessage = this.warpCombatMessage(id, sim);
+    if (combatMessage) throw new Error(combatMessage);
     const target = warp.to === 'world' ? this.global : this.interior(warp.to), arrival = warpPosition(warp.arrival);
     if (collidesWorld(arrival.x, arrival.y, PLAYER_RADIUS + 2, target.world, warp.arrivalElevation ?? 0)) throw new Error('Arrivo del passaggio bloccato.');
     sim.checkpoint(); this.store?.flush();
@@ -549,9 +559,10 @@ export class RoomManager {
       this.warpRequests.delete(id);
       const member = this.memberships.get(id); if (!member?.connected) continue;
       const source = this.simulationFor(id), actor = source.players.get(id), { warp } = request;
+      const combatMessage = this.warpCombatMessage(id, source);
       if (this.transfersStopped || member.epoch !== request.epoch || !actor || actor.hp <= 0 || !atWarp(actor, warp)
-        || Math.max(source.connections.get(id)?.combatUntil ?? 0, actor.pvpUntil ?? 0) > source.now) {
-        this.warpRearm.add(id); this.notices.set(id, 'Passaggio interrotto.');
+        || combatMessage) {
+        this.warpRearm.add(id); this.notices.set(id, combatMessage ?? 'Passaggio interrotto.');
         this.warpMessages.set(id, { type: 'warp-transition', phase: 'cancel' }); continue;
       }
       const target = warp.to === 'world' ? this.global : this.interior(warp.to), arrival = warpPosition(warp.arrival);

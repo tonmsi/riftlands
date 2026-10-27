@@ -31,16 +31,16 @@ test('NPC laboratory imports sprites, previews idle fallback, saves every NPC ty
     await page.locator('#boss-select').selectOption('platos');
     await expect(page.locator('#boss-status')).toHaveText('Catalogo caricato.');
     await page.locator('#boss-select').selectOption('old-fisher');
-    await page.locator('#boss-animation').selectOption('idle');
+    await page.locator('#boss-preview-state').selectOption('idle');
     await page.locator('#boss-direction').selectOption('2');
     await expect(page.locator('#boss-frame')).toContainText('Frame 9 / 16');
     await page.waitForTimeout(250); await expect(page.locator('#boss-frame')).toContainText('Frame 9 / 16');
-    await page.locator('#boss-select').selectOption('dock-skeptic');
+    await page.locator('#boss-select').selectOption('dock-skeptic'); await page.locator('[data-slot-asset=moving]').selectOption('/actor-assets/npc-old-fisher.png'); await page.locator('#boss-directional').check(); await page.locator('#boss-frameMs').fill('130'); await page.locator('#boss-frameMs').dispatchEvent('change');
     await page.locator('#boss-drawSize').fill('64');
     await page.locator('#boss-file').setInputFiles({ name: 'npc-editor-import-test.png', mimeType: 'image/png', buffer: await readFile(join(root, 'public/actor-assets/npc-old-fisher.png')) });
-    await expect(page.locator('#boss-asset')).toHaveValue('/actor-assets/npc-editor-import-test.png');
-    await page.locator('#boss-new-animation').selectOption('idle'); await page.locator('#boss-add-animation').click();
-    await page.locator('#boss-loop').check(); await expect(page.locator('#boss-animation option:checked')).toHaveText('idle · fermo');
+    await expect(page.locator('[data-slot-asset=moving]')).toHaveValue('/actor-assets/npc-editor-import-test.png');
+    await page.locator('[data-select-slot=idle]').click();
+    await expect(page.locator('#boss-animation option:checked')).toHaveText('Idle');
     await page.locator('#boss-save').click(); await expect(page.locator('#boss-status')).toContainText('Catalogo salvato con backup');
     const saved = JSON.parse(await readFile(actorPath, 'utf8'));
     assert.deepEqual(saved.bosses, ACTOR_CATALOG.bosses);
@@ -49,7 +49,7 @@ test('NPC laboratory imports sprites, previews idle fallback, saves every NPC ty
     assert.equal(saved.skins[saved.npcSkins['dock-skeptic']].animations.idle.loop, true);
     const imageResponse = await page.request.get(new URL(saved.skins[saved.npcSkins['dock-skeptic']].animations.moving.asset, studio.url).href);
     assert.equal(imageResponse.status(), 200); assert.match(imageResponse.headers()['content-type'], /image\/png/);
-    await page.locator('#boss-idle-fallback').click(); await expect(page.locator('#boss-frame')).toContainText('Frame 9 / 16');
+    await page.locator('[data-slot-asset=idle]').selectOption(''); await page.locator('#boss-preview-state').selectOption('idle'); await expect(page.locator('#boss-frame')).toContainText('Frame 9 / 16');
     await page.locator('#boss-save').click(); await expect(page.locator('#boss-status')).toContainText('Catalogo salvato con backup');
     assert.equal(JSON.parse(await readFile(actorPath, 'utf8')).skins['npc-dock-skeptic'].animations.idle, undefined);
     const runtime = await page.evaluate(async () => {
@@ -77,7 +77,7 @@ test('NPC laboratory imports sprites, previews idle fallback, saves every NPC ty
     await page.locator('#area-kind').selectOption('dungeon');
     await page.locator('#dungeon-resources > summary').click();
     await page.locator('#open-boss-editor').click(); await expect(page.locator('#boss-hp')).toBeVisible();
-    await expect(page.locator('#boss-idle-fallback')).toBeHidden();
+    await expect(page.locator('#boss-slots')).toBeVisible();
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); await studio.close(); if (!existed) await rm(importedPath, { force: true }); }
 });

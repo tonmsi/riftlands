@@ -551,6 +551,34 @@
           "frameMs": 180
         }
       }
+    },
+    "player-mage": {
+      "drawSize": 62,
+      "anchor": {
+        "x": 0.585,
+        "y": 0.615
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "shadow": {
+        "x": 0,
+        "y": 16,
+        "width": 25,
+        "height": 8,
+        "opacity": 0.28
+      },
+      "animations": {
+        "moving": {
+          "asset": "/actor-assets/mage256.png",
+          "columns": 4,
+          "rows": 4,
+          "directional": true,
+          "loop": true,
+          "frameMs": 130
+        }
+      }
     }
   },
   "playerDrawSizes": {
@@ -612,5 +640,8 @@
       },
       "group": ""
     }
-  ]
+  ],
+  "playerSkins": {
+    "mage": "player-mage"
+  }
 }

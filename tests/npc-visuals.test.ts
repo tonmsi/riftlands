@@ -44,6 +44,8 @@ test('dedicated idle can animate independently and NPC catalog rejects broken as
   catalog.npcSkins = { unknown: 'npc-old-fisher' } as any; assert.throws(() => parseActorCatalog(catalog));
   catalog.npcSkins = { 'old-fisher': 'npc-old-fisher' };
   delete catalog.skins['stone-warden'].animations.idle;
+  delete catalog.skins['stone-warden'].animations.walk;
+  delete catalog.skins['stone-warden'].animations.moving;
   assert.throws(() => parseActorCatalog(catalog));
 });
 

@@ -54263,7 +54263,7 @@
       "name": "Northpost Ruins",
       "width": 28,
       "height": 22,
-      "pvp": false,
+      "pvp": true,
       "kind": "dungeon",
       "document": {
         "cliffAssets": {
@@ -55186,7 +55186,7 @@
       "name": "passaggio sospetto",
       "width": 15,
       "height": 15,
-      "pvp": false,
+      "pvp": true,
       "kind": "building",
       "document": {
         "cliffAssets": {
@@ -56109,6 +56109,42 @@
         "y": 1
       },
       "reverseId": "warp-3c634375-47cf-4434-8fe2-9576247c4168"
+    },
+    {
+      "id": "warp-eba5b171-aa93-4425-8425-5db42494b476",
+      "name": "Northpost Ruins · Passaggio 1",
+      "from": "interior-ccfc2688-bbe0-485d-9987-d3f8ad11aff1",
+      "to": "world",
+      "entry": {
+        "x": 2,
+        "y": 19
+      },
+      "arrival": {
+        "x": 101,
+        "y": 214
+      },
+      "activation": "walk",
+      "entryElevation": 0,
+      "arrivalElevation": 0,
+      "reverseId": "warp-e3227146-7b21-40c2-9058-17a3fd249383"
+    },
+    {
+      "id": "warp-e3227146-7b21-40c2-9058-17a3fd249383",
+      "name": "Ritorno · Northpost Ruins · Passaggio 1",
+      "from": "world",
+      "to": "interior-ccfc2688-bbe0-485d-9987-d3f8ad11aff1",
+      "entry": {
+        "x": 101,
+        "y": 214
+      },
+      "arrival": {
+        "x": 2,
+        "y": 19
+      },
+      "activation": "walk",
+      "entryElevation": 0,
+      "arrivalElevation": 0,
+      "reverseId": "warp-eba5b171-aa93-4425-8425-5db42494b476"
     }
   ]
 }

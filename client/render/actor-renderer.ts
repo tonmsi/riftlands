@@ -94,7 +94,7 @@ export class ActorRenderer {
       ctx.stroke();
     }
     if (dead) ctx.globalAlpha = actor.npcKind === 'boss' ? 0.75 : 0.45;
-    if (detailed && !(actor.kind === 'npc' && this.actorSprites.shadow(ctx, actor))) {
+    if (detailed && !this.actorSprites.shadow(ctx, actor)) {
       ctx.fillStyle = 'rgba(36, 48, 37, 0.28)';
       ctx.beginPath();
       ctx.ellipse(1, 13, r + 5, r * 0.56, 0, 0, TAU);
@@ -209,7 +209,7 @@ export class ActorRenderer {
     const { ctx } = this;
     const drawSize = this.playerDrawSize(actor.classId);
     const sprite = this.classSprites.get(actor.classId);
-    if (sprite && !dead) {
+    if ((sprite || this.actorSprites.visual(actor)) && !dead) {
       const previous = this.classMotion.get(actor.id);
       const dx = previous ? actor.x - previous.x : 0;
       const dy = previous ? actor.y - previous.y : 0;
@@ -225,6 +225,8 @@ export class ActorRenderer {
       const startedAt = moving && (!previous || !previous.moving || previous.row !== row || Math.hypot(actor.x - previous.x, actor.y - previous.y) > 20)
         ? time : previous?.startedAt ?? time;
       this.classMotion.set(actor.id, { x: actor.x, y: actor.y, row, startedAt, moving });
+      if (this.actorSprites.drawPlayer(ctx, actor, time - startedAt, moving, row)) return;
+      if (!sprite) { ctx.save(); ctx.scale(drawSize / DEFAULT_PLAYER_DRAW_SIZE, drawSize / DEFAULT_PLAYER_DRAW_SIZE); this.drawPlayerFallback(actor, color, dead); ctx.restore(); return; }
       const frame = moving ? Math.floor((time - startedAt) / 130) % SPRITE_COLUMNS : 0;
       const cachedFrame = sprite.frames[row * SPRITE_COLUMNS + frame];
       ctx.imageSmoothingEnabled = true;

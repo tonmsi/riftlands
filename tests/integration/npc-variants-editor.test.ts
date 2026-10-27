@@ -28,15 +28,15 @@ test('World Maker duplicates NPCs with independent sprites, names and groups and
     await expect(page.locator('#boss-select')).toHaveValue('variant:inn-keeper');
     await expect(page.locator('#boss-npc-identity')).toContainText('Brugo');
     await page.locator('#boss-name').fill('Locandiere'); await page.locator('#boss-npc-group').fill('Abitanti');
-    await page.locator('#boss-drawSize').fill('72');
+    await page.locator('#boss-drawSize').fill('72'); await page.locator('[data-select-slot=idle]').click();
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#e69955"/></svg>';
     await page.locator('#boss-file').setInputFiles({ name: 'codex-npc-variant-test.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg) });
-    await expect(page.locator('#boss-asset')).toHaveValue('/actor-assets/codex-npc-variant-test.svg');
-    imported = await page.locator('#boss-asset').inputValue();
+    await expect(page.locator('[data-slot-asset=idle]')).toHaveValue('/actor-assets/codex-npc-variant-test.svg');
+    imported = await page.locator('[data-slot-asset=idle]').inputValue();
     await page.locator('#boss-save').click(); await expect(page.locator('#boss-status')).toContainText('Catalogo salvato con backup');
     const catalog = JSON.parse(await readFile(actorPath, 'utf8')), v = catalog.npcVariants.find((v: any) => v.id === 'inn-keeper');
     assert.equal(v.base, 'dock-skeptic'); assert.equal(v.group, 'Abitanti'); assert.equal(v.name, 'Locandiere');
-    assert.equal(catalog.skins[v.skin].drawSize, 72); assert.equal(catalog.skins[v.skin].animations.moving.asset, imported);
+    assert.equal(catalog.skins[v.skin].drawSize, 72); assert.equal(catalog.skins[v.skin].animations.idle.asset, imported);
     assert.deepEqual(catalog.bosses, ACTOR_CATALOG.bosses);
     assert.deepEqual(catalog.skins[catalog.npcSkins['dock-skeptic']], ACTOR_CATALOG.skins[ACTOR_CATALOG.npcSkins!['dock-skeptic']!]);
     // Copies of variants still inherit the original AI, with a fresh skin.

@@ -25,15 +25,17 @@ test('NPC laboratory saves, reloads and duplicates idle-only NPCs and renders id
     await page.locator('#open-npc-editor').click(); await expect(page.locator('#boss-status')).toHaveText('Catalogo caricato.');
     await page.locator('#boss-select').selectOption('old-fisher');
     page.once('dialog', d => d.accept('idle-only-editor-test')); await page.locator('#boss-duplicate').click();
-    await page.locator('#boss-idle-only').click();
+    await page.locator('[data-select-slot=idle]').click();
+    await expect(page.locator('[data-slot-asset=idle]')).toHaveValue('');
     await expect(page.locator('#boss-animation')).toHaveValue('idle');
-    await expect(page.locator('#boss-animation option')).toHaveCount(1);
-    await expect(page.locator('#boss-idle-fallback')).toBeDisabled();
+    await expect(page.locator('#boss-sheet-settings')).toBeHidden();
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="16"><path fill="red" d="M0 0h16v16H0z"/><path fill="blue" d="M16 0h16v16H16z"/><path fill="green" d="M32 0h16v16H32z"/><path fill="orange" d="M48 0h16v16H48z"/></svg>';
     await page.locator('#boss-file').setInputFiles({ name: 'codex-idle-only-editor-test.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg) });
-    await expect(page.locator('#boss-asset')).toHaveValue('/actor-assets/codex-idle-only-editor-test.svg'); imported = await page.locator('#boss-asset').inputValue();
+    await expect(page.locator('[data-slot-asset=idle]')).toHaveValue('/actor-assets/codex-idle-only-editor-test.svg'); imported = await page.locator('[data-slot-asset=idle]').inputValue();
+    await page.locator('[data-slot-asset=moving]').selectOption('');
+    await page.locator('[data-select-slot=idle]').click();
     await page.locator('#boss-directional').uncheck(); await page.locator('#boss-rows').fill('1'); await page.locator('#boss-rows').dispatchEvent('change');
-    await page.locator('#boss-columns').fill('4'); await page.locator('#boss-columns').dispatchEvent('change'); await page.locator('#boss-loop').check();
+    await page.locator('#boss-loop').locator('xpath=ancestor::details').locator('summary').click(); await page.locator('#boss-columns').fill('4'); await page.locator('#boss-columns').dispatchEvent('change'); await page.locator('#boss-loop').check();
     await page.locator('#boss-save').click(); await expect(page.locator('#boss-status')).toContainText('Catalogo salvato con backup');
     let catalog = JSON.parse(await readFile(actorPath, 'utf8'));
     const skin = catalog.npcVariants.find((v: any) => v.id === 'idle-only-editor-test').skin;
@@ -41,10 +43,10 @@ test('NPC laboratory saves, reloads and duplicates idle-only NPCs and renders id
     assert.deepEqual(catalog.skins['npc-old-fisher'], ACTOR_CATALOG.skins['npc-old-fisher']);
     await page.locator('#boss-reload').click(); await expect(page.locator('#boss-status')).toHaveText('Catalogo caricato.');
     await page.locator('#boss-select').selectOption('variant:idle-only-editor-test');
-    await expect(page.locator('#boss-animation')).toHaveValue('idle'); await expect(page.locator('#boss-asset')).toHaveValue(imported!);
+    await expect(page.locator('[data-slot-asset=idle]')).toHaveValue(imported!);
     // Movement can be added again, and removing it preserves the dedicated idle.
-    await page.locator('#boss-new-animation').selectOption('moving'); await page.locator('#boss-add-animation').click();
-    await expect(page.locator('#boss-idle-fallback')).toBeEnabled(); await page.locator('#boss-idle-only').click();
+    await page.locator('[data-slot-asset=moving]').selectOption('/actor-assets/npc-old-fisher.png');
+    await expect(page.locator('#boss-animation-rule')).toContainText('Da fermo: Idle'); await page.locator('[data-slot-asset=moving]').selectOption('');
     page.once('dialog', d => d.accept('idle-only-editor-copy')); await page.locator('#boss-duplicate').click();
     await page.locator('#boss-save').click(); await expect(page.locator('#boss-status')).toContainText('Catalogo salvato con backup');
     catalog = JSON.parse(await readFile(actorPath, 'utf8'));

@@ -73,9 +73,15 @@ export async function startWorldStudio(options: { root: string; documentPath: st
       } finally { busy = false; }
     })().catch(e => { if (!response.headersSent) reply(400, { error: e instanceof Error ? e.message : String(e) }); });
   });
-  // Keep Vite's style transport on this same loopback server, without file watching or
-  // surprise reloads on Apply. A second maker never contends for the default HMR port.
-  vite = await createViteServer({ root: options.root, server: { middlewareMode: true, hmr: { server }, watch: null,
+  // Studio data is fetched explicitly. Saving or importing must never reload a maker
+  // and discard its open dialogs, current selection or unsaved work.
+  vite = await createViteServer({ root: options.root,
+    plugins: [{ name: 'studio-no-file-watching', configResolved(config) {
+      // Vite's config merge skips null overrides. Set this after merging so the
+      // watcher really stays disabled even when vite.config.ts defines watch options.
+      config.server.watch = null;
+    } }],
+    server: { middlewareMode: true, hmr: { server }, watch: null,
     fs: { strict: true, allow: [options.root], deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/.tmp/**', '**/data/**', '**/server/**', '**/scripts/**', '**/tests/**', '**/*accounts*.json', '**/*.bak', '**/*.tmp', '**/*.lock', '**/*.log'] } }, appType: 'mpa' });
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(options.port, '127.0.0.1', resolve); });

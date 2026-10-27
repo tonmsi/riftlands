@@ -7,11 +7,14 @@ export interface AnimationState { name: string; elapsed: number; duration?: numb
 export function resolveAnimation(visual: ActorVisual, state: AnimationState): { animation: SpriteAnimation; state: AnimationState } | undefined {
   const exact = visual.animations[state.name];
   if (exact) return { animation: exact, state };
-  if (state.name === 'idle' && visual.animations.moving)
-    return { animation: visual.animations.moving, state: { ...state, frozen: true } };
-  if (state.name === 'moving' && visual.animations.idle)
+  const moving = visual.animations.moving ?? visual.animations.walk;
+  if (state.name === 'idle' && moving)
+    return { animation: moving, state: { ...state, frozen: true } };
+  if (['moving', 'walk'].includes(state.name) && moving)
+    return { animation: moving, state };
+  if (['moving', 'walk'].includes(state.name) && visual.animations.idle)
     return { animation: visual.animations.idle, state };
-  const fallback = visual.animations.idle ?? visual.animations.moving;
+  const fallback = visual.animations.idle ?? moving;
   return fallback ? { animation: fallback, state: { ...state, frozen: true } } : undefined;
 }
 export function bossAnimation(actor: Actor, time: number, moving: boolean, windup?: BossWindup, meleeMs = 520): AnimationState {
@@ -21,7 +24,7 @@ export function bossAnimation(actor: Actor, time: number, moving: boolean, windu
     return { name: 'melee', elapsed: time - actor.bossMeleeAt };
   if (actor.bossAwakenedAt === undefined) return { name: 'prep', elapsed: 0, frozen: true };
   if (time < actor.bossAwakenedAt + BOSS_WAKE_MS) return { name: 'prep', elapsed: Math.max(0, time - actor.bossAwakenedAt), duration: BOSS_WAKE_MS };
-  return { name: moving ? 'walk' : 'idle', elapsed: time };
+  return { name: moving ? 'moving' : 'idle', elapsed: time };
 }
 export function animationFrame(animation: SpriteAnimation, state: AnimationState, row: number): number {
   const count = animation.columns * (animation.directional ? 1 : animation.rows);

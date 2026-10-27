@@ -18,7 +18,6 @@ import { npcPropertiesMarkup, fillNpcProperties, readNpcProperties } from '../np
 import { newDungeonInterior } from '../../../shared/warps';
 import './world-maker.css';
 import { installActorEditor } from './boss-editor';
-import { installPlayerEditor } from './player-editor';
 import { importWorldAsset } from './world-asset-import';
 import { field, tools, terrains, worldMakerLayout } from './world-maker-layout';
 import { drawWorldEditorMap, drawAssetGrid as renderAssetGrid, assetView as assetGridView } from './world-editor-canvas';
@@ -54,7 +53,6 @@ root.innerHTML = worldMakerLayout;
 root.querySelector('.top-actions')!.insertAdjacentHTML('afterbegin', '<label class="check light-mode-toggle" title="Anteprima leggera: senza mare animato, maschere e ombre; asset semplificati. Il progetto e il gioco mantengono tutti gli effetti."><input id="light-mode" type="checkbox">Light mode <small>solo editor</small></label>');
 organizeWorldPanels(root);
 installActorEditor();
-installPlayerEditor();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const input = (id: string) => el<HTMLInputElement>(id);
 const val = (id: string) => (el(id) as HTMLInputElement | HTMLSelectElement).value;

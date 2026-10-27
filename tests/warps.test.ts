@@ -41,6 +41,37 @@ function enter(m: RoomManager, id: string, warpId: string) {
   advance(m);
 }
 
+test('interior and dungeon snapshots report the active map PvP rule, combat timer and live maker updates', () => {
+  for (const kind of ['building', 'dungeon'] as const) {
+    const p = warpProject(); p.interiors![0].kind = kind;
+    const m = new RoomManager(undefined, p.seed, 1_000_000, p), a = account(`pvp-${kind}`);
+    m.connect(a, 'warrior'); advance(m, .1);
+    assert.equal(m.snapshotFor(a.id)!.sanctuary, 'safe');
+    enter(m, a.id, 'door-a');
+    const sim = m.simulationFor(a.id), actor = sim.players.get(a.id)!;
+    assert.equal(m.stateFor(a.id).mapId, 'house');
+    assert.equal(m.snapshotFor(a.id)!.sanctuary, 'safe');
+    assert.equal(sim.isSafeProtected(actor), true);
+    actor.pvpUntil = sim.now + 1000;
+    advance(m, .05);
+    assert.equal(m.snapshotFor(a.id)!.sanctuary, 'combat');
+    actor.pvpUntil = 0;
+    advance(m, .05);
+    const enabled = structuredClone(m.project); enabled.interiors![0].pvp = true;
+    m.applyProject(enabled, m.prepareProject(enabled));
+    assert.equal(m.snapshotFor(a.id)!.sanctuary, 'outside');
+    assert.equal(sim.isSafeProtected(actor), false);
+    const zoned = structuredClone(enabled);
+    zoned.interiors![0].document.zones = [{ id: 'safe', name: 'Ingresso sicuro', priority: 1, pvp: false,
+      shape: { kind: 'rect', x: 0, y: 0, width: 24, height: 18 } }];
+    m.applyProject(zoned, m.prepareProject(zoned));
+    assert.equal(m.snapshotFor(a.id)!.sanctuary, 'safe');
+    enter(m, a.id, 'exit-b');
+    assert.equal(m.stateFor(a.id).id, 'world');
+    assert.equal(m.snapshotFor(a.id)!.sanctuary, 'safe');
+  }
+});
+
 test('internal map has bounded terrain, shared assets, authored NPCs and no random population', () => {
   const p = warpProject(), d = mapDocument(p, 'house'), world = new World(p.seed, 16, 'world', d, []);
   assert.equal(world.getTile(4, 4), 'grass'); assert.equal(world.getTile(-1, 4), 'rock'); assert.equal(world.getTile(24, 4), 'rock');
@@ -119,6 +150,31 @@ test('server validates proximity, source map, combat and destination; movement i
   assert.equal(m.enqueueInput(a.id, { seq: 1, dx: 1, dy: 0, aim: 0, cast: 'q' }, state.id, state.epoch), true);
   assert.equal(m.global.connections.get(a.id)!.inputs.length, 0); assert.equal(m.global.connections.get(a.id)!.ack, 1);
   advance(m); assert.equal(m.stateFor(a.id).mapId, 'house');
+});
+
+test('automatic and manual passage attempts explain combat cooldown without repeating each tick', () => {
+  for (const activation of ['walk', 'interact'] as const) {
+    const p = warpProject(), warp = p.warps![0]; warp.activation = activation;
+    const m = new RoomManager(undefined, p.seed, 1_000_000, p), a = account(`blocked-${activation}`);
+    m.connect(a, 'warrior'); advance(m, .1);
+    const actor = m.global.players.get(a.id)!;
+    Object.assign(actor, warpPosition(warp.entry));
+    actor.pvpUntil = m.global.now + 4500;
+    m.global.connections.get(a.id)!.combatUntil = m.global.now + 7000;
+    if (activation === 'walk') {
+      advance(m, .05);
+      assert.match(m.takeNotice(a.id)!, /Sei ancora in combattimento: passaggio bloccato per 7 s/);
+      advance(m, .5); assert.equal(m.takeNotice(a.id), undefined);
+    } else {
+      const state = m.stateFor(a.id);
+      assert.throws(() => m.interact(a.id, { kind: 'warp', warpId: warp.id }, state.id, state.epoch), /passaggio bloccato per 7 s/);
+    }
+    assert.equal(m.takeWarpTransition(a.id), undefined);
+    assert.equal(m.stateFor(a.id).id, 'world');
+    actor.pvpUntil = 0; m.global.connections.get(a.id)!.combatUntil = 0;
+    Object.assign(actor, warpPosition({ x: 10, y: 10 })); advance(m, .1);
+    enter(m, a.id, warp.id); assert.equal(m.stateFor(a.id).mapId, 'house');
+  }
 });
 
 test('internal location and progress survive disconnect, save and restart; a removed map recovers in the world', async t => {
@@ -231,6 +287,7 @@ test('damage during the fade cancels the warp and re-arms only after leaving the
   Object.assign(actor, warpPosition(p.warps![0].entry)); advance(m, .05);
   actor.pvpUntil = m.global.now + 1000; advance(m, .5);
   assert.equal(m.stateFor(a.id).id, 'world'); assert.equal(m.takeWarpTransition(a.id)?.phase, 'cancel');
+  assert.match(m.takeNotice(a.id)!, /Sei ancora in combattimento: passaggio bloccato/);
   actor.pvpUntil = 0; advance(m); assert.equal(m.stateFor(a.id).id, 'world');
   Object.assign(actor, warpPosition({ x: 10, y: 10 })); advance(m, .1);
   enter(m, a.id, 'door-a'); assert.equal(m.stateFor(a.id).mapId, 'house');

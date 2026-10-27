@@ -27,9 +27,11 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     <button id="interior-create" class="wide">＋ Crea interno</button><button id="interior-update" class="wide">Aggiorna interno</button><button id="interior-delete" class="wide danger">Elimina interno e collegamenti</button></div></details>`;
   const selectorLabel = section.querySelector('#surface-map')!.closest('label')!;
   root.querySelector('#map-controls-panel > summary')!.after(selectorLabel);
+  const mapPvp = document.createElement('div'); mapPvp.id = 'map-pvp-controls'; mapPvp.hidden = true;
+  mapPvp.innerHTML = `<label>PvP della mappa visualizzata<select id="map-pvp"><option value="false">Disabilitato · zona sicura</option><option value="true">Abilitato · combattimento tra giocatori</option></select></label><p class="hint">Poi premi Applica al gioco. Le zone e i dungeon con una regola PvP propria hanno precedenza.</p>`;
   const deleteMap = document.createElement('button'); deleteMap.id = 'map-delete'; deleteMap.className = 'wide danger'; deleteMap.textContent = 'Elimina completamente questa mappa interna';
   const deleteHint = document.createElement('p'); deleteHint.id = 'map-delete-hint'; deleteHint.className = 'hint';
-  selectorLabel.after(deleteMap, deleteHint);
+  selectorLabel.after(mapPvp, deleteMap, deleteHint);
   root.querySelector('#areas-controls-panel')!.append(section);
   const chooser = document.createElement('div'); chooser.className = 'map-controls';
   chooser.innerHTML = `<label>Tipo di area<select id="area-kind"><option value="building">Interni</option><option value="dungeon">Dungeon</option></select></label>
@@ -118,6 +120,8 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     root.querySelector('#current-map')!.textContent = host.mapId() === 'world' ? 'Mondo' : `Interno · ${options.find(([id]) => id === host.mapId())?.[1]}`;
 
     const visibleInterior = project.interiors?.find(m => m.id === host.mapId());
+    mapPvp.hidden = !visibleInterior;
+    el('map-pvp').value = String(visibleInterior?.pvp ?? false);
     deleteMap.disabled = !visibleInterior;
     deleteHint.textContent = visibleInterior ? `Elimina “${visibleInterior.name}”, tutti i contenuti e i collegamenti da ogni mappa. Poi premi Applica al gioco.` : 'Il mondo principale non può essere eliminato. Seleziona una mappa interna.';
     const interior = editingNew ? undefined : owner();
@@ -179,6 +183,11 @@ export function installWarpEditor(root: HTMLElement, host: WarpEditorHost) {
     host.switchMap(id);
   }
   el('surface-map').onchange = () => openMap(value('surface-map'));
+  el('map-pvp').onchange = () => {
+    const mapId = host.mapId(), enabled = value('map-pvp') === 'true';
+    if (mapId === 'world') return;
+    host.change(() => { const map = host.project().interiors?.find(m => m.id === mapId); if (map) map.pvp = enabled; });
+  };
   el('warp-destination').onchange = () => { preferredDestination = value('warp-destination'); if (pending) openMap(value('warp-destination')); };
   el('area-kind').onchange = () => {
     const first = host.project().interiors?.find(m => (m.kind ?? 'building') === value('area-kind'));
