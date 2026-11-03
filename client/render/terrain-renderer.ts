@@ -320,7 +320,7 @@ export class TerrainRenderer {
     }
     for (const p of visible) {
       if (!p.js) {
-        const a = this.activeWorld.authoring.terrainBushAt(p.x, p.y);
+        const a = this.activeWorld.sceneryAsset('bush',p.x, p.y);
         if (!this.ambientAnimations && !a.animation) continue;
         animated = true;
         this.bushArt.draw(ctx, a, { id: `terrain-bush:${p.x},${p.y}`, assetId: a.id, x: p.x, y: p.y }, 1, TILE_SIZE, time);
@@ -403,7 +403,7 @@ export class TerrainRenderer {
       const key=`${tx},${ty}`,cached=this.temperatureSamples.get(key);
       return cached??remember(this.temperatureSamples,key,world.getTemperature(tx,ty),4096);
     };
-    const scenery = (tile: TileKind) => tile === 'rock' || tile === 'bush';
+    const scenery = (tile: TileKind) => tile === 'rock' || tile === 'bush' || tile === 'plant';
     const tileAt = (tx: number, ty: number) => material ?? world.getTile(tx, ty);
 
     const rawSurfaceAt = (tx: number, ty: number): SurfaceKind | null => {
@@ -603,7 +603,7 @@ export class TerrainRenderer {
           if (shore) waterPlants.push({ x, y, variation: noise(tx, ty, 17), shore });
         } else if (tile === 'water') {
           ctx.fillStyle=palette.water.color;ctx.fillRect(x,y,TILE_SIZE+.4,TILE_SIZE+.4);
-        } else if (tile === 'rock' || tile === 'bush') {
+        } else if (tile === 'rock' || tile === 'bush' || tile === 'plant') {
           // Gestito dal pass sceneryGroups
         } else {
           const isCold = world.getTemperature(tx, ty) < 0.28;
@@ -721,6 +721,7 @@ export class TerrainRenderer {
     }
 
     }
+    if(world.authoring.document.procedural)return;
     const sceneryStart=perf.begin();
     const getScenery = (tx: number, ty: number): TileKind => {
       if (this.outsideLocalMap(tx, ty)) return 'grass';

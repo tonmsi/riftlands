@@ -1,7 +1,7 @@
 import type { TileKind } from './types';
 import type { TileOverride, WorldDocument } from './world-schema';
 
-export const WORLD_TILE_TERRAINS: readonly TileKind[] = ['grass', 'path', 'water', 'rock', 'bush', 'mud', 'snow', 'ice'];
+export const WORLD_TILE_TERRAINS: readonly TileKind[] = ['grass', 'path', 'water', 'rock', 'bush', 'mud', 'snow', 'ice', 'plant'];
 export const EDIT_CHUNK_SIZE = 32;
 const AREA = EDIT_CHUNK_SIZE ** 2;
 /** [chunkX, chunkY, offset, length, value, ...]. Zero cells remain procedural. */
@@ -23,11 +23,11 @@ export function setWorldTileMetrics(document: WorldDocument, value: TileMetrics)
 }
 export function tileCode(tile?: Omit<TileOverride, 'x' | 'y'>): number {
   if (!tile) return 0;
-  return (tile.terrain === undefined ? (tile.suppressAssets ? 1 : 0) : (WORLD_TILE_TERRAINS.indexOf(tile.terrain) + 1) * 2 + (tile.suppressAssets ? 1 : 0)) | (tile.bushStyle === 'js' ? 32 : tile.bushStyle === 'png' ? 64 : 0);
+  return (tile.terrain === undefined ? (tile.suppressAssets ? 1 : 0) : (WORLD_TILE_TERRAINS.indexOf(tile.terrain) + 1) * 2 + (tile.suppressAssets ? 1 : 0)) | (tile.bushStyle === 'js' ? 32 : tile.bushStyle === 'png' ? 64 : 0) | (tile.defaultFamilyOnly ? 128 : 0);
 }
 export function tileFromCode(code: number, x: number, y: number): TileOverride | undefined {
   const base = code & 31;
-  return code ? { x, y, ...(base >= 2 ? { terrain: WORLD_TILE_TERRAINS[Math.floor(base / 2) - 1] } : {}), ...(base % 2 ? { suppressAssets: true } : {}), ...(code & 32 ? { bushStyle: 'js' as const } : code & 64 ? { bushStyle: 'png' as const } : {}) } : undefined;
+  return code ? { x, y, ...(code & 128 ? { defaultFamilyOnly: true } : {}), ...(base >= 2 ? { terrain: WORLD_TILE_TERRAINS[Math.floor(base / 2) - 1] } : {}), ...(base % 2 ? { suppressAssets: true } : {}), ...(code & 32 ? { bushStyle: 'js' as const } : code & 64 ? { bushStyle: 'png' as const } : {}) } : undefined;
 }
 export function decodeTileChunk(chunk: WorldTileChunk): Uint8Array {
   const cells = new Uint8Array(AREA);

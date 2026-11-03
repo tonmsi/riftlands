@@ -50,7 +50,7 @@ export class WorldElevation {
   authoredGeometry(bounds: TileBounds): ElevationGeometry {
     const result:ElevationGeometry={surfaces:this.surfaces.query(bounds),solids:this.solids.query(bounds),stairs:this.stairs.query(bounds)};
     for(const c of this.cliffs(bounds))for(const part of c.parts) {
-      const asset = cliffAsset(this.world.authoring.document, part.variant);
+      const asset = cliffAsset(this.world.cliffCatalog(), part.variant,c);
       const g=this.assetGeometry(asset),place=(r:ElevationRect)=>({id:`cliff-${c.x}-${c.y}-${part.variant}/${r.id}`,x:c.x+r.x/asset.columns,y:c.y+r.y/asset.rows,width:r.width/asset.columns,height:r.height/asset.rows});
       for(const s of g.surfaces)if(s.elevation+c.base>=-128&&s.elevation+c.base<=127)result.surfaces.push({...s,...place(s),elevation:s.elevation+c.base});
       for(const s of g.solids) {
@@ -71,7 +71,7 @@ export class WorldElevation {
   }
   cliffHidesAt(x: number, y: number, elevation: number): boolean {
     return this.cliffs({ left: Math.floor(x), top: Math.floor(y), right: Math.floor(x)+1, bottom: Math.floor(y)+1 }).some(c => c.parts.some(part => {
-      const cell=cliffCell(cliffAsset(this.world.authoring.document,part.variant),c,x,y);
+      const cell=cliffCell(cliffAsset(this.world.cliffCatalog(),part.variant,c),c,x,y);
       return (cell?.elevation===undefined?c.base<=elevation&&elevation<c.elevation:c.base+cell.elevation===elevation)&&['hide','hide-fade'].includes(cell?.visibility??'');
     }));
   }
@@ -100,6 +100,11 @@ export class WorldElevation {
   terrainElevationAt(x: number, y: number): number {
     const surfaces = this.surfaces.query({ left: x, top: y, right: x + 1e-6, bottom: y + 1e-6 }).filter(s => s.ground && containsRectPoint(s, x, y));
     return surfaces.length ? Math.max(...surfaces.map(s => s.elevation)) : this.baseAt(Math.floor(x), Math.floor(y));
+  }
+  terrainKindAt(tx:number,ty:number) {
+    const x=tx+.5,y=ty+.5;
+    const surface=this.surfaces.query({left:x,top:y,right:x+1e-6,bottom:y+1e-6}).filter(s=>s.ground&&containsRectPoint(s,x,y)).sort((a,b)=>b.elevation-a.elevation)[0];
+    return surface?.terrain??this.world.getTile(tx,ty);
   }
   at(x: number, y: number, preferred?: number): Elevated {
     const tx = x / TILE_SIZE, ty = y / TILE_SIZE;

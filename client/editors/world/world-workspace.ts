@@ -90,6 +90,9 @@ export function installWorldWorkspace(root: HTMLElement, host: Host): void {
   const terrain=root.querySelector('#terrain')!.closest('label')!;
   const box=document.createElement('div');box.id='terrain-quick-controls';box.className='quick-box';
   box.append(terrain);
+  for(const selector of ['#bush-js-option','#bush-js-hint','#procedural-default-only','#terrain-family-info']){
+    const control=root.querySelector<HTMLElement>(selector);if(control)box.append(selector==='#procedural-default-only'?control.closest('label')!:control);
+  }
   const quota=root.querySelector('#terrain-elevation')!.closest('label')!;quota.firstChild!.textContent='Livello terreno';
   const stepper=document.createElement('div');stepper.className='level-stepper';
   for(const [label,delta] of [['−',-1],['＋',1]] as const){const button=document.createElement('button');button.textContent=label;button.setAttribute('aria-label',delta>0?'Alza livello terreno':'Abbassa livello terreno');button.onclick=()=>{const field=quota.querySelector('input')!,active=root.querySelector<HTMLInputElement>('#elevation-active')!;field.value=String(Math.max(-128,Math.min(127,Number(field.value===''?active.value:field.value)+delta)));field.dispatchEvent(new Event('change',{bubbles:true}));root.querySelector<HTMLButtonElement>('[data-tool="terrain"]')!.click();};stepper.append(button);}

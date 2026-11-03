@@ -5,10 +5,13 @@ import { arenaTileIsWall } from './arena';
 import { DUNGEON_DEFINITIONS, configuredDungeonTile, dungeonEncounters, dungeonStoneTiles, inDungeonApproachCorridor, insideDungeon, onDungeonApproach, type DungeonDefinition } from './dungeons';
 import type { Biome, Pickup, TileKind, RoomMode } from './types';
 import { WORLD_DOCUMENT } from './world-content';
-import { WorldAuthoring, type TileBounds, type GenerationEnvironment } from './world-authoring';
+import { WorldAuthoring, overlaps, placementBounds, placementVisualBounds, type TileBounds, type GenerationEnvironment } from './world-authoring';
 import type { AssetPlacement, WorldDocument } from './world-schema';
 import { assetCellColumns,assetCellRows,assetCellSubdivision } from './world-schema';
 import { coordinateHash } from './coordinate-random';
+import { proceduralAsset, type ProceduralKind } from './procedural-generation';
+import { proceduralFallback } from './procedural-fallback';
+import { familySceneryBlock, type SceneryKind } from './family-scenery';
 import { EDIT_CHUNK_SIZE, type WorldTileChunk } from './world-tiles';
 export { coordinateHash } from './coordinate-random';
 
@@ -40,6 +43,10 @@ export class World {
   roomAt(x: number, y: number): string { return this.roomTiles.size ? this.roomTiles.get(`${Math.floor(x / TILE_SIZE)},${Math.floor(y / TILE_SIZE)}`) ?? '' : ''; }
   sameRoom(a: { x: number; y: number }, b: { x: number; y: number }): boolean { return this.roomAt(a.x, a.y) === this.roomAt(b.x, b.y); }
   private cache = new Map<string, Chunk>();
+  private sceneryCache = new Map<string,AssetPlacement[]>();
+  private sceneryMargin?: number;
+  private sceneryEnabled=false;
+  private sceneryBlockSize=6;
   private readonly lockedBosses = new Set<string>();
   lockRevision = 0;
   authoringRevision = 0;
@@ -50,6 +57,8 @@ export class World {
   constructor(public readonly seed = WORLD_DOCUMENT.seed, private readonly cacheLimit = 160, public readonly mode: RoomMode = 'world',
     document: WorldDocument = WORLD_DOCUMENT, readonly dungeons: readonly DungeonDefinition[] = DUNGEON_DEFINITIONS) {
     this.authoring = new WorldAuthoring(document);
+    this.sceneryEnabled=!!document.procedural||document.tiles.some(t=>t.terrain==='plant')||!!document.geometry?.surfaces.some(s=>s.terrain==='plant')||!!document.tileChunks?.some(c=>c.some((v,i)=>i>=4&&(i-4)%3===0&&[18,19].includes(v&31)));
+    if(document.procedural){const ids=new Set(Object.values(document.procedural).flatMap(s=>s.families.flatMap(f=>f.rules.flatMap(r=>r.assets))));for(const a of document.assets)if(ids.has(a.id))this.sceneryBlockSize=Math.max(this.sceneryBlockSize,Math.ceil(Math.max(a.columns,a.rows)/6)*6);}
     this.elevation = new WorldElevation(this);
     for (const dungeon of dungeons) for (const room of dungeon.rooms ?? []) {
       const id = `${dungeon.id}:${room.id}`; this.rooms.push({ ...room, id });
@@ -67,17 +76,19 @@ export class World {
   }
   private createGenerationEnvironment(): GenerationEnvironment {
     const document = this.authoring.document;
-    return { tile: (x, y) => this.generateTile(x, y), temperature: (x, y) => this.getTemperature(x, y),
+    return { tile: (x, y) => this.generateTile(x, y), temperature: (x, y) => this.getTemperature(x, y), elevation: (x,y) => this.elevation.terrainElevationAt(x+.5,y+.5),
       moisture: (x, y) => this.getMoisture((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE),
       reserved: (x, y) => !!document.interiorBounds || configuredDungeonTile(x, y, this.dungeons) !== undefined
         || this.dungeons.some(d => onDungeonApproach(d, { x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE }))
         || this.arenaAt((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE) !== undefined };
   }
   /** Rendering includes image overflow; movement and concealment query only the tile grid. */
-  assetsIn(bounds: TileBounds, includeArtwork = true): AssetPlacement[] { return this.mode === 'world' ? this.authoring.assetsIn(bounds, this.generationEnvironment, this.seed, includeArtwork) : []; }
+  assetsIn(bounds: TileBounds, includeArtwork = true): AssetPlacement[] { return this.mode === 'world' ? [...this.authoring.assetsIn(bounds, this.generationEnvironment, this.seed, includeArtwork),...this.familySceneryIn(bounds,includeArtwork)] : []; }
   updateAuthoredTiles(document: WorldDocument, chunks: readonly WorldTileChunk[]): void {
     this.authoring.document = document;
     this.authoring.tiles.update(chunks); this.authoring.invalidateTileGeneration(); this.authoringRevision++;
+    this.sceneryCache.clear();
+    this.sceneryEnabled ||= !!document.procedural||chunks.some(c=>c.some((v,i)=>i>=4&&(i-4)%3===0&&[18,19].includes(v&31)));
     for (const c of chunks) for (let y = 0; y < EDIT_CHUNK_SIZE / CHUNK_TILES; y++) for (let x = 0; x < EDIT_CHUNK_SIZE / CHUNK_TILES; x++)
       this.cache.delete(chunkKey(c[0] * EDIT_CHUNK_SIZE / CHUNK_TILES + x, c[1] * EDIT_CHUNK_SIZE / CHUNK_TILES + y));
   }
@@ -111,6 +122,50 @@ export class World {
   }
   arenaAt(x: number, y: number): string | undefined { return this.mode === 'world' ? this.authoring.zonesAt(x / TILE_SIZE, y / TILE_SIZE).find(z => z.arenaId)?.id : undefined; }
   get cacheSize(): number { return this.cache.size; }
+  sceneryAsset(kind: ProceduralKind, x: number, y: number, width = 1, height = 1) {
+    const tile = this.authoring.tiles.at(x,y);
+    if((kind==='bush'||kind==='plant')&&tile?.bushStyle==='js')return proceduralFallback(kind,width,height);
+    const chosen=proceduralAsset(this.authoring.document,kind,{x,y,width,height,temperature:this.getTemperature(x,y),elevation:this.elevation.terrainElevationAt(x+.5,y+.5),defaultOnly:tile?.defaultFamilyOnly});
+    return chosen ? this.authoring.assets.get(chosen.id)??chosen : (kind==='bush'&&!this.authoring.document.procedural ? this.authoring.terrainBushAt(x,y) : proceduralFallback(kind,width,height));
+  }
+  cliffCatalog() {
+    return {...this.authoring.document,proceduralSample:(x:number,y:number,elevation:number)=>({x,y,elevation,temperature:this.getTemperature(x,y),defaultOnly:this.authoring.tiles.at(x,y)?.defaultFamilyOnly})};
+  }
+  private familySceneryIn(bounds:TileBounds,includeArtwork:boolean):AssetPlacement[] {
+    if(!this.sceneryEnabled)return [];
+    const doc=this.authoring.document,config=doc.procedural;
+    if(this.sceneryMargin===undefined){this.sceneryMargin=0;for(const a of doc.assets){const b=placementVisualBounds({x:0,y:0,id:'',assetId:a.id},a);this.sceneryMargin=Math.max(this.sceneryMargin,-b.left,-b.top,b.right-a.columns,b.bottom-a.rows);}}
+    const margin=includeArtwork?this.sceneryMargin:0,result:AssetPlacement[]=[];
+    const size=this.sceneryBlockSize;
+    for(let top=Math.floor((bounds.top-margin)/size)*size;top<bounds.bottom+margin;top+=size)for(let left=Math.floor((bounds.left-margin)/size)*size;left<bounds.right+margin;left+=size){
+      const key=`${left},${top}`;let placements=this.sceneryCache.get(key);
+      if(!placements){
+        const sample=(x:number,y:number)=>({x,y,temperature:this.getTemperature(x,y),elevation:this.elevation.terrainElevationAt(x+.5,y+.5),defaultOnly:this.authoring.tiles.at(x,y)?.defaultFamilyOnly});
+        const footprints=(kind:SceneryKind,x:number,y:number)=>{
+          const section=config?.[kind];if(!section)return kind==='rock'?[{width:2,height:2}]:[];
+          if(section.useJs||this.authoring.tiles.at(x,y)?.bushStyle==='js')return kind==='rock'?[{width:2,height:2}]:[];
+          const families=section.useFamilies&&!sample(x,y).defaultOnly?section.families:section.families.filter(f=>f.id==='default');
+          const sizes=families.flatMap(f=>f.rules.flatMap(r=>r.assets.map(id=>this.authoring.assets.get(id)).filter(a=>!!a).map(a=>({width:r.width??a!.columns,height:r.height??a!.rows}))));
+          if(!sizes.length)return kind==='rock'?[{width:2,height:2}]:[];
+          return sizes.filter(size=>!!proceduralAsset(doc,kind,{...sample(x,y),...size}));
+        };
+        const groups=familySceneryBlock((x,y)=>this.elevation.terrainKindAt(x,y),left,top,footprints,(x,y,ox,oy)=>{
+          const a=this.authoring.tiles.at(x,y),b=this.authoring.tiles.at(ox,oy);
+          return !!a?.defaultFamilyOnly===!!b?.defaultFamilyOnly&&a?.bushStyle===b?.bushStyle&&this.elevation.terrainElevationAt(x+.5,y+.5)===this.elevation.terrainElevationAt(ox+.5,oy+.5);
+        },size);
+        placements=[];
+        for(const g of groups){
+          if(!config&&g.tile!=='plant')continue;
+          const a=this.sceneryAsset(g.tile,g.x,g.y,g.width,g.height);this.authoring.registerSceneryAsset(a);
+          const p:AssetPlacement={id:`scenery:${g.x}:${g.y}`,assetId:a.id,x:g.x,y:g.y,baseElevation:sample(g.x,g.y).elevation};
+          if(!this.authoring.placements.query(placementBounds(p,a)).length)placements.push(p);
+        }
+        this.sceneryCache.set(key,placements);if(this.sceneryCache.size>256)this.sceneryCache.delete(this.sceneryCache.keys().next().value!);
+      }
+      for(const p of placements){const a=this.authoring.assets.get(p.assetId)!;if(overlaps(bounds,(includeArtwork?placementVisualBounds:placementBounds)(p,a)))result.push(p);}
+    }
+    return result;
+  }
   generatedChunks=0;
   setBossLocked(id: string, locked: boolean): void { if (this.lockedBosses.has(id) !== locked) this.lockRevision++; if (locked) this.lockedBosses.add(id); else this.lockedBosses.delete(id); }
   setBossLocks(ids: Iterable<string>): void { const next = new Set(ids); for (const id of this.lockedBosses) if (!next.has(id)) this.setBossLocked(id, false); for (const id of next) this.setBossLocked(id, true); }

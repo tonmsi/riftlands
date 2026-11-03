@@ -26,7 +26,7 @@ function drawStairSprite(ctx: CanvasRenderingContext2D, s: WorldStair, art: Worl
   ctx.drawImage(bitmap, crop.x, crop.y, crop.width, crop.height, -cross / 2, -length / 2, cross, length); ctx.restore();
 }
 
-const colors = { grass: '#73865a', path: '#b6a17b', water: '#507d91', rock: '#77716a', bush: '#486b42', mud: '#796b51', snow: '#d1dcd5', ice: '#a0c7ce' };
+const colors = { grass: '#73865a', path: '#b6a17b', water: '#507d91', rock: '#77716a', bush: '#486b42', plant:'#73925a', mud: '#796b51', snow: '#d1dcd5', ice: '#a0c7ce' };
 export function drawElevationSurface(ctx: CanvasRenderingContext2D, s: WorldSurface, self?: Vec2 & Elevated | null): void {
   // Painted ground already uses the terrain renderer's material and texture.
   if (s.transparent || (s.painted && s.ground)) return;

@@ -13,7 +13,7 @@ export interface Actor { pvpUntil?: number; }
 export interface Actor { soulEscort?: boolean; soulFarewellAt?: number; soulFarewellX?: number; soulFarewellY?: number; }
 export interface RoomState { id: string; epoch: number; mode: RoomMode; seed: number; spectating?: boolean; mapId?: string; }
 export interface ArenaGateState { phase: 'waiting' | 'countdown' | 'combat' | 'reenter' | 'full'; players: number; startsAt?: number; }
-export type TileKind = 'grass' | 'path' | 'water' | 'rock' | 'bush' | 'mud' | 'snow' | 'ice';
+export type TileKind = 'grass' | 'path' | 'water' | 'rock' | 'bush' | 'mud' | 'snow' | 'ice' | 'plant';
 export type Biome = 'meadow' | 'forest' | 'marsh';
 export type PickupKind = 'heal' | 'haste' | 'power' | 'weakness';
 export interface AbilityDef { targeting: 'directional' | 'self'; name: string; description: string; cost: number; cooldown: number; range: number; damage: number; kind: 'projectile' | 'melee' | 'area' | 'heal' | 'shield' | 'dash' | 'trap'; radius: number; color: string; duration?: number; speed?: number; slow?: number; }

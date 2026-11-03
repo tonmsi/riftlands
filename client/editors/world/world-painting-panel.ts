@@ -28,10 +28,7 @@ export function installWorldPaintingPanel(root: HTMLElement, current: () => Worl
       <label>Grandezza macchie<input id="painting-${key}-size" type="range" min=".25" max="2" step=".05"></label></fieldset>`).join('')}</div>
     <button id="painting-reset" class="wide">Ripristina World Painting</button>
     <p class="hint">Le modifiche entrano nella bozza e nell’esportazione; usa “Applica al gioco” per installarle. Annulla e ripeti funzionano anche qui. Rocce e cespugli conservano le forme degli oggetti.</p>`;
-  root.querySelector('.world-palette')!.append(panel);
-  const nav = root.querySelector('.palette-navigation')!;
-  const button = document.createElement('button'); button.textContent = 'Painting';
-  button.onclick = () => { panel.open = true; panel.scrollIntoView({ block: 'start' }); }; nav.append(button);
+  (root.querySelector('#procedural-painting-slot') ?? root.querySelector('.world-palette'))!.append(panel);
   const input = (id: string) => panel.querySelector<HTMLInputElement>(`#${id}`)!;
   const scope=installTransitionScope(panel,current,change);
   const refreshCoast=installWaterCoastControls(panel,current,change);

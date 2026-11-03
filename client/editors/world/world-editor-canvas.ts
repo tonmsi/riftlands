@@ -98,7 +98,8 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
             paint.setTransform(dpr, 0, 0, dpr, view.x * dpr, view.y * dpr);
         } else for (let y = Math.floor(b.top / step) * step; y < b.bottom; y += step)
             for (let x = Math.floor(b.left / step) * step; x < b.right; x += step) {
-                paint.fillStyle = world.authoring.document.painting?.materials[world.getTile(x, y)].color ?? terrains[world.getTile(x, y)].color;
+                const tile=world.getTile(x,y);
+                paint.fillStyle = world.authoring.document.painting?.materials[tile==='plant'?'grass':tile].color ?? terrains[tile].color;
                 paint.fillRect(x * s, y * s, step * s + .5, step * s + .5);
             }
         const placements = step === 1 ? world.assetsIn(b) : world.authoring.visibleAssetsIn(b);
@@ -129,8 +130,8 @@ export function drawWorldEditorMap(canvas: HTMLCanvasElement, world: World, draf
             paint.restore();
         }
         paint.save(); paint.scale(s / TILE_SIZE, s / TILE_SIZE);
-        for (const cliff of cliffs) if (cliffLevels(draft,cliff,true).some(e=>floorVisible(visible,e))) {
-            drawTerrainCliff(paint, cliff, art, geometry.stairs, { document: draft, time, visibleFloors:visible, version:world });
+        for (const cliff of cliffs) if (cliffLevels(world.cliffCatalog(),cliff,true).some(e=>floorVisible(visible,e))) {
+            drawTerrainCliff(paint, cliff, art, geometry.stairs, { document: world.cliffCatalog(), time, visibleFloors:visible, version:world });
         }
         for (const top of geometry.surfaces.filter(top => !top.id.includes('/') && floorVisible(visible, top.elevation)).sort((a, b) => a.elevation - b.elevation))
             for (const part of exposedSurfaceParts(top, geometry)) {

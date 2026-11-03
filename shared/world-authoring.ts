@@ -2,6 +2,8 @@ import { CHUNK_TILES } from './config';
 import { isBushAsset, terrainBushAsset } from './bush';
 import { pickAssetVariant } from './asset-variants';
 import { coordinateHash } from './coordinate-random';
+import { proceduralAsset } from './procedural-generation';
+import { proceduralFallback } from './procedural-fallback';
 import type { TileKind } from './types';
 import type { AssetCell, AssetPlacement, TileOverride, WorldAsset, WorldDocument, WorldZone, ZoneShape, ClimateBand } from './world-schema';
 import { worldAssetImageBounds, worldAssetShadow, assetCellColumns, assetCellRows, assetCellSubdivision } from './world-schema';
@@ -80,11 +82,12 @@ export class SpatialIndex<T> {
   }
 }
 export interface GenerationEnvironment {
+  elevation?(x: number, y: number): number;
   tile(x: number, y: number): TileKind; temperature(x: number, y: number): number; moisture(x: number, y: number): number;
   reserved(x: number, y: number): boolean;
 }
 interface GenerationBand { stride: number; assets: WorldAsset[]; density: number; maxSpacing: number; overhang: number; }
-interface Proposal { placement: AssetPlacement; priority: number; band: GenerationBand; }
+interface Proposal { placement: AssetPlacement; priority: number; band: GenerationBand; spacing: number; }
 /** Immutable runtime snapshot. Editor mutations create a new snapshot and invalidate all derived caches. */
 export class WorldAuthoring {
   readonly assets: ReadonlyMap<string, WorldAsset>;
@@ -100,7 +103,11 @@ export class WorldAuthoring {
   private zoneCache = new Map<string, WorldZone[]>();
   constructor(public document: WorldDocument) {
     const definitions = new Map(document.assets.map(a => [a.id, a]));
-    this.assets = new Map(document.assets.map(a => [a.id, a.variantOf ? { ...a, generation: definitions.get(a.variantOf)!.generation, shadow: worldAssetShadow(a, definitions.get(a.variantOf)) } : a]));
+    const generatedRoots = document.procedural ? (['bush','plant'] as const).map(kind=>{
+      const a=structuredClone(proceduralFallback(kind)),s=document.procedural![kind];
+      a.generation={...a.generation,enabled:true,category:kind,density:s.density,spacing:s.spacing,terrains:['grass','mud','snow']};return a;
+    }) : [];
+    this.assets = new Map([...document.assets.map(a => [a.id, a.variantOf ? { ...a, generation: definitions.get(a.variantOf)!.generation, shadow: worldAssetShadow(a, definitions.get(a.variantOf)) } : a] as const), ...generatedRoots.map(a=>[a.id,a] as const)]);
     for (const a of this.assets.values()) {
       const root = a.variantOf ?? a.id;
       const pool = this.variants.get(root) ?? [];
@@ -115,7 +122,10 @@ export class WorldAuthoring {
     for (const p of document.placements) this.addPlacement(p);
     for (const z of document.zones) this.zones.add(z);
     const bands = new Map<number, GenerationBand>();
-    for (const a of document.assets.filter(a => !a.variantOf && a.generation.enabled && a.generation.density > 0).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
+    const managed = new Set(document.procedural ? Object.values(document.procedural).flatMap(s=>s.families.flatMap(f=>f.rules.flatMap(r=>r.assets))) : []);
+    for(const a of document.assets)if(a.variantOf&&managed.has(a.id))managed.add(a.variantOf);
+    for(const root of generatedRoots){const kind=root.generation.category as 'plant'|'bush';this.variants.set(root.id,[root,...document.assets.filter(a=>document.procedural![kind].families.some(f=>f.rules.some(r=>r.assets.includes(a.id))))]);}
+    for (const a of [...document.assets.filter(a => !managed.has(a.id)&&!(document.procedural&&isBushAsset(a))),...generatedRoots].filter(a => !a.variantOf && a.generation.enabled && a.generation.density > 0).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
       const variants = this.variants.get(a.id)!;
       const stride = 2 ** Math.ceil(Math.log2(Math.max(...variants.map(v => Math.max(v.columns, v.rows))) + 2 * a.generation.spacing));
       const band = bands.get(stride) ?? { stride, assets: [], density: 0, maxSpacing: 0, overhang: 0 };
@@ -129,6 +139,7 @@ export class WorldAuthoring {
     this.bands = [...bands.values()].sort((a, b) => a.stride - b.stride);
   }
   addPlacement(p: AssetPlacement): void { this.placements.add(p); this.visiblePlacements.add(p); }
+  registerSceneryAsset(a:WorldAsset): void { (this.assets as Map<string,WorldAsset>).set(a.id,a); }
   terrainBushAt(x: number, y: number): WorldAsset {
     return pickAssetVariant(this.terrainBushVariants, x, y, this.document.seed);
   }
@@ -177,21 +188,25 @@ export class WorldAuthoring {
       const salt = seed + band.stride * 7919;
       let weight = coordinateHash(sx, sy, salt + 1709) * band.density;
       const root = band.assets.find(a => (weight -= a.generation.density) < 0)!;
-      const a = pickAssetVariant(this.variants.get(root.id)!, sx, sy, salt);
+      const managedKind=root.id==='procedural-plant-1-1-'?'plant':root.id==='procedural-bush-1-1-'?'bush':undefined;
+      const isPlant=!!managedKind;
+      const px=sx*band.stride+root.generation.spacing,py=sy*band.stride+root.generation.spacing;
+      const chosen = managedKind && !(managedKind==='bush'&&this.tiles.at(px,py)?.bushStyle==='js') ? proceduralAsset(this.document,managedKind,{x:px,y:py,temperature:env.temperature(px,py),elevation:env.elevation?.(px,py)??0,defaultOnly:this.tiles.at(px,py)?.defaultFamilyOnly}) : undefined;
+      const a = isPlant ? chosen ?? root : pickAssetVariant(this.variants.get(root.id)!, sx, sy, salt);
       if (coordinateHash(sx, sy, salt + 1711) < Math.min(1, band.density)) {
-        const gap = a.generation.spacing;
-        const x = sx * band.stride + gap + Math.floor(coordinateHash(sx, sy, salt + 1721) * (band.stride - a.columns - 2 * gap + 1));
-        const y = sy * band.stride + gap + Math.floor(coordinateHash(sx, sy, salt + 1723) * (band.stride - a.rows - 2 * gap + 1));
+        const gap = isPlant ? root.generation.spacing : a.generation.spacing;
+        const x = isPlant ? px : sx * band.stride + gap + Math.floor(coordinateHash(sx, sy, salt + 1721) * (band.stride - a.columns - 2 * gap + 1));
+        const y = isPlant ? py : sy * band.stride + gap + Math.floor(coordinateHash(sx, sy, salt + 1723) * (band.stride - a.rows - 2 * gap + 1));
         const p: AssetPlacement = { id: `generated:${band.stride}:${sx}:${sy}`, assetId: a.id, x, y };
         let allowed = !this.placements.query({ left: x - gap, top: y - gap, right: x + a.columns + gap, bottom: y + a.rows + gap }).length;
         for (let row = 0; allowed && row < a.rows; row++) for (let col = 0; allowed && col < a.columns; col++) {
-          const tx = x + col, ty = y + row, temp = env.temperature(tx, ty), moisture = env.moisture(tx, ty), g = a.generation;
-          const tile = this.tiles.at(tx, ty), bush = isBushAsset(root);
+          const tx = x + col, ty = y + row, temp = env.temperature(tx, ty), moisture = env.moisture(tx, ty), g = isPlant ? root.generation : a.generation;
+          const tile = this.tiles.at(tx, ty), bush = isBushAsset(root)||managedKind==='bush';
           if (bush && tile?.bushStyle === 'js') p.bushJs = true;
-          allowed = !env.reserved(tx, ty) && (!tile?.suppressAssets || (bush && tile.terrain === 'grass' && tile.bushStyle !== undefined)) && this.rule(tx + .5, ty + .5, 'generateAssets') !== false
+          allowed = !env.reserved(tx, ty) && (!tile?.suppressAssets || ((bush||isPlant) && tile.terrain === 'grass' && tile.bushStyle !== undefined)) && (!managedKind || !!tile?.defaultFamilyOnly===!!this.tiles.at(x,y)?.defaultFamilyOnly) && (env.elevation?.(tx,ty)??0)===(env.elevation?.(x,y)??0) && this.rule(tx + .5, ty + .5, 'generateAssets') !== false
             && g.terrains.includes(env.tile(tx, ty)) && temp >= g.temperature[0] && temp <= g.temperature[1] && moisture >= g.moisture[0] && moisture <= g.moisture[1];
         }
-        if (allowed) result = { placement: p, priority: coordinateHash(sx, sy, salt + 1727), band };
+        if (allowed) result = { placement: p, priority: coordinateHash(sx, sy, salt + 1727), band, spacing:gap };
       }
     }
     this.proposals.set(key, result);
@@ -209,12 +224,12 @@ export class WorldAuthoring {
       // Both peers make the same local decision regardless of chunk traversal or cache eviction.
       for (const otherBand of this.bands) {
         if (!result || otherBand === band) continue;
-        const padding = Math.max(a.generation.spacing, otherBand.maxSpacing);
+        const padding = Math.max(proposal.spacing, otherBand.maxSpacing);
         for (let y = Math.floor((b.top - padding) / otherBand.stride); result && y < Math.ceil((b.bottom + padding) / otherBand.stride); y++)
           for (let x = Math.floor((b.left - padding) / otherBand.stride); result && x < Math.ceil((b.right + padding) / otherBand.stride); x++) {
             const other = this.proposal(otherBand, x, y, env, seed);
             if (!other || other.priority > proposal.priority || (other.priority === proposal.priority && other.placement.id > proposal.placement.id)) continue;
-            const asset = this.assets.get(other.placement.assetId)!, gap = Math.max(a.generation.spacing, asset.generation.spacing);
+            const asset = this.assets.get(other.placement.assetId)!, gap = Math.max(proposal.spacing, other.spacing);
             if (overlaps({ left: b.left - gap, top: b.top - gap, right: b.right + gap, bottom: b.bottom + gap }, placementBounds(other.placement, asset))) result = null;
           }
       }

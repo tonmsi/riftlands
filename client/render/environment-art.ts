@@ -55,7 +55,7 @@ export class EnvironmentArt {
     // Contour/priority edits rebuild geometry, not the much larger artwork atlases.
     if(this.materialSignature===signature)return;
     this.materialSignature=signature;
-    for (const tile of Object.keys(TERRAIN) as TileKind[]) this.palette[tile] = painting.materials[tile].color;
+    for (const tile of Object.keys(TERRAIN) as TileKind[]) this.palette[tile] = painting.materials[tile === 'plant' ? 'grass' : tile].color;
     this.cache.clear(); this.cachedPixels = 0; this.washes.clear(); this.waterPaint.clear();
   }
   // Margine extra aumentato per accogliere la chioma sporgente dell'SVG senza tagliarla

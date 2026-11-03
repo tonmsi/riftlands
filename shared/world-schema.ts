@@ -1,4 +1,5 @@
 import type { TileKind, Vec2 } from './types';
+import { PROCEDURAL_KINDS, type ProceduralSettings } from './procedural-generation';
 import { validGeometry, validElevation, type ElevationGeometry } from './elevation';
 import { validWorldPainting, type WorldPainting } from './world-painting';
 import { validNpcSettings, type NpcSettings } from './npc-settings';
@@ -56,6 +57,7 @@ export function worldAssetImageBounds(asset: WorldAsset) {
 }
 export interface AssetPlacement extends Vec2 { id: string; assetId: string; pivotY?: number; baseElevation?: number; bushJs?: boolean; }
 export interface TileOverride extends Vec2 {
+  defaultFamilyOnly?: boolean;
   terrain?: TileKind; suppressAssets?: boolean;
   /** Painted grass allows scattered bushes in this style while suppressing other generated assets. */
   bushStyle?: 'png' | 'js';
@@ -93,6 +95,9 @@ export interface WorldWarp {
   reverseId?: string;
 }
 export interface WorldDocument {
+  /** Virtual catalog folders, including empty folders. */
+  assetFolders?: string[];
+  procedural?: ProceduralSettings;
   cliffAssets?: Partial<Record<CliffVariant, string>>;
   geometry?: ElevationGeometry;
   spawnElevation?: number;
@@ -187,6 +192,11 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   if (d.painting !== undefined && !validWorldPainting(d.painting)) fail('world painting');
   if (d.geometry !== undefined && !validGeometry(d.geometry)) fail('geometria dei livelli');
   if (d.spawnElevation !== undefined && !validElevation(d.spawnElevation)) fail('quota spawn');
+  if (d.assetFolders !== undefined) {
+    list(d.assetFolders, 4096, 'cartelle asset');
+    if (d.assetFolders.some((folder: unknown) => !name(folder) || (folder as string).length > 80)) fail('cartella asset');
+    unique(d.assetFolders, (folder: string) => folder, 'cartelle asset');
+  }
   list(d.assets, 4096, 'catalogo asset'); list(d.placements, 100_000, 'piazzamenti'); list(d.tiles, 500_000, 'terreno');
   list(d.zones, 10_000, 'zone'); list(d.npcs, 100_000, 'NPC'); list(d.dungeons, 4096, 'dungeon');
   if (d.soundPoints !== undefined) {
@@ -226,6 +236,24 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   if (d.cliffAssets !== undefined && (!object(d.cliffAssets) || Object.entries(d.cliffAssets).some(([variant, assetId]) => !CLIFF_VARIANTS.includes(variant as CliffVariant) || !assets.has(assetId)))) fail('catalogo bordi cliff-grid');
   if (d.cliffAssets && d.assets.some((a: WorldAsset) => a.animation && Object.values(d.cliffAssets).includes(a.id))) fail('gli spritesheet sono per gli asset piazzati, non per i bordi automatici del terreno');
   const assetDefinitions = new Map<string, WorldAsset>(d.assets.map((a: WorldAsset) => [a.id, a]));
+  if (d.procedural !== undefined) {
+    if (!object(d.procedural) || Object.keys(d.procedural).some(k => !PROCEDURAL_KINDS.includes(k as any))) fail('sezioni procedurali');
+    for (const kind of PROCEDURAL_KINDS) {
+      const section = d.procedural[kind];
+      if (!object(section) || !boolean(section.useJs) || !boolean(section.useFamilies) || !finite(section.density,0,1) || !integer(section.spacing,0,16)) fail('parametri procedurali');
+      list(section.families,128,'famiglie procedurali'); unique(section.families,(f:any)=>f.id,'famiglie procedurali');
+      if (!section.families.some((f:any)=>f.id==='default')) fail('famiglia predefinita mancante');
+      for (const f of section.families) {
+        if (!object(f) || !id(f.id) || !name(f.name) || !range(f.temperature) || !Array.isArray(f.elevation) || f.elevation.length!==2 || !f.elevation.every(validElevation) || f.elevation[0]>f.elevation[1] || !finite(f.temperatureBlend,0,1) || !finite(f.elevationBlend,0,255)) fail('famiglia procedurale');
+        list(f.rules,128,'regole procedurali'); unique(f.rules,(r:any)=>r.id,'regole procedurali');
+        for(const r of f.rules) {
+          if(!object(r)||!id(r.id)||(r.width!==undefined&&!integer(r.width,1,kind==='rock'?6:32))||(r.height!==undefined&&!integer(r.height,1,kind==='rock'?6:32))||(r.cliffVariant!==undefined&&!CLIFF_VARIANTS.includes(r.cliffVariant))) fail('ingombro procedurale');
+          list(r.assets,4096,'asset procedurali'); unique(r.assets,(a:any)=>a,'asset procedurali');
+          if(r.assets.some((a:any)=>!assets.has(a)||(kind==='cliff'&&assetDefinitions.get(a)?.animation))) fail('riferimento asset procedurale');
+        }
+      }
+    }
+  }
   for (const a of d.assets) if (a.variantOf !== undefined) {
     const parent = assetDefinitions.get(a.variantOf);
     if (!id(a.variantOf) || !parent || parent.id === a.id || parent.variantOf !== undefined) fail(`gruppo varianti di ${a.id}: scegli un asset principale esistente`);
@@ -240,7 +268,8 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   unique(d.placements, p => p.id, 'piazzamenti');
   for (const t of d.tiles) if (!point(t) || (t.terrain === undefined && t.suppressAssets !== true)
     || (t.terrain !== undefined && !WORLD_TERRAINS.includes(t.terrain)) || (t.suppressAssets !== undefined && !boolean(t.suppressAssets))
-    || (t.bushStyle !== undefined && (!['png', 'js'].includes(t.bushStyle) || !['grass', 'bush'].includes(t.terrain!)))) fail('tile');
+    || (t.defaultFamilyOnly !== undefined && !boolean(t.defaultFamilyOnly))
+    || (t.bushStyle !== undefined && (!['png', 'js'].includes(t.bushStyle) || !['grass', 'bush', 'plant'].includes(t.terrain!)))) fail('tile');
   unique(d.tiles, t => `${t.x},${t.y}`, 'tile');
   if (d.tileChunks !== undefined) {
     list(d.tileChunks, 100_000, 'chunk terreno');
@@ -250,8 +279,8 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       let end = 0;
       for (let i = 2; i < c.length; i += 3) {
         const code = c[i + 2], base = code & 31, style = code & 96;
-        if (!integer(c[i], end, 1023) || !integer(c[i + 1], 1, 1024 - c[i]) || !integer(code, 1, 81)
-          || base < 1 || base > 17 || style === 96 || (style && ![2, 3, 10, 11].includes(base))) fail('intervallo terreno');
+        if (!integer(c[i], end, 1023) || !integer(c[i + 1], 1, 1024 - c[i]) || !integer(code, 1, 211)
+          || (base < 1 && code !== 128) || base > 19 || style === 96 || (style && ![2, 3, 10, 11, 18, 19].includes(base))) fail('intervallo terreno');
         end = c[i] + c[i + 1]; cells += c[i + 1]; runs++;
       }
     }
@@ -322,7 +351,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
   }
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
   const result: WorldDocument = structuredClone({ ...(d.cliffAssets !== undefined ? { cliffAssets: d.cliffAssets } : {}), ...(d.geometry !== undefined ? { geometry: d.geometry } : {}), ...(d.spawnElevation !== undefined ? { spawnElevation: d.spawnElevation } : {}), ...(d.painting !== undefined ? { painting: d.painting } : {}), version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
-    placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons, ...(d.soundPoints !== undefined ? { soundPoints: d.soundPoints } : {}), ...(d.tileChunks !== undefined ? { tileChunks: d.tileChunks } : {}),
+    placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons, ...(d.assetFolders !== undefined ? { assetFolders: d.assetFolders } : {}), ...(d.procedural !== undefined ? { procedural: d.procedural } : {}), ...(d.soundPoints !== undefined ? { soundPoints: d.soundPoints } : {}), ...(d.tileChunks !== undefined ? { tileChunks: d.tileChunks } : {}),
     ...(d.interiors !== undefined ? { interiors: d.interiors.map((m: WorldInterior) => ({ id: m.id, name: m.name, width: m.width, height: m.height,
       ...(m.pvp !== undefined ? { pvp: m.pvp } : {}), ...(m.kind !== undefined ? { kind: m.kind } : {}),
       document: { ...parseWorldDocument({ ...m.document, assets: d.assets, seed: d.seed }), assets: [] } })) } : {}),

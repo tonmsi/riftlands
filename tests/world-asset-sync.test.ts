@@ -31,3 +31,14 @@ test('folder synchronization discovers nested art, is idempotent and preserves e
     assert.equal(validWorldAssetImage('/world-assets/Muri%5cprivate.png'),false);
   } finally {await rm(root,{recursive:true,force:true});}
 });
+
+
+test('catalog folders override image paths and persist empty folders with schema validation', () => {
+  const document = newWorldDocument(), asset = newWorldAsset('tree', 'Albero', '/world-assets/Natura/tree.svg');
+  asset.group = 'Preferiti'; document.assets.push(asset); document.assetFolders = ['Preferiti', 'Vuota'];
+  const parsed = parseWorldDocument(JSON.stringify(document));
+  assert.deepEqual(parsed.assetFolders, ['Preferiti', 'Vuota']);
+  assert.equal(assetGroup(parsed.assets[0]), 'Preferiti');
+  assert.equal(parsed.assets[0].image, '/world-assets/Natura/tree.svg');
+  for (const folders of [[' '], ['A', 'A'], ['x'.repeat(81)], [42]]) assert.throws(() => parseWorldDocument({ ...document, assetFolders: folders }), /cartell/);
+});

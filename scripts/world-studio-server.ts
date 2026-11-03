@@ -65,8 +65,9 @@ export async function startWorldStudio(options: { root: string; documentPath: st
         else if (path === '/__world/actors') { const result = await saveActorProject(options, payload.catalog, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }
         else if (path === '/__world/images' || path === '/__world/actor-images') reply(200, { image: await importWorldImage(options.root, payload.mime, payload.base64, path === '/__world/actor-images' ? 'actor-assets' : 'world-assets', payload.filename) });
         else if (path === '/__world/delete-asset') {
-          if (typeof payload.assetId !== 'string' || !payload.assetId) throw new Error('Asset non valido.');
-          const result = await saveWorldProject(options, payload.document, payload.revision, payload.assetId);
+          const ids = payload.assetIds ?? payload.assetId;
+          if (typeof ids !== 'string' && !Array.isArray(ids)) throw new Error('Asset non valido.');
+          const result = await saveWorldProject(options, payload.document, payload.revision, ids);
           vite.moduleGraph.invalidateAll(); reply(200, result);
         }
         else { const result = await saveWorldProject(options, payload.document, payload.revision); vite.moduleGraph.invalidateAll(); reply(200, result); }

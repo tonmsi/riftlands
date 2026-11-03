@@ -42,6 +42,7 @@ export class WorldAssetArt {
     return bitmap;
   }
   image(a: WorldAsset, includeShadow = true): HTMLCanvasElement | undefined {
+    if (a.image.startsWith('/world-assets/__procedural-')) return this.proceduralImage(a);
     if (a.animation) return this.sprites.image(a,includeShadow);
     if (includeShadow && a.shadow && worldAssetVisual(a).kind === 'image') {
       const source = this.image(a, false);
@@ -83,6 +84,22 @@ export class WorldAssetArt {
     if (a.animation) return this.sprites.ready(a);
     const b = worldAssetImageBounds(a); this.image(a);
     return this.loading.get(`${a.image}:${b.width}:${b.height}`) ?? Promise.resolve();
+  }
+  private proceduralImage(a: WorldAsset): HTMLCanvasElement {
+    const key = `${a.image}:${a.width}:${a.height}`, cached = this.cache.get(key);
+    if (cached) return cached;
+    const bitmap = document.createElement('canvas'); bitmap.width = Math.ceil(a.width*96); bitmap.height = Math.ceil(a.height*96);
+    const ctx = bitmap.getContext('2d')!; ctx.scale(bitmap.width/48,bitmap.height/48);
+    if (a.image.includes('__procedural-bush') || a.image.includes('__procedural-rock')) {
+      (this.bushArt ??= new EnvironmentArt()).draw(ctx,a.image.includes('__procedural-rock')?'rock':'bush',0,0,.4);
+    } else if (a.image.includes('__procedural-plant')) {
+      ctx.strokeStyle='#426743';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(24,44);ctx.quadraticCurveTo(20,25,25,8);ctx.stroke();
+      ctx.fillStyle='#73925a';for(let i=0;i<5;i++){ctx.beginPath();ctx.ellipse(24+(i%2?7:-6),12+i*6,8,3,i%2?-.7:.7,0,Math.PI*2);ctx.fill();}
+    } else {
+      ctx.fillStyle='#60675a';ctx.fillRect(0,0,48,48);ctx.fillStyle='#8b927a';ctx.fillRect(0,0,48,9);ctx.strokeStyle='#404b41';ctx.lineWidth=2;
+      for(let i=0;i<4;i++){ctx.beginPath();ctx.moveTo(i*14,13);ctx.lineTo(i*12+5,45);ctx.stroke();}
+    }
+    return this.remember(key,bitmap);
   }
   private jsBush(a: WorldAsset, p: Pick<AssetPlacement, 'x' | 'y'>): HTMLCanvasElement {
     const b = worldAssetImageBounds(a), variant = Math.floor(coordinateHash(p.x, p.y, 99127) * 4);

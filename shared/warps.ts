@@ -36,7 +36,7 @@ export function mapDocument(project: WorldDocument, id = 'world'): WorldDocument
   if (id === 'world') return project;
   const map = project.interiors?.find(m => m.id === id);
   if (!map) throw new Error(`Interno non disponibile: ${id}`);
-  return { ...map.document, seed: project.seed, assets: project.assets, cliffAssets: project.cliffAssets, interiorBounds: { id, name: map.name, width: map.width, height: map.height, pvp: map.pvp ?? false } };
+  return { ...map.document, seed: project.seed, assets: project.assets, cliffAssets: project.cliffAssets, procedural:project.procedural, interiorBounds: { id, name: map.name, width: map.width, height: map.height, pvp: map.pvp ?? false } };
 }
 /** Remove the whole map and every endpoint that references it, without reviving legacy world dungeons. */
 export function removeInterior(project: WorldDocument, id: string): void {

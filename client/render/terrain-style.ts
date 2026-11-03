@@ -7,6 +7,7 @@ export const TERRAIN: Record<TileKind, string> = {
   water: '#45a0ad',
   rock: '#8fa2ba',
   bush: '#559b55',
+  plant: '#73925a',
   mud: '#a09c72',
   snow: '#eaf4f8',  // Bianco freddo con velatura azzurrognola
   ice: '#8fcee5',   // Azzurro ghiaccio cristallino
@@ -61,7 +62,20 @@ export function shorelineMask(getTile: (x: number, y: number) => TileKind, tx: n
 export interface SceneryGroup { x: number; y: number; width: number; height: number; tile: TileKind }
 
 /** Four reads per fixed 2x2 block, including in infinite obstacle regions. */
-export function sceneryGroups(getTile: (x: number, y: number) => TileKind, tx: number, ty: number): SceneryGroup[] {
+export function sceneryGroups(getTile: (x: number, y: number) => TileKind, tx: number, ty: number, footprints?: readonly {width:number;height:number}[]): SceneryGroup[] {
+  if(footprints) {
+    // Fixed macro cells make ownership stable across viewport and chunk boundaries.
+    const left=Math.floor(tx/6)*6,top=Math.floor(ty/6)*6,used=new Set<number>(),groups:SceneryGroup[]=[];
+    const tiles=Array.from({length:36},(_,i)=>getTile(left+i%6,top+Math.floor(i/6)));
+    const sizes=[...footprints.filter(s=>s.width>=1&&s.height>=1&&s.width<=6&&s.height<=6),{width:2,height:2},{width:1,height:1}].sort((a,b)=>b.width*b.height-a.width*a.height||b.width-a.width);
+    for(let row=0;row<6;row++)for(let col=0;col<6;col++){
+      const i=row*6+col;if(used.has(i))continue;const tile=tiles[i];if(tile!=='rock'&&tile!=='bush')continue;
+      const size=tile==='bush'?{width:1,height:1}:sizes.find(s=>col+s.width<=6&&row+s.height<=6&&Array.from({length:s.width*s.height},(_,n)=>(row+Math.floor(n/s.width))*6+col+n%s.width).every(j=>!used.has(j)&&tiles[j]==='rock'))!;
+      for(let y=0;y<size.height;y++)for(let x=0;x<size.width;x++)used.add((row+y)*6+col+x);
+      const x=left+col,y=top+row;if(x>=tx&&x<tx+2&&y>=ty&&y<ty+2)groups.push({x,y,...size,tile});
+    }
+    return groups;
+  }
   const x = Math.floor(tx / 2) * 2, y = Math.floor(ty / 2) * 2;
   const tiles = [getTile(x, y), getTile(x + 1, y), getTile(x, y + 1), getTile(x + 1, y + 1)];
   const obstacle = (tile: TileKind) => tile === 'rock' || tile === 'bush';

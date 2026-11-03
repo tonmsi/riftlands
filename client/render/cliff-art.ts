@@ -47,7 +47,7 @@ export function drawTerrainCliff(ctx: CanvasRenderingContext2D, cliff: TerrainCl
   const sources: HTMLCanvasElement[] = [];
   let visibleParts = 0;
   for (const part of cliff.parts) {
-    const asset = cliffAsset(options.document,part.variant);
+    const asset = cliffAsset(options.document,part.variant,cliff);
     if (!asset.cells.some(included(asset,cliff,options))) continue;
     visibleParts++;
     const bitmap = cliffImage(asset,cliff,art,options);

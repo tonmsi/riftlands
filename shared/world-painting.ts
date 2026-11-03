@@ -1,6 +1,6 @@
 import type { TileKind } from './types';
 
-export type PaintMaterial = TileKind | 'stone';
+export type PaintMaterial = Exclude<TileKind,'plant'> | 'stone';
 export interface MaterialPaint { color: string; intensity: number; size: number; }
 export interface MaskPoint { x: number; y: number; }
 /** Interior control points only; shared edge endpoints are supplied by the renderer. */

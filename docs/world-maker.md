@@ -1,5 +1,48 @@
 # World Maker locale
 
+### Famiglie e biomi · generazione e painting
+
+Il pulsante **Famiglie e biomi**, nella barra superiore o nella navigazione
+laterale, apre uno spazio dedicato a **Cespugli**, **Piante**, **Rocce** e **Bordi
+delle altezze**. Qui si trovano anche **World Painting**, le maschere dei confini
+dei biomi e le regole individuali dell’asset selezionato. Il catalogo rimane
+condiviso: **Gestisci catalogo e importa asset** permette di aggiungere immagini.
+
+**Asset utilizzati** mostra le miniature, le dimensioni e le regole della famiglia
+selezionata. Una miniatura apre l’asset nel catalogo. I riferimenti incompatibili
+con l’ingombro sono segnalati; la modalità JS forzata è indicata esplicitamente.
+Le modifiche alle spunte aggiornano l’anteprima; premi **Salva parametri** per
+confermarle. **Dipingi …** attiva direttamente il pennello del terreno scelto.
+
+**Piante** è disponibile fra i terreni, insieme a cespugli e rocce. Il pennello
+mostra le miniature delle famiglie associate e un collegamento alle loro regole.
+Le aree dipinte vengono composte con gli stessi asset e regole dei biomi:
+un’area di cespugli con una regola 2×2 usa gli asset 2×2 dove c’è spazio, anche
+nel painting manuale. Ai margini senza un asset compatibile viene usato il JS.
+Le istanze seguono le modifiche del catalogo senza dover ridipingere l’area.
+
+Ogni categoria ha una famiglia predefinita e sottofamiglie opzionali, con
+intervalli di temperatura (0–1), quota e ampiezze di blend indipendenti.
+Il blend introduce una scelta casuale riproducibile nelle transizioni. Le regole
+possono selezionare asset in base alla larghezza e altezza della griglia; una
+regola specifica prevale su quella generica. Le rocce supportano gruppi fino a
+6×6, compresi 3×2 e 2×3. I bordi possono distinguere i pezzi del cliff-grid.
+
+**Forza disegno JS predefinito** parte disattivato. Il disegno JS viene usato
+quando è richiesto esplicitamente oppure quando non ci sono asset compatibili.
+Le immagini mantengono il proprio ingombro; le piante e i cespugli distribuiti
+dal generatore conservano collisioni, quote e visibilità degli asset.
+
+Nel pennello terreno, **Solo famiglia predefinita nella sezione dipinta**
+disattiva localmente la scelta delle sottofamiglie, per cespugli, piante e rocce.
+La scelta viene conservata nei tile compatti, in Undo/Redo e nell’esportazione.
+Le impostazioni procedurali sono globali al progetto; World Painting segue la
+mappa selezionata. **Salva parametri e aggiorna anteprima** aggiorna la bozza;
+**Applica al gioco** pubblica come gli altri strumenti del Maker.
+
+Le famiglie usano le quote già esistenti del terreno: questa schermata non
+introduce ancora una nuova generazione geografica delle altezze.
+
 ### Vento dei cespugli e impostazioni client
 
 Nel gioco i cespugli del catalogo riconosciuti come bush, le relative varianti e i cespugli del terreno (PNG o JS) oscillano leggermente al vento. L'immagine viene deformata attorno alla base, con fasi diverse in base alla posizione; il PNG o la bitmap JS viene riutilizzato senza ricrearlo a ogni frame. Posizione fisica, collisioni e nascondigli mantengono le coordinate originali; l'ombra degli asset resta ferma.
@@ -335,3 +378,11 @@ Lo strumento **♫ Punto sonoro** posiziona una sorgente musicale sulla mappa, s
 Il marker ♫ indica il centro della cella; selezionandolo compaiono i due cerchi. Puoi trascinarlo, cambiarne le coordinate, rimuoverlo e usare annulla/ripeti. I punti sono elencati in **Esplora oggetti → Punti sonori** e in **Progetto e verifica → Zone e punti sonori**. Ogni mappa, compresi gli interni, conserva i propri punti.
 
 Nel gioco le tracce vanno in loop, seguono distanza e direzione stereo e si sovrappongono alla musica della zona. Usano il controllo **Musica** e il mute generale. Si attivano soltanto nel raggio di ascolto e si fermano all'uscita, al cambio mappa o all'uscita dal gioco. Per contenere il numero di stream vengono riprodotti al massimo i quattro punti più udibili. Rientrando nel raggio la traccia riprende dal punto raggiunto; l'opzione **Ricomincia la canzone a ogni ingresso** permette invece di ripartire dall'inizio. I punti e i file musicali vengono inclusi nell'esportazione del progetto e ripristinati con l'importazione.
+
+### Selezione multipla nel catalogo
+
+Apri il catalogo ingrandito e clicca gli asset per selezionarli o deselezionarli. Il pannello laterale permette di selezionare tutti i risultati della ricerca, creare cartelle (anche vuote), spostare gli asset e scegliere fra rimozione delle copie manuali, rimozione dal catalogo conservando le immagini ed eliminazione completa dei file. “Usa / modifica asset” apre le proprietà quando è selezionato un solo asset. Le cartelle sono virtuali, salvate nel progetto e annullabili con Undo.
+
+Nel catalogo ingrandito ogni asset indica le istanze nella mappa attuale e i nomi delle altre mappe dove è collocato. “Localizza”, disponibile solo qui, sceglie un’istanza casuale fra mondo, interni e dungeon attivi, apre la sua mappa e centra la vista. Nella lista laterale compare soltanto un pallino accanto a dimensioni e modalità: verde nella mappa attuale, grigio altrimenti; il suggerimento distingue uso altrove e assenza di istanze collocate. Le istanze procedurali non persistite non sono incluse nel conteggio delle istanze collocate. La rimozione delle istanze coinvolge mondo e interni. L’eliminazione completa applica la bozza, controlla tutti gli asset prima di procedere e rimuove una sola volta i file condivisi fra le voci selezionate; le immagini ancora usate da altre voci, NPC o dungeon vengono conservate bloccando l’operazione.
+
+Nel selettore di Famiglie e biomi compaiono gli stessi raggruppamenti del catalogo: cartelle delle immagini, cartelle virtuali del progetto e gruppi automatici delle varianti. Questi ultimi riportano “Gruppo varianti”: creare una variante non crea cartelle sul disco. Un clic su un asset utilizzato apre il suo gruppo e mette a fuoco la riga; “Apri nel catalogo” seleziona la voce anche oltre la prima pagina. Si può rimuovere l’associazione alla famiglia, selezionare una cartella o un gruppo intero e creare una sottofamiglia dai suoi asset. La nuova sottofamiglia conserva un elenco di asset: aggiunte successive alla cartella non vengono associate automaticamente.

@@ -231,7 +231,7 @@ export class Renderer {
     const elevationBounds = { left: this.bounds.left / TILE_SIZE, top: this.bounds.top / TILE_SIZE, right: this.bounds.right / TILE_SIZE, bottom: this.bounds.bottom / TILE_SIZE };
     const surfaceGeometry = this.world.elevation.geometry(elevationBounds);
     const cliffs = this.world.elevation.cliffs(elevationBounds);
-    const cliffFloors=new Map(cliffs.map(c=>[c,cliffLevels(this.world.authoring.document,c)]));
+    const cliffFloors=new Map(cliffs.map(c=>[c,cliffLevels(this.world.cliffCatalog(),c)]));
     const mapSurfaces = surfaceGeometry.surfaces.filter(s => !s.id.includes('/'));
     const fadingBridges = surfaceGeometry.surfaces.filter(s => !s.ground && s.inheritAssetVisuals !== false && surfaceOpacity(s, frame.self) < 1);
     const inheritedOpacity = (p: typeof worldAssets[number], floor = assetElevation(p)) => {
@@ -434,7 +434,7 @@ export class Renderer {
     perf.end('actor-setup',actorSetupStart);
     const floors = [...new Set([0, ...actors.map(elevationOf), ...events.map(elevationOf), ...worldAssets.map(assetElevation), ...mapSurfaces.map(s => s.elevation), ...surfaceGeometry.stairs.flatMap(s => [s.from, s.to]), ...deckParts.map(d => d.s.elevation), ...frame.projectiles.map(elevationOf), ...pickups.map(elevationOf), ...(frame.groundItems ?? []).map(elevationOf), ...(frame.traps ?? []).map(elevationOf)])].sort((a, b) => a - b);
     for (const floor of [...new Set([...floors, ...cliffs.flatMap(c => cliffFloors.get(c)!)])].sort((a,b) => a-b)) {
-    for (const cliff of cliffs) if (cliffFloors.get(cliff)!.includes(floor)) drawTerrainCliff(ctx, cliff, this.worldAssetArt, surfaceGeometry.stairs, { document: this.world.authoring.document, floor, self: frame.self, publicPlayers, time: frame.time, version:this.world });
+    for (const cliff of cliffs) if (cliffFloors.get(cliff)!.includes(floor)) drawTerrainCliff(ctx, cliff, this.worldAssetArt, surfaceGeometry.stairs, { document: this.world.cliffCatalog(), floor, self: frame.self, publicPlayers, time: frame.time, version:this.world });
     for (const s of mapSurfaces.filter(s => s.elevation === floor)) {
       if (!s.ground) this.terrain.drawSurfaceMaterial(this.world, ctx, s, frame.time, frame.self);
       else drawElevationSurface(ctx, s, frame.self);

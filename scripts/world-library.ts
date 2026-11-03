@@ -33,7 +33,7 @@ export async function readWorldDungeonCatalog(path: string): Promise<DungeonDefi
   return bundles.map(b => b.definition);
 }
 export async function saveWorldProject(options: { root: string; documentPath: string; dungeonPath: string; dataPath: string;
-  live?: (document: WorldDocument) => () => void }, document: unknown, revision: string, deleteAssetId?: string): Promise<{ revision: string; backup: string; backups: string[]; document?: WorldDocument; live?: boolean }> {
+  live?: (document: WorldDocument) => () => void }, document: unknown, revision: string, deleteAssetId?: string | string[]): Promise<{ revision: string; backup: string; backups: string[]; document?: WorldDocument; live?: boolean }> {
   if (!options.live) {
     const forwarded = await forwardWorldPublication(options, { document, revision, deleteAssetId });
     if (forwarded) return forwarded;
@@ -41,7 +41,7 @@ export async function saveWorldProject(options: { root: string; documentPath: st
   const releaseData = options.live ? () => {} : acquireDataLease(options.dataPath);
   let releaseWorld: (() => void) | undefined;
   const temp = `${options.documentPath}.${randomUUID()}.tmp`;
-  let removedImage: { path: string; staged: string } | undefined;
+  const removedImages: { path: string; staged: string; bytes?: Buffer }[] = [];
   try {
     releaseWorld = acquireDataLease(options.documentPath);
     const current = await readFile(options.documentPath, 'utf8');
@@ -56,33 +56,39 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     }
     repairWorldAssetPaths(next, await listWorldAssetFiles(options.root));
     if (deleteAssetId !== undefined) {
-      const asset = next.assets.find(a => a.id === deleteAssetId);
-      if (!asset) throw new Error('Asset non più presente.');
-      if (next.assets.some(a => a.variantOf === asset.id)) throw new Error('Rendi autonome le varianti prima di eliminare il principale.');
-      if (Object.values(next.cliffAssets ?? {}).includes(asset.id)) throw new Error('Questo asset definisce un bordo automatico.');
-      if (catalog.some(d => d.assetPlacements?.some(p => p.assetId === asset.id))) throw new Error('Rimuovi prima le istanze dai dungeon.');
-      next.assets = next.assets.filter(a => a.id !== asset.id);
-      for (const doc of [next, ...(next.interiors ?? []).map(m => m.document)]) doc.placements = doc.placements.filter(p => p.assetId !== asset.id);
-      const image = assetFilePath(asset.image);
-      const referencesImage = (value: unknown): boolean => typeof value === 'string' ? assetFilePath(value) === image
-        : !!value && typeof value === 'object' && Object.values(value).some(referencesImage);
+      const ids = new Set(Array.isArray(deleteAssetId) ? deleteAssetId : [deleteAssetId]);
+      if (!ids.size || ids.size > 4096 || [...ids].some(id => typeof id !== 'string' || !id)) throw new Error('Asset non valido.');
+      const assets = [...ids].map(id => { const asset = next.assets.find(a => a.id === id); if (!asset) throw new Error('Asset non più presente.'); return asset; });
+      for (const asset of assets) {
+        if (next.assets.some(a => a.variantOf === asset.id && !ids.has(a.id))) throw new Error('Rendi autonome le varianti prima di eliminare il principale.');
+        if (Object.values(next.cliffAssets ?? {}).includes(asset.id)) throw new Error('Questo asset definisce un bordo automatico.');
+        if(Object.values(next.procedural??{}).some(s=>s.families.some(f=>f.rules.some(r=>r.assets.includes(asset.id))))) throw new Error('Rimuovi prima questo asset dalle famiglie procedurali.');
+        if (catalog.some(d => d.assetPlacements?.some(p => p.assetId === asset.id))) throw new Error('Rimuovi prima le istanze dai dungeon.');
+      }
+      next.assets = next.assets.filter(a => !ids.has(a.id));
+      for (const doc of [next, ...(next.interiors ?? []).map(m => m.document)]) doc.placements = doc.placements.filter(p => !ids.has(p.assetId));
       const actors = await readActorProject(join(dirname(options.documentPath), 'actor-catalog.json'));
       const dungeons = await readCatalog(options.dungeonPath);
-      const owners = [
-        ...next.assets.filter(a => assetFilePath(a.image) === image).map(a => `asset “${a.name}” (${a.id})`),
-        ...Object.entries(actors.catalog.skins).filter(([, skin]) => referencesImage(skin)).map(([id]) => `aspetto personaggio “${id}”`),
-        ...dungeons.bundles.filter(bundle => referencesImage(bundle)).map(bundle => `dungeon “${bundle.definition.name}”`),
-      ];
-      if (owners.length) throw new Error(`Immagine condivisa: ${decodeURIComponent(asset.image)} è usata anche da ${owners.slice(0, 5).join(', ')}${owners.length > 5 ? ` e altre ${owners.length - 5} voci` : ''}. Per eliminare solo questa voce usa “Rimuovi dal catalogo · conserva file”.`);
-      if (!validWorldAssetImage(asset.image)) throw new Error('Percorso immagine non valido.');
-      const publicDirectory = await realpath(resolve(options.root, 'public'));
-      const directory = await realpath(resolve(options.root, 'public/world-assets'));
-      const folderWithin = relative(publicDirectory, directory);
-      if (!folderWithin || folderWithin.startsWith('..') || isAbsolute(folderWithin)) throw new Error('La cartella world-assets deve trovarsi nel progetto.');
-      const path = resolve(options.root, 'public', decodeURIComponent(asset.image.slice(1)));
-      const actual = await realpath(path), within = relative(directory, actual);
-      if (!within || within.startsWith('..') || isAbsolute(within) || !(await lstat(path)).isFile()) throw new Error('Il file deve trovarsi nella cartella world-assets.');
-      removedImage = { path, staged: `${path}.${randomUUID()}.tmp` };
+      for (const asset of assets) {
+        const image = assetFilePath(asset.image);
+        const referencesImage = (value: unknown): boolean => typeof value === 'string' ? assetFilePath(value) === image
+          : !!value && typeof value === 'object' && Object.values(value).some(referencesImage);
+        const owners = [
+          ...next.assets.filter(a => assetFilePath(a.image) === image).map(a => `asset “${a.name}” (${a.id})`),
+          ...Object.entries(actors.catalog.skins).filter(([, skin]) => referencesImage(skin)).map(([id]) => `aspetto personaggio “${id}”`),
+          ...dungeons.bundles.filter(bundle => referencesImage(bundle)).map(bundle => `dungeon “${bundle.definition.name}”`),
+        ];
+        if (owners.length) throw new Error(`Immagine condivisa: ${decodeURIComponent(asset.image)} è usata anche da ${owners.slice(0, 5).join(', ')}${owners.length > 5 ? ` e altre ${owners.length - 5} voci` : ''}. Per eliminare solo questa voce usa “Rimuovi dal catalogo · conserva file”.`);
+        if (!validWorldAssetImage(asset.image)) throw new Error('Percorso immagine non valido.');
+        const publicDirectory = await realpath(resolve(options.root, 'public'));
+        const directory = await realpath(resolve(options.root, 'public/world-assets'));
+        const folderWithin = relative(publicDirectory, directory);
+        if (!folderWithin || folderWithin.startsWith('..') || isAbsolute(folderWithin)) throw new Error('La cartella world-assets deve trovarsi nel progetto.');
+        const path = resolve(options.root, 'public', decodeURIComponent(asset.image.slice(1)));
+        const actual = await realpath(path), within = relative(directory, actual);
+        if (!within || within.startsWith('..') || isAbsolute(within) || !(await lstat(path)).isFile()) throw new Error('Il file deve trovarsi nella cartella world-assets.');
+        if (!removedImages.some(image => image.path === path)) removedImages.push({ path, staged: `${path}.${randomUUID()}.tmp` });
+      }
     }
     const issues = validateWorld(next, catalog);
     if (issues.length) throw new Error(issues.slice(0, 12).join('\n'));
@@ -130,16 +136,21 @@ export async function saveWorldProject(options: { root: string; documentPath: st
     }
     const text = serializeWorldDocument(next);
     await writeFile(temp, text, { flag: 'wx' });
-    if (removedImage) await rename(removedImage.path, removedImage.staged);
-    try { await rename(temp, options.documentPath); }
-    catch (e) { if (removedImage) await rename(removedImage.staged, removedImage.path); throw e; }
-    if (removedImage) {
-      try { await unlink(removedImage.staged); }
-      catch (e) {
-        await rename(removedImage.staged, removedImage.path);
-        await writeFile(temp, current, { flag: 'wx' }); await rename(temp, options.documentPath);
-        throw e;
+    const staged: typeof removedImages = [];
+    try {
+      for (const image of removedImages) {
+        image.bytes = await readFile(image.path);
+        await rename(image.path, image.staged); staged.push(image);
       }
+      await rename(temp, options.documentPath);
+      for (const image of staged) await unlink(image.staged);
+    } catch (e) {
+      for (const image of staged) {
+        try { await rename(image.staged, image.path); }
+        catch { await writeFile(image.path, image.bytes!); }
+      }
+      await writeFile(temp, current); await rename(temp, options.documentPath);
+      throw e;
     }
     applyLive?.();
     return { revision: worldRevision(text), backup, backups, live: !!applyLive, document: next };

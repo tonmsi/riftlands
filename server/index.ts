@@ -69,7 +69,7 @@ const server = createServer((request, response) => {
         request.setTimeout(30_000, () => request.destroy());
         for await (const chunk of request) { size += chunk.length; if (size > 40_000_000) throw new Error('Progetto oltre 40 MB.'); chunks.push(Buffer.from(chunk)); }
         const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        if (typeof payload.revision !== 'string' || payload.deleteAssetId !== undefined && typeof payload.deleteAssetId !== 'string') throw new Error('Pubblicazione non valida.');
+        if (typeof payload.revision !== 'string' || payload.deleteAssetId !== undefined && typeof payload.deleteAssetId !== 'string' && !Array.isArray(payload.deleteAssetId)) throw new Error('Pubblicazione non valida.');
         const result = await saveWorldProject({ root: ROOT, documentPath, dungeonPath: resolve(ROOT, 'shared/custom-dungeons.json'), dataPath,
           live: document => {
             const prepared = rooms.prepareProject(document);

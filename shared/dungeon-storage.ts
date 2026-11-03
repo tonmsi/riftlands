@@ -2,7 +2,7 @@ import { ACTOR_CATALOG, type ActorCatalog } from './actor-catalog';
 import type { DungeonBundle } from './dungeon-install';
 import type { TileKind } from './types';
 
-const kinds = new Set(['grass', 'path', 'rock', 'water', 'bush', 'mud', 'snow', 'ice']);
+const kinds = new Set(['grass', 'path', 'rock', 'water', 'bush', 'mud', 'snow', 'ice', 'plant']);
 export function packDraftTiles(tiles: readonly TileKind[]): [TileKind, number][] {
   const runs: [TileKind, number][] = [];
   for (const tile of tiles) { const last = runs.at(-1); if (last?.[0] === tile) last[1]++; else runs.push([tile, 1]); }

@@ -20,7 +20,7 @@ test('bush styles survive compact storage, undo and erase without changing legac
   const erase = new WorldBrush(restored); erase.erase({ x: 0, y: -1 }); erase.erase({ x: 1, y: -1 }); erase.flushTiles();
   assert.equal(new WorldTiles(restored).at(0, -1)?.bushStyle, undefined);
   assert.equal(new WorldTiles(restored).at(1, -1)?.bushStyle, 'js');
-  for (const code of [18, 32, 33, 36, 64, 80, 98]) {
+  for (const code of [20, 32, 33, 36, 64, 80, 98]) {
     const bad = structuredClone(original); bad.tileChunks = [[0, 0, 0, 1, code]];
     assert.throws(() => parseWorldDocument(bad), /intervallo/);
   }

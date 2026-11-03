@@ -2,6 +2,8 @@ import { installAssetSpriteEditor } from './asset-sprite-editor';
 import { spritesheetLayout } from '../../../shared/asset-sprites';
 import { loadNpcEditorCatalog, readNpcChoice, refreshNpcSelect } from '../npc-catalog';
 import { installWorldPaintingPanel } from './world-painting-panel';
+import { installProceduralPanel } from './procedural-panel';
+import { worldProceduralSettings } from '../../../shared/procedural-generation';
 import { installElevationEditor } from './elevation-editor';
 import { validElevation } from '../../../shared/elevation';
 import { TerrainElevationBrush } from '../../../shared/terrain-elevation-editing';
@@ -38,6 +40,7 @@ import { DEFAULT_ASSET_SHADOW, worldAssetShadow } from '../../../shared/world-sc
 import { rasterizeAssetShadow } from '../../render/world-asset-shadow';
 import { WorldEditorHistory } from './world-editor-history';
 import { WorldAssetCatalog, assetGroup } from './world-asset-catalog';
+import { worldAssetUsage } from './world-asset-usage';
 import { installWorldImagePicker } from './world-image-picker';
 import { AssetGridCamera } from '../../render/world-asset-view';
 import { loadWorldCheckpoint, saveWorldCheckpoint, WorldCheckpointConflictError } from './world-editor-storage';
@@ -106,6 +109,8 @@ let cameraAsset = '';
 const assetCatalog = new WorldAssetCatalog(el('asset-list'), id => {
     if (!root.classList.contains('catalog-pinned')) el<HTMLDialogElement>('asset-catalog-dialog').close();
     void settleGesture().then(() => { activeAsset = id; selected = null; selectedGenerated = undefined; warpEditor.clearSelection(); selectTool('asset'); refresh(); revealInspector(); }).catch(report);
+}, () => el<HTMLDialogElement>('asset-catalog-dialog').open, () => refreshCatalogSelection(), id => {
+    void settleGesture().then(() => locateCatalogAsset(id)).catch(report);
 });
 const art = new WorldAssetArt(() => schedule());
 let view = { x: 0, y: 0, scale: 24 }, pointerTile: Vec2 | null = null;
@@ -114,7 +119,7 @@ function surface(): WorldDocument {
     if (activeMap === 'world') return draft;
     const m = draft.interiors?.find(m => m.id === activeMap);
     if (!m) return draft;
-    m.document.assets = draft.assets; m.document.seed = draft.seed; m.document.cliffAssets = draft.cliffAssets;
+    m.document.assets = draft.assets; m.document.seed = draft.seed; m.document.cliffAssets = draft.cliffAssets; m.document.procedural=draft.procedural;
     return m.document;
 }
 const warpEditor = installWarpEditor(root, {
@@ -132,6 +137,9 @@ const warpEditor = installWarpEditor(root, {
         worldDirty = true;
         refresh(); schedule(true); centerAt(surface().spawn.x, surface().spawn.y);
     },
+});
+const refreshProcedural = installProceduralPanel(root,()=>draft,change,id=>{activeAsset=id;selected=null;selectedGenerated=undefined;warpEditor.clearSelection();selectTool('asset');refresh();revealInspector();schedule();},id=>{
+    set('asset-search', ''); openCatalog(false); assetCatalog.focusAsset(id);
 });
 const refreshPainting = installWorldPaintingPanel(root, surface, change);
 const elevationEditor = installElevationEditor(root, canvas, assetCanvas, {
@@ -163,13 +171,14 @@ function revealInspector(): void {
 }
 const cliffPanel = document.createElement('details'); cliffPanel.id = 'cliff-asset-controls'; cliffPanel.open = true;
 cliffPanel.innerHTML = `<summary>Bordi automatici · cliff-grid</summary><label>Pezzo di bordo<select id="cliff-variant">${CLIFF_VARIANTS.map(v=>`<option value="${v}">${v.startsWith('90corner') ? `Corner basso ${v.slice(9)}°` : v}</option>`).join('')}</select></label><button id="cliff-edit" class="wide">Modifica immagine e collisioni</button><p class="hint">Le modifiche valgono per tutti i bordi automatici di questo tipo. Ogni bordo occupa un tile: la griglia dell’asset permette di suddividerne le collisioni. Sfondo passa dietro ai personaggi; Oggetto può coprirli.</p>`;
-root.querySelector('.inspector')!.insertBefore(cliffPanel, el('asset-inspector'));
+root.querySelector('#procedural-cliff-slot')!.append(cliffPanel);
 function openCliffAsset(variant: CliffVariant): void {
     if (!draft.cliffAssets?.[variant]) change(() => { installCliffAssets(draft); });
     const id = draft.cliffAssets?.[variant]; if (!id) return;
     activeAsset = id; selected = null; selectedGenerated = undefined; warpEditor.clearSelection();
     set('cliff-variant',variant); selectTool('asset'); refresh(); schedule();
     el('asset-inspector').scrollIntoView({ block: 'start' });
+    el<HTMLDialogElement>('procedural-dialog').close(); revealInspector();
 }
 on('cliff-edit', () => openCliffAsset(val('cliff-variant') as CliffVariant));
 el('asset-update').insertAdjacentHTML('beforebegin', `<div class="fields"><label>Suddivisione di ogni tile<select id="asset-cell-subdivision">${ASSET_CELL_SUBDIVISIONS.map(n=>`<option value="${n}">${n} × ${n} · ${n*n} ${n===1?'cella':'sottocelle'} per tile</option>`).join('')}</select></label><p id="asset-cell-info" class="hint"></p><p class="hint">Divide solo le celle di collisione e visibilità. Le dimensioni del PNG, la scala e la posizione dell’oggetto restano le stesse. Aumentando la suddivisione, le sottocelle ereditano le proprietà; riducendola si conservano blocchi e nascondigli presenti.</p></div>`);
@@ -239,7 +248,7 @@ let gesture: {
     screenStart?: Vec2;
     moved?: boolean;
     blockedLevels?: number;
-    settings?: { radius: number; density: number; bushJs: boolean; terrain: TileKind; asset?: WorldAsset; elevation?: number };
+    settings?: { radius: number; density: number; bushJs: boolean; defaultFamilyOnly?: boolean; terrain: TileKind; asset?: WorldAsset; elevation?: number };
 } | null = null;
 const keys = new Set<string>();
 let selectedGenerated: AssetPlacement | undefined;
@@ -344,7 +353,41 @@ input('terrain-elevation').addEventListener('change', () => {
 });
 function active(): WorldAsset | undefined { return draft.assets.find(a => a.id === activeAsset); }
 function palette(): void {
-    assetCatalog.update(draft.assets, activeAsset, val('asset-search'));
+    assetCatalog.update(draft.assets, activeAsset, val('asset-search'), worldAssetUsage(draft, catalog), draft.assetFolders, activeMap);
+    refreshCatalogSelection();
+}
+function locateCatalogAsset(id: string): void {
+    const locations = worldAssetUsage(draft, catalog).get(id) ?? [];
+    if (!locations.length) { status('Nessuna istanza collocata da localizzare.'); refresh(); return; }
+    const location = locations[Math.floor(Math.random() * locations.length)], placement = location.placement;
+    if (!root.classList.contains('catalog-pinned')) el<HTMLDialogElement>('asset-catalog-dialog').close();
+    finishGesture(undefined, true); elevationEditor.cancelGesture(); warpEditor.clearSelection();
+    if (activeMap !== location.mapId) { set('surface-map', location.mapId); input('surface-map').dispatchEvent(new Event('change')); }
+    activeAsset = id; selectedGenerated = undefined;
+    ensureWorld();
+    const elevation = placement.baseElevation ?? world.elevation.terrainElevationAt(placement.x + .5, placement.y + .5);
+    set('elevation-view', 'all'); set('elevation-active', elevation); input('elevation-active').dispatchEvent(new Event('change'));
+    selectTool(location.source === 'manual' ? 'select' : 'asset');
+    selected = location.source === 'manual' ? { kind: 'placement', id: placement.id } : null;
+    refresh(); revealInspector();
+    const asset = active(); centerAt(placement.x + (asset?.width ?? 1) / 2, placement.y + (asset?.height ?? 1) / 2);
+    schedule(true); canvas.focus({ preventScroll: true });
+    status(`Localizzato ${asset?.name ?? id} · ${location.mapName} · X ${placement.x}, Y ${placement.y}`);
+}
+function refreshCatalogSelection(): void {
+    const ids = new Set(assetCatalog.selectedIds);
+    el('asset-bulk-panel').hidden = !el<HTMLDialogElement>('asset-catalog-dialog').open;
+    el('asset-bulk-count').textContent = `${ids.size} asset selezionati`;
+    const usage = worldAssetUsage(draft, catalog), locations = [...ids].flatMap(id => usage.get(id) ?? []);
+    const current = locations.filter(location => location.mapId === activeMap), others = locations.filter(location => location.mapId !== activeMap);
+    el('asset-bulk-usage').textContent = `${current.length} istanze nella mappa attuale · ${others.length} in altre mappe`;
+    for (const id of ['asset-bulk-instances', 'asset-bulk-remove', 'asset-folder-move']) el<HTMLButtonElement>(id).disabled = !ids.size;
+    el<HTMLButtonElement>('asset-bulk-use').disabled = ids.size !== 1;
+    el<HTMLButtonElement>('asset-bulk-delete').disabled = !ids.size || !token || !ready || draftConflict;
+    const target = el<HTMLSelectElement>('asset-folder-target'), previous = target.value;
+    const folders = [...new Set([...(draft.assetFolders ?? []), ...draft.assets.map(a => assetGroup(a))])].sort((a,b) => a.localeCompare(b, 'it'));
+    target.replaceChildren(new Option('Cartella originale dell’immagine', ''), ...folders.map(folder => new Option(folder, folder)));
+    target.value = folders.includes(previous) ? previous : '';
 }
 let validationActive = false;
 let validatedDraft: typeof draft | undefined;
@@ -394,9 +437,10 @@ const spriteEditor = installAssetSpriteEditor(root, {
 });
 function refresh(): void {
     if (selected !== groupPrimary || tool !== 'select') clearObjectSelection();
-    input('bush-js').disabled = !['grass', 'bush'].includes(val('terrain'));
+    input('bush-js').disabled = !['grass', 'bush', 'plant'].includes(val('terrain'));
     if (activeMap !== 'world' && !draft.interiors?.some(m => m.id === activeMap)) activeMap = 'world';
     refreshPainting();
+    refreshProcedural();
     elevationEditor.refresh();
     if (validationActive && validatedDraft !== draft) showValidation();
     if (activeMap !== 'world' && !draft.interiors?.some(m => m.id === activeMap)) activeMap = 'world';
@@ -424,7 +468,7 @@ function refresh(): void {
         refreshSelection();
     el('asset-inspector').hidden = !!selected || !active() || (tool !== 'asset' && !(tool.startsWith('elevation-') && elevationEditor.editsAsset())) || warpEditor.hasSelection();
     const cliffVariant = CLIFF_VARIANTS.find(variant => draft.cliffAssets?.[variant] === activeAsset);
-    cliffPanel.hidden = el('asset-inspector').hidden || !cliffVariant;
+    cliffPanel.hidden = false;
     if (cliffVariant) set('cliff-variant', cliffVariant);
     el('elevation-inspector').hidden = !!selected || warpEditor.hasSelection() || !(tool.startsWith('elevation-') || tool === 'terrain' || tool === 'restore');
     el('inspector-empty').hidden = !!selected || warpEditor.hasSelection() || !el('elevation-inspector').hidden || ((tool === 'asset' || tool.startsWith('elevation-')) && !!active());
@@ -469,7 +513,7 @@ function refreshAsset(a: WorldAsset): void {
     variants.value = a.variantOf ?? '';
     variants.disabled = draft.assets.some(other => other.variantOf === a.id);
     input('asset-group').readOnly = true;
-    input('asset-group').title = 'Derivata dalla cartella immagine in public/world-assets.';
+    input('asset-group').title = 'Organizza le cartelle dalla finestra del catalogo.';
     el('asset-groups').replaceChildren(...[...new Set(draft.assets.flatMap(a => a.group ? [a.group] : []))].sort().map(group => new Option(group)));
     el('asset-preview-title').textContent = `Immagine · ${a.name}`;
     set('asset-width', a.width);
@@ -487,7 +531,7 @@ function refreshAsset(a: WorldAsset): void {
     set('gen-density', generation.density * 100);
     set('gen-spacing', generation.spacing);
     el('gen-terrains').replaceChildren(...WORLD_TERRAINS.map(t => { const l = document.createElement('label'); l.className = 'check'; const c = document.createElement('input'); c.id=`gen-terrain-${t}`; c.type = 'checkbox'; c.value = t; c.checked = generation.terrains.includes(t); l.append(c, terrains[t].name); return l; }));
-    for (const field of el('asset-inspector').querySelectorAll<HTMLInputElement | HTMLButtonElement>('[id^="gen-"]')) field.disabled = !!a.variantOf;
+    for (const field of root.querySelectorAll<HTMLInputElement | HTMLButtonElement>('[id^="gen-"]')) field.disabled = !!a.variantOf;
 }
 let musicSources: string[] = [];
 function refreshMusicOptions(src?: string): void {
@@ -636,11 +680,13 @@ function selectAt(p: Vec2, precise: Vec2 = { x: p.x + .5, y: p.y + .5 }, cycle =
     const sound = surface().soundPoints?.find(n => Math.hypot(n.x + .5 - precise.x, n.y + .5 - precise.y) <= Math.max(.35, 10 / view.scale));
     const n = surface().npcs.find(n => Math.hypot(n.x + .5 - precise.x, n.y + .5 - precise.y) <= Math.max(.24, 6 / view.scale) && floorVisible(elevationEditor.visibility(), n.elevation ?? 0));
     const placements = world.assetsIn({ left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 }).filter(p => {
+      if(!draft.assets.some(a=>a.id===p.assetId)) return false;
       const base = p.baseElevation ?? world.elevation.terrainElevationAt(p.x + .5, p.y + .5);
       const a = world.authoring.assets.get(p.assetId)!;
       return assetPickFloor(a, base, { x: precise.x - p.x, y: precise.y - p.y }, elevationEditor.visibility()) !== undefined && art.hit(a, p, precise.x, precise.y);
     }).sort((a,b) => compareAssetDrawOrder(a,b,world.authoring.assets));
     const asset = placements.at(-1), dungeon = floorVisible(elevationEditor.visibility(), 0) ? world.dungeons.find(d => p.x >= d.layout.bounds.minTx && p.x <= d.layout.bounds.maxTx && p.y >= d.layout.bounds.minTy && p.y <= d.layout.bounds.maxTy) : undefined;
+    if(!sound&&!n&&asset?.id.startsWith('scenery:')){activeAsset=asset.assetId;selected=null;selectedGenerated=undefined;warpEditor.clearSelection();selectTool('asset');refresh();revealInspector();schedule();return;}
     const zone = world.authoring.zonesAt(precise.x, precise.y)[0];
     // A stair is an editable passage, rather than a low-priority terrain tile.
     // Alt-click still allows selecting the zone underneath it.
@@ -648,10 +694,10 @@ function selectAt(p: Vec2, precise: Vec2 = { x: p.x + .5, y: p.y + .5 }, cycle =
     // Terrain geometry and automatic cliffs are the last fallback, after map entities.
     if (!sound && !n && !asset && !zone && !dungeon && elevationEditor.selectMapAt(precise)) { revealInspector(); return; }
     if (!sound && !n && !asset && !zone && !dungeon) {
-        const cliffs = world.elevation.cliffs({ left: p.x, top: p.y, right: p.x+1, bottom: p.y+1 }).filter(c=>cliffLevels(draft,c,true).some(e=>floorVisible(elevationEditor.visibility(),e)));
+        const cliffs = world.elevation.cliffs({ left: p.x, top: p.y, right: p.x+1, bottom: p.y+1 }).filter(c=>cliffLevels(world.cliffCatalog(),c,true).some(e=>floorVisible(elevationEditor.visibility(),e)));
         for (const cliff of cliffs.slice().reverse()) {
             const part = cliff.parts.slice().reverse().find(part=>{
-                const asset=cliffAsset(draft,part.variant),cell=cliffCell(asset,cliff,precise.x,precise.y);
+                const asset=cliffAsset(world.cliffCatalog(),part.variant,cliff),cell=cliffCell(asset,cliff,precise.x,precise.y);
                 return floorVisible(elevationEditor.visibility(),cell?cliffCellFloor(asset,cliff,cell,true):cliff.elevation)&&art.hit(asset,cliff,precise.x,precise.y);
             });
             if(part) {openCliffAsset(part.variant);revealInspector();return;}
@@ -699,6 +745,7 @@ function selectObjectsInBox(start: Vec2, end: Vec2): void {
     ensureWorld();
     const box = selectionRect(start, end), visible = elevationEditor.visibility();
     selectedObjects = world.assetsIn(box).filter(p => {
+        if(p.id.startsWith('scenery:')||!draft.assets.some(a=>a.id===p.assetId))return false;
         const a = world.authoring.assets.get(p.assetId)!;
         return assetInSelection(a, p, p.baseElevation ?? world.elevation.terrainElevationAt(p.x + .5, p.y + .5), visible, box);
     }).map(p => ({ kind: 'placement', id: p.id, ...(p.id.startsWith('generated:') ? { generated: p } : {}) }));
@@ -728,13 +775,14 @@ function paint(p: Vec2): void {
             continue;
         if (gesture.tool === 'terrain') {
             const terrain = gesture.settings!.terrain;
+            if(['bush','plant','rock'].includes(terrain)&&!draft.procedural)draft.procedural=worldProceduralSettings(draft);
             const current = world.elevation.terrainElevationAt(q.x + .5, q.y + .5);
             const base = terrain === 'water' ? -1 : 0;
             const elevation = gesture.settings!.elevation ?? (current === world.elevation.baseAt(q.x, q.y) ? base : current);
             if (!canPaintTerrainLevel(current, elevation)) { gesture.blockedLevels = (gesture.blockedLevels ?? 0) + 1; continue; }
             if (!floorVisible(elevationEditor.visibility(), elevation)) continue;
             gesture.terrainBrush!.paint(q, terrain, elevation, base);
-            gesture.brush!.tile(q, { terrain, suppressAssets: true, ...(['grass', 'bush'].includes(terrain) ? { bushStyle: gesture.settings!.bushJs ? 'js' as const : 'png' as const } : {}) });
+            gesture.brush!.tile(q, { terrain, suppressAssets: true, ...(gesture.settings!.defaultFamilyOnly?{defaultFamilyOnly:true}:{}), ...(['grass', 'bush', 'plant'].includes(terrain) ? { bushStyle: gesture.settings!.bushJs ? 'js' as const : 'png' as const } : {}) });
         } else if (gesture.tool === 'restore') {
             gesture.terrainBrush!.paint(q, undefined, 0, 0);
             gesture.brush!.tile(q);
@@ -831,7 +879,7 @@ canvas.addEventListener('pointerdown', event => {
     draft = forkWorldDocument(draft, tilesOnly && activeMap === 'world');
     gesture = { pointer: event.pointerId, before, start: p, last: p, tool, mass: event.ctrlKey || input('mass').checked, brush: new WorldBrush(surface(), tilesOnly) };
     if (tool === 'terrain' || tool === 'restore') gesture.terrainBrush = new TerrainElevationBrush(surface());
-    gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, bushJs: input('bush-js').checked, asset: active(), elevation: elevationEditor.terrainElevation() };
+    gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, bushJs: input('bush-js').checked, defaultFamilyOnly:input('procedural-default-only').checked, asset: active(), elevation: elevationEditor.terrainElevation() };
     canvas.setPointerCapture(event.pointerId);
     if (tool === 'sound') {
         const point = { ...p, id: uid('sound'), name: 'Punto sonoro', radius: 12, innerRadius: 2 };
@@ -1127,35 +1175,80 @@ on('gen-update', () => change(() => { const a = active()!; a.generation = { enab
 on('asset-delete', () => change(() => { const a = active()!;
     for (const doc of [draft, ...(draft.interiors ?? []).map(m => m.document)]) doc.placements = doc.placements.filter(p => p.assetId !== a.id);
     selected = null; }));
+function removeCatalogAssets(ids: readonly string[]): void {
+    const selectedIds = new Set(ids);
+    for (const asset of draft.assets.filter(a => selectedIds.has(a.id))) {
+        if (draft.assets.some(a => a.variantOf === asset.id && !selectedIds.has(a.id))) throw new Error('Seleziona anche le varianti o rendile autonome prima di rimuovere il principale.');
+        if (Object.values(draft.cliffAssets ?? {}).includes(asset.id)) throw new Error('Questo asset definisce un bordo automatico.');
+        if(Object.values(draft.procedural??{}).some(s=>s.families.some(f=>f.rules.some(r=>r.assets.includes(asset.id))))) throw new Error('Rimuovi prima questo asset dalle famiglie procedurali.');
+        const users = catalog.filter(d => d.assetPlacements?.some(p => p.assetId === asset.id));
+        if (users.length) throw new Error(`Asset usato nei dungeon: ${users.map(d => d.name).join(', ')}. Rimuovi prima quelle istanze.`);
+    }
+    for (const doc of [draft, ...(draft.interiors ?? []).map(m => m.document)]) doc.placements = doc.placements.filter(p => !selectedIds.has(p.assetId));
+    draft.assets = draft.assets.filter(a => !selectedIds.has(a.id));
+    selected = null; selectedGenerated = undefined; activeAsset = '';
+}
 on('asset-remove-catalog', () => {
     const asset = active(); if (!asset) return;
     if (!confirm(`Rimuovere “${asset.name}” dal catalogo e tutte le sue copie manuali? Il file immagine rimane nella cartella. Puoi annullare con Undo e salvare con Applica al gioco.`)) return;
-    change(() => {
-        if (draft.assets.some(a => a.variantOf === asset.id)) throw new Error('Rendi autonome le varianti prima di rimuovere il principale.');
-        if (Object.values(draft.cliffAssets ?? {}).includes(asset.id)) throw new Error('Questo asset definisce un bordo automatico.');
-        const users = catalog.filter(d => d.assetPlacements?.some(p => p.assetId === asset.id));
-        if (users.length) throw new Error(`Asset usato nei dungeon: ${users.map(d => d.name).join(', ')}. Rimuovi prima quelle istanze.`);
-        for (const doc of [draft, ...(draft.interiors ?? []).map(m => m.document)]) doc.placements = doc.placements.filter(p => p.assetId !== asset.id);
-        draft.assets = draft.assets.filter(a => a.id !== asset.id);
-        selected = null; selectedGenerated = undefined; activeAsset = '';
-    });
+    change(() => removeCatalogAssets([asset.id]));
 });
-on('asset-delete-permanently', async () => {
+async function deleteAssetsPermanently(ids: readonly string[]): Promise<void> {
+    if (!ids.length) return;
     if (!token || !ready) throw new Error('Apri il World Studio locale per eliminare anche il file.');
     if (draftConflict) throw new WorldCheckpointConflictError();
-    const asset = active(); if (!asset) return;
-    if (!confirm(`Eliminare definitivamente “${asset.name}”, tutte le sue istanze e il file immagine? Verrà applicata anche la bozza corrente. Questa operazione non è annullabile con Undo.`)) return;
+    if (!confirm(`Eliminare definitivamente ${ids.length} asset, tutte le loro istanze e i file immagine? Verrà applicata anche la bozza corrente. Questa operazione non è annullabile con Undo.`)) return;
     await checkpoint(true);
     const document = parseWorldDocument(draft);
     root.inert = true;
     try {
-        const result = await api('/__world/delete-asset', { document, revision, assetId: asset.id });
+        const result = await api('/__world/delete-asset', { document, revision, assetIds: ids });
         draft = parseWorldDocument(result.document); revision = installedRevision = result.revision; installedDocument = draft;
-        history.clear(); inspectorDrafts.clear(); selected = null; activeAsset = ''; dirty = false;
+        history.clear(); inspectorDrafts.clear(); selected = null; selectedGenerated = undefined; activeAsset = ''; dirty = false;
+        assetCatalog.clearSelection();
         await checkpoint(true);
         refresh(); schedule(true);
         status('Asset, istanze e file immagine eliminati definitivamente. Bozza applicata al progetto.');
     } finally { root.inert = false; }
+}
+on('asset-delete-permanently', () => deleteAssetsPermanently(active() ? [active()!.id] : []));
+on('asset-bulk-delete', () => deleteAssetsPermanently(assetCatalog.selectedIds));
+on('asset-bulk-instances', () => {
+    const ids = new Set(assetCatalog.selectedIds); if (!ids.size) return;
+    if (!confirm(`Rimuovere tutte le copie manuali dei ${ids.size} asset selezionati da mondo e interni? Catalogo e immagini saranno conservati. Puoi annullare con Undo.`)) return;
+    change(() => {
+        for (const doc of [draft, ...(draft.interiors ?? []).map(m => m.document)]) doc.placements = doc.placements.filter(p => !ids.has(p.assetId));
+        selected = null; selectedGenerated = undefined;
+    });
+});
+on('asset-bulk-remove', () => {
+    const ids = assetCatalog.selectedIds; if (!ids.length) return;
+    if (!confirm(`Rimuovere ${ids.length} asset dal catalogo e tutte le loro copie manuali? I file rimangono nel progetto. Puoi annullare con Undo.`)) return;
+    change(() => removeCatalogAssets(ids));
+});
+on('asset-bulk-all', () => { assetCatalog.selectVisible(); refreshCatalogSelection(); });
+on('asset-bulk-clear', () => { assetCatalog.clearSelection(); refreshCatalogSelection(); });
+on('asset-bulk-use', () => {
+    const ids = assetCatalog.selectedIds; if (ids.length !== 1) return;
+    activeAsset = ids[0]; selected = null; selectedGenerated = undefined; warpEditor.clearSelection(); selectTool('asset');
+    if (!root.classList.contains('catalog-pinned')) el<HTMLDialogElement>('asset-catalog-dialog').close();
+    refresh(); revealInspector();
+});
+on('asset-folder-create', () => {
+    const name = val('asset-folder-name').trim();
+    if (!name || name.length > 80) throw new Error('Inserisci un nome cartella da 1 a 80 caratteri.');
+    if (draft.assetFolders?.includes(name) || draft.assets.some(a => assetGroup(a) === name)) throw new Error('Esiste già una cartella con questo nome.');
+    change(() => { (draft.assetFolders ??= []).push(name); });
+    set('asset-folder-target', name); set('asset-folder-name', '');
+    status('Cartella creata. Premi Sposta selezionati per inserirvi gli asset.');
+});
+on('asset-folder-move', () => {
+    const ids = new Set(assetCatalog.selectedIds), folder = val('asset-folder-target');
+    if (!ids.size) return;
+    change(() => {
+        for (const asset of draft.assets) if (ids.has(asset.id)) { if (folder) asset.group = folder; else delete asset.group; }
+    });
+    status('Asset spostati. Applica al gioco per salvare le cartelle nel progetto.');
 });
 on('zone-update', () => change(() => { const z = surface().zones.find(z => z.id === selected?.id)!; z.name = val('zone-name').trim(); z.priority = num('zone-priority'); z.shape = val('zone-shape') === 'circle' ? { kind: 'circle', x: num('zone-x'), y: num('zone-y'), radius: num('zone-width') } : { kind: 'rect', x: num('zone-x'), y: num('zone-y'), width: num('zone-width'), height: num('zone-height') }; for (const [key, id] of [['temperature', 'zone-temperature'], ['moisture', 'zone-moisture']] as const) {
     if (val(id) === '')
@@ -1278,6 +1371,7 @@ function openCatalog(pinned: boolean): void {
     catalogPin.setAttribute('aria-pressed', String(pinned));
     catalogPin.textContent = pinned ? 'Torna a finestra singola' : 'Mantieni aperto';
     if (pinned) catalogDialog.show(); else catalogDialog.showModal();
+    palette();
     saveCatalogPin(pinned);
 }
 on('asset-catalog-expand', () => openCatalog(root.classList.contains('catalog-pinned')));
@@ -1286,6 +1380,7 @@ on('asset-catalog-close', () => catalogDialog.close());
 catalogDialog.addEventListener('close', () => {
     if (catalogDialog.open) return;
     catalogHome.append(el('asset-catalog-content'));
+    assetCatalog.clearSelection(); palette();
     root.classList.remove('catalog-pinned'); catalogPin.setAttribute('aria-pressed', 'false');
     saveCatalogPin(false);
 });
