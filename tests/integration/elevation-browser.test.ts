@@ -37,7 +37,7 @@ test('World Maker authors fractional elevated terrain and stairs, preserves undo
     await expect(page.locator('#terrain-auto-stair')).not.toBeChecked();
     await page.locator('#terrain-auto-stair').check();
     await page.locator('#terrain-elevation').fill('1');
-    await page.locator('#brush-radius').fill('0');
+    await expect(page.locator('#brush-radius')).toHaveValue('1');
     const paintBox = (await page.locator('#map').boundingBox())!;
     const clickTile = async (x: number, y: number) => page.mouse.click(paintBox.x + paintBox.width / 2 + (x + .5) * 24, paintBox.y + paintBox.height / 2 + (y + .5) * 24);
     await clickTile(2, 2);
@@ -46,6 +46,8 @@ test('World Maker authors fractional elevated terrain and stairs, preserves undo
     assert.equal(painted.geometry!.surfaces.length, 1);
     assert.equal(painted.geometry!.surfaces[0].elevation, 1);
     assert.equal(painted.geometry!.surfaces[0].terrain, 'snow');
+    assert.equal(painted.geometry!.surfaces[0].width, 1);
+    assert.equal(painted.geometry!.surfaces[0].height, 1);
     assert.equal(painted.geometry!.stairs.length, 1);
     assert.equal(painted.geometry!.stairs[0].automatic, true);
     await page.locator('#elevation-view').selectOption('floor:0');

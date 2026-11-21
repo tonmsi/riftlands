@@ -26,7 +26,7 @@ import type { DungeonDefinition } from '../../shared/dungeons';
 import { DUNGEON_ENTRY_MS, DUNGEON_ARRIVAL_MS, type BossLockState } from '../../shared/bosses';
 import { renderDpr } from '../core/frame-budget';
 import { performanceLog as perf } from '../core/performance-log';
-import { TERRAIN } from './terrain-style';
+import { DUNGEON_VOID_COLOR, TERRAIN } from './terrain-style';
 import { arenaViewSign, cameraZoom, parseCameraSettings, viewVector, type CameraSettings } from '../controls/camera-settings';
 
 import { TerrainRenderer } from './terrain-renderer';
@@ -538,7 +538,7 @@ export class Renderer {
     this.drawDungeonEntry(frame, true);
     if (frame.self && !frame.spectating && this.world.roomTiles.size) {
       const room = this.world.roomAt(frame.self.x, frame.self.y);
-      ctx.fillStyle = '#0b1115';
+      ctx.fillStyle = DUNGEON_VOID_COLOR;
       for (let ty = Math.floor(this.bounds.top / TILE_SIZE); ty <= Math.floor(this.bounds.bottom / TILE_SIZE); ty++) for (let tx = Math.floor(this.bounds.left / TILE_SIZE); tx <= Math.floor(this.bounds.right / TILE_SIZE); tx++) {
         if ((this.world.roomTiles.get(`${tx},${ty}`) ?? '') === room) continue;
         const x = this.width / 2 + (tx * TILE_SIZE - this.camera.x) * this.zoom;

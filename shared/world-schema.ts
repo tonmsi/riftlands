@@ -29,6 +29,8 @@ export interface WorldAsset {
   id: string; name: string; image: string; width: number; height: number;
   columns: number; rows: number; cells: AssetCell[];
   layer: 'ground' | 'object'; pivot: Vec2; generation: AssetGeneration;
+  /** Manual placements of this asset allow procedural scenery to overlap their grid. */
+  preserveProceduralScenery?: boolean;
   /** Built-in animated artwork is data-selected, never tied to an asset ID or world position. */
   visual?: { kind: 'image' } | { kind: 'fire'; style: 'brazier' | 'campfire' };
   fade?: { opacity: number; feather: number; durationMs: number };
@@ -95,6 +97,8 @@ export interface WorldWarp {
   reverseId?: string;
 }
 export interface WorldDocument {
+  /** Empty authoring canvas; omitted documents retain the legacy generator. */
+  baseTerrain?: 'water';
   /** Virtual catalog folders, including empty folders. */
   assetFolders?: string[];
   procedural?: ProceduralSettings;
@@ -218,6 +222,7 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       || !finite(a.width, .25, 32) || !finite(a.height, .25, 32) || a.columns !== Math.ceil(a.width) || a.rows !== Math.ceil(a.height)
       || !['ground', 'object'].includes(a.layer) || !object(a.pivot) || !finite(a.pivot.x, 0, 1) || !finite(a.pivot.y, 0, 1)) fail('definizione asset');
     if (a.cellSubdivision !== undefined && !ASSET_CELL_SUBDIVISIONS.includes(a.cellSubdivision)) fail(`suddivisione di ${a.id}`);
+    if (a.preserveProceduralScenery !== undefined && !boolean(a.preserveProceduralScenery)) fail(`sovrapposizione scenario di ${a.id}`);
     list(a.cells, 65536, 'celle asset');
     if (a.group !== undefined && (!name(a.group) || a.group.length > 80)) fail(`gruppo di ${a.id}`);
     if (a.imageTransform !== undefined && (!object(a.imageTransform) || !finite(a.imageTransform.x, -32, 32)
@@ -349,8 +354,9 @@ export function parseWorldDocument(value: string | unknown): WorldDocument {
       || !point(w.entry) || !point(w.arrival) || !['walk', 'interact'].includes(w.activation)
       || (w.reverseId !== undefined && (!id(w.reverseId) || w.reverseId === w.id))) fail('collegamento warp');
   }
+  if (d.baseTerrain !== undefined && d.baseTerrain !== 'water') fail('terreno di base');
   // Reconstruct the outer shape so unknown top-level fields cannot become executable extensions.
-  const result: WorldDocument = structuredClone({ ...(d.cliffAssets !== undefined ? { cliffAssets: d.cliffAssets } : {}), ...(d.geometry !== undefined ? { geometry: d.geometry } : {}), ...(d.spawnElevation !== undefined ? { spawnElevation: d.spawnElevation } : {}), ...(d.painting !== undefined ? { painting: d.painting } : {}), version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
+  const result: WorldDocument = structuredClone({ ...(d.baseTerrain !== undefined ? { baseTerrain: d.baseTerrain } : {}), ...(d.cliffAssets !== undefined ? { cliffAssets: d.cliffAssets } : {}), ...(d.geometry !== undefined ? { geometry: d.geometry } : {}), ...(d.spawnElevation !== undefined ? { spawnElevation: d.spawnElevation } : {}), ...(d.painting !== undefined ? { painting: d.painting } : {}), version: d.version, generatorVersion: 1, seed: d.seed, spawn: d.spawn, assets: d.assets,
     placements: d.placements, tiles: d.tiles, zones: d.zones, npcs: d.npcs, dungeons: d.dungeons, ...(d.assetFolders !== undefined ? { assetFolders: d.assetFolders } : {}), ...(d.procedural !== undefined ? { procedural: d.procedural } : {}), ...(d.soundPoints !== undefined ? { soundPoints: d.soundPoints } : {}), ...(d.tileChunks !== undefined ? { tileChunks: d.tileChunks } : {}),
     ...(d.interiors !== undefined ? { interiors: d.interiors.map((m: WorldInterior) => ({ id: m.id, name: m.name, width: m.width, height: m.height,
       ...(m.pvp !== undefined ? { pvp: m.pvp } : {}), ...(m.kind !== undefined ? { kind: m.kind } : {}),

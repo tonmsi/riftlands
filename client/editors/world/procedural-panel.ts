@@ -34,9 +34,15 @@ export function installProceduralPanel(root: HTMLElement, current:()=>WorldDocum
     const terrain=(root.querySelector('#terrain') as HTMLSelectElement).value,k=terrain==='plant'?'plant':terrain==='rock'?'rock':'bush',section=settings()[k];
     brushInfo.hidden=!['bush','plant','rock','grass'].includes(terrain);
     const only=(root.querySelector('#procedural-default-only') as HTMLInputElement).checked||!section.useFamilies;
-    root.querySelector('#terrain-family-name')!.textContent=`${names[k]} · ${only?'Predefinita':'Biomi: temperatura + quota'}`;
+    const label = terrain === 'grass' ? 'Cespugli decorativi sull’erba' : names[k];
+    root.querySelector('#terrain-family-name')!.textContent=`${label} · ${only?'Famiglia predefinita':'Biomi: temperatura + quota'}`;
     const ids=new Set(section.families.filter(f=>!only||f.id==='default').flatMap(f=>f.rules.flatMap(r=>r.assets))),assets=current().assets.filter(a=>ids.has(a.id));
-    root.querySelector('#terrain-family-assets')!.innerHTML=section.useJs?'<span>JS forzato</span>':assets.length?assets.slice(0,8).map(a=>`<img src="${escape(a.image)}" alt="${escape(a.name)}" title="${escape(a.name)} · ${a.columns} × ${a.rows}">`).join(''):`<span>JS di riserva · nessun asset associato</span>`;
+    const previews = assets.slice(0, 8);
+    const extra = assets.length - previews.length;
+    const forceJs = section.useJs || (k !== 'rock' && root.querySelector<HTMLInputElement>('#bush-js')!.checked);
+    root.querySelector('#terrain-family-assets')!.innerHTML = forceJs ? '<span>JS forzato</span>' : previews.length
+      ? previews.map(a=>`<img src="${escape(a.image)}" alt="${escape(a.name)}" title="${escape(a.name)} · ${a.columns} × ${a.rows}">`).join('') + (extra ? `<span>+ ${extra} nel catalogo della famiglia</span>` : '')
+      : '<span>JS di riserva · nessun asset associato</span>';
   }
   for(const id of ['terrain','procedural-default-only','bush-js'])root.querySelector(`#${id}`)!.addEventListener('change',refreshBrush);
   const mutate=(action:(s:ProceduralSettings)=>void)=>{const initial=structuredClone(settings());change(()=>{const s=current().procedural??=initial;action(s);});signature='';refresh();};
@@ -60,7 +66,7 @@ export function installProceduralPanel(root: HTMLElement, current:()=>WorldDocum
     const removedIds=new Set<string>();
     const assetSelector=folderEntries.map(([folder,assets],index)=>
       `<details class="proc-asset-folder" data-folder="${escape(folder)}" ${folderOpen.get(folder)===false?'':'open'}><summary>${escape(folder)} <span class="group-count">${assets.length}</span>${isAssetVariantGroup(assets,doc.assets)?'<small class="asset-group-kind" title="Gruppo virtuale: non crea cartelle sul disco">Gruppo varianti</small>':''}</summary><div class="proc-folder-actions"><button type="button" data-select-folder="${index}">Seleziona ${isAssetVariantGroup(assets,doc.assets)?'gruppo':'cartella'}</button><button type="button" data-clear-folder="${index}">Deseleziona ${isAssetVariantGroup(assets,doc.assets)?'gruppo':'cartella'}</button><button type="button" data-family-folder="${index}" ${assets.length?'':'disabled'}>Crea sottofamiglia da ${isAssetVariantGroup(assets,doc.assets)?'gruppo':'cartella'}</button></div><div class="proc-folder-items">${assets.map(a=>`<label class="procedural-asset" data-proc-asset="${escape(a.id)}"><input type="checkbox" name="proc-asset" value="${escape(a.id)}" ${rule?.assets.includes(a.id)?'checked':''}><img src="${escape(a.image)}" alt="" loading="lazy"><span>${escape(a.name)}<small>${a.columns} × ${a.rows}${a.animation?' · animato':''}</small></span></label>`).join('')}</div></details>`).join('');
-    form.innerHTML=`<h3>${names[kind]}</h3><p class="hint">Queste regole valgono sia per la generazione sia per il pennello terreno. Gli asset compatibili hanno la precedenza; il JS è la riserva.</p>
+    form.innerHTML=`<h3>${names[kind]}</h3><p class="hint">Queste regole valgono sia per la generazione sia per il pennello terreno. ${kind==='cliff'?'In assenza di asset compatibili si usano i PNG cliff-grid. Puoi forzare il disegno JS qui sotto.':'Gli asset compatibili hanno la precedenza. Il JS è la riserva.'}</p>
       ${kind!=='cliff'?`<button id="proc-paint-family" class="primary wide">Dipingi ${names[kind]} · ${family.id==='default'?'famiglia predefinita':'biomi e sottofamiglie'}</button>`:''}
       <section id="proc-usage"><h3>Asset utilizzati · ${escape(family.name)}</h3><div id="proc-used-assets"></div><p id="proc-usage-status" role="status"></p></section>
       <label class="check"><input id="proc-js" type="checkbox" ${section.useJs?'checked':''}>Forza disegno JS predefinito</label>
@@ -82,7 +88,7 @@ export function installProceduralPanel(root: HTMLElement, current:()=>WorldDocum
       form.querySelector('#proc-used-assets')!.innerHTML=doc.assets.filter(a=>ids.has(a.id)).map(a=>{
         const matches=rules.filter(r=>r.assets.includes(a.id)),valid=matches.some(r=>(r.width===undefined||r.width===a.columns)&&(r.height===undefined||r.height===a.rows)&&!(kind==='cliff'&&a.animation));
         return `<div class="proc-used-entry"><button type="button" class="proc-used-card" data-inspect-asset="${escape(a.id)}"><img src="${escape(a.image)}" alt=""><strong>${escape(a.name)}</strong><span>${a.columns} × ${a.rows} · ${!valid?'Ingombro incompatibile':input('proc-js').checked?'Associato · JS forzato':'In uso'}</span><small>${matches.map(r=>escape(r.cliffVariant??`${r.width??'Tutte'} × ${r.height??'tutte'}`)).join(' · ')}</small><span>Trova nella lista ↓</span></button><div class="proc-used-actions"><button type="button" data-edit-asset="${escape(a.id)}">Modifica asset ↗</button><button type="button" data-catalog-asset="${escape(a.id)}">Apri nel catalogo ↗</button><button type="button" data-remove-family-asset="${escape(a.id)}">Rimuovi dalla famiglia</button></div></div>`;
-      }).join('')||'<div class="proc-fallback-card">Disegno JS di riserva<br><small>Nessun asset associato. Aggiungilo dal catalogo qui sotto.</small></div>';
+      }).join('')||`<div class="proc-fallback-card">${kind==='cliff'&&!input('proc-js').checked?'PNG cliff-grid di riserva':'Disegno JS di riserva'}<br><small>Nessun asset associato. Aggiungilo dal catalogo qui sotto.</small></div>`;
       form.querySelector('#proc-usage-status')!.textContent=(pending?'Selezione modificata: premi Salva parametri per applicarla. ':'')+(input('proc-js').checked?'JS forzato: gli asset associati restano salvati, ma non vengono usati.':`${ids.size} asset associati. Clicca una miniatura per trovare la riga dell’asset. Rimuovi dalla famiglia cambia solo questa associazione; per cancellare l’asset apri il catalogo.`);
       for(const card of form.querySelectorAll<HTMLButtonElement>('[data-inspect-asset]'))card.onclick=()=>revealRow(card.dataset.inspectAsset!);
       for(const button of form.querySelectorAll<HTMLButtonElement>('[data-remove-family-asset]'))button.onclick=()=>{

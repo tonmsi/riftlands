@@ -36,7 +36,7 @@ Per creare un terreno sopraelevato:
    alla quota già presente sotto il pennello. Terra e acqua conservano le rispettive
    quote predefinite 0 e -1 quando dipingi sul terreno base.
 3. Dipingi direttamente sulla mappa. Non serve selezionare o disegnare prima un'area.
-   Per una singola casella imposta **Raggio pennello 0**. I rialzi generano il bordo
+   Per una singola casella imposta **Raggio pennello 1**. I rialzi generano il bordo
    esterno `cliff-grid`, largo un tile: una casella isolata ne ha otto attorno.
    Le caselle adiacenti alla stessa quota condividono il bordo anche se hanno materiali
    diversi. Il bordo occupa il piano inferiore, blocca il movimento e i colpi sotto

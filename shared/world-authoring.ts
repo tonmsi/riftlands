@@ -139,6 +139,9 @@ export class WorldAuthoring {
     this.bands = [...bands.values()].sort((a, b) => a.stride - b.stride);
   }
   addPlacement(p: AssetPlacement): void { this.placements.add(p); this.visiblePlacements.add(p); }
+  blocksProceduralScenery(bounds: TileBounds): boolean {
+    return this.placements.query(bounds).some(p => !this.assets.get(p.assetId)!.preserveProceduralScenery);
+  }
   registerSceneryAsset(a:WorldAsset): void { (this.assets as Map<string,WorldAsset>).set(a.id,a); }
   terrainBushAt(x: number, y: number): WorldAsset {
     return pickAssetVariant(this.terrainBushVariants, x, y, this.document.seed);
@@ -198,7 +201,7 @@ export class WorldAuthoring {
         const x = isPlant ? px : sx * band.stride + gap + Math.floor(coordinateHash(sx, sy, salt + 1721) * (band.stride - a.columns - 2 * gap + 1));
         const y = isPlant ? py : sy * band.stride + gap + Math.floor(coordinateHash(sx, sy, salt + 1723) * (band.stride - a.rows - 2 * gap + 1));
         const p: AssetPlacement = { id: `generated:${band.stride}:${sx}:${sy}`, assetId: a.id, x, y };
-        let allowed = !this.placements.query({ left: x - gap, top: y - gap, right: x + a.columns + gap, bottom: y + a.rows + gap }).length;
+        let allowed = !this.blocksProceduralScenery({ left: x - gap, top: y - gap, right: x + a.columns + gap, bottom: y + a.rows + gap });
         for (let row = 0; allowed && row < a.rows; row++) for (let col = 0; allowed && col < a.columns; col++) {
           const tx = x + col, ty = y + row, temp = env.temperature(tx, ty), moisture = env.moisture(tx, ty), g = isPlant ? root.generation : a.generation;
           const tile = this.tiles.at(tx, ty), bush = isBushAsset(root)||managedKind==='bush';
@@ -240,6 +243,7 @@ export class WorldAuthoring {
   }
   assetsIn(bounds: TileBounds, env: GenerationEnvironment, seed: number, includeArtwork = true): AssetPlacement[] {
     const result = (includeArtwork ? this.visiblePlacements : this.placements).query(bounds);
+    if (this.document.baseTerrain === 'water') return result;
     for (const band of this.bands) {
       const padding = includeArtwork ? band.overhang : 0;
       for (let sy = Math.floor((bounds.top - padding) / band.stride); sy < Math.ceil((bounds.bottom + padding) / band.stride); sy++)

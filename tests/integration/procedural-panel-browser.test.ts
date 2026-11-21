@@ -105,7 +105,7 @@ test('family usage is interactive and terrain brush paints plants and bush footp
     if(process.env.PROCEDURAL_SCREENSHOT)await page.screenshot({path:process.env.PROCEDURAL_SCREENSHOT.replace('.png','-assigned.png')});
     await page.locator('[data-edit-asset="bush-large"]').click();await expect(page.locator('#asset-name')).toHaveValue('bush 2x2');await expect(page.locator('#asset-inspector')).toBeVisible();
     await page.locator('#open-procedural').click();await page.locator('#proc-name').fill('Cespugli dipinti');await page.locator('#proc-paint-family').click();await expect(page.locator('#terrain')).toHaveValue('bush');await expect(page.locator('#procedural-default-only')).toBeChecked();
-    await page.locator('#brush-radius').fill('2');let box=(await page.locator('#map').boundingBox())!;
+    await page.locator('#brush-radius').fill('3');let box=(await page.locator('#map').boundingBox())!;
     await page.mouse.click(box.x+box.width/2+3.5*24,box.y+box.height/2+3.5*24);
     await page.locator('#open-procedural').click();await page.getByRole('button',{name:'Piante',exact:true}).click();await expect(page.locator('#proc-used-assets')).toContainText('plant 2x2');await page.locator('#proc-paint-family').click();
     await expect(page.locator('#terrain')).toHaveValue('plant');await expect(page.locator('#terrain-family-assets img')).toHaveCount(1);

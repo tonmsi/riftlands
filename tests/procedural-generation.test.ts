@@ -57,8 +57,40 @@ test('generated plants use family assets and actual geometry, preserve query det
 test('cliff family selection shares temperature, elevation and fallback with physics',()=>{
   const d=fixture();d.procedural!.cliff.families[0].rules=[{id:'edge',cliffVariant:'alto-centro',assets:['normal']}];
   const cliff={x:0,y:0,base:0,elevation:2,parts:[{variant:'alto-centro' as const}]};
-  assert.equal(cliffAsset(d,'alto-centro',cliff).id,'normal');d.procedural!.cliff.useJs=true;
+  d.cliffAssets = { 'alto-centro': 'cold' };
+  assert.equal(cliffAsset(d,'alto-centro',cliff).id,'normal');
+  d.procedural!.cliff.families[0].rules[0].assets = ['wide'];
+  assert.equal(cliffAsset(d,'alto-centro',cliff).id,'cold');
+  assert.equal(cliffAsset(d,'basso-centro',cliff).image,'/world-assets/montagna/cliff-grid/cliff-grid-basso-centro.png');
+  d.procedural!.cliff.useJs=true;
   assert.ok(cliffAsset(d,'alto-centro',cliff).id.startsWith('procedural-cliff'));
+});
+
+test('manual assets can preserve generated placements and painted rock and bush scenery', () => {
+  const d = newWorldDocument(42);
+  d.procedural = defaultProceduralSettings();
+  d.procedural.bush.density = 0;
+  d.procedural.plant.density = 1;
+  const bounds = { left: 0, top: 0, right: 32, bottom: 32 };
+  const env = { tile: () => 'grass' as const, temperature: () => .5, moisture: () => .5, reserved: () => false };
+  const generated = (doc: typeof d) => new WorldAuthoring(doc).assetsIn(bounds, env, doc.seed).filter(p => p.id.startsWith('generated:'));
+  const baseline = generated(d);
+  assert.ok(baseline.length > 0);
+
+  const asset = newWorldAsset('overlay', 'Overlay', '/world-assets/overlay.png');
+  resizeWorldAsset(asset, 32, 32);
+  d.assets.push(asset);
+  d.placements.push({ id: 'overlay', assetId: asset.id, x: 0, y: 0 });
+  d.tiles.push({ x: 1, y: 1, terrain: 'rock' }, { x: 3, y: 3, terrain: 'bush' });
+  const painted = (doc: typeof d) => new World(42, 160, 'world', doc, []).assetsIn(bounds, false).filter(p => p.id.startsWith('scenery:'));
+  assert.ok(generated(d).length < baseline.length);
+  assert.equal(painted(d).length, 0);
+
+  asset.preserveProceduralScenery = true;
+  const saved = parseWorldDocument(serializeWorldDocument(d));
+  assert.deepEqual(generated(saved), baseline);
+  assert.ok(painted(saved).some(p => p.x === 1 && p.y === 1));
+  assert.ok(painted(saved).some(p => p.x === 3 && p.y === 3));
 });
 
 test('painted bushes and plants use the same family footprint rules, collision masks and catalog definitions',()=>{
@@ -98,4 +130,16 @@ test('plant painting remains valid on raised terrain and queries assets at the p
   d.geometry={surfaces:[{id:'raised',x:2,y:2,width:1,height:1,elevation:2,terrain:'plant',ground:true,painted:true}],solids:[],stairs:[]};
   const restored=parseWorldDocument(serializeWorldDocument(d)),w=new World(42,160,'world',restored,[]);
   const plants=w.assetsIn({left:2,top:2,right:3,bottom:3},false);assert.equal(plants.length,1);assert.equal(plants[0].assetId,'alpine');assert.equal(plants[0].baseElevation,2);
+});
+
+test('interiors keep their blocking boundary without generating rocks outside the map', () => {
+  const d = newWorldDocument(42);
+  d.procedural = defaultProceduralSettings();
+  d.interiorBounds = { id: 'tunnel', name: 'Tunnel', width: 5, height: 40 };
+  d.tiles.push({ x: 4, y: 0, terrain: 'rock' });
+  const world = new World(d.seed, 16, 'world', d, []);
+  const rocks = world.assetsIn({ left: -3, top: -3, right: 8, bottom: 43 }, false);
+  assert.deepEqual(rocks.map(({ x, y }) => ({ x, y })), [{ x: 4, y: 0 }]);
+  assert.equal(world.getTile(5, 0), 'rock');
+  assert.equal(world.elevation.blocked(5.5 * 48, 24, 0, 0), true);
 });

@@ -1,5 +1,7 @@
 import type { TileKind } from '../../shared/types';
 
+export const DUNGEON_VOID_COLOR = '#0b1115';
+
 /** Quiet scenery leaves the brightest colours to actors, pickups and spells. */
 export const TERRAIN: Record<TileKind, string> = {
   grass: '#91ad69',

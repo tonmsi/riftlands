@@ -16,8 +16,10 @@ export function defaultCliffAsset(variant: CliffVariant): WorldAsset {
 }
 export function cliffAsset(document: CliffCatalog | undefined, variant: CliffVariant, cliff?: TerrainCliff): WorldAsset {
   if(document?.procedural && cliff) {
+    if (document.procedural.cliff.useJs) return proceduralFallback('cliff', 1, 1, variant);
     const sample=document.proceduralSample?.(cliff.x,cliff.y,cliff.elevation)??{x:cliff.x,y:cliff.y,elevation:cliff.elevation,temperature:.5};
-    return proceduralAsset({...document,seed:document.seed??0},'cliff',{...sample,cliffVariant:variant,width:1,height:1}) ?? proceduralFallback('cliff',1,1,variant);
+    const asset = proceduralAsset({...document,seed:document.seed??0},'cliff',{...sample,cliffVariant:variant,width:1,height:1});
+    if (asset) return asset;
   }
   const id = document?.cliffAssets?.[variant];
   return document?.assets.find(a => a.id === id) ?? defaultCliffAsset(variant);

@@ -8,7 +8,7 @@ import { EnvironmentArt } from './environment-art';
 import { WorldAssetArt } from './world-asset-art';
 import { terrainBushAsset } from '../../shared/bush';
 import { noise } from './render-primitives';
-import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor, climateSnowCoverage } from './terrain-style';
+import { TERRAIN, groundColor, shorelineMask, sceneryGroups, pathColor, climateSnowCoverage, DUNGEON_VOID_COLOR } from './terrain-style';
 import type { RenderBounds, TerrainViewport } from './render-types';
 import { performanceLog as perf } from '../core/performance-log';
 import type { WorldSurface } from '../../shared/elevation';
@@ -382,6 +382,7 @@ export class TerrainRenderer {
     if (this.activeWorld !== world) { this.legacyBushes.clear(); this.visibleBushViews.clear(); this.bushGroupsRevision++; }
     this.activeWorld = world;
     this.painting = world.authoring.document.painting ?? DEFAULT_PAINTING;
+    const voidColor = world.authoring.document.interiorBounds ? DUNGEON_VOID_COLOR : '#202b29';
     if(this.sampleWorld!==world||this.sampleRevision!==world.authoringRevision||this.sampleLock!==world.lockRevision||this.samplePainting!==this.painting||this.sampleMaterial!==material){
       this.clearSamples();this.sampleWorld=world;this.sampleRevision=world.authoringRevision;this.sampleLock=world.lockRevision;this.samplePainting=this.painting;this.sampleMaterial=material;
     }
@@ -525,7 +526,7 @@ export class TerrainRenderer {
           const right=Math.round((x+TILE_SIZE)*transform.a+transform.e),bottom=Math.round((y+TILE_SIZE)*transform.d+transform.f);
           const wx=(left-transform.e)/transform.a,wy=(top-transform.f)/transform.d;
           const width=(right-left)/transform.a,height=(bottom-top)/transform.d;
-          ctx.fillStyle=surface===null?'#202b29':surface==='water'?palette.water.color:surfaceColor(surface,tx,ty);
+          ctx.fillStyle=surface===null?voidColor:surface==='water'?palette.water.color:surfaceColor(surface,tx,ty);
           ctx.fillRect(wx,wy,width,height);
           if(surface===null)continue;
           if(surface==='water'){
@@ -562,7 +563,7 @@ export class TerrainRenderer {
     for (let ty = Math.floor(bounds.top / TILE_SIZE); ty <= Math.floor(bounds.bottom / TILE_SIZE); ty++) {
       for (let tx = Math.floor(bounds.left / TILE_SIZE); tx <= Math.floor(bounds.right / TILE_SIZE); tx++) {
         if (this.outsideLocalMap(tx, ty) || (world.mode === 'arena' && (tx < -10 || tx > 9 || ty < -8 || ty > 7))) {
-          ctx.fillStyle = '#202b29';
+          ctx.fillStyle = voidColor;
           ctx.fillRect(tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE + 0.4, TILE_SIZE + 0.4);
           continue;
         }

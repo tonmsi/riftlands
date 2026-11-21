@@ -69,7 +69,9 @@ export function validateWorld(document: WorldDocument, catalog: readonly Dungeon
     }
   }
   const spawn = { x: (document.spawn.x + (bounds ? .5 : 0)) * TILE_SIZE, y: (document.spawn.y + (bounds ? .5 : 0)) * TILE_SIZE };
-  if (collidesWorld(spawn.x, spawn.y, PLAYER_RADIUS + 2, world, document.spawnElevation ?? 0)) issues.push('Spawn del giocatore bloccato: libera anche le celle vicine.');
+  const spawnElevation = document.spawnElevation ?? 0;
+  if (collidesWorld(spawn.x, spawn.y, PLAYER_RADIUS + 2, world, spawnElevation))
+    issues.push(`Spawn del giocatore configurato a X ${document.spawn.x}, Y ${document.spawn.y}, quota ${spawnElevation}: spazio calpestabile insufficiente per il personaggio.`);
   if (!bounds && configuredDungeonTile(Math.floor(spawn.x / TILE_SIZE), Math.floor(spawn.y / TILE_SIZE), dungeons) !== undefined) issues.push('Spawn globale dentro un dungeon: scegli una posizione nel mondo.');
   if (world.arenaAt(spawn.x, spawn.y)) issues.push('Lo spawn del giocatore si trova dentro un ingresso arena.');
   for (const n of document.npcs) {

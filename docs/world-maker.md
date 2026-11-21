@@ -289,13 +289,13 @@ Il mondo non ha larghezza o altezza iniziali. La vista esplora coordinate positi
 - **Terreno**: pennello continuo con raggio. Le celle dipinte restano manuali e disabilitano gli asset procedurali su quelle celle.
 - **Asset**: piazzamento singolo. Ctrl + trascina, oppure **Asset con pennello continuo**, usa raggio e densità del pennello. La distanza minima evita accumuli; i passaggi veloci interpolano le celle attraversate.
 - **Cancella**: rimuove asset manuali e NPC nell’area e impedisce che gli asset generati ricompaiano. Conserva il terreno dipinto.
-- **Procedurale**: elimina l’intervento sul terreno e il blocco alla rigenerazione, lasciando nuovamente lavorare il generatore. Non rimuove le istanze manuali.
+- **Procedurale**: genera terreno e altezze reali soltanto nelle celle attraversate dal pennello. Le quote sono intere: −1 (acqua), 0, 1, 2, 3 e 4 (massimo). Il seed e le coordinate rendono coerenti le pennellate adiacenti; temperatura e umidità determinano il materiale terrestre. Superfici, volumi e bordi dei rilievi vengono salvati con il progetto e supportano annulla/ripeti. Non rimuove le istanze manuali. Nel mondo con base acqua, le celle non dipinte restano acqua.
 - **Seleziona**: un click seleziona asset, NPC, dungeon o zona; poi tieni premuto il sinistro sullo stesso elemento per trascinarlo mantenendo il punto di presa, anche per zone rettangolari e circolari. Il gesto si annulla con Escape ed è una sola modifica nella cronologia. Trascinare un asset procedurale lo converte in un’istanza manuale e ne impedisce la ricomparsa nella posizione originale. Il destro sposta sempre la vista, anche sopra un oggetto; valgono anche Spazio + trascina e tasto centrale. Le zone possono essere selezionate anche dal loro elenco.
 - **Spawn player**: imposta il centro dello spawn globale. Chi rientra con una posizione salvata diventata bloccata viene riportato a uno spawn libero, conservando progressi e salute.
 
 Una pennellata è una singola operazione annullabile. Ctrl+Z annulla; Ctrl+Shift+Z ripete. La cronologia è limitata sia nel numero di transazioni sia nella memoria. Le proprietà di collisione e visibilità possono essere mostrate sopra la mappa.
 
-Il raggio del pennello è espresso in celle del mondo, indipendentemente dallo zoom: raggio 16 copre circa 800 celle per impronta. Il contatore sotto la mappa mostra quante celle sono state modificate. I tratti lunghi vengono elaborati a gruppi con un budget di lavoro per fotogramma, mantenendo l’interpolazione e un’unica operazione di undo. La palette mostra gli asset a gruppi e riusa il DOM durante le pennellate.
+Il valore del pennello è indipendente dallo zoom. Con 1 si dipinge una sola casella, con 2 si dipingono il centro e le quattro adiacenti, e con 17 si coprono circa 800 celle per impronta. Il contatore sotto la mappa mostra quante celle sono state modificate. I tratti lunghi vengono elaborati a gruppi con un budget di lavoro per fotogramma, mantenendo l’interpolazione e un’unica operazione di undo. La palette mostra gli asset a gruppi e riusa il DOM durante le pennellate.
 
 ## Generazione e clima
 
@@ -307,7 +307,7 @@ La frequenza è la probabilità/peso di proposta negli slot della propria fascia
 
 Le celle lasciate senza interventi restano procedurali. Le zone possono modificare solo temperatura e/o umidità: la temperatura controlla neve e ghiaccio, mentre l’umidità controlla bioma e fango. Strade manuali e interni dei dungeon mantengono il proprio terreno. Il cespuglio iniziale è una definizione del catalogo usata dal generatore; anche la vecchia tile `bush` usa ora `bush.png` per impostazione predefinita.
 
-Nel pennello terreno, **Usa bush JS** sceglie il disegno canvas per i cespugli dell’erba dipinta o del terreno Cespuglio; senza spunta si usa il PNG. La scelta viene salvata sulle celle dipinte, con annulla/ripeti ed esportazione, e non modifica le altre zone. Sull’erba i cespugli restano sparsi secondo densità, clima, esclusioni e regole del catalogo, mentre gli altri asset procedurali restano soppressi. Cancella rimuove i cespugli generati dall’erba; Procedurale elimina anche la scelta locale.
+Nel pennello terreno, **Usa bush JS** sceglie il disegno canvas per i cespugli dell’erba dipinta o del terreno Cespuglio; senza spunta si usa il PNG. La scelta viene salvata sulle celle dipinte, con annulla/ripeti ed esportazione, e non modifica le altre zone. Sull’erba i cespugli restano sparsi secondo densità, clima, esclusioni e regole del catalogo, mentre gli altri asset procedurali restano soppressi. Cancella rimuove i cespugli generati dall’erba; Procedurale sostituisce la scelta locale con il terreno e la quota generati.
 
 ## Zone, NPC e arene
 

@@ -134,6 +134,10 @@ export class World {
   private familySceneryIn(bounds:TileBounds,includeArtwork:boolean):AssetPlacement[] {
     if(!this.sceneryEnabled)return [];
     const doc=this.authoring.document,config=doc.procedural;
+    const interior = doc.interiorBounds;
+    const sceneryTileAt = (x: number, y: number): TileKind | null =>
+      interior && (x < 0 || y < 0 || x >= interior.width || y >= interior.height)
+        ? null : this.elevation.terrainKindAt(x, y);
     if(this.sceneryMargin===undefined){this.sceneryMargin=0;for(const a of doc.assets){const b=placementVisualBounds({x:0,y:0,id:'',assetId:a.id},a);this.sceneryMargin=Math.max(this.sceneryMargin,-b.left,-b.top,b.right-a.columns,b.bottom-a.rows);}}
     const margin=includeArtwork?this.sceneryMargin:0,result:AssetPlacement[]=[];
     const size=this.sceneryBlockSize;
@@ -149,7 +153,7 @@ export class World {
           if(!sizes.length)return kind==='rock'?[{width:2,height:2}]:[];
           return sizes.filter(size=>!!proceduralAsset(doc,kind,{...sample(x,y),...size}));
         };
-        const groups=familySceneryBlock((x,y)=>this.elevation.terrainKindAt(x,y),left,top,footprints,(x,y,ox,oy)=>{
+        const groups=familySceneryBlock(sceneryTileAt,left,top,footprints,(x,y,ox,oy)=>{
           const a=this.authoring.tiles.at(x,y),b=this.authoring.tiles.at(ox,oy);
           return !!a?.defaultFamilyOnly===!!b?.defaultFamilyOnly&&a?.bushStyle===b?.bushStyle&&this.elevation.terrainElevationAt(x+.5,y+.5)===this.elevation.terrainElevationAt(ox+.5,oy+.5);
         },size);
@@ -158,7 +162,7 @@ export class World {
           if(!config&&g.tile!=='plant')continue;
           const a=this.sceneryAsset(g.tile,g.x,g.y,g.width,g.height);this.authoring.registerSceneryAsset(a);
           const p:AssetPlacement={id:`scenery:${g.x}:${g.y}`,assetId:a.id,x:g.x,y:g.y,baseElevation:sample(g.x,g.y).elevation};
-          if(!this.authoring.placements.query(placementBounds(p,a)).length)placements.push(p);
+          if (!this.authoring.blocksProceduralScenery(placementBounds(p, a))) placements.push(p);
         }
         this.sceneryCache.set(key,placements);if(this.sceneryCache.size>256)this.sceneryCache.delete(this.sceneryCache.keys().next().value!);
       }
@@ -214,6 +218,7 @@ export class World {
     const authored = this.authoring.tiles.at(tx, ty)?.terrain;
     if (authored !== undefined) return authored;
     if (bounds) return 'grass';
+    if (this.authoring.document.baseTerrain === 'water') return 'water';
     const curatedDungeonApproach = this.dungeons.some(definition => inDungeonApproachCorridor(definition, { x, y }));
     if (this.dungeons.some(definition => onDungeonApproach(definition, { x, y }))) return 'path';
     // An uninterrupted road network guarantees routes through terrain in every direction.
@@ -254,7 +259,7 @@ export class World {
     for (let y = 0; y < CHUNK_TILES; y++) for (let x = 0; x < CHUNK_TILES; x++) tiles.push(this.generateTile(cx * CHUNK_TILES + x, cy * CHUNK_TILES + y));
     const chunk: Chunk = { key, cx, cy, tiles, npcs: [], pickups: [] };
     // Try a bounded number of positions and place on walkable tile centres.
-    for (let i = 0; this.mode === 'world' && !this.authoring.document.interiorBounds && i < 48; i++) {
+    for (let i = 0; this.mode === 'world' && !this.authoring.document.interiorBounds && !this.authoring.document.baseTerrain && i < 48; i++) {
       const tx = Math.floor(coordinateHash(cx * 41 + i, cy, this.seed + 88) * CHUNK_TILES);
       const ty = Math.floor(coordinateHash(cx, cy * 41 + i, this.seed + 97) * CHUNK_TILES);
       const tile = tiles[ty * CHUNK_TILES + tx];
@@ -276,8 +281,8 @@ export class World {
         chunk.pickups.push({ id: `pickup:${key}:${index}`, x, y, elevation: state.elevation, radius: 12, kind: (['heal', 'haste', 'power', 'weakness'] as const)[Math.floor(coordinateHash(cx + i, cy, this.seed + 345) * 4)] });
       }
     }
-    if (this.mode === 'world' && !this.authoring.document.interiorBounds && cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
-    if (this.mode === 'world' && !this.authoring.document.interiorBounds && cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
+    if (this.mode === 'world' && !this.authoring.document.interiorBounds && !this.authoring.document.baseTerrain && cx === 0 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:heal', x: 168, y: 120, radius: 12, kind: 'heal' });
+    if (this.mode === 'world' && !this.authoring.document.interiorBounds && !this.authoring.document.baseTerrain && cx === -1 && cy === 0) chunk.pickups.push({ id: 'pickup:camp:haste', x: -168, y: 120, radius: 12, kind: 'haste' });
     if (this.mode === 'world') for (const n of this.manualNpcs.get(key) ?? []) if (!this.elevation.blocked(n.x, n.y, 19, n.elevation ?? 0)) chunk.npcs.push({ ...n });
     if (this.mode === 'world') for (const dungeon of this.dungeons) for (const npc of dungeon.npcSpawns ?? []) {
       const position = chunkCoords(npc.x, npc.y);

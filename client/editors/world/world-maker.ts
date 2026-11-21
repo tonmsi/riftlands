@@ -1,3 +1,4 @@
+import { paintProceduralTerrain } from '../../../shared/procedural-terrain';
 import { installAssetSpriteEditor } from './asset-sprite-editor';
 import { spritesheetLayout } from '../../../shared/asset-sprites';
 import { loadNpcEditorCatalog, readNpcChoice, refreshNpcSelect } from '../npc-catalog';
@@ -25,6 +26,7 @@ import { field, tools, terrains, worldMakerLayout } from './world-maker-layout';
 import { drawWorldEditorMap, drawAssetGrid as renderAssetGrid, assetView as assetGridView } from './world-editor-canvas';
 import { WORLD_DOCUMENT } from '../../../shared/world-content';
 import { World } from '../../../shared/world';
+import { TILE_SIZE } from '../../../shared/config';
 import { coordinateHash } from '../../../shared/coordinate-random';
 import { assetVariants, pickAssetVariant } from '../../../shared/asset-variants';
 import type { TileKind, Vec2 } from '../../../shared/types';
@@ -182,7 +184,12 @@ function openCliffAsset(variant: CliffVariant): void {
 }
 on('cliff-edit', () => openCliffAsset(val('cliff-variant') as CliffVariant));
 el('asset-update').insertAdjacentHTML('beforebegin', `<div class="fields"><label>Suddivisione di ogni tile<select id="asset-cell-subdivision">${ASSET_CELL_SUBDIVISIONS.map(n=>`<option value="${n}">${n} × ${n} · ${n*n} ${n===1?'cella':'sottocelle'} per tile</option>`).join('')}</select></label><p id="asset-cell-info" class="hint"></p><p class="hint">Divide solo le celle di collisione e visibilità. Le dimensioni del PNG, la scala e la posizione dell’oggetto restano le stesse. Aumentando la suddivisione, le sottocelle ereditano le proprietà; riducendola si conservano blocchi e nascondigli presenti.</p></div>`);
-for (const [id,label] of [['asset-width','Larghezza oggetto · tile'],['asset-height','Altezza oggetto · tile']]) input(id).closest('label')!.firstChild!.textContent=label;
+el('asset-update').insertAdjacentHTML('beforebegin', `<div class="fields">
+    <label class="check"><input id="asset-preserve-scenery" type="checkbox">Mantieni gli elementi procedurali sotto l’asset</label>
+    <p class="hint">Cespugli, rocce e altri elementi procedurali possono sovrapporsi alla griglia di questo asset.</p>
+</div>`);
+const assetWidthLabel = input('asset-width').closest('label')!.firstChild!;
+const assetHeightLabel = input('asset-height').closest('label')!.firstChild!;
 input('asset-cell-subdivision').addEventListener('change',()=>{
     const division=num('asset-cell-subdivision'); void settleGesture().then(()=>change(()=>subdivideWorldAsset(active()!,division))).catch(report);
 });
@@ -252,7 +259,13 @@ let gesture: {
 } | null = null;
 const keys = new Set<string>();
 let selectedGenerated: AssetPlacement | undefined;
+const brushRadiusInput = input('brush-radius');
+const maxBrushRadius = 16;
+brushRadiusInput.min = '1';
+brushRadiusInput.max = String(maxBrushRadius + 1);
+brushRadiusInput.title = '1 dipinge una sola casella. Ogni incremento aggiunge una casella al raggio.';
 set('brush-radius', 1);
+const brushRadius = () => Math.max(0, Math.min(maxBrushRadius, Math.round(num('brush-radius')) - 1));
 set('brush-density', 100);
 function ensureWorld(): void {
   if (gesture?.terrainBrush?.flush()) worldDirty = true;
@@ -473,18 +486,23 @@ function refresh(): void {
     el('elevation-inspector').hidden = !!selected || warpEditor.hasSelection() || !(tool.startsWith('elevation-') || tool === 'terrain' || tool === 'restore');
     el('inspector-empty').hidden = !!selected || warpEditor.hasSelection() || !el('elevation-inspector').hidden || ((tool === 'asset' || tool.startsWith('elevation-')) && !!active());
     if (!selected && active())
-        refreshAsset(active()!);
+        refreshAsset(active()!, cliffVariant !== undefined);
     el('zone-list').replaceChildren(...(surface().soundPoints ?? []).map(point => { const b = document.createElement('button'); b.textContent = `♫ ${point.name}`; b.onclick = () => { selected = { kind: 'sound', id: point.id }; selectTool('select'); centerAt(point.x + .5, point.y + .5); refresh(); revealInspector(); }; return b; }), ...surface().zones.map(z => { const b = document.createElement('button'); b.textContent = `${z.name} · ${z.priority}`; b.onclick = () => { selected = { kind: 'zone', id: z.id }; const bounds = shapeBounds(z.shape); centerAt((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2); refresh(); }; return b; }));
     inspectorDrafts.restore();
     spriteEditor.syncInfo();
     refreshClimateTransitionControl();
     root.dispatchEvent(new Event('world-refresh'));
 }
-function refreshAsset(a: WorldAsset): void {
+function refreshAsset(a: WorldAsset, automaticCliff: boolean): void {
     refreshCellControls(a);
     const generation = (a.variantOf ? draft.assets.find(other => other.id === a.variantOf) : a)!.generation;
+    assetWidthLabel.textContent = automaticCliff ? 'Larghezza griglia sorgente · tile' : 'Larghezza oggetto · tile';
+    assetHeightLabel.textContent = automaticCliff ? 'Altezza griglia sorgente · tile' : 'Altezza oggetto · tile';
     set('asset-cell-subdivision',assetCellSubdivision(a));
-    el('asset-cell-info').textContent=`Griglia: ${assetCellColumns(a)} × ${assetCellRows(a)} celle. Ogni cella: 1/${assetCellSubdivision(a)} di tile (${48/assetCellSubdivision(a)} unità).`;
+    const grid = `Griglia: ${assetCellColumns(a)} × ${assetCellRows(a)} celle.`;
+    el('asset-cell-info').textContent = automaticCliff
+        ? `${grid} Nel bordo automatico, l’immagine e la griglia di collisione vengono adattate a 1 × 1 tile della mappa. Le dimensioni della scheda valgono per il piazzamento manuale.`
+        : `${grid} Ogni cella: 1/${assetCellSubdivision(a)} di tile (${TILE_SIZE / assetCellSubdivision(a)} unità).`;
     spriteEditor.refresh();
     const visual = worldAssetVisual(a);
     const shadow = effectiveAsset(a).shadow;
@@ -522,6 +540,7 @@ function refreshAsset(a: WorldAsset): void {
     set('asset-image-scale', (a.imageTransform?.scale ?? 1) * 100);
     set('asset-layer', a.layer);
     set('asset-pivot', a.pivot.y);
+    input('asset-preserve-scenery').checked = a.preserveProceduralScenery ?? false;
     input('gen-enabled').checked = generation.enabled;
     set('gen-category', generation.category);
     set('gen-temp-min', generation.temperature[0]);
@@ -760,7 +779,7 @@ function selectObjectsInBox(start: Vec2, end: Vec2): void {
 function paint(p: Vec2): void {
     if (!gesture)
         return;
-    const radius = gesture.settings?.radius ?? Math.max(0, Math.min(16, Math.round(num('brush-radius'))));
+    const radius = gesture.settings?.radius ?? brushRadius();
     const asset = gesture.settings?.asset;
     const points = gesture.tool === 'asset' && !gesture.mass ? [p] : brushTiles(p, radius);
     for (const q of points) {
@@ -784,8 +803,7 @@ function paint(p: Vec2): void {
             gesture.terrainBrush!.paint(q, terrain, elevation, base);
             gesture.brush!.tile(q, { terrain, suppressAssets: true, ...(gesture.settings!.defaultFamilyOnly?{defaultFamilyOnly:true}:{}), ...(['grass', 'bush', 'plant'].includes(terrain) ? { bushStyle: gesture.settings!.bushJs ? 'js' as const : 'png' as const } : {}) });
         } else if (gesture.tool === 'restore') {
-            gesture.terrainBrush!.paint(q, undefined, 0, 0);
-            gesture.brush!.tile(q);
+            paintProceduralTerrain(q, draft.seed, world.getTemperature(q.x, q.y), world.getMoisture((q.x + .5) * TILE_SIZE, (q.y + .5) * TILE_SIZE), gesture.brush!, gesture.terrainBrush!);
         }
         else if (gesture.tool === 'erase')
             gesture.brush!.erase(q, elevationEditor.elevation());
@@ -875,11 +893,11 @@ canvas.addEventListener('pointerdown', event => {
         return;
     }
     const before = draft;
-    const tilesOnly = (tool === 'terrain' || tool === 'restore') && !surface().geometry && elevationEditor.terrainElevation() === undefined;
+    const tilesOnly = tool === 'terrain' && !surface().geometry && elevationEditor.terrainElevation() === undefined;
     draft = forkWorldDocument(draft, tilesOnly && activeMap === 'world');
     gesture = { pointer: event.pointerId, before, start: p, last: p, tool, mass: event.ctrlKey || input('mass').checked, brush: new WorldBrush(surface(), tilesOnly) };
     if (tool === 'terrain' || tool === 'restore') gesture.terrainBrush = new TerrainElevationBrush(surface());
-    gesture.settings = { radius: Math.max(0, Math.min(16, Math.round(num('brush-radius')))), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, bushJs: input('bush-js').checked, defaultFamilyOnly:input('procedural-default-only').checked, asset: active(), elevation: elevationEditor.terrainElevation() };
+    gesture.settings = { radius: brushRadius(), density: Math.max(0, Math.min(1, num('brush-density') / 100)), terrain: val('terrain') as TileKind, bushJs: input('bush-js').checked, defaultFamilyOnly:input('procedural-default-only').checked, asset: active(), elevation: elevationEditor.terrainElevation() };
     canvas.setPointerCapture(event.pointerId);
     if (tool === 'sound') {
         const point = { ...p, id: uid('sound'), name: 'Punto sonoro', radius: 12, innerRadius: 2 };
@@ -1156,6 +1174,8 @@ on('asset-update', () => change(() => {
     resizeWorldAsset(a,num('asset-width'),num('asset-height')); a.name=val('asset-name').trim();assetCatalog.reveal(a);
     if (val('asset-variant-of')) a.variantOf = val('asset-variant-of'); else delete a.variantOf;
     a.layer=val('asset-layer') as 'ground'|'object';a.pivot.y=num('asset-pivot');
+    if (input('asset-preserve-scenery').checked) a.preserveProceduralScenery = true;
+    else delete a.preserveProceduralScenery;
     updateAssetShadow();
     a.fade={opacity:num('fade-opacity')/100,feather:num('fade-feather'),durationMs:num('fade-duration')};
     a.visual=val('asset-visual')==='image'?{kind:'image'}:{kind:'fire',style:val('asset-visual') as 'brazier'|'campfire'};

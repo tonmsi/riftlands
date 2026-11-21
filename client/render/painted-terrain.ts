@@ -10,7 +10,7 @@ import { DEFAULT_WATER_COAST } from '../../shared/world-painting';
 import { WaterCoastArt } from './water-coast';
 import { CoastMotionArt } from './coast-motion';
 import { performanceLog as perf } from '../core/performance-log';
-import { climateSnowCoverage } from './terrain-style';
+import { climateSnowCoverage, DUNGEON_VOID_COLOR } from './terrain-style';
 
 export type Surface = Exclude<PaintMaterial, 'rock' | 'bush'>;
 const order: Surface[] = ['water', 'grass', 'mud', 'ice', 'path', 'snow', 'stone'];
@@ -27,6 +27,7 @@ export class PaintedTerrain {
     colorAt: (s: Exclude<Surface, 'water'>, x: number, y: number) => string,
     world: World,temperatureAt=(x:number,y:number)=>world.getTemperature(x,y)): void {
     const masksStart=perf.begin();
+    const voidColor = world.authoring.document.interiorBounds ? DUNGEON_VOID_COLOR : '#202b29';
     const firstX = Math.floor(bounds.left / TILE_SIZE - .5), firstY = Math.floor(bounds.top / TILE_SIZE - .5);
     this.transitions.configure(painting,TILE_SIZE);
     this.motion.configure(world,painting);
@@ -88,7 +89,7 @@ export class PaintedTerrain {
         // Preserve exact authored map boundaries and dungeon voids.
         for (let i = 0; i < 4; i++) {
           const s = corners[i], px = x + (i === 1 || i === 2 ? TILE_SIZE/2 : 0), py = y + (i >= 2 ? TILE_SIZE/2 : 0);
-          ctx.fillStyle = s ? color(s, tx + (i === 1 || i === 2 ? 1 : 0), ty + (i >= 2 ? 1 : 0)) : '#202b29';
+          ctx.fillStyle = s ? color(s, tx + (i === 1 || i === 2 ? 1 : 0), ty + (i >= 2 ? 1 : 0)) : voidColor;
           ctx.fillRect(px, py, TILE_SIZE/2 + .1, TILE_SIZE/2 + .1);
         }
         continue;

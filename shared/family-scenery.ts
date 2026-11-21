@@ -3,7 +3,7 @@ export type SceneryKind = 'bush'|'plant'|'rock';
 export interface FamilyScenery { x:number; y:number; width:number; height:number; tile:SceneryKind; }
 export interface SceneryFootprint {width:number;height:number;}
 /** One deterministic partition per macro cell, shared by drawing and physics. */
-export function familySceneryBlock(tileAt:(x:number,y:number)=>TileKind,left:number,top:number,
+export function familySceneryBlock(tileAt:(x:number,y:number)=>TileKind | null,left:number,top:number,
   footprints:(kind:SceneryKind,x:number,y:number)=>readonly SceneryFootprint[],
   sameRegion:(x:number,y:number,originX:number,originY:number)=>boolean=()=>true,blockSize=6): FamilyScenery[] {
   const used=new Set<number>(),result:FamilyScenery[]=[];
